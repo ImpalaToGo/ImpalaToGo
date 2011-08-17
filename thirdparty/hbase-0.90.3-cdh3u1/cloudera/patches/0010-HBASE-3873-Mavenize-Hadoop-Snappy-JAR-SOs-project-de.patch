@@ -1,0 +1,255 @@
+From 8a3418dbf857daf65fd9ffe325347758dc00fedc Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Mon, 6 Jun 2011 23:16:09 +0000
+Subject: [PATCH 10/18] HBASE-3873 Mavenize Hadoop Snappy JAR/SOs project dependencies
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1132833 13f79535-47bb-0310-9956-ffa450edef68
+---
+ pom.xml                                            |  122 +++++++++++++++++++-
+ src/assembly/all.xml                               |    2 +-
+ src/docbkx/book.xml                                |   16 +--
+ .../hadoop/hbase/util/TestCompressionTest.java     |   19 +++-
+ 4 files changed, 145 insertions(+), 14 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 3e11a67..e77d51d 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -381,10 +381,15 @@
+             <exclude>**/*$*</exclude>
+             <exclude>${test.exclude.pattern}</exclude>
+           </excludes>
++          <environmentVariables>
++            <LD_LIBRARY_PATH>${env.LD_LIBRARY_PATH}:${project.build.directory}/nativelib</LD_LIBRARY_PATH>
++            <DYLD_LIBRARY_PATH>${env.DYLD_LIBRARY_PATH}:${project.build.directory}/nativelib</DYLD_LIBRARY_PATH>
++          </environmentVariables>
+         </configuration>
+       </plugin>
+       <plugin>
+         <artifactId>maven-antrun-plugin</artifactId>
++        <version>1.6</version>
+         <executions>
+           <execution>
+             <id>generate</id>
+@@ -426,13 +431,52 @@
+             <phase>process-resources</phase>
+             <configuration>
+               <tasks>
+-                <replace file="${project.build.outputDirectory}/hbase-default.xml" token="@@@VERSION@@@" value="${project.version}" />
++                <replace file="${project.build.outputDirectory}/hbase-default.xml"
++                  token="@@@VERSION@@@" value="${project.version}" />
++                <mkdir dir="${project.build.directory}/nativelib"/>
++                <exec executable="tar" dir="${project.build.directory}/nativelib" failonerror="false">
++                  <arg value="xf"/>
++                  <arg value="hadoop-snappy-nativelibs.tar"/>
++                </exec>
+               </tasks>
+             </configuration>
+             <goals>
+               <goal>run</goal>
+             </goals>
+           </execution>
++          <execution>
++            <id>package</id>
++            <phase>package</phase>
++            <configuration>
++              <target>
++                <!-- Complements the assembly -->
++
++                <mkdir dir="${project.build.directory}/${project.artifactId}-${project.version}/${project.artifactId}-${project.version}/lib/native/${build.platform}"/>
++
++                <!-- Using Unix cp to preserve symlinks, using script to handle wildcards -->
++                <echo file="${project.build.directory}/copynativelibs.sh">
++                    if [ `ls ${project.build.directory}/nativelib | wc -l` -ne 0 ]; then
++                      cp -PR ${project.build.directory}/nativelib/lib* ${project.build.directory}/${project.artifactId}-${project.version}/${project.artifactId}-${project.version}/lib/native/${build.platform}
++                    fi
++                </echo>
++                <exec executable="sh" dir="${project.build.directory}" failonerror="true">
++                    <arg line="./copynativelibs.sh"/>
++                </exec>
++
++                <!-- Using Unix tar to preserve symlinks -->
++                <exec executable="tar" failonerror="yes"
++                  dir="${project.build.directory}/${project.artifactId}-${project.version}">
++                    <arg value="czf"/>
++                    <arg value="${project.build.directory}/${project.artifactId}-${project.version}.tar.gz"/>
++                    <arg value="."/>
++                </exec>
++
++              </target>
++            </configuration>
++            <goals>
++              <goal>run</goal>
++            </goals>
++          </execution>
+         </executions>
+       </plugin>
+       <plugin>
+@@ -501,6 +545,7 @@
+     <stax-api.version>1.0.1</stax-api.version>
+     <thrift.version>0.2.0</thrift.version><!-- newer version available -->
+     <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
++    <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
+ 
+     <!-- For flaky tests exclusion -->
+     <test.exclude />
+@@ -808,7 +853,80 @@
+   $ mvn -s /my/path/settings.xml deploy
+ 
+   -->
++  <profiles>
++    <profile>
++      <id>os.linux</id>
++      <activation>
++        <activeByDefault>false</activeByDefault>
++        <os>
++          <family>Linux</family>
++        </os>
++      </activation>
++      <properties>
++        <build.platform>${os.name}-${os.arch}-${sun.arch.data.model}</build.platform>
++      </properties>
++    </profile>
++    <profile>
++        <id>os.mac</id>
++        <activation>
++            <os>
++                <family>Mac</family>
++            </os>
++        </activation>
++        <properties>
++            <build.platform>Mac_OS_X-${sun.arch.data.model}</build.platform>
++        </properties>
++    </profile>
+ 
++    <profile>
++      <id>hadoop-snappy</id>
++      <activation>
++        <activeByDefault>false</activeByDefault>
++        <property>
++          <name>snappy</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-snappy</artifactId>
++          <version>${hadoop-snappy.version}</version>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <groupId>org.apache.maven.plugins</groupId>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>get-hadoop-snappy-native</id>
++                <phase>generate-resources</phase>
++                <goals>
++                  <goal>copy</goal>
++                </goals>
++                <configuration>
++                  <artifactItems>
++                    <artifactItem>
++                      <groupId>org.apache.hadoop</groupId>
++                      <artifactId>hadoop-snappy</artifactId>
++                      <version>${hadoop-snappy.version}</version>
++                      <classifier>${build.platform}</classifier>
++                      <type>tar</type>
++                      <overWrite>false</overWrite>
++                      <outputDirectory>${project.build.directory}/nativelib</outputDirectory>
++                      <destFileName>hadoop-snappy-nativelibs.tar</destFileName>
++                    </artifactItem>
++                  </artifactItems>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
++  </profiles>
++ 
+   <!-- See http://jira.codehaus.org/browse/MSITE-443 why the settings need to be here and not in pluginManagement. -->
+   <reporting>
+     <plugins>
+diff --git a/src/assembly/all.xml b/src/assembly/all.xml
+index a072c8a..d5ea24d 100644
+--- a/src/assembly/all.xml
++++ b/src/assembly/all.xml
+@@ -7,7 +7,7 @@
+   -->
+   <id>all</id>
+   <formats>
+-    <format>tar.gz</format>
++    <format>dir</format>
+   </formats>
+   <fileSets>
+     <fileSet>
+diff --git a/src/docbkx/book.xml b/src/docbkx/book.xml
+index f235c39..65716f7 100644
+--- a/src/docbkx/book.xml
++++ b/src/docbkx/book.xml
+@@ -1316,23 +1316,19 @@ false
+     SNAPPY
+     </title>
+     <para>
+-        To set SNAPPY compression on a column family, do as following:
++        If snappy is installed, HBase can make use of it (courtesy of
++        <link xlink:href="http://code.google.com/p/hadoop-snappy/">hadoop-snappy</link>).
++
+         <orderedlist>
+             <listitem>
+                 <para>
+-                 Install hadoop-snappy using these instructions: http://code.google.com/p/hadoop-snappy/
+-                </para>
+-            </listitem>
+-            <listitem>
+-                <para>
+-                    You need to ensure the hadoop-snappy libs (incl. the native libs) are in the HBase classpath. One way to do this is
+-                    to just symlink the libs from <filename>HADOOP_HOME/lib</filename> to <filename>HBASE_HOME/lib</filename>.
+-                    This needs to be done on all HBase nodes, as with LZO.
++                    Build and install <link xlink:href="http://code.google.com/p/snappy/">snappy</link> on all nodes
++                    of your cluster.
+                 </para>
+             </listitem>
+             <listitem>
+                 <para>
+-        Use CompressionTest to verify snappy support is enabled and the libs can be loaded:
++        Use CompressionTest to verify snappy support is enabled and the libs can be loaded ON ALL NODES of your cluster:
+         <programlisting>$ hbase org.apache.hadoop.hbase.util.CompressionTest hdfs://host/path/to/hbase snappy</programlisting>
+                 </para>
+             </listitem>
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java b/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
+index 14bf24f..24e9b99 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
+@@ -54,6 +54,23 @@ public class TestCompressionTest {
+     assertFalse(CompressionTest.testCompression("LZO"));
+     assertTrue(CompressionTest.testCompression("NONE"));
+     assertTrue(CompressionTest.testCompression("GZ"));
+-    assertFalse(CompressionTest.testCompression("SNAPPY"));
++
++    if (isCompressionAvailable("org.apache.hadoop.io.compress.SnappyCodec")) {
++      assertTrue(CompressionTest.testCompression("SNAPPY"));
++    }
++    else {
++      assertFalse(CompressionTest.testCompression("SNAPPY"));
++    }
+   }
++
++  private boolean isCompressionAvailable(String codecClassName) {
++    try {
++      Thread.currentThread().getContextClassLoader().loadClass(codecClassName);
++      return true;
++    }
++    catch (Exception ex) {
++      return false;
++    }
++  }
++
+ }
+-- 
+1.7.0.4
+

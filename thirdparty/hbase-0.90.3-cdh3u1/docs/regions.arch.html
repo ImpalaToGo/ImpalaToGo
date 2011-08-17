@@ -1,0 +1,50 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>12.3.&nbsp;Regions</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="architecture.html" title="Chapter&nbsp;12.&nbsp;Architecture"><link rel="prev" href="daemons.html" title="12.2.&nbsp;Daemons"><link rel="next" href="wal.html" title="12.4.&nbsp;Write Ahead Log (WAL)"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">12.3.&nbsp;Regions</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="daemons.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;12.&nbsp;Architecture</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="wal.html">Next</a></td></tr></table><hr></div><div class="section" title="12.3.&nbsp;Regions"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="regions.arch"></a>12.3.&nbsp;Regions</h2></div></div></div><p>This chapter is all about Regions.</p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>Regions are comprised of a Store per Column Family.
+        </p></div><div class="section" title="12.3.1.&nbsp;Region Size"><div class="titlepage"><div><div><h3 class="title"><a name="arch.regions.size"></a>12.3.1.&nbsp;Region Size</h3></div></div></div><p>Region size is one of those tricky things, there are a few factors
+      to consider:</p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem"><p>Regions are the basic element of availability and
+          distribution.</p></li><li class="listitem"><p>HBase scales by having regions across many servers. Thus if
+          you have 2 regions for 16GB data, on a 20 node machine you are a net
+          loss there.</p></li><li class="listitem"><p>High region count has been known to make things slow, this is
+          getting better, but it is probably better to have 700 regions than
+          3000 for the same amount of data.</p></li><li class="listitem"><p>Low region count prevents parallel scalability as per point
+          #2. This really cant be stressed enough, since a common problem is
+          loading 200MB data into HBase then wondering why your awesome 10
+          node cluster is mostly idle.</p></li><li class="listitem"><p>There is not much memory footprint difference between 1 region
+          and 10 in terms of indexes, etc, held by the RegionServer.</p></li></ul></div><p>Its probably best to stick to the default, perhaps going smaller
+      for hot tables (or manually split hot regions to spread the load over
+      the cluster), or go with a 1GB region size if your cell sizes tend to be
+      largish (100k and up).</p></div><div class="section" title="12.3.2.&nbsp;Region Splits"><div class="titlepage"><div><div><h3 class="title"><a name="d0e3182"></a>12.3.2.&nbsp;Region Splits</h3></div></div></div><p>Splits run unaided on the RegionServer; i.e. the Master does not
+        participate. The RegionServer splits a region, offlines the split
+        region and then adds the daughter regions to META, opens daughters on
+        the parent's hosting RegionServer and then reports the split to the
+        Master. See <a class="xref" href="important_configurations.html#disable.splitting" title="3.4.2.6.&nbsp;Managed Splitting">Section&nbsp;3.4.2.6, &#8220;Managed Splitting&#8221;</a> for how to manually manage
+        splits (and for why you might do this)</p></div><div class="section" title="12.3.3.&nbsp;Region Load Balancer"><div class="titlepage"><div><div><h3 class="title"><a name="d0e3189"></a>12.3.3.&nbsp;Region Load Balancer</h3></div></div></div><p>
+        Periodically, and when there are not any regions in transition,
+        a load balancer will run and move regions around to balance cluster load.
+        The period at which it runs can be configured.
+        </p></div><div class="section" title="12.3.4.&nbsp;Store"><div class="titlepage"><div><div><h3 class="title"><a name="store"></a>12.3.4.&nbsp;Store</h3></div></div></div><p>A Store hosts a MemStore and 0 or more StoreFiles (HFiles). A Store corresponds to a column family for a table for a given region.
+          </p><div class="section" title="12.3.4.1.&nbsp;MemStore"><div class="titlepage"><div><div><h4 class="title"><a name="store.memstore"></a>12.3.4.1.&nbsp;MemStore</h4></div></div></div><p>The MemStore holds in-memory modifications to the Store.  Modifications are KeyValues.
+       When asked to flush, current memstore is moved to snapshot and is cleared. 
+       HBase continues to serve edits out of new memstore and backing snapshot until flusher reports in that the 
+       flush succeeded. At this point the snapshot is let go.</p></div><div class="section" title="12.3.4.2.&nbsp;StoreFile (HFile)"><div class="titlepage"><div><div><h4 class="title"><a name="hfile"></a>12.3.4.2.&nbsp;StoreFile (HFile)</h4></div></div></div><div class="section" title="12.3.4.2.1.&nbsp;HFile Format"><div class="titlepage"><div><div><h5 class="title"><a name="d0e3207"></a>12.3.4.2.1.&nbsp;HFile Format</h5></div></div></div><p>The <span class="emphasis"><em>hfile</em></span> file format is based on
+              the SSTable file described in the <a class="link" href="http://labs.google.com/papers/bigtable.html" target="_top">BigTable [2006]</a> paper and on
+              Hadoop's <a class="link" href="http://hadoop.apache.org/common/docs/current/api/org/apache/hadoop/io/file/tfile/TFile.html" target="_top">tfile</a>
+              (The unit test suite and the compression harness were taken directly from tfile). 
+              Schubert Zhang's blog post on HFile: A Block-Indexed File Format to Store Sorted Key-Value Pairs makes for a thorough introduction to HBase's hfile.  Matteo Bertozzi has also put up a
+              helpful description, <a class="link" href="http://th30z.blogspot.com/2011/02/hbase-io-hfile.html?spref=tw" target="_top">HBase I/O: HFile</a>.
+          </p></div><div class="section" title="12.3.4.2.2.&nbsp;HFile Tool"><div class="titlepage"><div><div><h5 class="title"><a name="hfile_tool"></a>12.3.4.2.2.&nbsp;HFile Tool</h5></div></div></div><p>To view a textualized version of hfile content, you can do use
+        the <code class="classname">org.apache.hadoop.hbase.io.hfile.HFile
+        </code>tool. Type the following to see usage:</p><pre class="programlisting"><code class="code">$ ${HBASE_HOME}/bin/hbase org.apache.hadoop.hbase.io.hfile.HFile </code> </pre><p>For
+        example, to view the content of the file
+        <code class="filename">hdfs://10.81.47.41:9000/hbase/TEST/1418428042/DSMP/4759508618286845475</code>,
+        type the following:</p><pre class="programlisting"> <code class="code">$ ${HBASE_HOME}/bin/hbase org.apache.hadoop.hbase.io.hfile.HFile -v -f hdfs://10.81.47.41:9000/hbase/TEST/1418428042/DSMP/4759508618286845475 </code> </pre><p>If
+        you leave off the option -v to see just a summary on the hfile. See
+        usage for other things to do with the <code class="classname">HFile</code>
+        tool.</p></div></div><div class="section" title="12.3.4.3.&nbsp;Compaction"><div class="titlepage"><div><div><h4 class="title"><a name="compaction"></a>12.3.4.3.&nbsp;Compaction</h4></div></div></div><p>There are two types of compactions:  minor and major.  Minor compactions will usually pick up a couple of the smaller adjacent
+         files and rewrite them as one.  Minors do not drop deletes or expired cells, only major compactions do this.  Sometimes a minor compaction
+         will pick up all  the files in the store and in this case it actually promotes itself to being a major compaction.  
+         For a description of how a minor compaction picks files to compact, see the <a class="link" href="http://hbase.apache.org/xref/org/apache/hadoop/hbase/regionserver/Store.html#836" target="_top">ascii diagram in the Store source code.</a>
+         </p><p>After a major compaction runs there will be a single storefile per store, and this will help performance usually.  Caution:  major compactions rewrite all of the stores data and on a loaded system, this may not be tenable;
+             major compactions will usually have to be <a class="xref" href="important_configurations.html#disable.splitting" title="3.4.2.6.&nbsp;Managed Splitting">Section&nbsp;3.4.2.6, &#8220;Managed Splitting&#8221;</a> on large systems.
+        </p></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="daemons.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="architecture.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="wal.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">12.2.&nbsp;Daemons&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;12.4.&nbsp;Write Ahead Log (WAL)</td></tr></table></div></body></html>

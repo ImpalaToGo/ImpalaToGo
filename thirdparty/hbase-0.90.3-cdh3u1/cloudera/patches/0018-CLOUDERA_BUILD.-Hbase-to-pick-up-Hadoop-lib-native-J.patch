@@ -1,0 +1,28 @@
+From 50421e7161ae9bb8d2846fac2e67cd2601efd7dc Mon Sep 17 00:00:00 2001
+From: Alejandro Abdelnur <tucu00@gmail.com>
+Date: Mon, 11 Jul 2011 16:04:52 -0700
+Subject: [PATCH 18/18] CLOUDERA_BUILD. Hbase to pick up Hadoop lib/native/JAVA_PLATFORM in JAVA_LIBRARY_PATH if avail
+
+*** Interim fix for DISTRO-272 / HBASE-4085 ***
+---
+ bin/hbase |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/bin/hbase b/bin/hbase
+index f3b872b..04322c2 100755
+--- a/bin/hbase
++++ b/bin/hbase
+@@ -204,6 +204,10 @@ if [ -d "${HBASE_HOME}/build/native" -o -d "${HBASE_HOME}/lib/native" ]; then
+   fi
+ fi
+ 
++if [ -d "/usr/lib/hadoop-0.20/lib/native/${JAVA_PLATFORM}" ] ; then
++  JAVA_LIBRARY_PATH=$(append_path "${JAVA_LIBRARY_PATH}" /usr/lib/hadoop-0.20/lib/native/${JAVA_PLATFORM})
++fi
++
+ # cygwin path translation
+ if $cygwin; then
+   JAVA_LIBRARY_PATH=`cygpath -p "$JAVA_LIBRARY_PATH"`
+-- 
+1.7.0.4
+

@@ -1,0 +1,25 @@
+From 19096d9d506dded0304540c0703cddbf0986a49e Mon Sep 17 00:00:00 2001
+From: Todd Lipcon <todd@cloudera.com>
+Date: Tue, 14 Jun 2011 11:02:19 -0700
+Subject: [PATCH 02/18] CLOUDERA-BUILD. hbase-config.sh should set HBASE_PID_DIR if unset
+
+---
+ bin/hbase-config.sh |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/bin/hbase-config.sh b/bin/hbase-config.sh
+index 899e3ff..68ac904 100644
+--- a/bin/hbase-config.sh
++++ b/bin/hbase-config.sh
+@@ -71,6 +71,8 @@ done
+  
+ # Allow alternate hbase conf dir location.
+ HBASE_CONF_DIR="${HBASE_CONF_DIR:-$HBASE_HOME/conf}"
++
++HBASE_PID_DIR="${HBASE_PID_DIR:-/tmp}"
+ # List of hbase regions servers.
+ HBASE_REGIONSERVERS="${HBASE_REGIONSERVERS:-$HBASE_CONF_DIR/regionservers}"
+ # List of hbase secondary masters.
+-- 
+1.7.0.4
+

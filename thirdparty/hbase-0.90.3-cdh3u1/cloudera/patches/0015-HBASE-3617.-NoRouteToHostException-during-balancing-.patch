@@ -1,0 +1,61 @@
+From 56242ee425b21c4d0cab0c98c335b6dbdc71c8c4 Mon Sep 17 00:00:00 2001
+From: Eli Collins <eli@cloudera.com>
+Date: Tue, 5 Jul 2011 18:21:34 -0700
+Subject: [PATCH 15/18] HBASE-3617. NoRouteToHostException during balancing will cause Master abort.
+
+Reason: Bug
+Author: Ted Yu
+Ref: CDH-3314
+---
+ .../hadoop/hbase/master/AssignmentManager.java     |   33 +++-----------------
+ 1 files changed, 5 insertions(+), 28 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index c3e5c7f..cc94ba3 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -1135,36 +1135,13 @@ public class AssignmentManager extends ZooKeeperListener {
+       // Presume that the split message when it comes in will fix up the master's
+       // in memory cluster state.
+       return;
+-    } catch (ConnectException e) {
+-      LOG.info("Failed connect to " + server + ", message=" + e.getMessage() +
+-        ", region=" + region.getEncodedName());
+-      // Presume that regionserver just failed and we haven't got expired
+-      // server from zk yet.  Let expired server deal with clean up.
+-    } catch (java.net.SocketTimeoutException e) {
+-      LOG.info("Server " + server + " returned " + e.getMessage() + " for " +
+-        region.getEncodedName());
+-      // Presume retry or server will expire.
+-    } catch (EOFException e) {
+-      LOG.info("Server " + server + " returned " + e.getMessage() + " for " +
++    } catch (Throwable t) {
++      if (t instanceof RemoteException) {
++        t = ((RemoteException)t).unwrapRemoteException();
++      }
++      LOG.info("Server " + server + " returned " + t + " for " +
+         region.getEncodedName());
+       // Presume retry or server will expire.
+-    } catch (RemoteException re) {
+-      IOException ioe = re.unwrapRemoteException();
+-      if (ioe instanceof NotServingRegionException) {
+-        // Failed to close, so pass through and reassign
+-        LOG.debug("Server " + server + " returned " + ioe + " for " +
+-          region.getEncodedName());
+-      } else if (ioe instanceof EOFException) {
+-        // Failed to close, so pass through and reassign
+-        LOG.debug("Server " + server + " returned " + ioe + " for " +
+-          region.getEncodedName());
+-      } else {
+-        this.master.abort("Remote unexpected exception", ioe);
+-      }
+-    } catch (Throwable t) {
+-      // For now call abort if unexpected exception -- radical, but will get
+-      // fellas attention. St.Ack 20101012
+-      this.master.abort("Remote unexpected exception", t);
+     }
+   }
+ 
+-- 
+1.7.0.4
+

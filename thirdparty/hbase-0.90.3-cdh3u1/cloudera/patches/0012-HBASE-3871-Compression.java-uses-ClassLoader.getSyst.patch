@@ -1,0 +1,60 @@
+From dc0b38f7ef3d508f524ff1ccbc5acb5c9e1af15d Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Thu, 9 Jun 2011 22:34:32 +0000
+Subject: [PATCH 12/18] HBASE-3871 Compression.java uses ClassLoader.getSystemClassLoader() to load codec
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1134119 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../apache/hadoop/hbase/io/hfile/Compression.java  |   22 ++++++++++++++++++-
+ 1 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/hfile/Compression.java b/src/main/java/org/apache/hadoop/hbase/io/hfile/Compression.java
+index 0bfc7e2..b553cca 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/hfile/Compression.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/hfile/Compression.java
+@@ -71,6 +71,24 @@ public final class Compression {
+   }
+ 
+   /**
++   * Returns the classloader to load the Codec class from.
++   * @return
++   */
++  private static ClassLoader getClassLoaderForCodec() {
++    ClassLoader cl = Thread.currentThread().getContextClassLoader();
++    if (cl == null) {
++      cl = Compression.class.getClassLoader();
++    }
++    if (cl == null) {
++      cl = ClassLoader.getSystemClassLoader();
++    }
++    if (cl == null) {
++      throw new RuntimeException("A ClassLoader to load the Codec could not be determined");
++    }
++    return cl;
++  }
++
++  /**
+    * Compression algorithms. The ordinal of these cannot change or else you
+    * risk breaking all existing HFiles out there.  Even the ones that are
+    * not compressed! (They use the NONE algorithm)
+@@ -85,7 +103,7 @@ public final class Compression {
+         if (lzoCodec == null) {
+           try {
+             Class<?> externalCodec =
+-                ClassLoader.getSystemClassLoader().loadClass("com.hadoop.compression.lzo.LzoCodec");
++                getClassLoaderForCodec().loadClass("com.hadoop.compression.lzo.LzoCodec");
+             lzoCodec = (CompressionCodec) ReflectionUtils.newInstance(externalCodec, 
+                 new Configuration(conf));
+           } catch (ClassNotFoundException e) {
+@@ -150,7 +168,7 @@ public final class Compression {
+           if (snappyCodec == null) {
+             try {
+               Class<?> externalCodec =
+-                  ClassLoader.getSystemClassLoader().loadClass("org.apache.hadoop.io.compress.SnappyCodec");
++                  getClassLoaderForCodec().loadClass("org.apache.hadoop.io.compress.SnappyCodec");
+               snappyCodec = (CompressionCodec) ReflectionUtils.newInstance(externalCodec, 
+                   conf);
+             } catch (ClassNotFoundException e) {
+-- 
+1.7.0.4
+

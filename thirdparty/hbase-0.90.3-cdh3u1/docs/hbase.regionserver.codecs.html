@@ -1,0 +1,30 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>B.2.&nbsp; hbase.regionserver.codecs</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="compression.html" title="Appendix&nbsp;B.&nbsp;Compression In HBase"><link rel="prev" href="compression.html" title="Appendix&nbsp;B.&nbsp;Compression In HBase"><link rel="next" href="lzo.compression.html" title="B.3.&nbsp; LZO"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">B.2.&nbsp;
+    <code class="varname">
+    hbase.regionserver.codecs
+    </code>
+    </th></tr><tr><td width="20%" align="left"><a accesskey="p" href="compression.html">Prev</a>&nbsp;</td><th width="60%" align="center">Appendix&nbsp;B.&nbsp;Compression In HBase</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="lzo.compression.html">Next</a></td></tr></table><hr></div><div class="section" title="B.2.&nbsp; hbase.regionserver.codecs"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="hbase.regionserver.codecs"></a>B.2.&nbsp;
+    <code class="varname">
+    hbase.regionserver.codecs
+    </code>
+    </h2></div></div></div><p>
+    To have a RegionServer test a set of codecs and fail-to-start if any
+    code is missing or misinstalled, add the configuration
+    <code class="varname">
+    hbase.regionserver.codecs
+    </code>
+    to your <code class="filename">hbase-site.xml</code> with a value of
+    codecs to test on startup.  For example if the 
+    <code class="varname">
+    hbase.regionserver.codecs
+    </code> value is <code class="code">lzo,gz</code> and if lzo is not present
+    or improperly installed, the misconfigured RegionServer will fail
+    to start.
+    </p><p>
+    Administrators might make use of this facility to guard against
+    the case where a new server is added to cluster but the cluster
+    requires install of a particular coded.
+    </p></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="compression.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="compression.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="lzo.compression.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Appendix&nbsp;B.&nbsp;Compression In HBase&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;B.3.&nbsp;
+    LZO
+    </td></tr></table></div></body></html>

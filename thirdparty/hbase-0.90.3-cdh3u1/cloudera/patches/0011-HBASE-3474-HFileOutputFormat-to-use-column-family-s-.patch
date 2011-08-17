@@ -1,0 +1,229 @@
+From 1d627622a92bb1a12c8fd815b66b699119ec7399 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Thu, 24 Mar 2011 22:59:45 +0000
+Subject: [PATCH 11/18] HBASE-3474 HFileOutputFormat to use column family's compression algorithm
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1085179 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../org/apache/hadoop/hbase/io/hfile/HFile.java    |    4 +
+ .../hadoop/hbase/mapreduce/HFileOutputFormat.java  |   78 +++++++++++++++++++-
+ .../hbase/mapreduce/TestHFileOutputFormat.java     |   24 ++++--
+ 3 files changed, 95 insertions(+), 11 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java b/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
+index d51ec26..008fd4a 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
+@@ -1171,6 +1171,10 @@ public class HFile {
+       return this.comparator;
+     }
+ 
++    public Compression.Algorithm getCompressionAlgorithm() {
++      return this.compressAlgo;
++    }
++
+     /**
+      * @return index size
+      */
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
+index 36b3ab9..95407d1 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
+@@ -20,9 +20,13 @@
+ package org.apache.hadoop.hbase.mapreduce;
+ 
+ import java.io.IOException;
++import java.io.UnsupportedEncodingException;
+ import java.net.URI;
+ import java.net.URISyntaxException;
++import java.net.URLDecoder;
++import java.net.URLEncoder;
+ import java.util.ArrayList;
++import java.util.Collection;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.TreeMap;
+@@ -32,7 +36,9 @@ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.filecache.DistributedCache;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
+@@ -64,6 +70,7 @@ import org.apache.commons.logging.LogFactory;
+  */
+ public class HFileOutputFormat extends FileOutputFormat<ImmutableBytesWritable, KeyValue> {
+   static Log LOG = LogFactory.getLog(HFileOutputFormat.class);
++  static final String COMPRESSION_CONF_KEY = "hbase.hfileoutputformat.families.compression";
+   
+   public RecordWriter<ImmutableBytesWritable, KeyValue> getRecordWriter(final TaskAttemptContext context)
+   throws IOException, InterruptedException {
+@@ -78,8 +85,11 @@ public class HFileOutputFormat extends FileOutputFormat<ImmutableBytesWritable,
+     final int blocksize = conf.getInt("hbase.mapreduce.hfileoutputformat.blocksize",
+         HFile.DEFAULT_BLOCKSIZE);
+     // Invented config.  Add to hbase-*.xml if other than default compression.
+-    final String compression = conf.get("hfile.compression",
+-      Compression.Algorithm.NONE.getName());
++    final String defaultCompression = conf.get("hfile.compression",
++        Compression.Algorithm.NONE.getName());
++
++    // create a map from column family to the compression algorithm
++    final Map<byte[], String> compressionMap = createFamilyCompressionMap(conf);
+ 
+     return new RecordWriter<ImmutableBytesWritable, KeyValue>() {
+       // Map of families to writers and how much has been output on the writer.
+@@ -153,6 +163,8 @@ public class HFileOutputFormat extends FileOutputFormat<ImmutableBytesWritable,
+       private WriterLength getNewWriter(byte[] family) throws IOException {
+         WriterLength wl = new WriterLength();
+         Path familydir = new Path(outputdir, Bytes.toString(family));
++        String compression = compressionMap.get(family);
++        compression = compression == null ? defaultCompression : compression;
+         wl.writer = new HFile.Writer(fs,
+           StoreFile.getUniqueFile(fs, familydir), blocksize,
+           compression, KeyValue.KEY_COMPARATOR);
+@@ -300,7 +312,69 @@ public class HFileOutputFormat extends FileOutputFormat<ImmutableBytesWritable,
+     DistributedCache.addCacheFile(cacheUri, conf);
+     DistributedCache.createSymlink(conf);
+     
++    // Set compression algorithms based on column families
++    configureCompression(table, conf);
++    
+     LOG.info("Incremental table output configured.");
+   }
+   
++  /**
++   * Run inside the task to deserialize column family to compression algorithm
++   * map from the
++   * configuration.
++   * 
++   * Package-private for unit tests only.
++   * 
++   * @return a map from column family to the name of the configured compression
++   *         algorithm
++   */
++  static Map<byte[], String> createFamilyCompressionMap(Configuration conf) {
++    Map<byte[], String> compressionMap = new TreeMap<byte[], String>(Bytes.BYTES_COMPARATOR);
++    String compressionConf = conf.get(COMPRESSION_CONF_KEY, "");
++    for (String familyConf : compressionConf.split("&")) {
++      String[] familySplit = familyConf.split("=");
++      if (familySplit.length != 2) {
++        continue;
++      }
++      
++      try {
++        compressionMap.put(URLDecoder.decode(familySplit[0], "UTF-8").getBytes(),
++            URLDecoder.decode(familySplit[1], "UTF-8"));
++      } catch (UnsupportedEncodingException e) {
++        // will not happen with UTF-8 encoding
++        throw new AssertionError(e);
++      }
++    }
++    return compressionMap;
++  }
++
++  /**
++   * Serialize column family to compression algorithm map to configuration.
++   * Invoked while configuring the MR job for incremental load.
++   * 
++   * Package-private for unit tests only.
++   * 
++   * @throws IOException
++   *           on failure to read column family descriptors
++   */
++  static void configureCompression(HTable table, Configuration conf) throws IOException {
++    StringBuilder compressionConfigValue = new StringBuilder();
++    HTableDescriptor tableDescriptor = table.getTableDescriptor();
++    if(tableDescriptor == null){
++      // could happen with mock table instance
++      return;
++    }
++    Collection<HColumnDescriptor> families = tableDescriptor.getFamilies();
++    int i = 0;
++    for (HColumnDescriptor familyDescriptor : families) {
++      if (i++ > 0) {
++        compressionConfigValue.append('&');
++      }
++      compressionConfigValue.append(URLEncoder.encode(familyDescriptor.getNameAsString(), "UTF-8"));
++      compressionConfigValue.append('=');
++      compressionConfigValue.append(URLEncoder.encode(familyDescriptor.getCompression().getName(), "UTF-8"));
++    }
++    // Get rid of the last ampersand
++    conf.set(COMPRESSION_CONF_KEY, compressionConfigValue.toString());
++  }
+ }
+diff --git a/src/test/java/org/apache/hadoop/hbase/mapreduce/TestHFileOutputFormat.java b/src/test/java/org/apache/hadoop/hbase/mapreduce/TestHFileOutputFormat.java
+index c77e877..6c89355 100644
+--- a/src/test/java/org/apache/hadoop/hbase/mapreduce/TestHFileOutputFormat.java
++++ b/src/test/java/org/apache/hadoop/hbase/mapreduce/TestHFileOutputFormat.java
+@@ -23,9 +23,14 @@ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertNotSame;
+ import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+ import java.util.Arrays;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Map.Entry;
+ import java.util.Random;
+ 
+ import org.apache.commons.logging.Log;
+@@ -36,7 +41,9 @@ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.PerformanceEvaluation;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+@@ -45,6 +52,10 @@ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+ import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
++import org.apache.hadoop.hbase.io.hfile.Compression;
++import org.apache.hadoop.hbase.io.hfile.Compression.Algorithm;
++import org.apache.hadoop.hbase.io.hfile.HFile;
++import org.apache.hadoop.hbase.io.hfile.HFile.Reader;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.io.NullWritable;
+@@ -58,6 +69,8 @@ import org.junit.Before;
+ import org.junit.Test;
+ import org.mockito.Mockito;
+ 
++import com.google.common.collect.Lists;
++
+ /**
+  * Simple test for {@link KeyValueSortReducer} and {@link HFileOutputFormat}.
+  * Sets up and runs a mapreduce job that writes hfile output.
+@@ -232,18 +245,11 @@ public class TestHFileOutputFormat  {
+   public void testJobConfiguration() throws Exception {
+     Job job = new Job();
+     HTable table = Mockito.mock(HTable.class);
+-    byte[][] mockKeys = new byte[][] {
+-        HConstants.EMPTY_BYTE_ARRAY,
+-        Bytes.toBytes("aaa"),
+-        Bytes.toBytes("ggg"),
+-        Bytes.toBytes("zzz")
+-    };
+-    Mockito.doReturn(mockKeys).when(table).getStartKeys();
+-    
++    setupMockStartKeys(table);
+     HFileOutputFormat.configureIncrementalLoad(job, table);
+     assertEquals(job.getNumReduceTasks(), 4);
+   }
+-  
++
+   private byte [][] generateRandomStartKeys(int numKeys) {
+     Random random = new Random();
+     byte[][] ret = new byte[numKeys][];
+-- 
+1.7.0.4
+

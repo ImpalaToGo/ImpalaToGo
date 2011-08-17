@@ -1,0 +1,25 @@
+From 2147d6f9c003861f1a0f244f51d3d0f1c87e40f4 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Fri, 20 May 2011 16:58:25 +0000
+Subject: [PATCH 08/18] Fix TestCompressionTest since SNAPPY went in
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1125467 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/util/TestCompressionTest.java     |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java b/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
+index 3170ab3..14bf24f 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestCompressionTest.java
+@@ -54,6 +54,6 @@ public class TestCompressionTest {
+     assertFalse(CompressionTest.testCompression("LZO"));
+     assertTrue(CompressionTest.testCompression("NONE"));
+     assertTrue(CompressionTest.testCompression("GZ"));
+-    assertTrue(CompressionTest.testCompression("SNAPPY"));
++    assertFalse(CompressionTest.testCompression("SNAPPY"));
+   }
+ }
+-- 
+1.7.0.4
+

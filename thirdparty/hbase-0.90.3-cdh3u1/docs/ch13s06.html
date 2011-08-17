@@ -1,0 +1,49 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>13.6.&nbsp;HBase Client</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="performance.html" title="Chapter&nbsp;13.&nbsp;Performance Tuning"><link rel="prev" href="perf.batch.loading.html" title="13.5.&nbsp;Batch Loading"><link rel="next" href="blooms.html" title="Chapter&nbsp;14.&nbsp;Bloom Filters"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">13.6.&nbsp;HBase Client</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="perf.batch.loading.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;13.&nbsp;Performance Tuning</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="blooms.html">Next</a></td></tr></table><hr></div><div class="section" title="13.6.&nbsp;HBase Client"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="d0e3504"></a>13.6.&nbsp;HBase Client</h2></div></div></div><div class="section" title="13.6.1.&nbsp;AutoFlush"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.autoflush"></a>13.6.1.&nbsp;AutoFlush</h3></div></div></div><p>When performing a lot of Puts, make sure that setAutoFlush is set
+      to false on your <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HTable.html" target="_top">HTable</a>
+      instance. Otherwise, the Puts will be sent one at a time to the
+      RegionServer. Puts added via <code class="code"> htable.add(Put)</code> and <code class="code"> htable.add( &lt;List&gt; Put)</code>
+      wind up in the same write buffer. If <code class="code">autoFlush = false</code>,
+      these messages are not sent until the write-buffer is filled. To
+      explicitly flush the messages, call <code class="methodname">flushCommits</code>.
+      Calling <code class="methodname">close</code> on the <code class="classname">HTable</code>
+      instance will invoke <code class="methodname">flushCommits</code>.</p></div><div class="section" title="13.6.2.&nbsp;Scan Caching"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.caching"></a>13.6.2.&nbsp;Scan Caching</h3></div></div></div><p>If HBase is used as an input source for a MapReduce job, for
+      example, make sure that the input <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">Scan</a>
+      instance to the MapReduce job has <code class="methodname">setCaching</code> set to something greater
+      than the default (which is 1). Using the default value means that the
+      map-task will make call back to the region-server for every record
+      processed. Setting this value to 500, for example, will transfer 500
+      rows at a time to the client to be processed. There is a cost/benefit to
+      have the cache value be large because it costs more in memory for both
+      client and RegionServer, so bigger isn't always better.</p></div><div class="section" title="13.6.3.&nbsp;Scan Attribute Selection"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.selection"></a>13.6.3.&nbsp;Scan Attribute Selection</h3></div></div></div><p>Whenever a Scan is used to process large numbers of rows (and especially when used
+      as a MapReduce source), be aware of which attributes are selected.   If <code class="code">scan.addFamily</code> is called
+      then <span class="emphasis"><em>all</em></span> of the attributes in the specified ColumnFamily will be returned to the client.
+      If only a small number of the available attributes are to be processed, then only those attributes should be specified
+      in the input scan because attribute over-selection is a non-trivial performance penalty over large datasets.
+      </p></div><div class="section" title="13.6.4.&nbsp;Close ResultScanners"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.scannerclose"></a>13.6.4.&nbsp;Close ResultScanners</h3></div></div></div><p>This isn't so much about improving performance but rather
+      <span class="emphasis"><em>avoiding</em></span> performance problems. If you forget to
+      close <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/ResultScanner.html" target="_top">ResultScanners</a>
+      you can cause problems on the RegionServers. Always have ResultScanner
+      processing enclosed in try/catch blocks... </p><pre class="programlisting">
+Scan scan = new Scan();
+// set attrs...
+ResultScanner rs = htable.getScanner(scan);
+try {
+  for (Result r = rs.next(); r != null; r = rs.next()) {
+  // process result...
+} finally {
+  rs.close();  // always close the ResultScanner!
+}
+htable.close();</pre></div><div class="section" title="13.6.5.&nbsp;Block Cache"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.blockcache"></a>13.6.5.&nbsp;Block Cache</h3></div></div></div><p><a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">Scan</a>
+      instances can be set to use the block cache in the RegionServer via the
+      <code class="methodname">setCacheBlocks</code> method. For input Scans to MapReduce jobs, this should be
+      <code class="varname">false</code>. For frequently accessed rows, it is advisable to use the block
+      cache.</p></div><div class="section" title="13.6.6.&nbsp;Optimal Loading of Row Keys"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.rowkeyonly"></a>13.6.6.&nbsp;Optimal Loading of Row Keys</h3></div></div></div><p>When performing a table <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">scan</a>
+            where only the row keys are needed (no families, qualifiers, values or timestamps), add a FilterList with a
+            <code class="varname">MUST_PASS_ALL</code> operator to the scanner using <code class="methodname">setFilter</code>. The filter list
+            should include both a <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/filter/FirstKeyOnlyFilter.html" target="_top">FirstKeyOnlyFilter</a>
+            and a <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/filter/KeyOnlyFilter.html" target="_top">KeyOnlyFilter</a>.
+            Using this filter combination will result in a worst case scenario of a RegionServer reading a single value from disk
+            and minimal network traffic to the client for a single row.
+      </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="perf.batch.loading.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="performance.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="blooms.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">13.5.&nbsp;Batch Loading&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;14.&nbsp;Bloom Filters</td></tr></table></div></body></html>

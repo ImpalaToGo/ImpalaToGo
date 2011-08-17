@@ -1,0 +1,28 @@
+From 53572869a7bd986a2b002344c801c7636a8b35a8 Mon Sep 17 00:00:00 2001
+From: Aaron T. Myers <atm@cloudera.com>
+Date: Fri, 6 May 2011 16:07:05 -0700
+Subject: [PATCH 05/18] HBASE-3864. Rename of hfile.min.blocksize.size in HBASE-2899 reverted in HBASE-1861
+
+Reason: Bug
+Author: Aaron T. Myers
+Ref: CDH-3057
+---
+ .../hadoop/hbase/mapreduce/HFileOutputFormat.java  |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
+index a0a2f86..36b3ab9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/HFileOutputFormat.java
+@@ -75,7 +75,7 @@ public class HFileOutputFormat extends FileOutputFormat<ImmutableBytesWritable,
+     // These configs. are from hbase-*.xml
+     final long maxsize = conf.getLong("hbase.hregion.max.filesize",
+         HConstants.DEFAULT_MAX_FILE_SIZE);
+-    final int blocksize = conf.getInt("hfile.min.blocksize.size",
++    final int blocksize = conf.getInt("hbase.mapreduce.hfileoutputformat.blocksize",
+         HFile.DEFAULT_BLOCKSIZE);
+     // Invented config.  Add to hbase-*.xml if other than default compression.
+     final String compression = conf.get("hfile.compression",
+-- 
+1.7.0.4
+

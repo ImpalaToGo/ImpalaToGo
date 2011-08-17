@@ -1,0 +1,26 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>B.5.&nbsp; SNAPPY</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="compression.html" title="Appendix&nbsp;B.&nbsp;Compression In HBase"><link rel="prev" href="gzip.compression.html" title="B.4.&nbsp; GZIP"><link rel="next" href="faq.html" title="Appendix&nbsp;C.&nbsp;FAQ"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">B.5.&nbsp;
+    SNAPPY
+    </th></tr><tr><td width="20%" align="left"><a accesskey="p" href="gzip.compression.html">Prev</a>&nbsp;</td><th width="60%" align="center">Appendix&nbsp;B.&nbsp;Compression In HBase</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="faq.html">Next</a></td></tr></table><hr></div><div class="section" title="B.5.&nbsp; SNAPPY"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="snappy.compression"></a>B.5.&nbsp;
+    SNAPPY
+    </h2></div></div></div><p>
+        If snappy is installed, HBase can make use of it (courtesy of
+        <a class="link" href="http://code.google.com/p/hadoop-snappy/" target="_top">hadoop-snappy</a>).
+
+        </p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+                    Build and install <a class="link" href="http://code.google.com/p/snappy/" target="_top">snappy</a> on all nodes
+                    of your cluster.
+                </p></li><li class="listitem"><p>
+        Use CompressionTest to verify snappy support is enabled and the libs can be loaded ON ALL NODES of your cluster:
+        </p><pre class="programlisting">$ hbase org.apache.hadoop.hbase.util.CompressionTest hdfs://host/path/to/hbase snappy</pre><p>
+                </p></li><li class="listitem"><p>
+        Create a column family with snappy compression and verify it in the hbase shell:
+        </p><pre class="programlisting">$ hbase&gt; create 't1', { NAME =&gt; 'cf1', COMPRESSION =&gt; 'SNAPPY' }
+hbase&gt; describe 't1'</pre><p>
+        In the output of the "describe" command, you need to ensure it lists "COMPRESSION =&gt; 'SNAPPY'"
+                </p></li></ol></div><p>
+
+    </p></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="gzip.compression.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="compression.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="faq.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">B.4.&nbsp;
+    GZIP
+    &nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Appendix&nbsp;C.&nbsp;FAQ</td></tr></table></div></body></html>

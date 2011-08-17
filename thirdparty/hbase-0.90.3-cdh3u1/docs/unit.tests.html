@@ -1,0 +1,18 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>1.2.&nbsp;Unit Tests</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="developer.html" title="Chapter&nbsp;1.&nbsp;Developers"><link rel="up" href="developer.html" title="Chapter&nbsp;1.&nbsp;Developers"><link rel="prev" href="developer.html" title="Chapter&nbsp;1.&nbsp;Developers"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.2.&nbsp;Unit Tests</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="developer.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;</td></tr></table><hr></div><div class="section" title="1.2.&nbsp;Unit Tests"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="unit.tests"></a>1.2.&nbsp;Unit Tests</h2></div></div></div><p>In HBase we use <a class="link" href="http://junit.org" target="_top">JUnit</a> 4.
+            If you need to run miniclusters of HDFS, ZooKeeper, HBase, or MapReduce testing,
+            be sure to checkout the <code class="classname">HBaseTestingUtility</code>.
+            Alex Baranau of Sematext describes how it can be used in
+            <a class="link" href="http://blog.sematext.com/2010/08/30/hbase-case-study-using-hbasetestingutility-for-local-testing-development/" target="_top">HBase Case-Study: Using HBaseTestingUtility for Local Testing and Development</a> (2010).
+        </p><div class="section" title="1.2.1.&nbsp;Mocito"><div class="titlepage"><div><div><h3 class="title"><a name="mockito"></a>1.2.1.&nbsp;Mocito</h3></div></div></div><p>Sometimes you don't need a full running server
+              unit testing.  For example, some methods can make do with a
+              a <code class="classname">org.apache.hadoop.hbase.Server</code> instance
+              or a <code class="classname">org.apache.hadoop.hbase.master.MasterServices</code>
+              Interface reference rather than a full-blown
+              <code class="classname">org.apache.hadoop.hbase.master.HMaster</code>.
+              In these cases, you maybe able to get away with a mocked
+              <code class="classname">Server</code> instance.  For example:
+              </p><pre class="programlisting">
+              </pre><p>
+           </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="developer.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;</td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;1.&nbsp;Developers&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="developer.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;</td></tr></table></div></body></html>

@@ -1,0 +1,80 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Appendix&nbsp;C.&nbsp;FAQ</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="book.html" title="The Apache HBase Book"><link rel="prev" href="snappy.compression.html" title="B.5.&nbsp; SNAPPY"><link rel="next" href="apd.html" title="Appendix&nbsp;D.&nbsp;YCSB: The Yahoo! Cloud Serving Benchmark and HBase"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Appendix&nbsp;C.&nbsp;FAQ</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="snappy.compression.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="apd.html">Next</a></td></tr></table><hr></div><div class="appendix" title="Appendix&nbsp;C.&nbsp;FAQ"><div class="titlepage"><div><div><h2 class="title"><a name="faq"></a>Appendix&nbsp;C.&nbsp;FAQ</h2></div></div></div><div class="qandaset" title="Frequently Asked Questions"><a name="d0e4357"></a><dl><dt>C.1.  <a href="faq.html#d0e4358">General</a></dt><dd><dl><dt> <a href="faq.html#d0e4361">Are there other HBase FAQs?</a></dt><dt> <a href="faq.html#faq.sql">Does HBase support SQL?</a></dt><dt> <a href="faq.html#faq.hdfs.hbase">How does HBase work on top of HDFS?</a></dt><dt> <a href="faq.html#brand.new.compressor">Why are logs flooded with '2011-01-10 12:40:48,407 INFO org.apache.hadoop.io.compress.CodecPool: Got
+            brand-new compressor' messages?</a></dt></dl></dd><dt>C.2.  <a href="faq.html#ec2">EC2</a></dt><dd><dl><dt> <a href="faq.html#d0e4413">
+            Why doesn't my remote java connection into my ec2 cluster work?
+            </a></dt></dl></dd><dt>C.3.  <a href="faq.html#d0e4423">Building HBase</a></dt><dd><dl><dt> <a href="faq.html#d0e4426">
+When I build, why do I always get Unable to find resource 'VM_global_library.vm'?
+            </a></dt></dl></dd><dt>C.4.  <a href="faq.html#d0e4439">Runtime</a></dt><dd><dl><dt> <a href="faq.html#d0e4442">
+                    Loading, why do I see pauses when loading HBase?
+            </a></dt><dt> <a href="faq.html#d0e4452">
+                    Why does my RegionServer hang inexplicitly?
+            </a></dt><dt> <a href="faq.html#d0e4471">
+                    Why do I see double the actual count of regionservers, once by domain name and then by IP?
+            </a></dt></dl></dd><dt>C.5.  <a href="faq.html#d0e4481">How do I...?</a></dt><dd><dl><dt> <a href="faq.html#secondary.indices">
+                    Secondary Indexes in HBase?
+            </a></dt></dl></dd></dl><table border="0" width="100%" summary="Q and A Set"><col align="left" width="1%"><col><tbody><tr class="qandadiv"><td align="left" valign="top" colspan="2"><h3 class="title"><a name="d0e4358"></a>C.1. General</h3></td></tr><tr class="toc"><td align="left" valign="top" colspan="2"><dl><dt> <a href="faq.html#d0e4361">Are there other HBase FAQs?</a></dt><dt> <a href="faq.html#faq.sql">Does HBase support SQL?</a></dt><dt> <a href="faq.html#faq.hdfs.hbase">How does HBase work on top of HDFS?</a></dt><dt> <a href="faq.html#brand.new.compressor">Why are logs flooded with '2011-01-10 12:40:48,407 INFO org.apache.hadoop.io.compress.CodecPool: Got
+            brand-new compressor' messages?</a></dt></dl></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4361"></a><a name="d0e4362"></a></td><td align="left" valign="top"><p>Are there other HBase FAQs?</p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+              See the FAQ that is up on the wiki, <a class="link" href="http://wiki.apache.org/hadoop/Hbase/FAQ" target="_top">HBase Wiki FAQ</a>
+              as well as the <a class="link" href="http://wiki.apache.org/hadoop/Hbase/Troubleshooting" target="_top">Troubleshooting</a> page.
+                </p></td></tr><tr class="question"><td align="left" valign="top"><a name="faq.sql"></a><a name="d0e4375"></a></td><td align="left" valign="top"><p>Does HBase support SQL?</p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    Not really.  SQL-ish support for HBase via <a class="link" href="http://hive.apache.org/" target="_top">Hive</a> is in development, however Hive is based on MapReduce which is not generally suitable for low-latency requests.
+                    See the <a class="xref" href="datamodel.html" title="Chapter&nbsp;11.&nbsp;Data Model">Chapter&nbsp;11, <i>Data Model</i></a> section for examples on the HBase client.
+                </p></td></tr><tr class="question"><td align="left" valign="top"><a name="faq.hdfs.hbase"></a><a name="d0e4387"></a></td><td align="left" valign="top"><p>How does HBase work on top of HDFS?</p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    <a class="link" href="http://hadoop.apache.org/hdfs/" target="_top">HDFS</a> is a distributed file system that is well suited for the storage of large files.  It's documentation 
+                    states that it is not, however, a general purpose file system, and does not provide fast individual record lookups in files. 
+                    HBase, on the other hand, is built on top of HDFS and provides fast record lookups (and updates) for large tables.  This can sometimes be a point of conceptual confusion.
+                    See the <a class="xref" href="datamodel.html" title="Chapter&nbsp;11.&nbsp;Data Model">Chapter&nbsp;11, <i>Data Model</i></a> and <a class="xref" href="architecture.html" title="Chapter&nbsp;12.&nbsp;Architecture">Chapter&nbsp;12, <i>Architecture</i></a> sections for more information on how HBase achieves its goals.
+                </p></td></tr><tr class="question"><td align="left" valign="top"><a name="brand.new.compressor"></a><a name="d0e4401"></a></td><td align="left" valign="top"><p>Why are logs flooded with '2011-01-10 12:40:48,407 INFO org.apache.hadoop.io.compress.CodecPool: Got
+            brand-new compressor' messages?</p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    Because we are not using the native versions of compression
+                    libraries.  See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-1900" target="_top">HBASE-1900 Put back native support when hadoop 0.21 is released</a>.
+                    Copy the native libs from hadoop under hbase lib dir or
+                    symlink them into place and the message should go away.
+                </p></td></tr><tr class="qandadiv"><td align="left" valign="top" colspan="2"><h3 class="title"><a name="ec2"></a>C.2. EC2</h3></td></tr><tr class="toc"><td align="left" valign="top" colspan="2"><dl><dt> <a href="faq.html#d0e4413">
+            Why doesn't my remote java connection into my ec2 cluster work?
+            </a></dt></dl></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4413"></a><a name="d0e4414"></a></td><td align="left" valign="top"><p>
+            Why doesn't my remote java connection into my ec2 cluster work?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+          See Andrew's answer here, up on the user list: <a class="link" href="http://search-hadoop.com/m/sPdqNFAwyg2" target="_top">Remote Java client connection into EC2 instance</a>.
+                </p></td></tr><tr class="qandadiv"><td align="left" valign="top" colspan="2"><h3 class="title"><a name="d0e4423"></a>C.3. Building HBase</h3></td></tr><tr class="toc"><td align="left" valign="top" colspan="2"><dl><dt> <a href="faq.html#d0e4426">
+When I build, why do I always get Unable to find resource 'VM_global_library.vm'?
+            </a></dt></dl></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4426"></a><a name="d0e4427"></a></td><td align="left" valign="top"><p>
+When I build, why do I always get <code class="code">Unable to find resource 'VM_global_library.vm'</code>?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    Ignore it.  Its not an error.  It is <a class="link" href="http://jira.codehaus.org/browse/MSITE-286" target="_top">officially ugly</a> though.
+                </p></td></tr><tr class="qandadiv"><td align="left" valign="top" colspan="2"><h3 class="title"><a name="d0e4439"></a>C.4. Runtime</h3></td></tr><tr class="toc"><td align="left" valign="top" colspan="2"><dl><dt> <a href="faq.html#d0e4442">
+                    Loading, why do I see pauses when loading HBase?
+            </a></dt><dt> <a href="faq.html#d0e4452">
+                    Why does my RegionServer hang inexplicitly?
+            </a></dt><dt> <a href="faq.html#d0e4471">
+                    Why do I see double the actual count of regionservers, once by domain name and then by IP?
+            </a></dt></dl></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4442"></a><a name="d0e4443"></a></td><td align="left" valign="top"><p>
+                    Loading, why do I see pauses when loading HBase?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    If compression is enabled, see this thread up on the user list,
+                    <a class="link" href="http://search-hadoop.com/m/WUnLM6ojHm1/Long+client+pauses+with+compression&amp;subj=Long+client+pauses+with+compression" target="_top">Long client pauses with compression</a>.
+                </p></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4452"></a><a name="d0e4453"></a></td><td align="left" valign="top"><p>
+                    Why does my RegionServer hang inexplicitly?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                Are you running an old JVM (&lt; 1.6.0_u21?)?  When you look at a thread dump,
+                does it look like threads are BLOCKED but no one holds the lock all are
+                blocked on?  See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-3622" target="_top">HBASE 3622 Deadlock in HBaseServer (JVM bug?)</a>.
+                Adding <code class="code">-XX:+UseMembar</code> to the HBase <code class="varname">HBASE_OPTS</code> in <code class="filename">conf/hbase-env.sh</code>
+                may fix it.
+                </p></td></tr><tr class="question"><td align="left" valign="top"><a name="d0e4471"></a><a name="d0e4472"></a></td><td align="left" valign="top"><p>
+                    Why do I see double the actual count of regionservers, once by domain name and then by IP?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                    Fix your DNS.  In versions of HBase before 0.92.x, reverse DNS needs to give same answer
+                    as forward lookup. See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-3431" target="_top">HBASE 3431
+                        Regionserver is not using the name given it by the master; double entry in master listing of servers</a> for gorey details.
+                </p></td></tr><tr class="qandadiv"><td align="left" valign="top" colspan="2"><h3 class="title"><a name="d0e4481"></a>C.5. How do I...?</h3></td></tr><tr class="toc"><td align="left" valign="top" colspan="2"><dl><dt> <a href="faq.html#secondary.indices">
+                    Secondary Indexes in HBase?
+            </a></dt></dl></td></tr><tr class="question"><td align="left" valign="top"><a name="secondary.indices"></a><a name="d0e4485"></a></td><td align="left" valign="top"><p>
+                    Secondary Indexes in HBase?
+            </p></td></tr><tr class="answer"><td align="left" valign="top"></td><td align="left" valign="top"><p>
+                For a useful introduction to the issues involved maintaining a secondary Index in a store like HBase,
+                see the David Butler message in this thread, <a class="link" href="http://search-hadoop.com/m/nvbiBp2TDP/Stargate%252Bhbase&amp;subj=Stargate+hbase" target="_top">HBase, mail # user - Stargate+hbase</a>
+                </p></td></tr></tbody></table></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="snappy.compression.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="apd.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">B.5.&nbsp;
+    SNAPPY
+    &nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Appendix&nbsp;D.&nbsp;YCSB: The Yahoo! Cloud Serving Benchmark and HBase</td></tr></table></div></body></html>

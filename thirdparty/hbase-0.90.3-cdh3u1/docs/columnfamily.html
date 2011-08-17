@@ -1,0 +1,21 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>11.5.&nbsp;Column Family</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="datamodel.html" title="Chapter&nbsp;11.&nbsp;Data Model"><link rel="prev" href="row.html" title="11.4.&nbsp;Row"><link rel="next" href="cells.html" title="11.6.&nbsp;Cells"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">11.5.&nbsp;Column Family</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="row.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;11.&nbsp;Data Model</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="cells.html">Next</a></td></tr></table><hr></div><div class="section" title="11.5.&nbsp;Column Family"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="columnfamily"></a>11.5.&nbsp;Column Family<a class="indexterm" name="d0e2800"></a></h2></div></div></div><p>
+      Columns in HBase are grouped into <span class="emphasis"><em>column families</em></span>.
+      All column members of a column family have the same prefix.  For example, the
+      columns <span class="emphasis"><em>courses:history</em></span> and
+      <span class="emphasis"><em>courses:math</em></span> are both members of the
+      <span class="emphasis"><em>courses</em></span> column family.
+          The colon character (<code class="literal">:</code>) delimits the column family from the
+      <a class="indexterm" name="d0e2820"></a>.
+        The column family prefix must be composed of
+      <span class="emphasis"><em>printable</em></span> characters. The qualifying tail, the
+      column family <span class="emphasis"><em>qualifier</em></span>, can be made of any
+      arbitrary bytes. Column families must be declared up front
+      at schema definition time whereas columns do not need to be
+      defined at schema time but can be conjured on the fly while
+      the table is up an running.</p><p>Physically, all column family members are stored together on the
+      filesystem.  Because tunings and
+      storage specifications are done at the column family level, it is
+      advised that all column family members have the same general access
+      pattern and size characteristics.</p><p></p></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="row.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="datamodel.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="cells.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">11.4.&nbsp;Row&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;11.6.&nbsp;Cells</td></tr></table></div></body></html>

@@ -1,0 +1,21 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;8.&nbsp;HBase and Schema Design</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="book.html" title="The Apache HBase Book"><link rel="prev" href="mapreduce.specex.html" title="7.4.&nbsp;Speculative Execution"><link rel="next" href="number.of.cfs.html" title="8.2.&nbsp; On the number of column families"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;8.&nbsp;HBase and Schema Design</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="mapreduce.specex.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="number.of.cfs.html">Next</a></td></tr></table><hr></div><div class="chapter" title="Chapter&nbsp;8.&nbsp;HBase and Schema Design"><div class="titlepage"><div><div><h2 class="title"><a name="schema"></a>Chapter&nbsp;8.&nbsp;HBase and Schema Design</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="schema.html#schema.creation">8.1. 
+      Schema Creation
+  </a></span></dt><dt><span class="section"><a href="number.of.cfs.html">8.2. 
+      On the number of column families
+  </a></span></dt><dt><span class="section"><a href="timeseries.html">8.3. 
+  Monotonically Increasing Row Keys/Timeseries Data
+  </a></span></dt><dt><span class="section"><a href="keysize.html">8.4. Try to minimize row and column sizes</a></span></dt><dt><span class="section"><a href="schema.versions.html">8.5. 
+  Number of Versions
+  </a></span></dt></dl></div><p>A good general introduction on the strength and weaknesses modelling on
+          the various non-rdbms datastores is Ian Varleys' Master thesis,
+          <a class="link" href="http://ianvarley.com/UT/MR/Varley_MastersReport_Full_2009-08-07.pdf" target="_top">No Relation: The Mixed Blessings of Non-Relational Databases</a>.
+          Recommended.
+      </p><div class="section" title="8.1.&nbsp; Schema Creation"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.creation"></a>8.1.&nbsp;
+      Schema Creation
+  </h2></div></div></div><p>HBase schemas can be created or updated with <a class="xref" href="shell.html" title="Chapter&nbsp;4.&nbsp;The HBase Shell">Chapter&nbsp;4, <i>The HBase Shell</i></a>
+      or by using <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HBaseAdmin.html" target="_top">HBaseAdmin</a> in the Java API.
+      </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="mapreduce.specex.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="number.of.cfs.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">7.4.&nbsp;Speculative Execution&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;8.2.&nbsp;
+      On the number of column families
+  </td></tr></table></div></body></html>

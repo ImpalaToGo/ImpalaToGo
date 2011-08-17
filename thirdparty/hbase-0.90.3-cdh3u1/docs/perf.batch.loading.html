@@ -1,0 +1,37 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>13.5.&nbsp;Batch Loading</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="performance.html" title="Chapter&nbsp;13.&nbsp;Performance Tuning"><link rel="prev" href="perf.one.region.html" title="13.4.&nbsp;Data Clumping"><link rel="next" href="ch13s06.html" title="13.6.&nbsp;HBase Client"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">13.5.&nbsp;Batch Loading</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="perf.one.region.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;13.&nbsp;Performance Tuning</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="ch13s06.html">Next</a></td></tr></table><hr></div><div class="section" title="13.5.&nbsp;Batch Loading"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="perf.batch.loading"></a>13.5.&nbsp;Batch Loading</h2></div></div></div><p>Use the bulk load tool if you can.  See
+        <a class="link" href="http://hbase.apache.org/bulk-loads.html" target="_top">Bulk Loads</a>.
+        Otherwise, pay attention to the below.
+    </p><div class="section" title="13.5.1.&nbsp; Table Creation: Pre-Creating Regions"><div class="titlepage"><div><div><h3 class="title"><a name="precreate.regions"></a>13.5.1.&nbsp;
+  Table Creation: Pre-Creating Regions
+  </h3></div></div></div><p>
+Tables in HBase are initially created with one region by default.  For bulk imports, this means that all clients will write to the same region until it is large enough to split and become distributed across the cluster.  A useful pattern to speed up the bulk import process is to pre-create empty regions.  Be somewhat conservative in this, because too-many regions can actually degrade performance.  An example of pre-creation using hex-keys is as follows (note:  this example may need to be tweaked to the individual applications keys):
+</p><p>
+</p><pre class="programlisting">public static boolean createTable(HBaseAdmin admin, HTableDescriptor table, byte[][] splits)
+throws IOException {
+  try {
+    admin.createTable( table, splits );
+    return true;
+  } catch (TableExistsException e) {
+    logger.info("table " + table.getNameAsString() + " already exists");
+    // the table already exists...
+    return false;  
+  }
+}
+
+public static byte[][] getHexSplits(String startKey, String endKey, int numRegions) {
+  byte[][] splits = new byte[numRegions-1][];
+  BigInteger lowestKey = new BigInteger(startKey, 16);
+  BigInteger highestKey = new BigInteger(endKey, 16);
+  BigInteger range = highestKey.subtract(lowestKey);
+  BigInteger regionIncrement = range.divide(BigInteger.valueOf(numRegions));
+  lowestKey = lowestKey.add(regionIncrement);
+  for(int i=0; i &lt; numRegions-1;i++) {
+    BigInteger key = lowestKey.add(regionIncrement.multiply(BigInteger.valueOf(i)));
+    byte[] b = String.format("%016x", key).getBytes();
+    splits[i] = b;
+  }
+  return splits;
+}</pre><p>
+  </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="perf.one.region.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="performance.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="ch13s06.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">13.4.&nbsp;Data Clumping&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;13.6.&nbsp;HBase Client</td></tr></table></div></body></html>

@@ -1,0 +1,22 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>8.4.&nbsp;Try to minimize row and column sizes</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="schema.html" title="Chapter&nbsp;8.&nbsp;HBase and Schema Design"><link rel="prev" href="timeseries.html" title="8.3.&nbsp; Monotonically Increasing Row Keys/Timeseries Data"><link rel="next" href="schema.versions.html" title="8.5.&nbsp; Number of Versions"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">8.4.&nbsp;Try to minimize row and column sizes</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="timeseries.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;8.&nbsp;HBase and Schema Design</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="schema.versions.html">Next</a></td></tr></table><hr></div><div class="section" title="8.4.&nbsp;Try to minimize row and column sizes"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="keysize"></a>8.4.&nbsp;Try to minimize row and column sizes</h2></div></div></div><p>In HBase, values are always freighted with their coordinates; as a
+          cell value passes through the system, it'll be accompanied by its
+          row, column name, and timestamp.  Always.  If your rows and column names
+          are large, especially compared o the size of the cell value, then
+          you may run up against some interesting scenarios.  One such is
+          the case described by Marc Limotte at the tail of
+          HBASE-3551
+          (recommended!).
+          Therein, the indices that are kept on HBase storefiles (<a class="xref" href="regions.arch.html#hfile" title="12.3.4.2.&nbsp;StoreFile (HFile)">Section&nbsp;12.3.4.2, &#8220;StoreFile (HFile)&#8221;</a>)
+                  to facilitate random access may end up occupyng large chunks of the HBase
+                  allotted RAM because the cell value coordinates are large.
+                  Mark in the above cited comment suggests upping the block size so
+                  entries in the store file index happen at a larger interval or
+                  modify the table schema so it makes for smaller rows and column
+                  names.
+      `</p></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="timeseries.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="schema.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="schema.versions.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">8.3.&nbsp;
+  Monotonically Increasing Row Keys/Timeseries Data
+  &nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;8.5.&nbsp;
+  Number of Versions
+  </td></tr></table></div></body></html>

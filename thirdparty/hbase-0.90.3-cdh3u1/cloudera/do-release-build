@@ -1,0 +1,22 @@
+#!/bin/bash
+# Copyright (c) 2009 Cloudera, inc
+#
+# Performs a release build
+
+set -ex
+
+# Do the build
+BIN_DIR=$(readlink -f $(dirname $0))
+RELEASE_DIR=$BIN_DIR/..
+
+cd $RELEASE_DIR
+mvn -DskipTests clean site source:jar package install javadoc:javadoc $DO_MAVEN_DEPLOY
+
+mkdir -p build
+for x in target/*.tar.gz ; do
+  tar -C build -xzf $x
+done
+
+cp -r target/site/apidocs build/hbase-${FULL_VERSION}/docs
+
+(cd build && tar -czf hbase-${FULL_VERSION}.tar.gz hbase-${FULL_VERSION})

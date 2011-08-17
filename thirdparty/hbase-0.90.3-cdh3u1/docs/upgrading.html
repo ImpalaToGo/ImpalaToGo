@@ -1,0 +1,37 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;2.&nbsp;Upgrading</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="book.html" title="The Apache HBase Book"><link rel="prev" href="notsoquick.html" title="1.3.&nbsp;Not-so-quick Start Guide"><link rel="next" href="configuration.html" title="Chapter&nbsp;3.&nbsp;Configuration"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;2.&nbsp;Upgrading</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="notsoquick.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="configuration.html">Next</a></td></tr></table><hr></div><div class="chapter" title="Chapter&nbsp;2.&nbsp;Upgrading"><div class="titlepage"><div><div><h2 class="title"><a name="upgrading"></a>Chapter&nbsp;2.&nbsp;Upgrading</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="upgrading.html#upgrade0.90">2.1. Upgrading to HBase 0.90.x from 0.20.x or 0.89.x</a></span></dt></dl></div><p>
+        Review <a class="xref" href="notsoquick.html#requirements" title="1.3.1.&nbsp;Requirements">Section&nbsp;1.3.1, &#8220;Requirements&#8221;</a>, in particular the section on Hadoop version.
+    </p><div class="section" title="2.1.&nbsp;Upgrading to HBase 0.90.x from 0.20.x or 0.89.x"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="upgrade0.90"></a>2.1.&nbsp;Upgrading to HBase 0.90.x from 0.20.x or 0.89.x</h2></div></div></div><p>This version of 0.90.x HBase can be started on data written by
+              HBase 0.20.x or HBase 0.89.x.  There is no need of a migration step.
+              HBase 0.89.x and 0.90.x does write out the name of region directories
+              differently -- it names them with a md5 hash of the region name rather
+              than a jenkins hash -- so this means that once started, there is no
+              going back to HBase 0.20.x.
+          </p><p>
+             Be sure to remove the <code class="filename">hbase-default.xml</code> from
+             your <code class="filename">conf</code>
+             directory on upgrade.  A 0.20.x version of this file will have
+             sub-optimal configurations for 0.90.x HBase.  The
+             <code class="filename">hbase-default.xml</code> file is now bundled into the
+             HBase jar and read from there.  If you would like to review
+             the content of this file, see it in the src tree at
+             <code class="filename">src/main/resources/hbase-default.xml</code> or
+             see <a class="xref" href="configuration.html#hbase_default_configurations" title="3.1.1.&nbsp;HBase Default Configuration">Section&nbsp;3.1.1, &#8220;HBase Default Configuration&#8221;</a>.
+          </p><p>
+            Finally, if upgrading from 0.20.x, check your 
+            <code class="varname">.META.</code> schema in the shell.  In the past we would
+            recommend that users run with a 16kb
+            <code class="varname">MEMSTORE_FLUSHSIZE</code>.
+            Run <code class="code">hbase&gt; scan '-ROOT-'</code> in the shell. This will output
+            the current <code class="varname">.META.</code> schema.  Check
+            <code class="varname">MEMSTORE_FLUSHSIZE</code> size.  Is it 16kb (16384)?  If so, you will
+            need to change this (The 'normal'/default value is 64MB (67108864)).
+            Run the script <code class="filename">bin/set_meta_memstore_size.rb</code>.
+            This will make the necessary edit to your <code class="varname">.META.</code> schema.
+            Failure to run this change will make for a slow cluster <sup>[<a name="d0e1048" href="#ftn.d0e1048" class="footnote">9</a>]</sup>
+            .
+
+          </p></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.d0e1048" href="#d0e1048" class="para">9</a>] </sup>
+            See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-3499" target="_top">HBASE-3499 Users upgrading to 0.90.0 need to have their .META. table updated with the right MEMSTORE_SIZE</a>
+            </p></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="notsoquick.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="configuration.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">1.3.&nbsp;Not-so-quick Start Guide&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;3.&nbsp;Configuration</td></tr></table></div></body></html>

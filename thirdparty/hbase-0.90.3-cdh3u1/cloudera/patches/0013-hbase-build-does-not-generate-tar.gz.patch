@@ -1,0 +1,46 @@
+From 092ab8f88d6880b716b308d9742eb7179d678681 Mon Sep 17 00:00:00 2001
+From: Alejandro Abdelnur <tucu00@gmail.com>
+Date: Fri, 10 Jun 2011 15:05:41 -0700
+Subject: [PATCH 13/18] hbase build does not generate tar.gz
+
+---
+ cloudera/do-release-build |    2 +-
+ pom.xml                   |    9 +++++++++
+ 2 files changed, 10 insertions(+), 1 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index 952b536..67a63fb 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -10,7 +10,7 @@ BIN_DIR=$(readlink -f $(dirname $0))
+ RELEASE_DIR=$BIN_DIR/..
+ 
+ cd $RELEASE_DIR
+-mvn -DskipTests clean site source:jar install assembly:assembly javadoc:javadoc $DO_MAVEN_DEPLOY
++mvn -DskipTests clean site source:jar package install javadoc:javadoc $DO_MAVEN_DEPLOY
+ 
+ mkdir -p build
+ for x in target/*.tar.gz ; do
+diff --git a/pom.xml b/pom.xml
+index e77d51d..abc2a9e 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -325,6 +325,15 @@
+             <descriptor>src/assembly/all.xml</descriptor>
+           </descriptors>
+         </configuration>
++        <executions>
++          <execution>
++            <id>tarball</id>
++            <phase>package</phase>
++            <goals>
++              <goal>single</goal>
++            </goals>
++          </execution>
++        </executions>
+       </plugin>
+ 
+       <!-- Run with -Dmaven.test.skip.exec=true to build -tests.jar without running tests (this is needed for upstream projects whose tests need this jar simply for compilation)-->
+-- 
+1.7.0.4
+

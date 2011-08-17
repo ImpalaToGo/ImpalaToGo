@@ -1,0 +1,38 @@
+From de68648f456cdb4bf51b8402dbf194988529374e Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Mon, 23 May 2011 21:45:20 +0000
+Subject: [PATCH 09/18] Change 'snappy' to 'SNAPPY' in schema illustration
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1126768 13f79535-47bb-0310-9956-ffa450edef68
+---
+ src/docbkx/book.xml |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/docbkx/book.xml b/src/docbkx/book.xml
+index a7894c0..f235c39 100644
+--- a/src/docbkx/book.xml
++++ b/src/docbkx/book.xml
+@@ -1316,7 +1316,7 @@ false
+     SNAPPY
+     </title>
+     <para>
+-        To set snappy compression on a column family, do as following:
++        To set SNAPPY compression on a column family, do as following:
+         <orderedlist>
+             <listitem>
+                 <para>
+@@ -1339,9 +1339,9 @@ false
+             <listitem>
+                 <para>
+         Create a column family with snappy compression and verify it in the hbase shell:
+-        <programlisting>$ hbase> create 't1', { NAME => 'cf1', COMPRESSION => 'snappy' }
++        <programlisting>$ hbase> create 't1', { NAME => 'cf1', COMPRESSION => 'SNAPPY' }
+ hbase> describe 't1'</programlisting>
+-        In the output of the "describe" command, you need to ensure it lists "COMPRESSION => 'snappy'"
++        In the output of the "describe" command, you need to ensure it lists "COMPRESSION => 'SNAPPY'"
+                 </para>
+             </listitem>
+ 
+-- 
+1.7.0.4
+

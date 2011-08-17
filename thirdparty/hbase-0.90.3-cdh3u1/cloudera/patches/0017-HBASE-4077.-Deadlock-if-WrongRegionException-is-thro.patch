@@ -1,0 +1,45 @@
+From 83650220f0a3431e88b601ad63745db43afa3571 Mon Sep 17 00:00:00 2001
+From: Eli Collins <eli@cloudera.com>
+Date: Mon, 11 Jul 2011 14:00:15 -0700
+Subject: [PATCH 17/18] HBASE-4077. Deadlock if WrongRegionException is thrown from getLock in HRegion.delete.
+
+In the HRegion.delete function, If getLock throws a WrongRegionException, no
+lock id is ever returned, yet in the finally block, it tries to release the row
+lock using that lock id (which is null). This causes an NPE in the finally
+clause, and the closeRegionOperation() to never execute, keeping a read lock
+open forever.
+
+Reason: Bug
+Author: Adam Warrington
+Ref: CDH-3319
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   12 +++++++-----
+ 1 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 0f57d7b..9c7ba27 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -1171,12 +1171,14 @@ public class HRegion implements HeapSize { // , Writable{
+       // If we did not pass an existing row lock, obtain a new one
+       lid = getLock(lockid, row, true);
+ 
+-      // All edits for the given row (across all column families) must happen atomically.
+-      prepareDelete(delete);
+-      delete(delete.getFamilyMap(), writeToWAL);
+-
++      try {
++        // All edits for the given row (across all column families) must happen atomically.
++        prepareDelete(delete);
++        delete(delete.getFamilyMap(), writeToWAL);
++      } finally {
++        if(lockid == null) releaseRowLock(lid);
++      }
+     } finally {
+-      if(lockid == null) releaseRowLock(lid);
+       closeRegionOperation();
+     }
+   }
+-- 
+1.7.0.4
+

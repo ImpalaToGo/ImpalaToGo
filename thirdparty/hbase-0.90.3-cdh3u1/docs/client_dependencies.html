@@ -1,0 +1,48 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>3.5.&nbsp;Client configuration and dependencies connecting to an HBase cluster</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="configuration.html" title="Chapter&nbsp;3.&nbsp;Configuration"><link rel="prev" href="important_configurations.html" title="3.4.&nbsp;The Important Configurations"><link rel="next" href="shell.html" title="Chapter&nbsp;4.&nbsp;The HBase Shell"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">3.5.&nbsp;Client configuration and dependencies connecting to an HBase cluster</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="important_configurations.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;3.&nbsp;Configuration</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shell.html">Next</a></td></tr></table><hr></div><div class="section" title="3.5.&nbsp;Client configuration and dependencies connecting to an HBase cluster"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="client_dependencies"></a>3.5.&nbsp;Client configuration and dependencies connecting to an HBase cluster</h2></div></div></div><p>
+          Since the HBase Master may move around, clients bootstrap by looking to ZooKeeper for
+          current critical locations.  ZooKeeper is where all these values are kept.  Thus clients
+          require the location of the ZooKeeper ensemble information before they can do anything else.
+          Usually this the ensemble location is kept out in the <code class="filename">hbase-site.xml</code> and
+          is picked up by the client from the <code class="varname">CLASSPATH</code>.</p><p>If you are configuring an IDE to run a HBase client, you should
+            include the <code class="filename">conf/</code> directory on your classpath so
+            <code class="filename">hbase-site.xml</code> settings can be found (or
+            add <code class="filename">src/test/resources</code> to pick up the hbase-site.xml
+            used by tests).
+      </p><p>
+          Minimally, a client of HBase needs the hbase, hadoop, log4j, commons-logging, commons-lang,
+          and ZooKeeper jars in its <code class="varname">CLASSPATH</code> connecting to a cluster.
+      </p><p>
+          An example basic <code class="filename">hbase-site.xml</code> for client only
+          might look as follows:
+          </p><pre class="programlisting">
+&lt;?xml version="1.0"?&gt;
+&lt;?xml-stylesheet type="text/xsl" href="configuration.xsl"?&gt;
+&lt;configuration&gt;
+  &lt;property&gt;
+    &lt;name&gt;hbase.zookeeper.quorum&lt;/name&gt;
+    &lt;value&gt;example1,example2,example3&lt;/value&gt;
+    &lt;description&gt;The directory shared by region servers.
+    &lt;/description&gt;
+  &lt;/property&gt;
+&lt;/configuration&gt;
+</pre><p>
+        </p><div class="section" title="3.5.1.&nbsp;Java client configuration"><div class="titlepage"><div><div><h3 class="title"><a name="d0e2066"></a>3.5.1.&nbsp;Java client configuration</h3></div><div><h4 class="subtitle">How Java reads <code class="filename">hbase-site.xml</code> content</h4></div></div></div><p>The configuration used by a java client is kept
+        in an <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/HBaseConfiguration" target="_top">HBaseConfiguration</a> instance.
+        The factory method on HBaseConfiguration, <code class="code">HBaseConfiguration.create();</code>,
+        on invocation, will read in the content of the first <code class="filename">hbase-site.xml</code> found on
+        the client's <code class="varname">CLASSPATH</code>, if one is present
+        (Invocation will also factor in any <code class="filename">hbase-default.xml</code> found;
+        an hbase-default.xml ships inside the <code class="filename">hbase.X.X.X.jar</code>). 
+        It is also possible to specify configuration directly without having to read from a
+        <code class="filename">hbase-site.xml</code>.  For example, to set the ZooKeeper
+        ensemble for the cluster programmatically do as follows:
+        </p><pre class="programlisting">Configuration config = HBaseConfiguration.create();
+config.set("hbase.zookeeper.quorum", "localhost");  // Here we are running zookeeper locally</pre><p>    
+        If multiple ZooKeeper instances make up your ZooKeeper ensemble,
+        they may be specified in a comma-separated list (just as in the <code class="filename">hbase-site.xml</code> file).
+        This populated <code class="classname">Configuration</code> instance can then be passed to an 
+        <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HTable.html" target="_top">HTable</a>,
+        and so on.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="important_configurations.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="configuration.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shell.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">3.4.&nbsp;The Important Configurations&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;4.&nbsp;The HBase Shell</td></tr></table></div></body></html>

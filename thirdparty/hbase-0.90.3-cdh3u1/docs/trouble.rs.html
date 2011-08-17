@@ -1,0 +1,33 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>1.5.&nbsp;RegionServer</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="troubleshooting.html" title="Chapter&nbsp;1.&nbsp;Troubleshooting and Debugging HBase"><link rel="up" href="troubleshooting.html" title="Chapter&nbsp;1.&nbsp;Troubleshooting and Debugging HBase"><link rel="prev" href="trouble.client.html" title="1.4.&nbsp;Client"><link rel="next" href="trouble.master.html" title="1.6.&nbsp;Master"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.5.&nbsp;RegionServer</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="trouble.client.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="trouble.master.html">Next</a></td></tr></table><hr></div><div class="section" title="1.5.&nbsp;RegionServer"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="trouble.rs"></a>1.5.&nbsp;RegionServer</h2></div></div></div><div class="section" title="1.5.1.&nbsp;Startup Errors"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.rs.startup"></a>1.5.1.&nbsp;Startup Errors</h3></div></div></div><div class="section" title="1.5.1.1.&nbsp;Compression Link Errors"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.startup.compression"></a>1.5.1.1.&nbsp;Compression Link Errors</h4></div></div></div><p>
+            Since compression algorithms such as LZO need to be installed and configured on each cluster this is a frequent source of startup error.  If you see messages like this...
+            </p><pre class="programlisting">
+11/02/20 01:32:15 ERROR lzo.GPLNativeCodeLoader: Could not load native gpl library
+java.lang.UnsatisfiedLinkError: no gplcompression in java.library.path
+        at java.lang.ClassLoader.loadLibrary(ClassLoader.java:1734)
+        at java.lang.Runtime.loadLibrary0(Runtime.java:823)
+        at java.lang.System.loadLibrary(System.java:1028)
+            </pre><p>
+            .. then there is a path issue with the compression libraries.  See the Configuration section on <a class="link" href="">LZO compression configuration</a>.
+            </p></div></div><div class="section" title="1.5.2.&nbsp;Runtime Errors"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.rs.runtime"></a>1.5.2.&nbsp;Runtime Errors</h3></div></div></div><div class="section" title="1.5.2.1.&nbsp;java.io.IOException...(Too many open files)"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.runtime.filehandles"></a>1.5.2.1.&nbsp;java.io.IOException...(Too many open files)</h4></div></div></div><p>
+           See the Getting Started section on <a class="link" href="">ulimit and nproc configuration</a>.
+           </p></div><div class="section" title="1.5.2.2.&nbsp;xceiverCount 258 exceeds the limit of concurrent xcievers 256"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.runtime.xceivers"></a>1.5.2.2.&nbsp;xceiverCount 258 exceeds the limit of concurrent xcievers 256</h4></div></div></div><p>
+           This typically shows up in the DataNode logs.
+           </p><p>
+           See the Getting Started section on <a class="link" href="">xceivers configuration</a>.
+           </p></div><div class="section" title="1.5.2.3.&nbsp;System instability, and the presence of &#34;java.lang.OutOfMemoryError: unable to create new native thread in exceptions&#34; HDFS DataNode logs or that of any system daemon"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.runtime.oom-nt"></a>1.5.2.3.&nbsp;System instability, and the presence of "java.lang.OutOfMemoryError: unable to create new native thread in exceptions" HDFS DataNode logs or that of any system daemon</h4></div></div></div><p>
+           See the Getting Started section on <a class="link" href="">ulimit and nproc configuration</a>.
+           </p></div><div class="section" title="1.5.2.4.&nbsp;DFS instability and/or RegionServer lease timeouts"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.runtime.gc"></a>1.5.2.4.&nbsp;DFS instability and/or RegionServer lease timeouts</h4></div></div></div><p>
+           If you see warning messages like this...
+           </p><pre class="programlisting">
+2009-02-24 10:01:33,516 WARN org.apache.hadoop.hbase.util.Sleeper: We slept xxx ms, ten times longer than scheduled: 10000
+2009-02-24 10:01:33,516 WARN org.apache.hadoop.hbase.util.Sleeper: We slept xxx ms, ten times longer than scheduled: 15000
+2009-02-24 10:01:36,472 WARN org.apache.hadoop.hbase.regionserver.HRegionServer: unable to report to master for xxx milliseconds - retrying      
+           </pre><p>
+           ... or see full GC compactions then you may be experiencing full GC's.
+           </p></div><div class="section" title="1.5.2.5.&nbsp;&#34;No live nodes contain current block&#34; and/or YouAreDeadException"><div class="titlepage"><div><div><h4 class="title"><a name="trouble.rs.runtime.nolivenodes"></a>1.5.2.5.&nbsp;"No live nodes contain current block" and/or YouAreDeadException</h4></div></div></div><p>
+           These errors can happen either when running out of OS file handles or in periods of severe network problems where the nodes are unreachable.
+           </p><p>
+           See the Getting Started section on <a class="link" href="">ulimit and nproc configuration</a> and check your network.
+           </p></div></div><div class="section" title="1.5.3.&nbsp;Shutdown Errors"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.rs.shutdown"></a>1.5.3.&nbsp;Shutdown Errors</h3></div></div></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="trouble.client.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="trouble.master.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">1.4.&nbsp;Client&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="troubleshooting.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;1.6.&nbsp;Master</td></tr></table></div></body></html>

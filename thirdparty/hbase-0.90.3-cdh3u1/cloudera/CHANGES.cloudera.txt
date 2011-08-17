@@ -1,0 +1,163 @@
+commit 50421e7161ae9bb8d2846fac2e67cd2601efd7dc
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Mon Jul 11 16:04:52 2011 -0700
+
+    CLOUDERA_BUILD. Hbase to pick up Hadoop lib/native/JAVA_PLATFORM in JAVA_LIBRARY_PATH if avail
+    
+    *** Interim fix for DISTRO-272 / HBASE-4085 ***
+
+commit 83650220f0a3431e88b601ad63745db43afa3571
+Author: Eli Collins <eli@cloudera.com>
+Date:   Mon Jul 11 14:00:15 2011 -0700
+
+    HBASE-4077. Deadlock if WrongRegionException is thrown from getLock in HRegion.delete.
+    
+    In the HRegion.delete function, If getLock throws a WrongRegionException, no
+    lock id is ever returned, yet in the finally block, it tries to release the row
+    lock using that lock id (which is null). This causes an NPE in the finally
+    clause, and the closeRegionOperation() to never execute, keeping a read lock
+    open forever.
+    
+    Reason: Bug
+    Author: Adam Warrington
+    Ref: CDH-3319
+
+commit 16d9e89f3ace4bd264e92d79e50dce69b8835cfe
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Jul 6 00:43:59 2011 -0700
+
+    CLOUDERA-BUILD. Updating versions for cdh3u1 release.
+
+commit 56242ee425b21c4d0cab0c98c335b6dbdc71c8c4
+Author: Eli Collins <eli@cloudera.com>
+Date:   Tue Jul 5 18:21:34 2011 -0700
+
+    HBASE-3617. NoRouteToHostException during balancing will cause Master abort.
+    
+    Reason: Bug
+    Author: Ted Yu
+    Ref: CDH-3314
+
+commit d8f24ac79fcbbf138d99c71c45dba3da4f126394
+Author: Aaron T. Myers <atm@cloudera.com>
+Date:   Tue Jul 5 17:38:01 2011 -0700
+
+    HBASE-3240. Improve documentation of importtsv and bulk loads
+    
+    Reason: Improvement
+    Author: Aaron T. Myers
+    Ref: CDH-3057
+
+commit 092ab8f88d6880b716b308d9742eb7179d678681
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Fri Jun 10 15:05:41 2011 -0700
+
+    hbase build does not generate tar.gz
+
+commit dc0b38f7ef3d508f524ff1ccbc5acb5c9e1af15d
+Author: Michael Stack <stack@apache.org>
+Date:   Thu Jun 9 22:34:32 2011 +0000
+
+    HBASE-3871 Compression.java uses ClassLoader.getSystemClassLoader() to load codec
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1134119 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 1d627622a92bb1a12c8fd815b66b699119ec7399
+Author: Michael Stack <stack@apache.org>
+Date:   Thu Mar 24 22:59:45 2011 +0000
+
+    HBASE-3474 HFileOutputFormat to use column family's compression algorithm
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1085179 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 8a3418dbf857daf65fd9ffe325347758dc00fedc
+Author: Michael Stack <stack@apache.org>
+Date:   Mon Jun 6 23:16:09 2011 +0000
+
+    HBASE-3873 Mavenize Hadoop Snappy JAR/SOs project dependencies
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1132833 13f79535-47bb-0310-9956-ffa450edef68
+
+commit de68648f456cdb4bf51b8402dbf194988529374e
+Author: Michael Stack <stack@apache.org>
+Date:   Mon May 23 21:45:20 2011 +0000
+
+    Change 'snappy' to 'SNAPPY' in schema illustration
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1126768 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2147d6f9c003861f1a0f244f51d3d0f1c87e40f4
+Author: Michael Stack <stack@apache.org>
+Date:   Fri May 20 16:58:25 2011 +0000
+
+    Fix TestCompressionTest since SNAPPY went in
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1125467 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 83e7e3edb3e3b9963c3611e795c4e6506ee20eec
+Author: Michael Stack <stack@apache.org>
+Date:   Thu May 19 23:00:47 2011 +0000
+
+    HBASE-3691 Add compressor support for 'snappy', google's compressor
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1125163 13f79535-47bb-0310-9956-ffa450edef68
+
+commit c7ee06143f38427be8e4e8bd832ce6d7d56bd2c4
+Author: Aaron T. Myers <atm@cloudera.com>
+Date:   Thu May 5 14:08:50 2011 -0700
+
+    HBASE-3440. Clean out load_table.rb and make sure all roads lead to completebulkload tool
+    
+    Reason: Bug
+    Author: Vidhyashankar Venkataraman
+    Ref: CDH-3057
+
+commit 53572869a7bd986a2b002344c801c7636a8b35a8
+Author: Aaron T. Myers <atm@cloudera.com>
+Date:   Fri May 6 16:07:05 2011 -0700
+
+    HBASE-3864. Rename of hfile.min.blocksize.size in HBASE-2899 reverted in HBASE-1861
+    
+    Reason: Bug
+    Author: Aaron T. Myers
+    Ref: CDH-3057
+
+commit f0d8349c5d1ede7b2d9a84c1cda83378f00cf8be
+Author: Aaron T. Myers <atm@cloudera.com>
+Date:   Thu May 5 13:53:57 2011 -0700
+
+    HBASE-1861. Multi-family support for HFileOutputFormat
+    
+    Reason: Improvement
+    Author: Nicolas Spiegelberg
+    Ref: CDH-3057
+
+commit 93f769181d59e8cf98c37762261bc1474c181ab8
+Author: Todd Lipcon <todd@cloudera.com>
+Date:   Wed Jan 12 13:32:54 2011 -0800
+
+    HBASE-3533. Allow HBASE_LIBRARY_PATH to point to libs
+    
+    Author: Todd Lipcon
+
+commit 19096d9d506dded0304540c0703cddbf0986a49e
+Author: Todd Lipcon <todd@cloudera.com>
+Date:   Tue Jun 14 11:02:19 2011 -0700
+
+    CLOUDERA-BUILD. hbase-config.sh should set HBASE_PID_DIR if unset
+
+commit db367cda62d77479085b8154df2728ab536cd5b0
+Author: Todd Lipcon <todd@cloudera.com>
+Date:   Tue Jun 14 11:02:00 2011 -0700
+
+    CLOUDERA-BUILD. Add Cloudera-specific build infrastructure.
+    
+    Major changes:
+    * Add scripts in cloudera/ directory used for installation from within
+      package control scripts
+    * Add basic hbase.1 man page in cloudera/ dir
+    * Build should create a "mixed" src/bin tarball, and install from that
+    * Update pom.xml for CDH:
+    ** Inherit from CDH parent pom and add cdh repo
+    ** Change to CDH version numbering for HBase and dependent projects
+    ** Add cloudera/ directory to assembly

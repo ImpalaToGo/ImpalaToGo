@@ -1,0 +1,272 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;3.&nbsp;Configuration</title><link rel="stylesheet" href="css/freebsd_docbook.css" type="text/css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.75.2"><link rel="home" href="book.html" title="The Apache HBase Book"><link rel="up" href="book.html" title="The Apache HBase Book"><link rel="prev" href="upgrading.html" title="Chapter&nbsp;2.&nbsp;Upgrading"><link rel="next" href="hbase.env.sh.html" title="3.2.&nbsp;hbase-env.sh"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;3.&nbsp;Configuration</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="upgrading.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="hbase.env.sh.html">Next</a></td></tr></table><hr></div><div class="chapter" title="Chapter&nbsp;3.&nbsp;Configuration"><div class="titlepage"><div><div><h2 class="title"><a name="configuration"></a>Chapter&nbsp;3.&nbsp;Configuration</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="configuration.html#hbase.site">3.1. <code class="filename">hbase-site.xml</code> and <code class="filename">hbase-default.xml</code></a></span></dt><dd><dl><dt><span class="section"><a href="configuration.html#hbase_default_configurations">3.1.1. HBase Default Configuration</a></span></dt></dl></dd><dt><span class="section"><a href="hbase.env.sh.html">3.2. <code class="filename">hbase-env.sh</code></a></span></dt><dt><span class="section"><a href="log4j.html">3.3. <code class="filename">log4j.properties</code></a></span></dt><dt><span class="section"><a href="important_configurations.html">3.4. The Important Configurations</a></span></dt><dd><dl><dt><span class="section"><a href="important_configurations.html#required_configuration">3.4.1. Required Configurations</a></span></dt><dt><span class="section"><a href="important_configurations.html#recommended_configurations">3.4.2. Recommended Configuations</a></span></dt></dl></dd><dt><span class="section"><a href="client_dependencies.html">3.5. Client configuration and dependencies connecting to an HBase cluster</a></span></dt><dd><dl><dt><span class="section"><a href="client_dependencies.html#d0e2066">3.5.1. Java client configuration</a></span></dt></dl></dd></dl></div><p>
+        HBase uses the same configuration system as Hadoop.
+        To configure a deploy, edit a file of environment variables
+        in <code class="filename">conf/hbase-env.sh</code> -- this configuration
+        is used mostly by the launcher shell scripts getting the cluster
+        off the ground -- and then add configuration to an XML file to
+        do things like override HBase defaults, tell HBase what Filesystem to
+        use, and the location of the ZooKeeper ensemble
+        <sup>[<a name="d0e1063" href="#ftn.d0e1063" class="footnote">10</a>]</sup>
+        .
+    </p><p>When running in distributed mode, after you make
+    an edit to an HBase configuration, make sure you copy the
+    content of the <code class="filename">conf</code> directory to
+    all nodes of the cluster.  HBase will not do this for you.
+    Use <span class="command"><strong>rsync</strong></span>.</p><div class="section" title="3.1.&nbsp;hbase-site.xml and hbase-default.xml"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="hbase.site"></a>3.1.&nbsp;<code class="filename">hbase-site.xml</code> and <code class="filename">hbase-default.xml</code></h2></div></div></div><p>Just as in Hadoop where you add site-specific HDFS configuration
+    to the <code class="filename">hdfs-site.xml</code> file,
+    for HBase, site specific customizations go into
+    the file <code class="filename">conf/hbase-site.xml</code>.
+    For the list of configurable properties, see
+    <a class="xref" href="configuration.html#hbase_default_configurations" title="3.1.1.&nbsp;HBase Default Configuration">Section&nbsp;3.1.1, &#8220;HBase Default Configuration&#8221;</a>
+    below or view the raw <code class="filename">hbase-default.xml</code>
+    source file in the HBase source code at
+    <code class="filename">src/main/resources</code>.
+    </p><p>
+    Not all configuration options make it out to
+    <code class="filename">hbase-default.xml</code>.  Configuration
+    that it is thought rare anyone would change can exist only
+    in code; the only way to turn up such configurations is
+    via a reading of the source code itself.
+    </p><p>
+      Currently, changes here will require a cluster restart for HBase to notice the change.
+      </p><div class="section" title="3.1.1.&nbsp;HBase Default Configuration"><div class="titlepage"><div><div><h3 class="title"><a name="hbase_default_configurations"></a>3.1.1.&nbsp;HBase Default Configuration</h3></div></div></div><p></p><div class="glossary" title="HBase Default Configuration"><div class="titlepage"><div><div><h4 class="title"><a name="hbase.default.configuration"></a>HBase Default Configuration</h4></div></div></div><p>
+This documentation is generated using the default hbase configuration file,
+<code class="filename">hbase-default.xml</code>, as source.
+</p><dl><dt><a name="hbase.rootdir"></a><code class="varname">hbase.rootdir</code></dt><dd><p>The directory shared by region servers and into
+    which HBase persists.  The URL should be 'fully-qualified'
+    to include the filesystem scheme.  For example, to specify the
+    HDFS directory '/hbase' where the HDFS instance's namenode is
+    running at namenode.example.org on port 9000, set this value to:
+    hdfs://namenode.example.org:9000/hbase.  By default HBase writes
+    into /tmp.  Change this configuration else all data will be lost
+    on machine restart.
+    </p><p>Default: <code class="varname">file:///tmp/hbase-${user.name}/hbase</code></p></dd><dt><a name="hbase.master.port"></a><code class="varname">hbase.master.port</code></dt><dd><p>The port the HBase Master should bind to.</p><p>Default: <code class="varname">60000</code></p></dd><dt><a name="hbase.cluster.distributed"></a><code class="varname">hbase.cluster.distributed</code></dt><dd><p>The mode the cluster will be in. Possible values are
+      false for standalone mode and true for distributed mode.  If
+      false, startup will run all HBase and ZooKeeper daemons together
+      in the one JVM.
+    </p><p>Default: <code class="varname">false</code></p></dd><dt><a name="hbase.tmp.dir"></a><code class="varname">hbase.tmp.dir</code></dt><dd><p>Temporary directory on the local filesystem.
+    Change this setting to point to a location more permanent
+    than '/tmp' (The '/tmp' directory is often cleared on
+    machine restart).
+    </p><p>Default: <code class="varname">/tmp/hbase-${user.name}</code></p></dd><dt><a name="hbase.master.info.port"></a><code class="varname">hbase.master.info.port</code></dt><dd><p>The port for the HBase Master web UI.
+    Set to -1 if you do not want a UI instance run.
+    </p><p>Default: <code class="varname">60010</code></p></dd><dt><a name="hbase.master.info.bindAddress"></a><code class="varname">hbase.master.info.bindAddress</code></dt><dd><p>The bind address for the HBase Master web UI
+    </p><p>Default: <code class="varname">0.0.0.0</code></p></dd><dt><a name="hbase.client.write.buffer"></a><code class="varname">hbase.client.write.buffer</code></dt><dd><p>Default size of the HTable clien write buffer in bytes.
+    A bigger buffer takes more memory -- on both the client and server
+    side since server instantiates the passed write buffer to process
+    it -- but a larger buffer size reduces the number of RPCs made.
+    For an estimate of server-side memory-used, evaluate
+    hbase.client.write.buffer * hbase.regionserver.handler.count
+    </p><p>Default: <code class="varname">2097152</code></p></dd><dt><a name="hbase.regionserver.port"></a><code class="varname">hbase.regionserver.port</code></dt><dd><p>The port the HBase RegionServer binds to.
+    </p><p>Default: <code class="varname">60020</code></p></dd><dt><a name="hbase.regionserver.info.port"></a><code class="varname">hbase.regionserver.info.port</code></dt><dd><p>The port for the HBase RegionServer web UI
+    Set to -1 if you do not want the RegionServer UI to run.
+    </p><p>Default: <code class="varname">60030</code></p></dd><dt><a name="hbase.regionserver.info.port.auto"></a><code class="varname">hbase.regionserver.info.port.auto</code></dt><dd><p>Whether or not the Master or RegionServer
+    UI should search for a port to bind to. Enables automatic port
+    search if hbase.regionserver.info.port is already in use.
+    Useful for testing, turned off by default.
+    </p><p>Default: <code class="varname">false</code></p></dd><dt><a name="hbase.regionserver.info.bindAddress"></a><code class="varname">hbase.regionserver.info.bindAddress</code></dt><dd><p>The address for the HBase RegionServer web UI
+    </p><p>Default: <code class="varname">0.0.0.0</code></p></dd><dt><a name="hbase.regionserver.class"></a><code class="varname">hbase.regionserver.class</code></dt><dd><p>The RegionServer interface to use.
+    Used by the client opening proxy to remote region server.
+    </p><p>Default: <code class="varname">org.apache.hadoop.hbase.ipc.HRegionInterface</code></p></dd><dt><a name="hbase.client.pause"></a><code class="varname">hbase.client.pause</code></dt><dd><p>General client pause value.  Used mostly as value to wait
+    before running a retry of a failed get, region lookup, etc.</p><p>Default: <code class="varname">1000</code></p></dd><dt><a name="hbase.client.retries.number"></a><code class="varname">hbase.client.retries.number</code></dt><dd><p>Maximum retries.  Used as maximum for all retryable
+    operations such as fetching of the root region from root region
+    server, getting a cell's value, starting a row update, etc.
+    Default: 10.
+    </p><p>Default: <code class="varname">10</code></p></dd><dt><a name="hbase.client.scanner.caching"></a><code class="varname">hbase.client.scanner.caching</code></dt><dd><p>Number of rows that will be fetched when calling next
+    on a scanner if it is not served from (local, client) memory. Higher
+    caching values will enable faster scanners but will eat up more memory
+    and some calls of next may take longer and longer times when the cache is empty.
+    Do not set this value such that the time between invocations is greater
+    than the scanner timeout; i.e. hbase.regionserver.lease.period
+    </p><p>Default: <code class="varname">1</code></p></dd><dt><a name="hbase.client.keyvalue.maxsize"></a><code class="varname">hbase.client.keyvalue.maxsize</code></dt><dd><p>Specifies the combined maximum allowed size of a KeyValue
+    instance. This is to set an upper boundary for a single entry saved in a
+    storage file. Since they cannot be split it helps avoiding that a region
+    cannot be split any further because the data is too large. It seems wise
+    to set this to a fraction of the maximum region size. Setting it to zero
+    or less disables the check.
+    </p><p>Default: <code class="varname">10485760</code></p></dd><dt><a name="hbase.regionserver.lease.period"></a><code class="varname">hbase.regionserver.lease.period</code></dt><dd><p>HRegion server lease period in milliseconds. Default is
+    60 seconds. Clients must report in within this period else they are
+    considered dead.</p><p>Default: <code class="varname">60000</code></p></dd><dt><a name="hbase.regionserver.handler.count"></a><code class="varname">hbase.regionserver.handler.count</code></dt><dd><p>Count of RPC Server instances spun up on RegionServers
+    Same property is used by the Master for count of master handlers.
+    Default is 10.
+    </p><p>Default: <code class="varname">10</code></p></dd><dt><a name="hbase.regionserver.msginterval"></a><code class="varname">hbase.regionserver.msginterval</code></dt><dd><p>Interval between messages from the RegionServer to Master
+    in milliseconds.
+    </p><p>Default: <code class="varname">3000</code></p></dd><dt><a name="hbase.regionserver.flushlogentries"></a><code class="varname">hbase.regionserver.flushlogentries</code></dt><dd><p>Sync the HLog to HDFS when it has accumulated this many
+    entries. Default 1. Value is checked on every HLog.hflush
+    </p><p>Default: <code class="varname">1</code></p></dd><dt><a name="hbase.regionserver.optionallogflushinterval"></a><code class="varname">hbase.regionserver.optionallogflushinterval</code></dt><dd><p>Sync the HLog to the HDFS after this interval if it has not
+    accumulated enough entries to trigger a sync. Default 1 second. Units:
+    milliseconds.
+    </p><p>Default: <code class="varname">1000</code></p></dd><dt><a name="hbase.regionserver.regionSplitLimit"></a><code class="varname">hbase.regionserver.regionSplitLimit</code></dt><dd><p>Limit for the number of regions after which no more region
+    splitting should take place. This is not a hard limit for the number of
+    regions but acts as a guideline for the regionserver to stop splitting after
+    a certain limit. Default is set to MAX_INT; i.e. do not block splitting.
+    </p><p>Default: <code class="varname">2147483647</code></p></dd><dt><a name="hbase.regionserver.logroll.period"></a><code class="varname">hbase.regionserver.logroll.period</code></dt><dd><p>Period at which we will roll the commit log regardless
+    of how many edits it has.</p><p>Default: <code class="varname">3600000</code></p></dd><dt><a name="hbase.regionserver.hlog.reader.impl"></a><code class="varname">hbase.regionserver.hlog.reader.impl</code></dt><dd><p>The HLog file reader implementation.</p><p>Default: <code class="varname">org.apache.hadoop.hbase.regionserver.wal.SequenceFileLogReader</code></p></dd><dt><a name="hbase.regionserver.hlog.writer.impl"></a><code class="varname">hbase.regionserver.hlog.writer.impl</code></dt><dd><p>The HLog file writer implementation.</p><p>Default: <code class="varname">org.apache.hadoop.hbase.regionserver.wal.SequenceFileLogWriter</code></p></dd><dt><a name="hbase.regionserver.thread.splitcompactcheckfrequency"></a><code class="varname">hbase.regionserver.thread.splitcompactcheckfrequency</code></dt><dd><p>How often a region server runs the split/compaction check.
+    </p><p>Default: <code class="varname">20000</code></p></dd><dt><a name="hbase.regionserver.nbreservationblocks"></a><code class="varname">hbase.regionserver.nbreservationblocks</code></dt><dd><p>The number of resevoir blocks of memory release on
+    OOME so we can cleanup properly before server shutdown.
+    </p><p>Default: <code class="varname">4</code></p></dd><dt><a name="hbase.zookeeper.dns.interface"></a><code class="varname">hbase.zookeeper.dns.interface</code></dt><dd><p>The name of the Network Interface from which a ZooKeeper server
+      should report its IP address.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.zookeeper.dns.nameserver"></a><code class="varname">hbase.zookeeper.dns.nameserver</code></dt><dd><p>The host name or IP address of the name server (DNS)
+      which a ZooKeeper server should use to determine the host name used by the
+      master for communication and display purposes.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.regionserver.dns.interface"></a><code class="varname">hbase.regionserver.dns.interface</code></dt><dd><p>The name of the Network Interface from which a region server
+      should report its IP address.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.regionserver.dns.nameserver"></a><code class="varname">hbase.regionserver.dns.nameserver</code></dt><dd><p>The host name or IP address of the name server (DNS)
+      which a region server should use to determine the host name used by the
+      master for communication and display purposes.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.master.dns.interface"></a><code class="varname">hbase.master.dns.interface</code></dt><dd><p>The name of the Network Interface from which a master
+      should report its IP address.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.master.dns.nameserver"></a><code class="varname">hbase.master.dns.nameserver</code></dt><dd><p>The host name or IP address of the name server (DNS)
+      which a master should use to determine the host name used
+      for communication and display purposes.
+    </p><p>Default: <code class="varname">default</code></p></dd><dt><a name="hbase.balancer.period%0A    "></a><code class="varname">hbase.balancer.period
+    </code></dt><dd><p>Period at which the region balancer runs in the Master.
+    </p><p>Default: <code class="varname">300000</code></p></dd><dt><a name="hbase.regions.slop"></a><code class="varname">hbase.regions.slop</code></dt><dd><p>Rebalance if any regionserver has average + (average * slop) regions.
+    Default is 0% slop.
+    </p><p>Default: <code class="varname">0</code></p></dd><dt><a name="hbase.master.logcleaner.ttl"></a><code class="varname">hbase.master.logcleaner.ttl</code></dt><dd><p>Maximum time a HLog can stay in the .oldlogdir directory,
+    after which it will be cleaned by a Master thread.
+    </p><p>Default: <code class="varname">600000</code></p></dd><dt><a name="hbase.master.logcleaner.plugins"></a><code class="varname">hbase.master.logcleaner.plugins</code></dt><dd><p>A comma-separated list of LogCleanerDelegate invoked by
+    the LogsCleaner service. These WAL/HLog cleaners are called in order,
+    so put the HLog cleaner that prunes the most HLog files in front. To
+    implement your own LogCleanerDelegate, just put it in HBase's classpath
+    and add the fully qualified class name here. Always add the above
+    default log cleaners in the list.
+    </p><p>Default: <code class="varname">org.apache.hadoop.hbase.master.TimeToLiveLogCleaner</code></p></dd><dt><a name="hbase.regionserver.global.memstore.upperLimit"></a><code class="varname">hbase.regionserver.global.memstore.upperLimit</code></dt><dd><p>Maximum size of all memstores in a region server before new
+      updates are blocked and flushes are forced. Defaults to 40% of heap
+    </p><p>Default: <code class="varname">0.4</code></p></dd><dt><a name="hbase.regionserver.global.memstore.lowerLimit"></a><code class="varname">hbase.regionserver.global.memstore.lowerLimit</code></dt><dd><p>When memstores are being forced to flush to make room in
+      memory, keep flushing until we hit this mark. Defaults to 35% of heap.
+      This value equal to hbase.regionserver.global.memstore.upperLimit causes
+      the minimum possible flushing to occur when updates are blocked due to
+      memstore limiting.
+    </p><p>Default: <code class="varname">0.35</code></p></dd><dt><a name="hbase.server.thread.wakefrequency"></a><code class="varname">hbase.server.thread.wakefrequency</code></dt><dd><p>Time to sleep in between searches for work (in milliseconds).
+    Used as sleep interval by service threads such as log roller.
+    </p><p>Default: <code class="varname">10000</code></p></dd><dt><a name="hbase.hregion.memstore.flush.size"></a><code class="varname">hbase.hregion.memstore.flush.size</code></dt><dd><p>
+    Memstore will be flushed to disk if size of the memstore
+    exceeds this number of bytes.  Value is checked by a thread that runs
+    every hbase.server.thread.wakefrequency.
+    </p><p>Default: <code class="varname">67108864</code></p></dd><dt><a name="hbase.hregion.preclose.flush.size"></a><code class="varname">hbase.hregion.preclose.flush.size</code></dt><dd><p>
+      If the memstores in a region are this size or larger when we go
+      to close, run a "pre-flush" to clear out memstores before we put up
+      the region closed flag and take the region offline.  On close,
+      a flush is run under the close flag to empty memory.  During
+      this time the region is offline and we are not taking on any writes.
+      If the memstore content is large, this flush could take a long time to
+      complete.  The preflush is meant to clean out the bulk of the memstore
+      before putting up the close flag and taking the region offline so the
+      flush that runs under the close flag has little to do.
+    </p><p>Default: <code class="varname">5242880</code></p></dd><dt><a name="hbase.hregion.memstore.block.multiplier"></a><code class="varname">hbase.hregion.memstore.block.multiplier</code></dt><dd><p>
+    Block updates if memstore has hbase.hregion.block.memstore
+    time hbase.hregion.flush.size bytes.  Useful preventing
+    runaway memstore during spikes in update traffic.  Without an
+    upper-bound, memstore fills such that when it flushes the
+    resultant flush files take a long time to compact or split, or
+    worse, we OOME.
+    </p><p>Default: <code class="varname">2</code></p></dd><dt><a name="hbase.hregion.memstore.mslab.enabled"></a><code class="varname">hbase.hregion.memstore.mslab.enabled</code></dt><dd><p>
+      Experimental: Enables the MemStore-Local Allocation Buffer,
+      a feature which works to prevent heap fragmentation under
+      heavy write loads. This can reduce the frequency of stop-the-world
+      GC pauses on large heaps.
+    </p><p>Default: <code class="varname">false</code></p></dd><dt><a name="hbase.hregion.max.filesize"></a><code class="varname">hbase.hregion.max.filesize</code></dt><dd><p>
+    Maximum HStoreFile size. If any one of a column families' HStoreFiles has
+    grown to exceed this value, the hosting HRegion is split in two.
+    Default: 256M.
+    </p><p>Default: <code class="varname">268435456</code></p></dd><dt><a name="hbase.hstore.compactionThreshold"></a><code class="varname">hbase.hstore.compactionThreshold</code></dt><dd><p>
+    If more than this number of HStoreFiles in any one HStore
+    (one HStoreFile is written per flush of memstore) then a compaction
+    is run to rewrite all HStoreFiles files as one.  Larger numbers
+    put off compaction but when it runs, it takes longer to complete.
+    </p><p>Default: <code class="varname">3</code></p></dd><dt><a name="hbase.hstore.blockingStoreFiles"></a><code class="varname">hbase.hstore.blockingStoreFiles</code></dt><dd><p>
+    If more than this number of StoreFiles in any one Store
+    (one StoreFile is written per flush of MemStore) then updates are
+    blocked for this HRegion until a compaction is completed, or
+    until hbase.hstore.blockingWaitTime has been exceeded.
+    </p><p>Default: <code class="varname">7</code></p></dd><dt><a name="hbase.hstore.blockingWaitTime"></a><code class="varname">hbase.hstore.blockingWaitTime</code></dt><dd><p>
+    The time an HRegion will block updates for after hitting the StoreFile
+    limit defined by hbase.hstore.blockingStoreFiles.
+    After this time has elapsed, the HRegion will stop blocking updates even
+    if a compaction has not been completed.  Default: 90 seconds.
+    </p><p>Default: <code class="varname">90000</code></p></dd><dt><a name="hbase.hstore.compaction.max"></a><code class="varname">hbase.hstore.compaction.max</code></dt><dd><p>Max number of HStoreFiles to compact per 'minor' compaction.
+    </p><p>Default: <code class="varname">10</code></p></dd><dt><a name="hbase.hregion.majorcompaction"></a><code class="varname">hbase.hregion.majorcompaction</code></dt><dd><p>The time (in miliseconds) between 'major' compactions of all
+    HStoreFiles in a region.  Default: 1 day.
+    Set to 0 to disable automated major compactions.
+    </p><p>Default: <code class="varname">86400000</code></p></dd><dt><a name="hbase.mapreduce.hfileoutputformat.blocksize"></a><code class="varname">hbase.mapreduce.hfileoutputformat.blocksize</code></dt><dd><p>The mapreduce HFileOutputFormat writes storefiles/hfiles.
+    This is the minimum hfile blocksize to emit.  Usually in hbase, writing
+    hfiles, the blocksize is gotten from the table schema (HColumnDescriptor)
+    but in the mapreduce outputformat context, we don't have access to the
+    schema so get blocksize from Configuation.  The smaller you make
+    the blocksize, the bigger your index and the less you fetch on a
+    random-access.  Set the blocksize down if you have small cells and want
+    faster random-access of individual cells.
+    </p><p>Default: <code class="varname">65536</code></p></dd><dt><a name="hfile.block.cache.size"></a><code class="varname">hfile.block.cache.size</code></dt><dd><p>
+          Percentage of maximum heap (-Xmx setting) to allocate to block cache
+          used by HFile/StoreFile. Default of 0.2 means allocate 20%.
+          Set to 0 to disable.
+      </p><p>Default: <code class="varname">0.2</code></p></dd><dt><a name="hbase.hash.type"></a><code class="varname">hbase.hash.type</code></dt><dd><p>The hashing algorithm for use in HashFunction. Two values are
+    supported now: murmur (MurmurHash) and jenkins (JenkinsHash).
+    Used by bloom filters.
+    </p><p>Default: <code class="varname">murmur</code></p></dd><dt><a name="hbase.master.keytab.file"></a><code class="varname">hbase.master.keytab.file</code></dt><dd><p>Full path to the kerberos keytab file to use for logging in
+    the configured HMaster server principal.
+    </p><p>Default: <code class="varname"></code></p></dd><dt><a name="hbase.master.kerberos.principal"></a><code class="varname">hbase.master.kerberos.principal</code></dt><dd><p>Ex. "hbase/_HOST@EXAMPLE.COM".  The kerberos principal name
+    that should be used to run the HMaster process.  The principal name should
+    be in the form: user/hostname@DOMAIN.  If "_HOST" is used as the hostname
+    portion, it will be replaced with the actual hostname of the running
+    instance.
+    </p><p>Default: <code class="varname"></code></p></dd><dt><a name="hbase.regionserver.keytab.file"></a><code class="varname">hbase.regionserver.keytab.file</code></dt><dd><p>Full path to the kerberos keytab file to use for logging in
+    the configured HRegionServer server principal.
+    </p><p>Default: <code class="varname"></code></p></dd><dt><a name="hbase.regionserver.kerberos.principal"></a><code class="varname">hbase.regionserver.kerberos.principal</code></dt><dd><p>Ex. "hbase/_HOST@EXAMPLE.COM".  The kerberos principal name
+    that should be used to run the HRegionServer process.  The principal name
+    should be in the form: user/hostname@DOMAIN.  If "_HOST" is used as the
+    hostname portion, it will be replaced with the actual hostname of the
+    running instance.  An entry for this principal must exist in the file
+    specified in hbase.regionserver.keytab.file
+    </p><p>Default: <code class="varname"></code></p></dd><dt><a name="zookeeper.session.timeout"></a><code class="varname">zookeeper.session.timeout</code></dt><dd><p>ZooKeeper session timeout.
+      HBase passes this to the zk quorum as suggested maximum time for a
+      session.  See http://hadoop.apache.org/zookeeper/docs/current/zookeeperProgrammers.html#ch_zkSessions
+      "The client sends a requested timeout, the server responds with the
+      timeout that it can give the client. "
+      In milliseconds.
+    </p><p>Default: <code class="varname">180000</code></p></dd><dt><a name="zookeeper.znode.parent"></a><code class="varname">zookeeper.znode.parent</code></dt><dd><p>Root ZNode for HBase in ZooKeeper. All of HBase's ZooKeeper
+      files that are configured with a relative path will go under this node.
+      By default, all of HBase's ZooKeeper file path are configured with a
+      relative path, so they will all go under this directory unless changed.
+    </p><p>Default: <code class="varname">/hbase</code></p></dd><dt><a name="zookeeper.znode.rootserver"></a><code class="varname">zookeeper.znode.rootserver</code></dt><dd><p>Path to ZNode holding root region location. This is written by
+      the master and read by clients and region servers. If a relative path is
+      given, the parent folder will be ${zookeeper.znode.parent}. By default,
+      this means the root location is stored at /hbase/root-region-server.
+    </p><p>Default: <code class="varname">root-region-server</code></p></dd><dt><a name="hbase.zookeeper.quorum"></a><code class="varname">hbase.zookeeper.quorum</code></dt><dd><p>Comma separated list of servers in the ZooKeeper Quorum.
+    For example, "host1.mydomain.com,host2.mydomain.com,host3.mydomain.com".
+    By default this is set to localhost for local and pseudo-distributed modes
+    of operation. For a fully-distributed setup, this should be set to a full
+    list of ZooKeeper quorum servers. If HBASE_MANAGES_ZK is set in hbase-env.sh
+    this is the list of servers which we will start/stop ZooKeeper on.
+    </p><p>Default: <code class="varname">localhost</code></p></dd><dt><a name="hbase.zookeeper.peerport"></a><code class="varname">hbase.zookeeper.peerport</code></dt><dd><p>Port used by ZooKeeper peers to talk to each other.
+    See http://hadoop.apache.org/zookeeper/docs/r3.1.1/zookeeperStarted.html#sc_RunningReplicatedZooKeeper
+    for more information.
+    </p><p>Default: <code class="varname">2888</code></p></dd><dt><a name="hbase.zookeeper.leaderport"></a><code class="varname">hbase.zookeeper.leaderport</code></dt><dd><p>Port used by ZooKeeper for leader election.
+    See http://hadoop.apache.org/zookeeper/docs/r3.1.1/zookeeperStarted.html#sc_RunningReplicatedZooKeeper
+    for more information.
+    </p><p>Default: <code class="varname">3888</code></p></dd><dt><a name="hbase.zookeeper.property.initLimit"></a><code class="varname">hbase.zookeeper.property.initLimit</code></dt><dd><p>Property from ZooKeeper's config zoo.cfg.
+    The number of ticks that the initial synchronization phase can take.
+    </p><p>Default: <code class="varname">10</code></p></dd><dt><a name="hbase.zookeeper.property.syncLimit"></a><code class="varname">hbase.zookeeper.property.syncLimit</code></dt><dd><p>Property from ZooKeeper's config zoo.cfg.
+    The number of ticks that can pass between sending a request and getting an
+    acknowledgment.
+    </p><p>Default: <code class="varname">5</code></p></dd><dt><a name="hbase.zookeeper.property.dataDir"></a><code class="varname">hbase.zookeeper.property.dataDir</code></dt><dd><p>Property from ZooKeeper's config zoo.cfg.
+    The directory where the snapshot is stored.
+    </p><p>Default: <code class="varname">${hbase.tmp.dir}/zookeeper</code></p></dd><dt><a name="hbase.zookeeper.property.clientPort"></a><code class="varname">hbase.zookeeper.property.clientPort</code></dt><dd><p>Property from ZooKeeper's config zoo.cfg.
+    The port at which the clients will connect.
+    </p><p>Default: <code class="varname">2181</code></p></dd><dt><a name="hbase.zookeeper.property.maxClientCnxns"></a><code class="varname">hbase.zookeeper.property.maxClientCnxns</code></dt><dd><p>Property from ZooKeeper's config zoo.cfg.
+    Limit on number of concurrent connections (at the socket level) that a
+    single client, identified by IP address, may make to a single member of
+    the ZooKeeper ensemble. Set high to avoid zk connection issues running
+    standalone and pseudo-distributed.
+    </p><p>Default: <code class="varname">2000</code></p></dd><dt><a name="hbase.rest.port"></a><code class="varname">hbase.rest.port</code></dt><dd><p>The port for the HBase REST server.</p><p>Default: <code class="varname">8080</code></p></dd><dt><a name="hbase.rest.readonly"></a><code class="varname">hbase.rest.readonly</code></dt><dd><p>
+    Defines the mode the REST server will be started in. Possible values are:
+    false: All HTTP methods are permitted - GET/PUT/POST/DELETE.
+    true: Only the GET method is permitted.
+    </p><p>Default: <code class="varname">false</code></p></dd></dl></div></div></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.d0e1063" href="#d0e1063" class="para">10</a>] </sup>
+Be careful editing XML.  Make sure you close all elements.
+Run your file through <span class="command"><strong>xmllint</strong></span> or similar
+to ensure well-formedness of your document after an edit session.
+</p></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="upgrading.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="hbase.env.sh.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;2.&nbsp;Upgrading&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;3.2.&nbsp;<code class="filename">hbase-env.sh</code></td></tr></table></div></body></html>
