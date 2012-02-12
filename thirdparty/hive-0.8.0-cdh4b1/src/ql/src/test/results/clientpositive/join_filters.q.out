@@ -1,0 +1,1238 @@
+PREHOOK: query: CREATE TABLE myinput1(key int, value int)
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE myinput1(key int, value int)
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@myinput1
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in3.txt' INTO TABLE myinput1
+PREHOOK: type: LOAD
+PREHOOK: Output: default@myinput1
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in3.txt' INTO TABLE myinput1
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@myinput1
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-10-53_959_4678848543117504855/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-10-53_959_4678848543117504855/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-03_025_7955462004282010855/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-03_025_7955462004282010855/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-12_100_6983040145015177293/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-12_100_6983040145015177293/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-21_141_5185531257242427094/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-21_141_5185531257242427094/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	NULL	40
+NULL	NULL	NULL	40
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	12	35
+NULL	NULL	12	35
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+NULL	NULL	48	NULL
+NULL	NULL	48	NULL
+NULL	NULL	48	NULL
+NULL	40	NULL	NULL
+NULL	40	NULL	NULL
+NULL	40	NULL	NULL
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+12	35	NULL	NULL
+12	35	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+48	NULL	NULL	NULL
+48	NULL	NULL	NULL
+48	NULL	NULL	NULL
+100	100	NULL	NULL
+100	100	NULL	NULL
+100	100	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-30_330_3788413488391769992/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-30_330_3788413488391769992/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-39_405_2758170420131898392/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-39_405_2758170420131898392/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-48_617_8714153075559321840/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-48_617_8714153075559321840/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-57_671_5251740170706163625/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-11-57_671_5251740170706163625/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-06_741_5172687860565306741/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-06_741_5172687860565306741/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-16_006_4048631933921695035/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-16_006_4048631933921695035/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-24_963_4815857239765076463/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-24_963_4815857239765076463/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key and a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-34_144_8059340765002036479/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key and a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-34_144_8059340765002036479/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-43_197_3407865851415822388/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-43_197_3407865851415822388/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-52_358_1943945651950396591/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-12-52_358_1943945651950396591/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-01_464_7114755242792932651/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-01_464_7114755242792932651/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key=b.key and a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-10_599_7122215970373956220/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key=b.key and a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-10_599_7122215970373956220/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-19_612_5962551300955095299/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-19_612_5962551300955095299/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-28_641_6195156976360514519/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-28_641_6195156976360514519/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-37_632_5623116073571922212/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-37_632_5623116073571922212/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-46_619_7290674563298782372/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-46_619_7290674563298782372/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-55_667_430473894480487629/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-13-55_667_430473894480487629/-mr-10000
+NULL	NULL	NULL	NULL	NULL	40
+NULL	NULL	NULL	NULL	12	35
+NULL	NULL	NULL	NULL	48	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-05_055_4545479006314769628/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-05_055_4545479006314769628/-mr-10000
+NULL	NULL	NULL	40	NULL	NULL
+NULL	NULL	12	35	NULL	NULL
+NULL	NULL	48	NULL	NULL	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.value = c.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-14_255_6157226682735356933/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.value = c.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-14_255_6157226682735356933/-mr-10000
+NULL	NULL	NULL	NULL	NULL	40
+NULL	NULL	NULL	NULL	12	35
+NULL	NULL	NULL	NULL	48	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-27_901_7440551648111417769/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-27_901_7440551648111417769/-mr-10000
+NULL	NULL	NULL	NULL	NULL	40
+NULL	NULL	NULL	NULL	12	35
+NULL	NULL	NULL	NULL	48	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-41_719_1859940648407277632/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-41_719_1859940648407277632/-mr-10000
+NULL	NULL	NULL	40	NULL	NULL
+NULL	NULL	12	35	NULL	NULL
+NULL	NULL	48	NULL	NULL	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.key = c.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-55_369_8074987097157483776/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.key = c.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-14-55_369_8074987097157483776/-mr-10000
+NULL	NULL	NULL	NULL	NULL	40
+NULL	NULL	NULL	NULL	12	35
+NULL	NULL	NULL	NULL	48	NULL
+100	100	100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-09_129_4519335629855179347/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-09_129_4519335629855179347/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-20_485_2798776265117549064/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-20_485_2798776265117549064/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-31_930_2485746093976885286/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-31_930_2485746093976885286/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-43_299_2760432052539022109/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-43_299_2760432052539022109/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-54_566_2804678894376754194/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-15-54_566_2804678894376754194/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-06_026_7846170071933661330/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-06_026_7846170071933661330/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-17_258_3909028066393320133/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-17_258_3909028066393320133/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-28_576_3218835035704700217/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-28_576_3218835035704700217/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-40_000_1016545606411675617/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-40_000_1016545606411675617/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-51_262_7242543282403073102/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-16-51_262_7242543282403073102/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-02_434_753066470854534431/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-02_434_753066470854534431/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-13_793_7841839638939668810/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-13_793_7841839638939668810/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-25_015_8294910576752480714/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-25_015_8294910576752480714/-mr-10000
+NULL	40	NULL	NULL
+12	35	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-36_184_1295990012733783115/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-36_184_1295990012733783115/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-47_586_5056930489466838568/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-47_586_5056930489466838568/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-58_922_4969260413229633952/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-17-58_922_4969260413229633952/-mr-10000
+NULL	NULL	NULL	40
+NULL	NULL	12	35
+NULL	NULL	48	NULL
+100	100	100	100
+PREHOOK: query: CREATE TABLE smb_input1(key int, value int) CLUSTERED BY (key) SORTED BY (key) INTO 2 BUCKETS
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE smb_input1(key int, value int) CLUSTERED BY (key) SORTED BY (key) INTO 2 BUCKETS
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@smb_input1
+PREHOOK: query: CREATE TABLE smb_input2(key int, value int) CLUSTERED BY (value) SORTED BY (value) INTO 2 BUCKETS
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE smb_input2(key int, value int) CLUSTERED BY (value) SORTED BY (value) INTO 2 BUCKETS
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@smb_input2
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in1.txt' into table smb_input1
+PREHOOK: type: LOAD
+PREHOOK: Output: default@smb_input1
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in1.txt' into table smb_input1
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@smb_input1
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in2.txt' into table smb_input1
+PREHOOK: type: LOAD
+PREHOOK: Output: default@smb_input1
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in2.txt' into table smb_input1
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@smb_input1
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in1.txt' into table smb_input2
+PREHOOK: type: LOAD
+PREHOOK: Output: default@smb_input2
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in1.txt' into table smb_input2
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@smb_input2
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in2.txt' into table smb_input2
+PREHOOK: type: LOAD
+PREHOOK: Output: default@smb_input2
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/in2.txt' into table smb_input2
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@smb_input2
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-12_244_6851421972122657862/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-12_244_6851421972122657862/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-21_508_512221184151722667/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-21_508_512221184151722667/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-30_742_1804652164056337460/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-30_742_1804652164056337460/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-40_106_8700430376677863339/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-40_106_8700430376677863339/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-51_764_659640421231245124/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-18-51_764_659640421231245124/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-01_053_6048968085954304272/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-01_053_6048968085954304272/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-10_445_485676876031056349/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-10_445_485676876031056349/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-19_792_1447393646057628788/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-19_792_1447393646057628788/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-31_446_5974271916583665146/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-31_446_5974271916583665146/-mr-10000
+NULL	35	NULL	NULL
+NULL	135	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+148	NULL	NULL	NULL
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-40_600_2876988171248751966/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-40_600_2876988171248751966/-mr-10000
+NULL	35	NULL	NULL
+NULL	135	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+148	NULL	NULL	NULL
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a LEFT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-50_046_1232028144267716385/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a LEFT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-50_046_1232028144267716385/-mr-10000
+NULL	35	NULL	NULL
+NULL	135	NULL	NULL
+48	NULL	NULL	NULL
+100	100	100	100
+148	NULL	NULL	NULL
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-59_036_6143289660458100755/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-19-59_036_6143289660458100755/-mr-10000
+NULL	NULL	NULL	35
+NULL	NULL	NULL	135
+NULL	NULL	48	NULL
+NULL	NULL	148	NULL
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-08_202_1931727438363530421/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-08_202_1931727438363530421/-mr-10000
+NULL	NULL	NULL	35
+NULL	NULL	NULL	135
+NULL	NULL	48	NULL
+NULL	NULL	148	NULL
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a RIGHT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-17_529_6420589679015562850/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a RIGHT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-17_529_6420589679015562850/-mr-10000
+NULL	NULL	NULL	35
+NULL	NULL	NULL	135
+NULL	NULL	48	NULL
+NULL	NULL	148	NULL
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-26_716_7047061978719578315/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-26_716_7047061978719578315/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-35_699_6458114689162875930/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-35_699_6458114689162875930/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-44_773_450532957707665629/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-44_773_450532957707665629/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-53_764_4865977989247533500/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-20-53_764_4865977989247533500/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-02_840_6177533646503709884/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-02_840_6177533646503709884/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-11_941_9018576475178578256/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-11_941_9018576475178578256/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-20_990_405293266815507860/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-20_990_405293266815507860/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-30_094_9024863239113366268/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-30_094_9024863239113366268/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-39_313_9204772333498501702/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-39_313_9204772333498501702/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-48_412_8412958173598721995/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-48_412_8412958173598721995/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-57_658_1169520686612655816/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-21-57_658_1169520686612655816/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key and a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-06_706_63065923182054906/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key and a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-06_706_63065923182054906/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-15_783_5147226451823934489/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-15_783_5147226451823934489/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-24_992_8720447994563042781/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-24_992_8720447994563042781/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-34_060_1869401985004643637/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-34_060_1869401985004643637/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key=b.key and a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-43_163_2349492542266347806/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key=b.key and a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-43_163_2349492542266347806/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-52_231_6661876364521137452/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-22-52_231_6661876364521137452/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-01_273_8020179056918605608/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-01_273_8020179056918605608/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-10_520_733575737127065087/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-10_520_733575737127065087/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-19_563_4497554766664418026/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a FULL OUTER JOIN myinput1 b ON a.value = b.value and a.key=b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-19_563_4497554766664418026/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-28_599_3287897916743793306/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-28_599_3287897916743793306/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-38_020_831619887240654650/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.value=c.value AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-38_020_831619887240654650/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.value = c.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-47_277_4921816655377056361/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.value = c.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-23-47_277_4921816655377056361/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-01_015_5428076780169954671/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a LEFT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) RIGHT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-01_015_5428076780169954671/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-14_868_4456222603368078072/-mr-10000
+POSTHOOK: query: SELECT * from myinput1 a RIGHT OUTER JOIN myinput1 b ON (a.value=b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) LEFT OUTER JOIN myinput1 c ON (b.key=c.key AND c.key > 40 AND c.value > 50 AND c.key = c.value AND b.key > 40 AND b.value > 50 AND b.key = b.value) ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-14_868_4456222603368078072/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.key = c.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-28_761_4991733785595769500/-mr-10000
+POSTHOOK: query: SELECT * FROM myinput1 a LEFT OUTER JOIN myinput1 b RIGHT OUTER JOIN myinput1 c ON a.value = b.value and b.key = c.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value AND c.key > 40 AND c.value > 50 AND c.key = c.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC, c.key ASC, c.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-28_761_4991733785595769500/-mr-10000
+100	100	100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-42_425_3191908778343386586/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-42_425_3191908778343386586/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-53_776_5861047209286791448/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-24-53_776_5861047209286791448/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-05_185_7378288352901213104/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-05_185_7378288352901213104/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-16_507_2255965753302446051/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-16_507_2255965753302446051/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-27_754_3568291978943817744/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-27_754_3568291978943817744/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-39_030_8983659429007957665/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b on a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-39_030_8983659429007957665/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-50_410_8626952465170670124/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-25-50_410_8626952465170670124/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-01_753_7223216214999156176/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-01_753_7223216214999156176/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-13_156_8723193410616854854/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-13_156_8723193410616854854/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-24_516_2338813158107483013/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a JOIN myinput1 b ON a.value = b.value and a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-24_516_2338813158107483013/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-35_898_2147972681343842028/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-35_898_2147972681343842028/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-47_170_3170066195413759261/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-47_170_3170066195413759261/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-58_727_2987204214739338024/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM myinput1 a LEFT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-26-58_727_2987204214739338024/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-10_053_850342490728241151/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-10_053_850342490728241151/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-21_432_7614933887616750977/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-21_432_7614933887616750977/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@myinput1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-32_639_7662659482817301151/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM myinput1 a RIGHT OUTER JOIN myinput1 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@myinput1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-32_639_7662659482817301151/-mr-10000
+100	100	100	100
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-43_995_9192471144908001961/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-43_995_9192471144908001961/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-53_274_1535413780299996749/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-27-53_274_1535413780299996749/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-02_662_2673397316834601572/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-02_662_2673397316834601572/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-11_910_2230649725644383258/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-11_910_2230649725644383258/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-23_488_3723967833036628653/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-23_488_3723967833036628653/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-32_790_6251585465454407541/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-32_790_6251585465454407541/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-42_103_959524367229687286/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-42_103_959524367229687286/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-51_393_8453479327129845878/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a JOIN smb_input2 b ON a.key = b.key AND a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-28-51_393_8453479327129845878/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-03_091_2305320656868727270/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-03_091_2305320656868727270/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-12_224_95891984999469612/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input1 a LEFT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-12_224_95891984999469612/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a LEFT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-21_539_4396901802595775198/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(b) */ * FROM smb_input2 a LEFT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-21_539_4396901802595775198/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-30_772_2533535102563895229/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input1 b ON a.key = b.key AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-30_772_2533535102563895229/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input1
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-40_009_6656397578789142643/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input1 a RIGHT OUTER JOIN smb_input2 b ON a.key = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input1
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-40_009_6656397578789142643/-mr-10000
+100	100	100	100
+200	200	200	200
+PREHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a RIGHT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+PREHOOK: type: QUERY
+PREHOOK: Input: default@smb_input2
+PREHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-49_321_185551890620852609/-mr-10000
+POSTHOOK: query: SELECT /*+ MAPJOIN(a) */ * FROM smb_input2 a RIGHT OUTER JOIN smb_input2 b ON a.value = b.value AND a.key > 40 AND a.value > 50 AND a.key = a.value AND b.key > 40 AND b.value > 50 AND b.key = b.value ORDER BY a.key ASC, a.value ASC, b.key ASC, b.value ASC
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@smb_input2
+POSTHOOK: Output: file:/tmp/cloudera/hive_2012-01-25_19-29-49_321_185551890620852609/-mr-10000
+100	100	100	100
+200	200	200	200
