@@ -1,0 +1,51 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>1.7.&nbsp;Reading from HBase</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="performance.html" title="Chapter&nbsp;1.&nbsp;Performance Tuning"><link rel="up" href="performance.html" title="Chapter&nbsp;1.&nbsp;Performance Tuning"><link rel="prev" href="perf.writing.html" title="1.6.&nbsp;Writing to HBase"><link rel="next" href="perf.deleting.html" title="1.8.&nbsp;Deleting from HBase"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.7.&nbsp;Reading from HBase</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="perf.writing.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="perf.deleting.html">Next</a></td></tr></table><hr></div><div class="section" title="1.7.&nbsp;Reading from HBase"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="perf.reading"></a>1.7.&nbsp;Reading from HBase</h2></div></div></div><div class="section" title="1.7.1.&nbsp;Scan Caching"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.caching"></a>1.7.1.&nbsp;Scan Caching</h3></div></div></div><p>If HBase is used as an input source for a MapReduce job, for
+      example, make sure that the input <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">Scan</a>
+      instance to the MapReduce job has <code class="methodname">setCaching</code> set to something greater
+      than the default (which is 1). Using the default value means that the
+      map-task will make call back to the region-server for every record
+      processed. Setting this value to 500, for example, will transfer 500
+      rows at a time to the client to be processed. There is a cost/benefit to
+      have the cache value be large because it costs more in memory for both
+      client and RegionServer, so bigger isn't always better.</p><div class="section" title="1.7.1.1.&nbsp;Scan Caching in MapReduce Jobs"><div class="titlepage"><div><div><h4 class="title"><a name="perf.hbase.client.caching.mr"></a>1.7.1.1.&nbsp;Scan Caching in MapReduce Jobs</h4></div></div></div><p>Scan settings in MapReduce jobs deserve special attention.  Timeouts can result (e.g., UnknownScannerException)
+        in Map tasks if it takes longer to process a batch of records before the client goes back to the RegionServer for the
+        next set of data.  This problem can occur because there is non-trivial processing occuring per row.  If you process
+        rows quickly, set caching higher.  If you process rows more slowly (e.g., lots of transformations per row, writes), 
+        then set caching lower.
+        </p><p>Timeouts can also happen in a non-MapReduce use case (i.e., single threaded HBase client doing a Scan), but the
+        processing that is often performed in MapReduce jobs tends to exacerbate this issue.
+        </p></div></div><div class="section" title="1.7.2.&nbsp;Scan Attribute Selection"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.selection"></a>1.7.2.&nbsp;Scan Attribute Selection</h3></div></div></div><p>Whenever a Scan is used to process large numbers of rows (and especially when used
+      as a MapReduce source), be aware of which attributes are selected.   If <code class="code">scan.addFamily</code> is called
+      then <span class="emphasis"><em>all</em></span> of the attributes in the specified ColumnFamily will be returned to the client.
+      If only a small number of the available attributes are to be processed, then only those attributes should be specified
+      in the input scan because attribute over-selection is a non-trivial performance penalty over large datasets.
+      </p></div><div class="section" title="1.7.3.&nbsp;Close ResultScanners"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.scannerclose"></a>1.7.3.&nbsp;Close ResultScanners</h3></div></div></div><p>This isn't so much about improving performance but rather
+      <span class="emphasis"><em>avoiding</em></span> performance problems. If you forget to
+      close <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/ResultScanner.html" target="_top">ResultScanners</a>
+      you can cause problems on the RegionServers. Always have ResultScanner
+      processing enclosed in try/catch blocks... </p><pre class="programlisting">
+Scan scan = new Scan();
+// set attrs...
+ResultScanner rs = htable.getScanner(scan);
+try {
+  for (Result r = rs.next(); r != null; r = rs.next()) {
+  // process result...
+} finally {
+  rs.close();  // always close the ResultScanner!
+}
+htable.close();</pre></div><div class="section" title="1.7.4.&nbsp;Block Cache"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.blockcache"></a>1.7.4.&nbsp;Block Cache</h3></div></div></div><p><a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">Scan</a>
+      instances can be set to use the block cache in the RegionServer via the
+      <code class="methodname">setCacheBlocks</code> method. For input Scans to MapReduce jobs, this should be
+      <code class="varname">false</code>. For frequently accessed rows, it is advisable to use the block
+      cache.</p></div><div class="section" title="1.7.5.&nbsp;Optimal Loading of Row Keys"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.client.rowkeyonly"></a>1.7.5.&nbsp;Optimal Loading of Row Keys</h3></div></div></div><p>When performing a table <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">scan</a>
+            where only the row keys are needed (no families, qualifiers, values or timestamps), add a FilterList with a
+            <code class="varname">MUST_PASS_ALL</code> operator to the scanner using <code class="methodname">setFilter</code>. The filter list
+            should include both a <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/filter/FirstKeyOnlyFilter.html" target="_top">FirstKeyOnlyFilter</a>
+            and a <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/filter/KeyOnlyFilter.html" target="_top">KeyOnlyFilter</a>.
+            Using this filter combination will result in a worst case scenario of a RegionServer reading a single value from disk
+            and minimal network traffic to the client for a single row.
+      </p></div><div class="section" title="1.7.6.&nbsp;Concurrency: Monitor Data Spread"><div class="titlepage"><div><div><h3 class="title"><a name="perf.hbase.read.dist"></a>1.7.6.&nbsp;Concurrency:  Monitor Data Spread</h3></div></div></div><p>When performing a high number of concurrent reads, monitor the data spread of the target tables.  If the target table(s) have 
+      too few regions then the reads could likely be served from too few nodes.  </p><p>See <a class="xref" href="perf.writing.html#precreate.regions" title="1.6.2.&nbsp; Table Creation: Pre-Creating Regions">Section&nbsp;1.6.2, &#8220;
+    Table Creation: Pre-Creating Regions
+    &#8221;</a>, as well as <a class="xref" href="perf.configurations.html" title="1.4.&nbsp;HBase Configurations">Section&nbsp;1.4, &#8220;HBase Configurations&#8221;</a> </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="perf.writing.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="perf.deleting.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">1.6.&nbsp;Writing to HBase&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="performance.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;1.8.&nbsp;Deleting from HBase</td></tr></table></div></body></html>

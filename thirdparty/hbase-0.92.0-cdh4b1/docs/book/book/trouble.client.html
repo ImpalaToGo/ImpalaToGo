@@ -1,0 +1,42 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>11.4.&nbsp;Client</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="book.html" title=""><link rel="up" href="trouble.html" title="Chapter&nbsp;11.&nbsp;Troubleshooting and Debugging HBase"><link rel="prev" href="trouble.tools.html" title="11.3.&nbsp;Tools"><link rel="next" href="trouble.namenode.html" title="11.5.&nbsp;NameNode"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">11.4.&nbsp;Client</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="trouble.tools.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;11.&nbsp;Troubleshooting and Debugging HBase</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="trouble.namenode.html">Next</a></td></tr></table><hr></div><div class="section" title="11.4.&nbsp;Client"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="trouble.client"></a>11.4.&nbsp;Client</h2></div></div></div><p>For more information on the HBase client, see <a class="xref" href="client.html" title="8.2.&nbsp;Client">Section&nbsp;8.2, &#8220;Client&#8221;</a>. 
+       </p><div class="section" title="11.4.1.&nbsp;ScannerTimeoutException or UnknownScannerException"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.client.scantimeout"></a>11.4.1.&nbsp;ScannerTimeoutException or UnknownScannerException</h3></div></div></div><p>This is thrown if the time between RPC calls from the client to RegionServer exceeds the scan timeout.  
+            For example, if <code class="code">Scan.setCaching</code> is set to 500, then there will be an RPC call to fetch the next batch of rows every 500 <code class="code">.next()</code> calls on the ResultScanner
+            because data is being transferred in blocks of 500 rows to the client.  Reducing the setCaching value may be an option, but setting this value too low makes for inefficient
+            processing on numbers of rows.
+            </p><p>See <a class="xref" href="perf.reading.html#perf.hbase.client.caching" title="10.7.1.&nbsp;Scan Caching">Section&nbsp;10.7.1, &#8220;Scan Caching&#8221;</a>.
+            </p></div><div class="section" title="11.4.2.&nbsp;Shell or client application throws lots of scary exceptions during normal operation"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.client.scarylogs"></a>11.4.2.&nbsp;Shell or client application throws lots of scary exceptions during normal operation</h3></div></div></div><p>Since 0.20.0 the default log level for <code class="code">org.apache.hadoop.hbase.*</code>is DEBUG. </p><p>
+            On your clients, edit <code class="filename">$HBASE_HOME/conf/log4j.properties</code> and change this: <code class="code">log4j.logger.org.apache.hadoop.hbase=DEBUG</code> to this: <code class="code">log4j.logger.org.apache.hadoop.hbase=INFO</code>, or even <code class="code">log4j.logger.org.apache.hadoop.hbase=WARN</code>. 
+            </p></div><div class="section" title="11.4.3.&nbsp;Long Client Pauses With Compression"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.client.longpauseswithcompression"></a>11.4.3.&nbsp;Long Client Pauses With Compression</h3></div></div></div><p>This is a fairly frequent question on the HBase dist-list.  The scenario is that a client is typically inserting a lot of data into a 
+            relatively un-optimized HBase cluster.  Compression can exacerbate the pauses, although it is not the source of the problem.</p><p>See <a class="xref" href="perf.writing.html#precreate.regions" title="10.6.2.&nbsp; Table Creation: Pre-Creating Regions">Section&nbsp;10.6.2, &#8220;
+    Table Creation: Pre-Creating Regions
+    &#8221;</a> on the pattern for pre-creating regions and confirm that the table isn't starting with a single region.</p><p>See <a class="xref" href="perf.configurations.html" title="10.4.&nbsp;HBase Configurations">Section&nbsp;10.4, &#8220;HBase Configurations&#8221;</a> for cluster configuration, particularly <code class="code">hbase.hstore.blockingStoreFiles</code>, <code class="code">hbase.hregion.memstore.block.multiplier</code>, 
+            <code class="code">MAX_FILESIZE</code> (region size), and <code class="code">MEMSTORE_FLUSHSIZE.</code>  </p><p>A slightly longer explanation of why pauses can happen is as follows:  Puts are sometimes blocked on the MemStores which are blocked by the flusher thread which is blocked because there are 
+            too many files to compact because the compactor is given too many small files to compact and has to compact the same data repeatedly.  This situation can occur even with minor compactions.
+            Compounding this situation, HBase doesn't compress data in memory.  Thus, the 64MB that lives in the MemStore could become a 6MB file after compression - which results in a smaller StoreFile.  The upside is that
+            more data is packed into the same region, but performance is achieved by being able to write larger files - which is why HBase waits until the flushize before writing a new StoreFile.  And smaller StoreFiles
+            become targets for compaction.  Without compression the files are much bigger and don't need as much compaction, however this is at the expense of I/O.   
+            </p><p>
+            For additional information, see this thread on <a class="link" href="http://search-hadoop.com/m/WUnLM6ojHm1/Long+client+pauses+with+compression&amp;subj=Long+client+pauses+with+compression" target="_top">Long client pauses with compression</a>.
+            </p></div><div class="section" title="11.4.4.&nbsp;ZooKeeper Client Connection Errors"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.client.zookeeper"></a>11.4.4.&nbsp;ZooKeeper Client Connection Errors</h3></div></div></div><p>Errors like this...
+</p><pre class="programlisting">
+11/07/05 11:26:41 WARN zookeeper.ClientCnxn: Session 0x0 for server null,
+ unexpected error, closing socket connection and attempting reconnect
+ java.net.ConnectException: Connection refused: no further information
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(Unknown Source)
+        at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1078)
+ 11/07/05 11:26:43 INFO zookeeper.ClientCnxn: Opening socket connection to
+ server localhost/127.0.0.1:2181
+ 11/07/05 11:26:44 WARN zookeeper.ClientCnxn: Session 0x0 for server null,
+ unexpected error, closing socket connection and attempting reconnect
+ java.net.ConnectException: Connection refused: no further information
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(Unknown Source)
+        at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1078)
+ 11/07/05 11:26:45 INFO zookeeper.ClientCnxn: Opening socket connection to
+ server localhost/127.0.0.1:2181
+</pre><p>
+            ... are either due to ZooKeeper being down, or unreachable due to network issues.            
+            </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="trouble.tools.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="trouble.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="trouble.namenode.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">11.3.&nbsp;Tools&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;11.5.&nbsp;NameNode</td></tr></table></div></body></html>

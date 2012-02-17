@@ -1,0 +1,91 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>8.6.&nbsp;Regions</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="book.html" title=""><link rel="up" href="architecture.html" title="Chapter&nbsp;8.&nbsp;Architecture"><link rel="prev" href="regionserver.arch.html" title="8.5.&nbsp;RegionServer"><link rel="next" href="arch.hdfs.html" title="8.7.&nbsp;HDFS"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">8.6.&nbsp;Regions</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="regionserver.arch.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;8.&nbsp;Architecture</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="arch.hdfs.html">Next</a></td></tr></table><hr></div><div class="section" title="8.6.&nbsp;Regions"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="regions.arch"></a>8.6.&nbsp;Regions</h2></div></div></div><p>This section is all about Regions.</p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>Regions are comprised of a Store per Column Family.
+        </p></div><div class="section" title="8.6.1.&nbsp;Region Size"><div class="titlepage"><div><div><h3 class="title"><a name="arch.regions.size"></a>8.6.1.&nbsp;Region Size</h3></div></div></div><p>Region size is one of those tricky things, there are a few factors
+      to consider:</p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem"><p>Regions are the basic element of availability and
+          distribution.</p></li><li class="listitem"><p>HBase scales by having regions across many servers. Thus if
+          you have 2 regions for 16GB data, on a 20 node machine you are a net
+          loss there.</p></li><li class="listitem"><p>High region count has been known to make things slow, this is
+          getting better, but it is probably better to have 700 regions than
+          3000 for the same amount of data.</p></li><li class="listitem"><p>Low region count prevents parallel scalability as per point
+          #2. This really cant be stressed enough, since a common problem is
+          loading 200MB data into HBase then wondering why your awesome 10
+          node cluster is mostly idle.</p></li><li class="listitem"><p>There is not much memory footprint difference between 1 region
+          and 10 in terms of indexes, etc, held by the RegionServer.</p></li></ul></div><p>Its probably best to stick to the default, perhaps going smaller
+      for hot tables (or manually split hot regions to spread the load over
+      the cluster), or go with a 1GB region size if your cell sizes tend to be
+      largish (100k and up).</p></div><div class="section" title="8.6.2.&nbsp;Region Splits"><div class="titlepage"><div><div><h3 class="title"><a name="d0e4152"></a>8.6.2.&nbsp;Region Splits</h3></div></div></div><p>Splits run unaided on the RegionServer; i.e. the Master does not
+        participate. The RegionServer splits a region, offlines the split
+        region and then adds the daughter regions to META, opens daughters on
+        the parent's hosting RegionServer and then reports the split to the
+        Master. See <a class="xref" href="important_configurations.html#disable.splitting" title="2.8.2.7.&nbsp;Managed Splitting">Section&nbsp;2.8.2.7, &#8220;Managed Splitting&#8221;</a> for how to manually manage
+        splits (and for why you might do this)</p></div><div class="section" title="8.6.3.&nbsp;Region Load Balancing"><div class="titlepage"><div><div><h3 class="title"><a name="regions.arch.balancer"></a>8.6.3.&nbsp;Region Load Balancing</h3></div></div></div><p>
+        Regions can be periodically moved by the <a class="xref" href="master.html#master.processes.loadbalancer" title="8.4.3.1.&nbsp;LoadBalancer">Section&nbsp;8.4.3.1, &#8220;LoadBalancer&#8221;</a>.
+        </p></div><div class="section" title="8.6.4.&nbsp;Store"><div class="titlepage"><div><div><h3 class="title"><a name="store"></a>8.6.4.&nbsp;Store</h3></div></div></div><p>A Store hosts a MemStore and 0 or more StoreFiles (HFiles). A Store corresponds to a column family for a table for a given region.
+          </p><div class="section" title="8.6.4.1.&nbsp;MemStore"><div class="titlepage"><div><div><h4 class="title"><a name="store.memstore"></a>8.6.4.1.&nbsp;MemStore</h4></div></div></div><p>The MemStore holds in-memory modifications to the Store.  Modifications are KeyValues.
+       When asked to flush, current memstore is moved to snapshot and is cleared. 
+       HBase continues to serve edits out of new memstore and backing snapshot until flusher reports in that the 
+       flush succeeded. At this point the snapshot is let go.</p></div><div class="section" title="8.6.4.2.&nbsp;StoreFile (HFile)"><div class="titlepage"><div><div><h4 class="title"><a name="hfile"></a>8.6.4.2.&nbsp;StoreFile (HFile)</h4></div></div></div><div class="section" title="8.6.4.2.1.&nbsp;HFile Format"><div class="titlepage"><div><div><h5 class="title"><a name="d0e4179"></a>8.6.4.2.1.&nbsp;HFile Format</h5></div></div></div><p>The <span class="emphasis"><em>hfile</em></span> file format is based on
+              the SSTable file described in the <a class="link" href="http://labs.google.com/papers/bigtable.html" target="_top">BigTable [2006]</a> paper and on
+              Hadoop's <a class="link" href="http://hadoop.apache.org/common/docs/current/api/org/apache/hadoop/io/file/tfile/TFile.html" target="_top">tfile</a>
+              (The unit test suite and the compression harness were taken directly from tfile). 
+              Schubert Zhang's blog post on HFile: A Block-Indexed File Format to Store Sorted Key-Value Pairs makes for a thorough introduction to HBase's hfile.  Matteo Bertozzi has also put up a
+              helpful description, <a class="link" href="http://th30z.blogspot.com/2011/02/hbase-io-hfile.html?spref=tw" target="_top">HBase I/O: HFile</a>.
+          </p><p>For more information, see the <a class="link" href="http://hbase.apache.org/xref/org/apache/hadoop/hbase/io/hfile/HFile.html" target="_top">HFile source code</a>.
+          </p></div><div class="section" title="8.6.4.2.2.&nbsp;HFile Tool"><div class="titlepage"><div><div><h5 class="title"><a name="hfile_tool"></a>8.6.4.2.2.&nbsp;HFile Tool</h5></div></div></div><p>To view a textualized version of hfile content, you can do use
+        the <code class="classname">org.apache.hadoop.hbase.io.hfile.HFile
+        </code>tool. Type the following to see usage:</p><pre class="programlisting"><code class="code">$ ${HBASE_HOME}/bin/hbase org.apache.hadoop.hbase.io.hfile.HFile </code> </pre><p>For
+        example, to view the content of the file
+        <code class="filename">hdfs://10.81.47.41:8020/hbase/TEST/1418428042/DSMP/4759508618286845475</code>,
+        type the following:</p><pre class="programlisting"> <code class="code">$ ${HBASE_HOME}/bin/hbase org.apache.hadoop.hbase.io.hfile.HFile -v -f hdfs://10.81.47.41:8020/hbase/TEST/1418428042/DSMP/4759508618286845475 </code> </pre><p>If
+        you leave off the option -v to see just a summary on the hfile. See
+        usage for other things to do with the <code class="classname">HFile</code>
+        tool.</p></div><div class="section" title="8.6.4.2.3.&nbsp;StoreFile Directory Structure on HDFS"><div class="titlepage"><div><div><h5 class="title"><a name="store.file.dir"></a>8.6.4.2.3.&nbsp;StoreFile Directory Structure on HDFS</h5></div></div></div><p>For more information of what StoreFiles look like on HDFS with respect to the directory structure, see <a class="xref" href="trouble.namenode.html#trouble.namenode.hbase.objects" title="11.5.2.&nbsp;Browsing HDFS for HBase Objects">Section&nbsp;11.5.2, &#8220;Browsing HDFS for HBase Objects&#8221;</a>.
+        </p></div></div><div class="section" title="8.6.4.3.&nbsp;Blocks"><div class="titlepage"><div><div><h4 class="title"><a name="hfile.blocks"></a>8.6.4.3.&nbsp;Blocks</h4></div></div></div><p>StoreFiles are composed of blocks.  The blocksize is configured on a per-ColumnFamily basis.
+        </p><p>For more information, see the <a class="link" href="http://hbase.apache.org/xref/org/apache/hadoop/hbase/io/hfile/HFileBlock.html" target="_top">HFileBlock source code</a>.
+        </p></div><div class="section" title="8.6.4.4.&nbsp;KeyValue"><div class="titlepage"><div><div><h4 class="title"><a name="keyvalue"></a>8.6.4.4.&nbsp;KeyValue</h4></div></div></div><p>The KeyValue class is the heart of data storage in HBase.  KeyValue wraps a byte array and takes offsets and lengths into passed array
+         at where to start interpreting the content as KeyValue.
+        </p><p>The KeyValue format inside a byte array is:
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">keylength</li><li class="listitem">valuelength</li><li class="listitem">key</li><li class="listitem">value</li></ul></div><p>
+        </p><p>The Key is further decomposed as:
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">rowlength</li><li class="listitem">row (i.e., the rowkey)</li><li class="listitem">columnfamilylength</li><li class="listitem">columnfamily</li><li class="listitem">columnqualifier</li><li class="listitem">timestamp</li><li class="listitem">keytype (e.g., Put, Delete)</li></ul></div><p>
+        </p><p>For more information, see the <a class="link" href="http://hbase.apache.org/xref/org/apache/hadoop/hbase/KeyValue.html" target="_top">KeyValue source code</a>.
+        </p><div class="section" title="8.6.4.4.1.&nbsp;Example"><div class="titlepage"><div><div><h5 class="title"><a name="keyvalue.example"></a>8.6.4.4.1.&nbsp;Example</h5></div></div></div><p>To emphasize the points above, examine what happens with two Puts for two different columns for the same row:</p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Put #1:  <code class="code">rowkey=row1, cf:attr1=value1</code></li><li class="listitem">Put #2:  <code class="code">rowkey=row1, cf:attr2=value2</code></li></ul></div><p>Even though these are for the same row, a KeyValue is created for each column:</p><p>Key portion for Put #1:
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">rowlength <code class="code">------------&gt; 4</code></li><li class="listitem">row <code class="code">-----------------&gt; row1</code></li><li class="listitem">columnfamilylength <code class="code">---&gt; 2</code></li><li class="listitem">columnfamily <code class="code">--------&gt; cf</code></li><li class="listitem">columnqualifier <code class="code">------&gt; attr1</code></li><li class="listitem">timestamp <code class="code">-----------&gt; server time of Put</code></li><li class="listitem">keytype <code class="code">-------------&gt; Put</code></li></ul></div><p>
+          </p><p>Key portion for Put #2:
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">rowlength <code class="code">------------&gt; 4</code></li><li class="listitem">row <code class="code">-----------------&gt; row1</code></li><li class="listitem">columnfamilylength <code class="code">---&gt; 2</code></li><li class="listitem">columnfamily <code class="code">--------&gt; cf</code></li><li class="listitem">columnqualifier <code class="code">------&gt; attr2</code></li><li class="listitem">timestamp <code class="code">-----------&gt; server time of Put</code></li><li class="listitem">keytype <code class="code">-------------&gt; Put</code></li></ul></div><p>
+           
+          </p></div><p>It is critical to understand that the rowkey, ColumnFamily, and column (aka columnqualifier) are embedded within
+       the KeyValue instance.  The longer these identifiers are, the bigger the KeyValue is.</p></div><div class="section" title="8.6.4.5.&nbsp;Compaction"><div class="titlepage"><div><div><h4 class="title"><a name="compaction"></a>8.6.4.5.&nbsp;Compaction</h4></div></div></div><p>There are two types of compactions:  minor and major.  Minor compactions will usually pick up a couple of the smaller adjacent
+         files and rewrite them as one.  Minors do not drop deletes or expired cells, only major compactions do this.  Sometimes a minor compaction
+         will pick up all  the files in the store and in this case it actually promotes itself to being a major compaction.  
+         For a description of how a minor compaction picks files to compact, see the <a class="link" href="http://hbase.apache.org/xref/org/apache/hadoop/hbase/regionserver/Store.html#836" target="_top">ascii diagram in the Store source code.</a>
+         </p><p>After a major compaction runs there will be a single storefile per store, and this will help performance usually.  Caution:  major compactions rewrite all of the stores data and on a loaded system, this may not be tenable;
+             major compactions will usually have to be done manually on large systems.  See <a class="xref" href="important_configurations.html#managed.compactions" title="2.8.2.8.&nbsp;Managed Compactions">Section&nbsp;2.8.2.8, &#8220;Managed Compactions&#8221;</a>.
+        </p></div></div><div class="section" title="8.6.5.&nbsp;Bloom Filters"><div class="titlepage"><div><div><h3 class="title"><a name="blooms"></a>8.6.5.&nbsp;Bloom Filters</h3></div></div></div><p><a class="link" href="http://en.wikipedia.org/wiki/Bloom_filter" target="_top">Bloom filters</a> were developed over in <a class="link" href="https://issues.apache.org/jira/browse/HBASE-1200" target="_top">HBase-1200
+    Add bloomfilters</a>.<sup>[<a name="d0e4394" href="#ftn.d0e4394" class="footnote">22</a>]</sup><sup>[<a name="d0e4406" href="#ftn.d0e4406" class="footnote">23</a>]</sup></p><p>See also <a class="xref" href="perf.schema.html#schema.bloom" title="10.5.4.&nbsp;Bloom Filters">Section&nbsp;10.5.4, &#8220;Bloom Filters&#8221;</a> and <a class="xref" href="config.bloom.html" title="2.9.&nbsp;Bloom Filter Configuration">Section&nbsp;2.9, &#8220;Bloom Filter Configuration&#8221;</a>.
+        </p><div class="section" title="8.6.5.1.&nbsp;Bloom StoreFile footprint"><div class="titlepage"><div><div><h4 class="title"><a name="bloom_footprint"></a>8.6.5.1.&nbsp;Bloom StoreFile footprint</h4></div></div></div><p>Bloom filters add an entry to the <code class="classname">StoreFile</code>
+      general <code class="classname">FileInfo</code> data structure and then two
+      extra entries to the <code class="classname">StoreFile</code> metadata
+      section.</p><div class="section" title="8.6.5.1.1.&nbsp;BloomFilter in the StoreFile FileInfo data structure"><div class="titlepage"><div><div><h5 class="title"><a name="d0e4432"></a>8.6.5.1.1.&nbsp;BloomFilter in the <code class="classname">StoreFile</code>
+        <code class="classname">FileInfo</code> data structure</h5></div></div></div><p><code class="classname">FileInfo</code> has a
+          <code class="varname">BLOOM_FILTER_TYPE</code> entry which is set to
+          <code class="varname">NONE</code>, <code class="varname">ROW</code> or
+          <code class="varname">ROWCOL.</code></p></div><div class="section" title="8.6.5.1.2.&nbsp;BloomFilter entries in StoreFile metadata"><div class="titlepage"><div><div><h5 class="title"><a name="d0e4456"></a>8.6.5.1.2.&nbsp;BloomFilter entries in <code class="classname">StoreFile</code>
+        metadata</h5></div></div></div><p><code class="varname">BLOOM_FILTER_META</code> holds Bloom Size, Hash
+          Function used, etc. Its small in size and is cached on
+          <code class="classname">StoreFile.Reader</code> load</p><p><code class="varname">BLOOM_FILTER_DATA</code> is the actual bloomfilter
+          data. Obtained on-demand. Stored in the LRU cache, if it is enabled
+          (Its enabled by default).</p></div></div></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a id="ftn.d0e4394" href="#d0e4394" class="para">22</a>] </sup>For description of the development process -- why static blooms
+        rather than dynamic -- and for an overview of the unique properties
+        that pertain to blooms in HBase, as well as possible future
+        directions, see the <span class="emphasis"><em>Development Process</em></span> section
+        of the document <a class="link" href="https://issues.apache.org/jira/secure/attachment/12444007/Bloom_Filters_in_HBase.pdf" target="_top">BloomFilters
+        in HBase</a> attached to <a class="link" href="https://issues.apache.org/jira/browse/HBASE-1200" target="_top">HBase-1200</a>.</p></div><div class="footnote"><p><sup>[<a id="ftn.d0e4406" href="#d0e4406" class="para">23</a>] </sup>The bloom filters described here are actually version two of
+        blooms in HBase. In versions up to 0.19.x, HBase had a dynamic bloom
+        option based on work done by the <a class="link" href="http://www.one-lab.org" target="_top">European Commission One-Lab
+        Project 034819</a>. The core of the HBase bloom work was later
+        pulled up into Hadoop to implement org.apache.hadoop.io.BloomMapFile.
+        Version 1 of HBase blooms never worked that well. Version 2 is a
+        rewrite from scratch though again it starts with the one-lab
+        work.</p></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="regionserver.arch.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="architecture.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="arch.hdfs.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">8.5.&nbsp;RegionServer&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;8.7.&nbsp;HDFS</td></tr></table></div></body></html>

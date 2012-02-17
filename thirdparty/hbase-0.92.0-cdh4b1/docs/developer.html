@@ -1,0 +1,212 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;1.&nbsp;Building and Developing HBase</title><link rel="stylesheet" type="text/css" href="css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="chapter" title="Chapter&nbsp;1.&nbsp;Building and Developing HBase"><div class="titlepage"><div><div><h2 class="title"><a name="developer"></a>Chapter&nbsp;1.&nbsp;Building and Developing HBase</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="#repos">1.1. HBase Repositories</a></span></dt><dd><dl><dt><span class="section"><a href="#svn">1.1.1. SVN</a></span></dt><dt><span class="section"><a href="#git">1.1.2. Git</a></span></dt></dl></dd><dt><span class="section"><a href="#ides">1.2. IDEs</a></span></dt><dd><dl><dt><span class="section"><a href="#eclipse">1.2.1. Eclipse</a></span></dt></dl></dd><dt><span class="section"><a href="#build">1.3. Building HBase</a></span></dt><dd><dl><dt><span class="section"><a href="#build.snappy">1.3.1. Building in snappy compression support</a></span></dt><dt><span class="section"><a href="#mvn_repo">1.3.2. Adding an HBase release to Apache's Maven Repository</a></span></dt></dl></dd><dt><span class="section"><a href="#maven.build.commands">1.4. Maven Build Commands</a></span></dt><dd><dl><dt><span class="section"><a href="#maven.build.commands.compile">1.4.1. Compile</a></span></dt><dt><span class="section"><a href="#maven.build.commands.unitall">1.4.2. Run all Unit Tests</a></span></dt><dt><span class="section"><a href="#maven.build.commands.unit">1.4.3. Run a Single Unit Test</a></span></dt><dt><span class="section"><a href="#maven.build.commands.unit2">1.4.4. Run a Few Unit Tests</a></span></dt><dt><span class="section"><a href="#maven.build.commands.unit.package">1.4.5. Run all Unit Tests for a Package</a></span></dt><dt><span class="section"><a href="#maven.build.commanas.integration.tests">1.4.6. Integration Tests</a></span></dt></dl></dd><dt><span class="section"><a href="#getting.involved">1.5. Getting Involved</a></span></dt><dd><dl><dt><span class="section"><a href="#mailing.list">1.5.1. Mailing Lists</a></span></dt><dt><span class="section"><a href="#jira">1.5.2. Jira</a></span></dt></dl></dd><dt><span class="section"><a href="#developing">1.6. Developing</a></span></dt><dd><dl><dt><span class="section"><a href="#codelines">1.6.1. Codelines</a></span></dt><dt><span class="section"><a href="#unit.tests">1.6.2. Unit Tests</a></span></dt></dl></dd><dt><span class="section"><a href="#submitting.patches">1.7. Submitting Patches</a></span></dt><dd><dl><dt><span class="section"><a href="#submitting.patches.create">1.7.1. Create Patch</a></span></dt><dt><span class="section"><a href="#submitting.patches.naming">1.7.2. Patch File Naming</a></span></dt><dt><span class="section"><a href="#submitting.patches.tests">1.7.3. Unit Tests</a></span></dt><dt><span class="section"><a href="#submitting.patches.jira">1.7.4. Attach Patch to Jira</a></span></dt><dt><span class="section"><a href="#common.patch.feedback">1.7.5. Common Patch Feedback</a></span></dt><dt><span class="section"><a href="#reviewboard">1.7.6. ReviewBoard</a></span></dt><dt><span class="section"><a href="#committing.patches">1.7.7. Committing Patches</a></span></dt></dl></dd></dl></div><p>This chapter will be of interest only to those building and developing HBase (i.e., as opposed to
+    just downloading the latest distribution).
+    </p><div class="section" title="1.1.&nbsp;HBase Repositories"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="repos"></a>1.1.&nbsp;HBase Repositories</h2></div></div></div><div class="section" title="1.1.1.&nbsp;SVN"><div class="titlepage"><div><div><h3 class="title"><a name="svn"></a>1.1.1.&nbsp;SVN</h3></div></div></div><pre class="programlisting">
+svn co http://svn.apache.org/repos/asf/hbase/trunk hbase-core-trunk 
+        </pre></div><div class="section" title="1.1.2.&nbsp;Git"><div class="titlepage"><div><div><h3 class="title"><a name="git"></a>1.1.2.&nbsp;Git</h3></div></div></div><pre class="programlisting">
+git clone git://git.apache.org/hbase.git
+        </pre></div></div><div class="section" title="1.2.&nbsp;IDEs"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="ides"></a>1.2.&nbsp;IDEs</h2></div></div></div><div class="section" title="1.2.1.&nbsp;Eclipse"><div class="titlepage"><div><div><h3 class="title"><a name="eclipse"></a>1.2.1.&nbsp;Eclipse</h3></div></div></div><div class="section" title="1.2.1.1.&nbsp;Code Formatting"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.code.formatting"></a>1.2.1.1.&nbsp;Code Formatting</h4></div></div></div><p>See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-3678" target="_top">HBASE-3678 Add Eclipse-based Apache Formatter to HBase Wiki</a>
+              for an Eclipse formatter to help ensure your code conforms to HBase'y coding convention.
+            The issue includes instructions for loading the attached formatter.</p><p>Also, no @author tags - that's a rule.  Quality Javadoc comments are appreciated.  And include the Apache license.</p></div><div class="section" title="1.2.1.2.&nbsp;Subversive Plugin"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.svn"></a>1.2.1.2.&nbsp;Subversive Plugin</h4></div></div></div><p>Download and install the Subversive plugin.</p><p>Set up an SVN Repository target from <a class="xref" href="#svn" title="1.1.1.&nbsp;SVN">Section&nbsp;1.1.1, &#8220;SVN&#8221;</a>, then check out the code.</p></div><div class="section" title="1.2.1.3.&nbsp;HBase Project Setup"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.maven.setup"></a>1.2.1.3.&nbsp;HBase Project Setup</h4></div></div></div>
+            To set up your Eclipse environment for HBase, close Eclipse and execute...
+            <pre class="programlisting">
+mvn eclipse:eclipse
+            </pre>
+            ... from your local HBase project directory in your workspace to generate some new <code class="filename">.project</code> 
+            and <code class="filename">.classpath</code>files.  Then reopen Eclipse.
+            </div><div class="section" title="1.2.1.4.&nbsp;Maven Plugin"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.maven.plugin"></a>1.2.1.4.&nbsp;Maven Plugin</h4></div></div></div><p>Download and install the Maven plugin.  For example, Help -&gt; Install New Software -&gt; (search for Maven Plugin)</p></div><div class="section" title="1.2.1.5.&nbsp;Maven Classpath Variable"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.maven.class"></a>1.2.1.5.&nbsp;Maven Classpath Variable</h4></div></div></div><p>The <code class="varname">M2_REPO</code> classpath variable needs to be set up for the project.  This needs to be set to 
+            your local Maven repository, which is usually <code class="filename">~/.m2/repository</code></p>
+            If this classpath variable is not configured, you will see compile errors in Eclipse like this...
+            <pre class="programlisting">
+Description	Resource	Path	Location	Type
+The project cannot be built until build path errors are resolved	hbase		Unknown	Java Problem 
+Unbound classpath variable: 'M2_REPO/asm/asm/3.1/asm-3.1.jar' in project 'hbase'	hbase		Build path	Build Path Problem
+Unbound classpath variable: 'M2_REPO/com/github/stephenc/high-scale-lib/high-scale-lib/1.1.1/high-scale-lib-1.1.1.jar' in project 'hbase'	hbase		Build path	Build Path Problem 
+Unbound classpath variable: 'M2_REPO/com/google/guava/guava/r09/guava-r09.jar' in project 'hbase'	hbase		Build path	Build Path Problem
+Unbound classpath variable: 'M2_REPO/com/google/protobuf/protobuf-java/2.3.0/protobuf-java-2.3.0.jar' in project 'hbase'	hbase		Build path	Build Path Problem Unbound classpath variable:
+            </pre></div><div class="section" title="1.2.1.6.&nbsp;Import via m2eclipse"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.m2eclipse"></a>1.2.1.6.&nbsp;Import via m2eclipse</h4></div></div></div><p>If you install the m2eclipse and import the HBase pom.xml in your workspace, you will have to fix your eclipse Build Path.
+            Remove <code class="filename">target</code> folder, add <code class="filename">target/generated-jamon</code>
+            and <code class="filename">target/generated-sources/java</code> folders. You may also remove from your Build Path
+            the exclusions on the <code class="filename">src/main/resources</code> and <code class="filename">src/test/resources</code>
+            to avoid error message in the console 'Failed to execute goal org.apache.maven.plugins:maven-antrun-plugin:1.6:run (default) on project hbase: 
+            'An Ant BuildException has occured: Replace: source file .../target/classes/hbase-default.xml doesn't exist'. This will also
+            reduce the eclipse build cycles and make your life easier when developing.</p></div><div class="section" title="1.2.1.7.&nbsp;Eclipse Known Issues"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.issues"></a>1.2.1.7.&nbsp;Eclipse Known Issues</h4></div></div></div><p>Eclipse will currently complain about <code class="filename">Bytes.java</code>.  It is not possible to turn these errors off.</p><pre class="programlisting">            
+Description	Resource	Path	Location	Type
+Access restriction: The method arrayBaseOffset(Class) from the type Unsafe is not accessible due to restriction on required library /System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Classes/classes.jar	Bytes.java	/hbase/src/main/java/org/apache/hadoop/hbase/util	line 1061	Java Problem
+Access restriction: The method arrayIndexScale(Class) from the type Unsafe is not accessible due to restriction on required library /System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Classes/classes.jar	Bytes.java	/hbase/src/main/java/org/apache/hadoop/hbase/util	line 1064	Java Problem
+Access restriction: The method getLong(Object, long) from the type Unsafe is not accessible due to restriction on required library /System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Classes/classes.jar	Bytes.java	/hbase/src/main/java/org/apache/hadoop/hbase/util	line 1111	Java Problem
+             </pre></div><div class="section" title="1.2.1.8.&nbsp;Eclipse - More Information"><div class="titlepage"><div><div><h4 class="title"><a name="eclipse.more"></a>1.2.1.8.&nbsp;Eclipse - More Information</h4></div></div></div><p>For additional information on setting up Eclipse for HBase development on Windows, see 
+             <a class="link" href="http://michaelmorello.blogspot.com/2011/09/hbase-subversion-eclipse-windows.html" target="_top">Michael Morello's blog</a> on the topic.
+             </p></div></div></div><div class="section" title="1.3.&nbsp;Building HBase"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="build"></a>1.3.&nbsp;Building HBase</h2></div></div></div><p>This section will be of interest only to those building HBase from source.
+      </p><div class="section" title="1.3.1.&nbsp;Building in snappy compression support"><div class="titlepage"><div><div><h3 class="title"><a name="build.snappy"></a>1.3.1.&nbsp;Building in snappy compression support</h3></div></div></div><p>Pass <code class="code">-Dsnappy</code> to trigger the snappy maven profile for building
+            snappy native libs into hbase.</p></div><div class="section" title="1.3.2.&nbsp;Adding an HBase release to Apache's Maven Repository"><div class="titlepage"><div><div><h3 class="title"><a name="mvn_repo"></a>1.3.2.&nbsp;Adding an HBase release to Apache's Maven Repository</h3></div></div></div><p>Follow the instructions at
+        <a class="link" href="http://www.apache.org/dev/publishing-maven-artifacts.html" target="_top">Publishing Maven Artifacts</a>.
+            The 'trick' to making it all work is answering the questions put to you by the mvn release plugin properly,
+            making sure it is using the actual branch AND before doing the <span class="command"><strong>mvn release:perform</strong></span> step,
+            VERY IMPORTANT, hand edit the release.properties file that was put under <code class="varname">${HBASE_HOME}</code>
+            by the previous step, <span class="command"><strong>release:perform</strong></span>. You need to edit it to make it point at
+            right locations in SVN.
+        </p><p>If you see run into the below, its because you need to edit version in the pom.xml and add
+        <code class="code">-SNAPSHOT</code> to the version (and commit).
+        </p><pre class="programlisting">[INFO] Scanning for projects...
+[INFO] Searching repository for plugin with prefix: 'release'.
+[INFO] ------------------------------------------------------------------------
+[INFO] Building HBase
+[INFO]    task-segment: [release:prepare] (aggregator-style)
+[INFO] ------------------------------------------------------------------------
+[INFO] [release:prepare {execution: default-cli}]
+[INFO] ------------------------------------------------------------------------
+[ERROR] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] You don't have a SNAPSHOT project in the reactor projects list.
+[INFO] ------------------------------------------------------------------------
+[INFO] For more information, run Maven with the -e switch
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time: 3 seconds
+[INFO] Finished at: Sat Mar 26 18:11:07 PDT 2011
+[INFO] Final Memory: 35M/423M
+[INFO] -----------------------------------------------------------------------</pre><p>
+        </p></div></div><div class="section" title="1.4.&nbsp;Maven Build Commands"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="maven.build.commands"></a>1.4.&nbsp;Maven Build Commands</h2></div></div></div><p>All commands executed from the local HBase project directory.
+       </p><p>Note: use Maven 3 (Maven 2 may work but we suggest you use Maven 3).
+       </p><div class="section" title="1.4.1.&nbsp;Compile"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commands.compile"></a>1.4.1.&nbsp;Compile</h3></div></div></div><pre class="programlisting">
+mvn compile
+          </pre></div><div class="section" title="1.4.2.&nbsp;Run all Unit Tests"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commands.unitall"></a>1.4.2.&nbsp;Run all Unit Tests</h3></div></div></div><pre class="programlisting">
+mvn test
+          </pre></div><div class="section" title="1.4.3.&nbsp;Run a Single Unit Test"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commands.unit"></a>1.4.3.&nbsp;Run a Single Unit Test</h3></div></div></div><pre class="programlisting">
+mvn test -Dtest=TestXYZ
+          </pre></div><div class="section" title="1.4.4.&nbsp;Run a Few Unit Tests"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commands.unit2"></a>1.4.4.&nbsp;Run a Few Unit Tests</h3></div></div></div><pre class="programlisting">
+mvn test -Dtest=TestXYZ,TestABC
+          </pre></div><div class="section" title="1.4.5.&nbsp;Run all Unit Tests for a Package"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commands.unit.package"></a>1.4.5.&nbsp;Run all Unit Tests for a Package</h3></div></div></div><pre class="programlisting">
+mvn test -Dtest=org.apache.hadoop.hbase.client.*
+          </pre></div><div class="section" title="1.4.6.&nbsp;Integration Tests"><div class="titlepage"><div><div><h3 class="title"><a name="maven.build.commanas.integration.tests"></a>1.4.6.&nbsp;Integration Tests</h3></div></div></div><p>HBase 0.92 added a <code class="varname">verify</code> maven target. Invoking it with run all the phases up to and including the verify phase via the maven <a class="link" href="http://maven.apache.org/plugins/maven-failsafe-plugin/" target="_top">failsafe plugin</a>, running all the unit tests as well as the long running unit and integration tests.
+          </p><pre class="programlisting">
+mvn verify
+          </pre></div></div><div class="section" title="1.5.&nbsp;Getting Involved"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="getting.involved"></a>1.5.&nbsp;Getting Involved</h2></div></div></div><p>HBase gets better only when people contribute!
+        </p><p>As HBase is an Apache Software Foundation project, see <a class="xref" href="#">???</a> for more information about how the ASF functions.
+        </p><div class="section" title="1.5.1.&nbsp;Mailing Lists"><div class="titlepage"><div><div><h3 class="title"><a name="mailing.list"></a>1.5.1.&nbsp;Mailing Lists</h3></div></div></div><p>Sign up for the dev-list and the user-list.  See the 
+          <a class="link" href="http://hbase.apache.org/mail-lists.html" target="_top">mailing lists</a> page.
+          Posing questions - and helping to answer other people's questions - is encouraged!  
+          There are varying levels of experience on both lists so patience and politeness are encouraged (and please 
+          stay on topic.)  
+          </p></div><div class="section" title="1.5.2.&nbsp;Jira"><div class="titlepage"><div><div><h3 class="title"><a name="jira"></a>1.5.2.&nbsp;Jira</h3></div></div></div><p>Check for existing issues in <a class="link" href="https://issues.apache.org/jira/browse/HBASE" target="_top">Jira</a>.  
+          If it's either a new feature request, enhancement, or a bug, file a ticket.
+          </p><div class="section" title="1.5.2.1.&nbsp;Jira Priorities"><div class="titlepage"><div><div><h4 class="title"><a name="jira.priorities"></a>1.5.2.1.&nbsp;Jira Priorities</h4></div></div></div><p>The following is a guideline on setting Jira issue priorities:
+                </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Blocker: Should only be used if the issue WILL cause data loss or cluster instability reliably.</li><li class="listitem">Critical: The issue described can cause data loss or cluster instability in some cases.</li><li class="listitem">Major: Important but not tragic issues, like updates to the client API that will add a lot of much-needed functionality or significant
+                bugs that need to be fixed but that don't cause data loss.</li><li class="listitem">Minor: Useful enhancements and annoying but not damaging bugs.</li><li class="listitem">Trivial: Useful enhancements but generally cosmetic.</li></ul></div><p>  
+             </p></div><div class="section" title="1.5.2.2.&nbsp;Code Blocks in Jira Comments"><div class="titlepage"><div><div><h4 class="title"><a name="submitting.patches.jira.code"></a>1.5.2.2.&nbsp;Code Blocks in Jira Comments</h4></div></div></div><p>A commonly used macro in Jira is {code}. If you do this in a Jira comment...
+</p><pre class="programlisting">
+{code}
+   code snippet
+{code}
+</pre><p>
+              ... Jira will format the code snippet like code, instead of a regular comment.  It improves readability.
+          </p></div></div></div><div class="section" title="1.6.&nbsp;Developing"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="developing"></a>1.6.&nbsp;Developing</h2></div></div></div><div class="section" title="1.6.1.&nbsp;Codelines"><div class="titlepage"><div><div><h3 class="title"><a name="codelines"></a>1.6.1.&nbsp;Codelines</h3></div></div></div><p>Most development is done on TRUNK.  However, there are branches for minor releases (e.g., 0.90.1, 0.90.2, and 0.90.3 are on the 0.90 branch).</p><p>If you have any questions on this just send an email to the dev dist-list.</p></div><div class="section" title="1.6.2.&nbsp;Unit Tests"><div class="titlepage"><div><div><h3 class="title"><a name="unit.tests"></a>1.6.2.&nbsp;Unit Tests</h3></div></div></div><p>In HBase we use <a class="link" href="http://junit.org" target="_top">JUnit</a> 4.
+            If you need to run miniclusters of HDFS, ZooKeeper, HBase, or MapReduce testing,
+            be sure to checkout the <code class="classname">HBaseTestingUtility</code>.
+            Alex Baranau of Sematext describes how it can be used in
+            <a class="link" href="http://blog.sematext.com/2010/08/30/hbase-case-study-using-hbasetestingutility-for-local-testing-development/" target="_top">HBase Case-Study: Using HBaseTestingUtility for Local Testing and Development</a> (2010).
+          </p><div class="section" title="1.6.2.1.&nbsp;Mockito"><div class="titlepage"><div><div><h4 class="title"><a name="mockito"></a>1.6.2.1.&nbsp;Mockito</h4></div></div></div><p>Sometimes you don't need a full running server
+              unit testing.  For example, some methods can make do with a
+              a <code class="classname">org.apache.hadoop.hbase.Server</code> instance
+              or a <code class="classname">org.apache.hadoop.hbase.master.MasterServices</code>
+              Interface reference rather than a full-blown
+              <code class="classname">org.apache.hadoop.hbase.master.HMaster</code>.
+              In these cases, you maybe able to get away with a mocked
+              <code class="classname">Server</code> instance.  For example:
+              </p><pre class="programlisting">
+              TODO...
+              </pre><p>
+           </p></div><div class="section" title="1.6.2.2.&nbsp;Code Standards"><div class="titlepage"><div><div><h4 class="title"><a name="code.standards"></a>1.6.2.2.&nbsp;Code Standards</h4></div></div></div><p>See <a class="xref" href="#eclipse.code.formatting" title="1.2.1.1.&nbsp;Code Formatting">Section&nbsp;1.2.1.1, &#8220;Code Formatting&#8221;</a> and <a class="xref" href="#common.patch.feedback" title="1.7.5.&nbsp;Common Patch Feedback">Section&nbsp;1.7.5, &#8220;Common Patch Feedback&#8221;</a>.
+           </p></div></div></div><div class="section" title="1.7.&nbsp;Submitting Patches"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="submitting.patches"></a>1.7.&nbsp;Submitting Patches</h2></div></div></div><div class="section" title="1.7.1.&nbsp;Create Patch"><div class="titlepage"><div><div><h3 class="title"><a name="submitting.patches.create"></a>1.7.1.&nbsp;Create Patch</h3></div></div></div><p>Patch files can be easily generated from Eclipse, for example by selecting "Team -&gt; Create Patch".
+          Patches can also be created by git diff and svn diff.
+          </p><p>Please submit one patch-file per Jira.  For example, if multiple files are changed make sure the 
+          selected resource when generating the patch is a directory.  Patch files can reflect changes in multiple files. </p><p>Make sure you review <a class="xref" href="#eclipse.code.formatting" title="1.2.1.1.&nbsp;Code Formatting">Section&nbsp;1.2.1.1, &#8220;Code Formatting&#8221;</a> for code style. </p></div><div class="section" title="1.7.2.&nbsp;Patch File Naming"><div class="titlepage"><div><div><h3 class="title"><a name="submitting.patches.naming"></a>1.7.2.&nbsp;Patch File Naming</h3></div></div></div><p>The patch file should have the HBase Jira ticket in the name.  For example, if a patch was submitted for <code class="filename">Foo.java</code>, then
+          a patch file called <code class="filename">Foo_HBASE_XXXX.patch</code> would be acceptable where XXXX is the HBase Jira number.
+          </p><p>If you generating from a branch, then including the target branch in the filename is advised, e.g., <code class="filename">HBASE-XXXX-0.90.patch</code>.
+          </p></div><div class="section" title="1.7.3.&nbsp;Unit Tests"><div class="titlepage"><div><div><h3 class="title"><a name="submitting.patches.tests"></a>1.7.3.&nbsp;Unit Tests</h3></div></div></div><p>Yes, please.  Please try to include unit tests with every code patch (and especially new classes and large changes).
+            Make sure unit tests pass locally before submitting the patch.</p><p>Also, see <a class="xref" href="#mockito" title="1.6.2.1.&nbsp;Mockito">Section&nbsp;1.6.2.1, &#8220;Mockito&#8221;</a>.</p></div><div class="section" title="1.7.4.&nbsp;Attach Patch to Jira"><div class="titlepage"><div><div><h3 class="title"><a name="submitting.patches.jira"></a>1.7.4.&nbsp;Attach Patch to Jira</h3></div></div></div><p>The patch should be attached to the associated Jira ticket "More Actions -&gt; Attach Files".  Make sure you click the
+            ASF license inclusion, otherwise the patch can't be considered for inclusion.
+            </p><p>Once attached to the ticket, click "Submit Patch" and 
+            the status of the ticket will change.  Committers will review submitted patches for inclusion into the codebase.  Please
+            understand that not every patch may get committed, and that feedback will likely be provided on the patch.  Fear not, though,
+            because the HBase community is helpful!
+            </p></div><div class="section" title="1.7.5.&nbsp;Common Patch Feedback"><div class="titlepage"><div><div><h3 class="title"><a name="common.patch.feedback"></a>1.7.5.&nbsp;Common Patch Feedback</h3></div></div></div><p>The following items are representative of common patch feedback. Your patch process will go faster if these are
+          taken into account <span class="emphasis"><em>before</em></span> submission.
+          </p><p>
+          See the <a class="link" href="http://www.oracle.com/technetwork/java/codeconv-138413.html" target="_top">Java coding standards</a> 
+          for more information on coding conventions in Java.
+          </p><div class="section" title="1.7.5.1.&nbsp;Space Invaders"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.space.invaders"></a>1.7.5.1.&nbsp;Space Invaders</h4></div></div></div><p>Rather than do this...
+</p><pre class="programlisting">
+if ( foo.equals( bar ) ) {     // don't do this
+</pre><p>
+			... do this instead...        
+</p><pre class="programlisting">
+if (foo.equals(bar)) {
+</pre><p>
+          </p><p>Also, rather than do this...
+</p><pre class="programlisting">
+foo = barArray[ i ];     // don't do this
+</pre><p>
+			... do this instead...        
+</p><pre class="programlisting">
+foo = barArray[i];   
+</pre><p>
+          </p></div><div class="section" title="1.7.5.2.&nbsp;Auto Generated Code"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.autogen"></a>1.7.5.2.&nbsp;Auto Generated Code</h4></div></div></div><p>Auto-generated code in Eclipse often looks like this...
+</p><pre class="programlisting">
+ public void readFields(DataInput arg0) throws IOException {    // don't do this
+   foo = arg0.readUTF();                                       // don't do this
+</pre><p>
+			... do this instead ...        
+</p><pre class="programlisting">
+ public void readFields(DataInput di) throws IOException {
+   foo = di.readUTF();
+</pre><p>
+           See the difference?  'arg0' is what Eclipse uses for arguments by default.
+           </p></div><div class="section" title="1.7.5.3.&nbsp;Long Lines"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.longlines"></a>1.7.5.3.&nbsp;Long Lines</h4></div></div></div><p>
+            Keep lines less than 80 characters.
+</p><pre class="programlisting">
+Bar bar = foo.veryLongMethodWithManyArguments(argument1, argument2, argument3, argument4, argument5);  // don't do this
+</pre><p>
+			... do this instead ...        
+</p><pre class="programlisting">
+Bar bar = foo.veryLongMethodWithManyArguments(argument1,
+ argument2, argument3,argument4, argument5); 
+</pre><p>
+           ... or this, whichever looks better ...
+</p><pre class="programlisting">
+Bar bar = foo.veryLongMethodWithManyArguments(
+ argument1, argument2, argument3,argument4, argument5); 
+</pre><p>
+           </p></div><div class="section" title="1.7.5.4.&nbsp;Trailing Spaces"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.trailingspaces"></a>1.7.5.4.&nbsp;Trailing Spaces</h4></div></div></div><p>
+            This happens more than people would imagine.
+</p><pre class="programlisting">
+Bar bar = foo.getBar();     &lt;--- imagine there's an extra space(s) after the semicolon instead of a line break.
+</pre><p>
+            Make sure there's a line-break after the end of your code, and also avoid lines that have nothing
+            but whitespace. 
+            </p></div><div class="section" title="1.7.5.5.&nbsp;Implementing Writable"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.writable"></a>1.7.5.5.&nbsp;Implementing Writable</h4></div></div></div><p>Every class returned by RegionServers must implement <code class="code">Writable</code>.  If you
+            are creating a new class that needs to implement this interface, don't forget the default constructor.
+            </p></div><div class="section" title="1.7.5.6.&nbsp;Javadoc"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.javadoc"></a>1.7.5.6.&nbsp;Javadoc</h4></div></div></div><p>This is also a very common feedback item.  Don't forget Javadoc!
+            </p></div><div class="section" title="1.7.5.7.&nbsp;Javadoc - Useless Defaults"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.javadoc.defaults"></a>1.7.5.7.&nbsp;Javadoc - Useless Defaults</h4></div></div></div><p>Don't just leave the @param arguments the way your IDE generated them.  Don't do this...
+</p><pre class="programlisting">
+  /**
+   * 
+   * @param bar             &lt;---- don't do this!!!!
+   * @return                &lt;---- or this!!!!
+   */
+  public Foo getFoo(Bar bar);
+</pre><p> 
+            ... either add something descriptive to the @param and @return lines, or just remove them. 
+            But the preference is to add something descriptive and useful.          
+            </p></div><div class="section" title="1.7.5.8.&nbsp;One Thing At A Time, Folks"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.onething"></a>1.7.5.8.&nbsp;One Thing At A Time, Folks</h4></div></div></div><p>If you submit a patch for one thing, don't do auto-reformatting or unrelated reformatting of code on a completely
+            different area of code. 
+            </p><p>Likewise, don't add unrelated cleanup or refactorings outside the scope of your Jira. 
+            </p></div><div class="section" title="1.7.5.9.&nbsp;Ambigious Unit Tests"><div class="titlepage"><div><div><h4 class="title"><a name="common.patch.feedback.tests"></a>1.7.5.9.&nbsp;Ambigious Unit Tests</h4></div></div></div><p>Make sure that you're clear about what you are testing in your unit tests and why. 
+            </p></div></div><div class="section" title="1.7.6.&nbsp;ReviewBoard"><div class="titlepage"><div><div><h3 class="title"><a name="reviewboard"></a>1.7.6.&nbsp;ReviewBoard</h3></div></div></div><p>Larger patches should go through <a class="link" href="http://reviews.apache.org" target="_top">ReviewBoard</a>.
+          </p><p>For more information on how to use ReviewBoard, see
+           <a class="link" href="http://www.reviewboard.org/docs/manual/1.5/" target="_top">the ReviewBoard documentation</a>.
+          </p></div><div class="section" title="1.7.7.&nbsp;Committing Patches"><div class="titlepage"><div><div><h3 class="title"><a name="committing.patches"></a>1.7.7.&nbsp;Committing Patches</h3></div></div></div><p>
+          Committers do this.  See <a class="link" href="http://wiki.apache.org/hadoop/Hbase/HowToCommit" target="_top">How To Commit</a> in the HBase wiki.
+          </p><p>Commiters will also resolve the Jira, typically after the patch passes a build.
+          </p></div></div></div></body></html>
