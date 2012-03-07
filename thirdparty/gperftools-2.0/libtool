@@ -2,7 +2,7 @@
 
 # libtool - Provide generalized library-building support services.
 # Generated automatically by config.status (gperftools) 2.0
-# Libtool was configured on host nong-desktop:
+# Libtool was configured on host marcel-desktop:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 #
 #   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005,
@@ -52,7 +52,7 @@ build_libtool_libs=yes
 build_old_libs=yes
 
 # What type of objects to build.
-pic_mode=default
+pic_mode=yes
 
 # The host system.
 host_alias=
