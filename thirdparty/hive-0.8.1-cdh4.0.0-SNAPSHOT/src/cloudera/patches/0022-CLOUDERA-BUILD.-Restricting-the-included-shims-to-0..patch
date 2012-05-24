@@ -1,0 +1,25 @@
+From 2354b846d42d35f61cfce13033b16541d0f9b4f5 Mon Sep 17 00:00:00 2001
+From: Roman Shaposhnik <rvs@cloudera.com>
+Date: Tue, 7 Feb 2012 15:59:57 -0800
+Subject: [PATCH 22/58] CLOUDERA-BUILD. Restricting the included shims to 0.23 only
+
+---
+ build.properties |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/src/build.properties b/src/build.properties
+index 8f79d91..febe20f 100644
+--- a/src/build.properties
++++ b/src/build.properties
+@@ -11,6 +11,8 @@ javac.args=
+ javac.args.warnings=
+ 
+ hadoop.version=0.20.1
++hadoop-0.23.version=${hadoop.version}
++shims.include=0.23
+ hadoop.security.version=${hadoop.version}
+ hadoop.security.version.prefix=0.20S
+ hadoop.mirror=http://mirror.facebook.net/facebook/hive-deps
+-- 
+1.7.0.4
+

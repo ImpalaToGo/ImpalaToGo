@@ -1,0 +1,123 @@
+From 365bbaecb2284682d627a2c84a184f7c649221d3 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <carl@cloudera.com>
+Date: Wed, 9 May 2012 22:33:55 -0700
+Subject: [PATCH 51/58] HIVE-2757.  hive can't find hadoop executor scripts without HADOOP_HOME set
+
+Reason: Bug
+Author: Roman Shaposhnik
+Ref: CDH-5694
+---
+ bin/ext/help.sh                                    |    2 +-
+ bin/hive                                           |    6 ++--
+ bin/init-hive-dfs.sh                               |    6 ++--
+ .../java/org/apache/hadoop/hive/conf/HiveConf.java |   21 ++++++++++---------
+ 4 files changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/src/bin/ext/help.sh b/src/bin/ext/help.sh
+index 40d492f..2bb5d13 100644
+--- a/src/bin/ext/help.sh
++++ b/src/bin/ext/help.sh
+@@ -24,7 +24,7 @@ help() {
+   echo "  --config : Hive configuration directory"
+   echo "  --service : Starts specific service/component. cli is default"
+   echo "Parameters used:"
+-  echo "  HADOOP_HOME : Hadoop install directory"
++  echo "  HADOOP_HOME or HADOOP_PREFIX : Hadoop install directory"
+   echo "  HIVE_OPT : Hive options"
+   echo "For help on a particular service:"
+   echo "  ./hive --service serviceName --help"
+diff --git a/src/bin/hive b/src/bin/hive
+index edac15c..995d1a0 100755
+--- a/src/bin/hive
++++ b/src/bin/hive
+@@ -155,15 +155,15 @@ if [ -f ${HADOOP_IN_PATH} ]; then
+   HADOOP_DIR=`dirname "$HADOOP_IN_PATH"`/..
+ fi
+ # HADOOP_HOME env variable overrides hadoop in the path
+-HADOOP_HOME=${HADOOP_HOME:-$HADOOP_DIR}
++HADOOP_HOME=${HADOOP_HOME:-${HADOOP_PREFIX:-$HADOOP_DIR}}
+ if [ "$HADOOP_HOME" == "" ]; then
+-  echo "Cannot find hadoop installation: \$HADOOP_HOME must be set or hadoop must be in the path";
++  echo "Cannot find hadoop installation: \$HADOOP_HOME or \$HADOOP_PREFIX must be set or hadoop must be in the path";
+   exit 4;
+ fi
+ 
+ HADOOP=$HADOOP_HOME/bin/hadoop
+ if [ ! -f ${HADOOP} ]; then
+-  echo "Cannot find hadoop installation: \$HADOOP_HOME must be set or hadoop must be in the path";
++  echo "Cannot find hadoop installation: \$HADOOP_HOME or \$HADOOP_PREFIX must be set or hadoop must be in the path";
+   exit 4;
+ fi
+ 
+diff --git a/src/bin/init-hive-dfs.sh b/src/bin/init-hive-dfs.sh
+index ec3997a..9364f43 100644
+--- a/src/bin/init-hive-dfs.sh
++++ b/src/bin/init-hive-dfs.sh
+@@ -62,15 +62,15 @@ if [ -f ${HADOOP_IN_PATH} ]; then
+   HADOOP_DIR=`dirname "$HADOOP_IN_PATH"`/..
+ fi
+ # HADOOP_HOME env variable overrides hadoop in the path
+-HADOOP_HOME=${HADOOP_HOME:-$HADOOP_DIR}
++HADOOP_HOME=${HADOOP_HOME:-${HADOOP_PREFIX:-$HADOOP_DIR}}
+ if [ "$HADOOP_HOME" == "" ]; then
+-  echo "Cannot find hadoop installation: \$HADOOP_HOME must be set or hadoop must be in the path";
++  echo "Cannot find hadoop installation: \$HADOOP_HOME or \$HADOOP_PREFIX must be set or hadoop must be in the path";
+   exit 4;
+ fi
+ 
+ HADOOP_EXEC=$HADOOP_HOME/bin/hadoop
+ if [ ! -f ${HADOOP} ]; then
+-  echo "Cannot find hadoop installation: \$HADOOP_HOME must be set or hadoop must be in the path";
++  echo "Cannot find hadoop installation: \$HADOOP_HOME or \$HADOOP_PREFIX must be set or hadoop must be in the path";
+   exit 4;
+ fi
+ 
+diff --git a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+index 162ce75..3ab00b0 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
++++ b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+@@ -202,8 +202,7 @@ public class HiveConf extends Configuration {
+     // Properties with null values are ignored and exist only for the purpose of giving us
+     // a symbolic name to reference in the Hive source code. Properties with non-null
+     // values will override any values set in the underlying Hadoop configuration.
+-    HADOOPBIN("hadoop.bin.path", System.getenv("HADOOP_HOME") + "/bin/hadoop"),
+-    HADOOPCONF("hadoop.config.dir", System.getenv("HADOOP_HOME") + "/conf"),
++    HADOOPBIN("hadoop.bin.path", findHadoopBinary()),
+     HADOOPFS("fs.default.name", null),
+     HIVE_FS_HAR_IMPL("fs.har.impl", "org.apache.hadoop.hive.shims.HiveHarFileSystem"),
+     HADOOPMAPFILENAME("map.input.file", null),
+@@ -819,14 +818,6 @@ public class HiveConf extends Configuration {
+       addResource(hiveSiteURL);
+     }
+ 
+-    // if hadoop configuration files are already in our path - then define
+-    // the containing directory as the configuration directory
+-    URL hadoopconfurl = getClassLoader().getResource("core-site.xml");
+-    if (hadoopconfurl != null) {
+-      String conffile = hadoopconfurl.getPath();
+-      this.setVar(ConfVars.HADOOPCONF, conffile.substring(0, conffile.lastIndexOf('/')));
+-    }
+-
+     // Overlay the values of any system properties whose names appear in the list of ConfVars
+     applySystemProperties();
+ 
+@@ -872,6 +863,16 @@ public class HiveConf extends Configuration {
+     }
+   }
+ 
++  private static String findHadoopBinary() {
++    String val = System.getenv("HADOOP_HOME");
++    // In Hadoop 1.X and Hadoop 2.X HADOOP_HOME is gone and replaced with HADOOP_PREFIX
++    if (val == null) {
++      val = System.getenv("HADOOP_PREFIX");
++    }
++    // and if all else fails we can at least try /usr/bin/hadoop
++    return (val == null ? File.separator + "usr" : val) + File.separator + "bin" + File.separator + "hadoop";
++  }
++
+   public Properties getChangedProperties() {
+     Properties ret = new Properties();
+     Properties newProp = getAllProperties();
+-- 
+1.7.0.4
+

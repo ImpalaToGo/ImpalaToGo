@@ -1,0 +1,318 @@
+From 146ab751d263ea905cc4f0be4ef052900cafb9f6 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <carl@cloudera.com>
+Date: Mon, 30 Jan 2012 17:57:24 -0800
+Subject: [PATCH 19/58] CDH-4318. Update Hive's Eclipse templates for CDH4
+
+Reason: Bug
+Author: Carl Steinbach
+Ref: CDH-4318
+---
+ build.xml                                          |    2 +
+ eclipse-templates/.classpath                       |  131 ++++++++++++++++++-
+ eclipse-templates/HiveCLI.launchtemplate           |    1 -
+ eclipse-templates/TestCliDriver.launchtemplate     |    1 -
+ .../TestEmbeddedHiveMetaStore.launchtemplate       |    1 -
+ .../TestHBaseCliDriver.launchtemplate              |    1 -
+ eclipse-templates/TestHive.launchtemplate          |    1 -
+ .../TestHiveMetaStoreChecker.launchtemplate        |    1 -
+ eclipse-templates/TestJdbc.launchtemplate          |    1 -
+ eclipse-templates/TestMTQueries.launchtemplate     |    1 -
+ .../TestRemoteHiveMetaStore.launchtemplate         |    1 -
+ eclipse-templates/TestTruncate.launchtemplate      |    1 -
+ 12 files changed, 126 insertions(+), 17 deletions(-)
+
+diff --git a/src/build.xml b/src/build.xml
+index d2d6c6e..01c3a07 100644
+--- a/src/build.xml
++++ b/src/build.xml
+@@ -49,6 +49,7 @@
+     </then>
+   </if>
+ 
++  
+   <property name="hive.root" location="${basedir}"/>
+   <property file="${hive.root}/cdh.build.properties"/>
+   <property file="${hive.root}/build.properties"/>
+@@ -574,6 +575,7 @@
+       </fileset>
+       <filterset>
+         <filtersfile file="${hive.root}/ivy/libraries.properties"/>
++        <filtersfile file="${hive.root}/cdh.build.properties"/>
+         <filter token="PROJECT" value="${eclipse.project}"/>
+         <filter token="HADOOPVER" value="${hadoop.version.ant-internal}"/>
+         <filter token="HADOOPVERPREF" value="${hadoop.version.ant-internal.prefix}"/>
+diff --git a/src/eclipse-templates/.classpath b/src/eclipse-templates/.classpath
+index 50c246a..f3a7d14 100644
+--- a/src/eclipse-templates/.classpath
++++ b/src/eclipse-templates/.classpath
+@@ -1,16 +1,132 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <classpath>
+   <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/hadoop-@HADOOPVER@-core.jar"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/hadoop-@HADOOPVER@-test.jar"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/hadoop-@HADOOPVER@-tools.jar"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/@SERVLETAPIJAR@"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/@JETTYJAR@"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/@JETTYUTILJAR@"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/hadoop-common-@HADOOPVER@-sources.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/hadoop-common-@HADOOPVER@-test-sources.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/hadoop-common-@HADOOPVER@-tests.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/hadoop-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/activation-1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/asm-3.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/aspectjrt-1.6.5.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/avro-1.5.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-beanutils-1.7.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-beanutils-core-1.8.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-cli-1.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-codec-1.4.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-collections-3.2.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-configuration-1.6.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-digester-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-el-1.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-httpclient-3.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-lang-2.5.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-logging-1.1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-logging-api-1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-math-2.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/commons-net-1.4.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/core-3.1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/guava-r09.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/hadoop-auth-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/hsqldb-1.8.0.7.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jackson-core-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jackson-jaxrs-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jackson-mapper-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jackson-xc-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jasper-compiler-5.5.23.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jasper-runtime-5.5.23.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jaxb-api-2.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jaxb-impl-2.2.3-1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jersey-core-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jersey-json-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jersey-server-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jets3t-0.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jettison-1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jetty-6.1.26.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jetty-util-6.1.26.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jsch-0.1.42.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/json-simple-1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/jsp-api-2.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/kfs-0.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/log4j-1.2.15.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/oro-2.0.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/paranamer-2.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/protobuf-java-2.4.0a.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/servlet-api-2.5.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/slf4j-api-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/slf4j-log4j12-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/snappy-java-1.0.3.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/stax-api-1.0.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/common/lib/xmlenc-0.52.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/hadoop-hdfs-@HADOOPVER@-sources.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/hadoop-hdfs-@HADOOPVER@-test-sources.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/hadoop-hdfs-@HADOOPVER@-tests.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/hadoop-hdfs-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/avro-1.5.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/commons-daemon-1.0.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/commons-logging-1.1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/jackson-core-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/jackson-mapper-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/log4j-1.2.15.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/paranamer-2.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/protobuf-java-2.4.0a.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/slf4j-api-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/slf4j-log4j12-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/hdfs/lib/snappy-java-1.0.3.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-app-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-core-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-hs-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-jobclient-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-client-shuffle-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-mapreduce-examples-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-api-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-applications-distributedshell-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-server-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-server-nodemanager-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-server-resourcemanager-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-server-web-proxy-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/hadoop-yarn-site-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/aopalliance-1.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/asm-3.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/avro-1.5.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/clover-3.0.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/commons-daemon-1.0.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/commons-io-2.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/commons-logging-1.1.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/guice-3.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/guice-servlet-3.0.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/hadoop-annotations-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jackson-core-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jackson-mapper-asl-1.7.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/javax.inject-1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jdiff-1.0.9.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jersey-core-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jersey-guice-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/jersey-server-1.8.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/junit-4.8.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/log4j-1.2.15.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/netty-3.2.3.Final.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/paranamer-2.3.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/protobuf-java-2.4.0a.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/slf4j-api-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/slf4j-log4j12-1.6.1.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/mapreduce/lib/snappy-java-1.0.3.2.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/tools/lib/hadoop-archives-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/share/hadoop/tools/lib/hadoop-streaming-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-annotations-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-hdfs-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-mapreduce-client-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-mapreduce-client-core-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-mapreduce-client-jobclient-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-mapreduce-client-jobclient-@HADOOPVER@-tests.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-mapreduce-client-shuffle-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-yarn-api-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-yarn-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-yarn-server-common-@HADOOPVER@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/test/hadoop-yarn-server-nodemanager-@HADOOPVER@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/jline-@jline.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/json-@json.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/asm-@asm.version@.jar"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/commons-codec-@commons-codec.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-lang-@commons-lang.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-logging-@commons-logging.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-logging-api-@commons-logging-api.version@.jar"/>
+@@ -37,6 +153,7 @@
+   <classpathentry kind="lib" path="build/ivy/lib/default/slf4j-log4j12-@slf4j-log4j12.version@.jar"/>
+   <classpathentry kind="lib" path="lib/javaewah-@javaewah.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/mockito-all-@mockito-all.version@.jar"/>
++  <classpathentry kind="lib" path="build/builtins/hive-builtins-@HIVE_VERSION@.jar"/>
+   <classpathentry kind="src" path="build/contrib/test/src"/>
+   <classpathentry kind="src" path="build/metastore/gen/antlr/gen-java"/>
+   <classpathentry kind="src" path="build/ql/test/src"/>
+diff --git a/src/eclipse-templates/HiveCLI.launchtemplate b/src/eclipse-templates/HiveCLI.launchtemplate
+index f79ca7e..1a805ed 100644
+--- a/src/eclipse-templates/HiveCLI.launchtemplate
++++ b/src/eclipse-templates/HiveCLI.launchtemplate
+@@ -18,7 +18,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/common/src/java/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/ql/hive-exec-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+   </listAttribute>
+diff --git a/src/eclipse-templates/TestCliDriver.launchtemplate b/src/eclipse-templates/TestCliDriver.launchtemplate
+index e72324c..ac2852a 100644
+--- a/src/eclipse-templates/TestCliDriver.launchtemplate
++++ b/src/eclipse-templates/TestCliDriver.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestEmbeddedHiveMetaStore.launchtemplate b/src/eclipse-templates/TestEmbeddedHiveMetaStore.launchtemplate
+index 1d4fc84..97e98a0 100644
+--- a/src/eclipse-templates/TestEmbeddedHiveMetaStore.launchtemplate
++++ b/src/eclipse-templates/TestEmbeddedHiveMetaStore.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestHBaseCliDriver.launchtemplate b/src/eclipse-templates/TestHBaseCliDriver.launchtemplate
+index 515ec6a..2fe62af 100644
+--- a/src/eclipse-templates/TestHBaseCliDriver.launchtemplate
++++ b/src/eclipse-templates/TestHBaseCliDriver.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-0.6.0.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestHive.launchtemplate b/src/eclipse-templates/TestHive.launchtemplate
+index dc7c845..c05ffb0 100644
+--- a/src/eclipse-templates/TestHive.launchtemplate
++++ b/src/eclipse-templates/TestHive.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestHiveMetaStoreChecker.launchtemplate b/src/eclipse-templates/TestHiveMetaStoreChecker.launchtemplate
+index f767c9c..a0ddadf 100644
+--- a/src/eclipse-templates/TestHiveMetaStoreChecker.launchtemplate
++++ b/src/eclipse-templates/TestHiveMetaStoreChecker.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestJdbc.launchtemplate b/src/eclipse-templates/TestJdbc.launchtemplate
+index 32f9397..2aab4a0 100644
+--- a/src/eclipse-templates/TestJdbc.launchtemplate
++++ b/src/eclipse-templates/TestJdbc.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestMTQueries.launchtemplate b/src/eclipse-templates/TestMTQueries.launchtemplate
+index f37ca95..9c08a9a 100644
+--- a/src/eclipse-templates/TestMTQueries.launchtemplate
++++ b/src/eclipse-templates/TestMTQueries.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestRemoteHiveMetaStore.launchtemplate b/src/eclipse-templates/TestRemoteHiveMetaStore.launchtemplate
+index 0ef99de..cb97fcd 100644
+--- a/src/eclipse-templates/TestRemoteHiveMetaStore.launchtemplate
++++ b/src/eclipse-templates/TestRemoteHiveMetaStore.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+diff --git a/src/eclipse-templates/TestTruncate.launchtemplate b/src/eclipse-templates/TestTruncate.launchtemplate
+index 93708cb..9ef03cd 100644
+--- a/src/eclipse-templates/TestTruncate.launchtemplate
++++ b/src/eclipse-templates/TestTruncate.launchtemplate
+@@ -13,7 +13,6 @@
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/metastore/src/model&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/hadoopcore/hadoop-@HADOOPVER@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/data/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
+     <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
+-- 
+1.7.0.4
+

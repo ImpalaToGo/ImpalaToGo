@@ -1,0 +1,93 @@
+From 4565aa48ac45910967d2722cb0a6001369874525 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Fri, 16 Mar 2012 09:40:17 -0700
+Subject: [PATCH 39/58] HIVE-2748. Upgrade Hbase and ZK dependcies
+
+Reason: Bug
+Author: Enis Soztutar
+Ref:    CDH-4532
+---
+ hbase-handler/ivy.xml                              |    4 ++++
+ .../apache/hadoop/hive/hbase/HBaseTestSetup.java   |    4 ++--
+ ivy/libraries.properties                           |    3 ++-
+ shims/ivy.xml                                      |    3 +++
+ 4 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/hbase-handler/ivy.xml b/src/hbase-handler/ivy.xml
+index 041e38a..99f439f 100644
+--- a/src/hbase-handler/ivy.xml
++++ b/src/hbase-handler/ivy.xml
+@@ -49,6 +49,10 @@
+       <artifact name="hbase" type="test-jar" ext="jar"
+                 m:classifier="tests"/>
+     </dependency>
++    <dependency org="com.github.stephenc.high-scale-lib" name="high-scale-lib" rev="1.1.1"
++                transitive="false"/>
++    <dependency org="org.codehaus.jackson" name="jackson-jaxrs" rev="${jackson.version}"/>
++    <dependency org="org.codehaus.jackson" name="jackson-xc" rev="${jackson.version}"/>
+     <dependency org="org.apache.zookeeper" name="zookeeper" rev="${zookeeper.version}"
+                 transitive="false"/>
+     
+diff --git a/src/hbase-handler/src/test/org/apache/hadoop/hive/hbase/HBaseTestSetup.java b/src/hbase-handler/src/test/org/apache/hadoop/hive/hbase/HBaseTestSetup.java
+index 6743e57..163f676 100644
+--- a/src/hbase-handler/src/test/org/apache/hadoop/hive/hbase/HBaseTestSetup.java
++++ b/src/hbase-handler/src/test/org/apache/hadoop/hive/hbase/HBaseTestSetup.java
+@@ -61,7 +61,7 @@ public class HBaseTestSetup extends TestSetup {
+       setUpFixtures(conf);
+     }
+     conf.set("hbase.rootdir", hbaseRoot);
+-    conf.set("hbase.master", hbaseCluster.getMaster().toString());
++    conf.set("hbase.master", hbaseCluster.getMaster().getServerName().getHostAndPort());
+     conf.set("hbase.zookeeper.property.clientPort",
+       Integer.toString(zooKeeperPort));
+     String auxJars = conf.getAuxJars();
+@@ -88,7 +88,7 @@ public class HBaseTestSetup extends TestSetup {
+     hbaseConf.setInt("hbase.regionserver.port", findFreePort());
+     hbaseConf.setInt("hbase.regionserver.info.port", -1);
+     hbaseCluster = new MiniHBaseCluster(hbaseConf, NUM_REGIONSERVERS);
+-    conf.set("hbase.master", hbaseCluster.getMaster().toString());
++    conf.set("hbase.master", hbaseCluster.getMaster().getServerName().getHostAndPort());
+     // opening the META table ensures that cluster is running
+     new HTable(new HBaseConfiguration(conf), HConstants.META_TABLE_NAME);
+   }
+diff --git a/src/ivy/libraries.properties b/src/ivy/libraries.properties
+index d17d3cc..cb87086 100644
+--- a/src/ivy/libraries.properties
++++ b/src/ivy/libraries.properties
+@@ -37,10 +37,11 @@ commons-logging.version=1.0.4
+ commons-logging-api.version=1.0.4
+ commons-pool.version=1.5.4
+ derby.version=10.4.2.0
+-guava.version=r06
++guava.version=r09
+ haivvreo.version=1.0.7-cdh-2
+ hbase.version=0.92.0
+ hbase-test.version=0.92.0
++jackson.version=1.8.8
+ javaewah.version=0.3
+ jdo-api.version=2.3-ec
+ jdom.version=1.1
+diff --git a/src/shims/ivy.xml b/src/shims/ivy.xml
+index 9474e0c..dbb1134 100644
+--- a/src/shims/ivy.xml
++++ b/src/shims/ivy.xml
+@@ -29,6 +29,7 @@
+   <dependencies>
+     <dependency org="${hadoop.dep.org}" name="${hadoop.dep.name}" rev="${hadoop.version.ant-internal}">
+       <artifact name="${hadoop.dep.artifact}" type="source" ext="tar.gz"/>
++      <exclude org="org.codehaus.jackson" name="*"/>
+     </dependency> 
+     <dependency org="${hadoop.dep.org}" name="${hadoop.dep.name}" rev="${hadoop.security.version}">
+       <artifact name="${hadoop.dep.artifact}" type="source" ext="tar.gz"/>
+@@ -45,6 +46,8 @@
+                 transitive="false"/>
+     <dependency org="com.google.guava" name="guava" rev="${guava.version}"
+                 transitive="false"/>
++    <dependency org="org.codehaus.jackson" name="jackson-core-asl" rev="${jackson.version}"/>
++    <dependency org="org.codehaus.jackson" name="jackson-mapper-asl" rev="${jackson.version}"/>
+     <conflict manager="all" />
+   </dependencies>
+ </ivy-module>
+-- 
+1.7.0.4
+

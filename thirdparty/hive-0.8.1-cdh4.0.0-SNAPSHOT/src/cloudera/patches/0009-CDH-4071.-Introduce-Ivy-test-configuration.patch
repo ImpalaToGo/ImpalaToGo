@@ -1,0 +1,125 @@
+From d6cfbf910d2719a297d7fd42bb31f64f3e296ac6 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Mon, 9 Jan 2012 16:36:22 -0800
+Subject: [PATCH 09/58] CDH-4071. Introduce Ivy 'test' configuration.
+
+Switch the test dependency in ql on
+hadoop-mapreduce-client-jobclient-*-tests.jar to be part of a new
+test configuration in Ivy, distinct from the default/compile
+configuration. This'll help us keep the test dependencies from
+bleeding over into the compile dependencies, and is a starting point
+for the overall reworking of the dependency management.
+
+For right now, the only jar in the test configuration that actually
+makes it onto the classpath is the one explicitly specified, since
+this is the only Hadoop dependency being handled directly via Ivy,
+rather than indirectly through the tarball, but that'll change. The
+make-pom target in build-common.xml has also been tweaked to support
+adding dependencies in the test configuration as test-scoped
+dependencies to the generated POMs.
+
+Reason: Improvement
+Author: Andrew Bayer
+Ref: CDH-4071
+---
+ build-common.xml              |   22 +++++++++++++++++++---
+ ivy/common-configurations.xml |    1 +
+ ql/build.xml                  |    2 +-
+ ql/ivy.xml                    |    3 ++-
+ 4 files changed, 23 insertions(+), 5 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index c315aa2..618ae8d 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -106,7 +106,7 @@
+       <exclude name="share/hadoop/common/lib/hadoop-yarn-*.jar" />
+     </fileset>
+     <!-- Hack to get jobclient test jar in classpath. -->
+-    <fileset dir="${hive.root}/build/ivy/lib/default" includes="hadoop-mapreduce-client-jobclient-*-tests.jar" />
++    <fileset dir="${hive.root}/build/ivy/lib/test" includes="hadoop-mapreduce-client-jobclient-*-tests.jar" />
+   </path>
+ 
+ 
+@@ -152,7 +152,22 @@
+   	<ivy:retrieve settingsRef="${ant.project.name}-${hadoop.version.ant-internal}.ivy.settings"
+       pattern="${build.dir.hadoop}/[artifact]-[revision].[ext]"/>
+   </target>
+-  
++
++  <target name="ivy-resolve-test" depends="ivy-init-settings" unless="offline">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:resolve settingsRef="${ant.project.name}.ivy.settings"
++      conf="test" log="${ivyresolvelog}"/>
++  </target>
++
++  <target name="ivy-retrieve-test" depends="ivy-resolve-test"
++    description="Retrieve Ivy-managed artifacts">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
++      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}"
++      log="${ivyresolvelog}" conf="test"/>
++  </target>
++
++
+   <available property="hadoopcore.${hadoop.version.ant-internal}.install.done"
+     file="${build.dir.hadoop}/hadoop-${hadoop.version.ant-internal}.installed"/>
+ 
+@@ -283,7 +298,7 @@
+   </target>
+ 
+   <!-- target to compile tests -->
+-  <target name="compile-test" depends="compile">
++  <target name="compile-test" depends="compile, ivy-retrieve-test">
+     <echo message="Project: ${ant.project.name}"/>
+     <javac
+      encoding="${build.encoding}"
+@@ -469,6 +484,7 @@
+     <ivy:makepom ivyfile="${basedir}/ivy.xml" pomfile="${build.dir}/pom.xml">
+       <mapping conf="default" scope="compile" />
+       <mapping conf="runtime" scope="compile" />
++      <mapping conf="test"    scope="test" />
+     </ivy:makepom>
+     <replace file="${build.dir}/pom.xml">
+       <replacetoken>&lt;dependencies&gt;</replacetoken>
+diff --git a/src/ivy/common-configurations.xml b/src/ivy/common-configurations.xml
+index 79c7ddd..f7725ad 100644
+--- a/src/ivy/common-configurations.xml
++++ b/src/ivy/common-configurations.xml
+@@ -20,4 +20,5 @@
+   <conf name="master" description="contains the artifact but no dependencies"/>
+   <conf name="compile" description="contains the artifact but no dependencies"/>
+   <conf name="runtime" description="runtime but not the artifact"/>
++  <conf name="test" extends="compile" visibility="private" />
+ </configurations>
+\ No newline at end of file
+diff --git a/src/ql/build.xml b/src/ql/build.xml
+index 7dec1b4..48c029d 100644
+--- a/src/ql/build.xml
++++ b/src/ql/build.xml
+@@ -62,7 +62,7 @@
+ 
+     <path refid="classpath"/>
+     <!-- Hack to get jobclient test jar in classpath. -->
+-    <fileset dir="${hive.root}/build/ivy/lib/default" includes="hadoop-mapreduce-client-jobclient-*-tests.jar" />
++    <fileset dir="${hive.root}/build/ivy/lib/test" includes="hadoop-mapreduce-client-jobclient-*-tests.jar" />
+ 
+   </path>
+ 
+diff --git a/src/ql/ivy.xml b/src/ql/ivy.xml
+index 96281c2..3ae37e8 100644
+--- a/src/ql/ivy.xml
++++ b/src/ql/ivy.xml
+@@ -62,7 +62,8 @@
+     <dependency org="org.apache.derby" name="derby" rev="${derby.version}"/>
+ 
+     <!-- Hack to get jobclient tests dependency in. -->
+-    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-jobclient" rev="${hadoop.version.ant-internal}">
++    <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-jobclient" rev="${hadoop.version.ant-internal}"
++                conf="test->default">
+       <artifact name="hadoop-mapreduce-client-jobclient" ext="jar" />
+       <artifact name="hadoop-mapreduce-client-jobclient" type="tests" ext="jar" m:classifier="tests"/>
+       <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
+-- 
+1.7.0.4
+

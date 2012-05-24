@@ -1,0 +1,28 @@
+From a13d5bf7f5ccb2b881df491dc10b9519b7e1039c Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <carl@cloudera.com>
+Date: Wed, 8 Feb 2012 20:07:34 -0800
+Subject: [PATCH 25/58] HIVE-2793. Disable loadpart_err.q on 0.23
+
+Reason: Bug
+Author: Carl Steinbach
+Ref: CDH-4246
+---
+ ql/src/test/queries/clientpositive/loadpart_err.q |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/ql/src/test/queries/clientpositive/loadpart_err.q b/src/ql/src/test/queries/clientpositive/loadpart_err.q
+index bbba2ab..4c3f9fe 100644
+--- a/src/ql/src/test/queries/clientpositive/loadpart_err.q
++++ b/src/ql/src/test/queries/clientpositive/loadpart_err.q
+@@ -2,7 +2,7 @@ set hive.cli.errors.ignore=true;
+ 
+ ADD FILE ../data/scripts/error_script;
+ 
+--- EXCLUDE_HADOOP_MAJOR_VERSIONS(0.17, 0.18, 0.19, 0.20)
++-- EXCLUDE_HADOOP_MAJOR_VERSIONS(0.17, 0.18, 0.19, 0.20, 0.23)
+ -- (this test is flaky so it is currently disabled for all Hadoop versions)
+ 
+ CREATE TABLE loadpart1(a STRING, b STRING) PARTITIONED BY (ds STRING);
+-- 
+1.7.0.4
+

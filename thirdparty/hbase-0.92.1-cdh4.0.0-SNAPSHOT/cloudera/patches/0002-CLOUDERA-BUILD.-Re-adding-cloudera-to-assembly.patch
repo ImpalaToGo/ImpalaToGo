@@ -1,0 +1,28 @@
+From aa34ad4c7ff38cf45146aa9ba835d374e75088fd Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Tue, 20 Mar 2012 09:47:13 -0700
+Subject: [PATCH 02/36] CLOUDERA-BUILD. Re-adding cloudera to assembly.
+
+---
+ src/assembly/all.xml |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/src/assembly/all.xml b/src/assembly/all.xml
+index f33495a..f5674a7 100644
+--- a/src/assembly/all.xml
++++ b/src/assembly/all.xml
+@@ -40,6 +40,11 @@
+       </includes>
+     </fileSet>
+     <fileSet>
++      <directory>cloudera</directory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
++    <fileSet>
+       <directory>src</directory>
+       <fileMode>0644</fileMode>
+       <directoryMode>0755</directoryMode>
+-- 
+1.7.0.4
+

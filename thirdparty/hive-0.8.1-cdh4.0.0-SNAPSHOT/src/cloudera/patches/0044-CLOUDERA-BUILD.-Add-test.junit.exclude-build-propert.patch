@@ -1,0 +1,53 @@
+From 67a12010ed17670060ac699c89de2f64ede7d975 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <carl@cloudera.com>
+Date: Fri, 30 Mar 2012 21:58:38 -0700
+Subject: [PATCH 44/58] CLOUDERA-BUILD. Add test.junit.exclude build property
+
+---
+ build-common.xml |    2 +-
+ build.properties |    2 ++
+ common/build.xml |    2 +-
+ 3 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 3ca943e..bc1ea49 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -450,7 +450,7 @@
+       <batchtest todir="${test.build.dir}" unless="testcase">
+         <fileset dir="${test.build.classes}"
+                  includes="**/${test.include}.class"
+-                 excludes="**/TestSerDe.class,**/TestHiveMetaStore.class,**/*$*.class" />
++                 excludes="**/TestSerDe.class,**/TestHiveMetaStore.class,**/*$*.class,${test.junit.exclude}" />
+       </batchtest>
+       <batchtest todir="${test.build.dir}" if="testcase">
+         <fileset dir="${test.build.classes}" includes="**/${testcase}.class"/>
+diff --git a/src/build.properties b/src/build.properties
+index febe20f..5afa650 100644
+--- a/src/build.properties
++++ b/src/build.properties
+@@ -62,6 +62,8 @@ jasperc.test.jar=${hadoop.root}/lib/jetty-ext/jasper-compiler.jar
+ jsp.test.jar=${hadoop.root}/lib/jetty-ext/jsp-api.jar
+ common.jar=${hadoop.root}/lib/commons-httpclient-3.0.1.jar
+ 
++test.junit.exclude=
++
+ #
+ # Ivy Properties
+ #
+diff --git a/src/common/build.xml b/src/common/build.xml
+index 4ab7555..05fffd5 100755
+--- a/src/common/build.xml
++++ b/src/common/build.xml
+@@ -58,7 +58,7 @@ to call at top-level: ant deploy-contrib compile-core-test
+       <batchtest todir="${test.build.dir}" unless="testcase">
+         <fileset dir="${test.build.classes}"
+                  includes="**/${test.include}.class"
+-                 excludes="**/*$*.class" />
++                 excludes="**/*$*.class,${test.junit.exclude}" />
+       </batchtest>
+       <batchtest todir="${test.build.dir}" if="testcase">
+         <fileset dir="${test.build.classes}" includes="**/${testcase}.class"/>
+-- 
+1.7.0.4
+

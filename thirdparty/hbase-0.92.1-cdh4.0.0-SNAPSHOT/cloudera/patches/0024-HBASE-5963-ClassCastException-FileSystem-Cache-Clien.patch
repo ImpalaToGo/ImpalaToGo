@@ -1,0 +1,162 @@
+From b8c848f0327c37ad5c4f672267c8dbd530afc126 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Wed, 9 May 2012 18:33:41 +0000
+Subject: [PATCH 24/36] HBASE-5963 ClassCastException: FileSystem$Cache$ClientFinalizer cannot be cast to Thread
+
+Reason: Bug
+Author: Zhhong Yu
+Ref: CDH-5732
+---
+ .../hadoop/hbase/regionserver/ShutdownHook.java    |   10 ++-
+ .../hadoop/hbase/util/ShutdownHookManager.java     |   97 ++++++++++++++++++++
+ 2 files changed, 104 insertions(+), 3 deletions(-)
+ create mode 100644 src/main/java/org/apache/hadoop/hbase/util/ShutdownHookManager.java
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/ShutdownHook.java b/src/main/java/org/apache/hadoop/hbase/regionserver/ShutdownHook.java
+index 4ccf68e..e0363fd 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/ShutdownHook.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/ShutdownHook.java
+@@ -30,6 +30,7 @@ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.Stoppable;
++import org.apache.hadoop.hbase.util.ShutdownHookManager;
+ import org.apache.hadoop.hbase.util.Threads;
+ 
+ /**
+@@ -81,7 +82,7 @@ public class ShutdownHook {
+       final Stoppable stop, final Thread threadToJoin) {
+     Thread fsShutdownHook = suppressHdfsShutdownHook(fs);
+     Thread t = new ShutdownHookThread(conf, stop, threadToJoin, fsShutdownHook);
+-    Runtime.getRuntime().addShutdownHook(t);
++    ShutdownHookManager.affixShutdownHook(t, 0);
+     LOG.info("Installed shutdown hook thread: " + t.getName());
+   }
+ 
+@@ -178,7 +179,10 @@ public class ShutdownHook {
+         Field cacheField = FileSystem.class.getDeclaredField("CACHE");
+         cacheField.setAccessible(true);
+         Object cacheInstance = cacheField.get(fs);
+-        hdfsClientFinalizer = (Thread)field.get(cacheInstance);
++        Runnable finalizerRunnable = (Runnable)field.get(cacheInstance);
++        if (!(finalizerRunnable instanceof Thread)) {
++          hdfsClientFinalizer = new Thread(finalizerRunnable);
++        } else hdfsClientFinalizer = (Thread)finalizerRunnable;
+       } else {
+         // Then we didnt' find clientFinalizer in Cache.  Presume clean 0.20 hadoop.
+         field = FileSystem.class.getDeclaredField(CLIENT_FINALIZER_DATA_METHOD);
+@@ -189,7 +193,7 @@ public class ShutdownHook {
+         throw new RuntimeException("Client finalizer is null, can't suppress!");
+       }
+       if (!fsShutdownHooks.containsKey(hdfsClientFinalizer) &&
+-          !Runtime.getRuntime().removeShutdownHook(hdfsClientFinalizer)) {
++          !ShutdownHookManager.deleteShutdownHook(hdfsClientFinalizer)) {
+         throw new RuntimeException("Failed suppression of fs shutdown hook: " +
+           hdfsClientFinalizer);
+       }
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/ShutdownHookManager.java b/src/main/java/org/apache/hadoop/hbase/util/ShutdownHookManager.java
+new file mode 100644
+index 0000000..ebf308c
+--- /dev/null
++++ b/src/main/java/org/apache/hadoop/hbase/util/ShutdownHookManager.java
+@@ -0,0 +1,97 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.util;
++
++import java.io.IOException;
++
++/**
++ * This class provides ShutdownHookManager shims for HBase to interact with the Hadoop 1.0.x and the
++ * Hadoop 2.0+ series.
++ * 
++ * NOTE: No testing done against 0.22.x, or 0.21.x.
++ */
++abstract public class ShutdownHookManager {
++  private static ShutdownHookManager instance;
++
++  static Class shutdownHookManagerClass = null;
++  static {
++    try {
++      // This class exists in hadoop 2.0+ but not in Hadoop 20.x/1.x
++      shutdownHookManagerClass = Class.forName("org.apache.hadoop.util.ShutdownHookManager");
++      instance = new ShutdownHookManagerV2();
++    } catch (Exception e) {
++      instance = new ShutdownHookManagerV1();
++    }
++  }
++
++  abstract public void addShutdownHook(Thread shutdownHook, int priority);
++  
++  abstract public boolean removeShutdownHook(Runnable shutdownHook);
++    
++  public static void affixShutdownHook(Thread shutdownHook, int priority) {
++    instance.addShutdownHook(shutdownHook, priority);
++  }
++  
++  public static boolean deleteShutdownHook(Runnable shutdownHook) {
++    return instance.removeShutdownHook(shutdownHook);
++  }
++
++  private static class ShutdownHookManagerV1 extends ShutdownHookManager {
++    // priority is ignored in hadoop versions earlier than 2.0
++    public void addShutdownHook(Thread shutdownHookThread, int priority) {      
++      Runtime.getRuntime().addShutdownHook(shutdownHookThread);
++    }
++    
++    public boolean removeShutdownHook(Runnable shutdownHook) {
++      Thread shutdownHookThread = null;
++      if (!(shutdownHook instanceof Thread)) {
++        shutdownHookThread = new Thread(shutdownHook);
++      } else shutdownHookThread = (Thread) shutdownHook;
++      
++      return Runtime.getRuntime().removeShutdownHook(shutdownHookThread);
++    }
++  };
++
++  private static class ShutdownHookManagerV2 extends ShutdownHookManager {
++    public void addShutdownHook(Thread shutdownHookThread, int priority) {
++      try {
++        Methods.call(shutdownHookManagerClass, 
++            Methods.call(shutdownHookManagerClass, null, "get", null, null),
++            "addShutdownHook",
++            new Class[] { Runnable.class, int.class },
++            new Object[] { shutdownHookThread, priority });
++      } catch (Exception ex) {
++        throw new RuntimeException("we could not use ShutdownHookManager.addShutdownHook", ex);
++      }
++    }
++    
++    public boolean removeShutdownHook(Runnable shutdownHook) {
++      try {
++        return (Boolean)
++        Methods.call(shutdownHookManagerClass, 
++            Methods.call(shutdownHookManagerClass, null, "get", null, null),
++            "removeShutdownHook",
++            new Class[] { Runnable.class },
++            new Object[] { shutdownHook });
++      } catch (Exception ex) {
++        throw new RuntimeException("we could not use ShutdownHookManager", ex);
++      }
++    }
++  };
++
++}
+-- 
+1.7.0.4
+

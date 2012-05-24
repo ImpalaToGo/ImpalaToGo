@@ -1,0 +1,369 @@
+commit 7eee3c1298e74b2436a0e4987eb177a3b433fe8e
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri May 18 22:39:05 2012 +0200
+
+    HBASE-5792 HLog Performance Evaluation Tool
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1327668 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Bug
+    Author: Matteo Bertozzi/Michael Stack
+    Ref: CDH-5113
+
+commit b0ec04351898a5ee7153d02837950f5cbd5afd86
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu May 17 10:43:06 2012 -0700
+
+    HBASE-6004 Adding more logging to help debugging MR job
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-5889
+
+commit 07574ab4a5ab16b7d4030347eacd98fc7ea42b40
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu May 17 10:21:22 2012 -0700
+
+    HBASE-6029 HBCK doesn't recover Balance switch if exception occurs in onlineHbck()
+    
+    Reason: Improvement
+    Author: Maryann Xue
+    Ref: CDH-5889
+
+commit 91d2dc734e8cc8641438728b544c240426af8fda
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu May 17 10:16:20 2012 -0700
+
+    HBASE-6001 Upgrade slf4j to 1.6.1
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-5888
+
+commit 5c1c2c04ca1fb1a24c0ea04851355329ccebc87f
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Sun Jan 1 17:46:53 2012 +0000
+
+    HBASE-5114 TestMetaReaderEditor can timeout during test execution
+    
+    Reason: Test
+    Author: Zhihong Yu
+    Ref: CDh-5542
+
+commit 8f8c22825e7a0763aa5a3a67066619feba5c4438
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Wed Jan 18 22:43:55 2012 +0000
+
+    HBASE-5223  TestMetaReaderEditor is missing call to CatalogTracker.stop()
+    
+    Reason: Test
+    Author: Zhihong Yu
+    Ref: CDH-5542
+
+commit f438568f2c2cbf237340bbcdd78a4df00b8305cf
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Thu Apr 19 16:18:35 2012 +0000
+
+    HBASE-5821  Incorrect handling of null value in Coprocessor aggregation function min() (Maryann Xue)
+    
+    Reason: Bug
+    Author: Maryann Xue
+    Ref: CDH-5861
+
+commit 7fcb44e417f891d9266221eb5a0efb1b03136010
+Author: Michael Stack <stack@apache.org>
+Date:   Thu Mar 29 15:30:29 2012 +0000
+
+    HBASE-5669 AggregationClient fails validation for open stoprow scan
+    
+    Reason: Bug
+    Author: Mubarak Seyed
+    Ref: CDH-5861
+
+commit efde04e0f0a4f29fe1fcd63a68b4267cfd10e38d
+Author: David S. Wang <dsw@cloudera.com>
+Date:   Sun May 13 06:14:25 2012 -0700
+
+    HBASE-5973: Add ability for potentially long-running IPC calls to abort if client disconnects
+    
+    Reason: Improvement
+    Author: Todd Lipcon
+    Ref: CDH-5769
+
+commit b6f2e23f26eeadddd3c54cefe0e60541e3bec265
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu May 10 11:42:25 2012 -0700
+
+    HBASE-5985 TestMetaMigrationRemovingHTD failed with HADOOP 2.0.0
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-5732
+
+commit 10ba67c211b666cf148bf803cb71b772e58b9d38
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed May 9 18:22:37 2012 -0700
+
+    HBASE-5966 MapReduce based tests broken on Hadoop 2.0.0-alpha
+    
+    Reason: Bug
+    Author: Andrew Purtell, Jimmy Xiang
+    Ref: CDH-5732
+
+commit 50505b1331c80a0c3bd5c4c3ba4d4610ce6696e4
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed May 9 13:47:38 2012 -0700
+
+    HBASE-5975 Failed suppression of fs shutdown hook with Hadoop 2.0.0
+    
+    Readon: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-5732
+
+commit b8c848f0327c37ad5c4f672267c8dbd530afc126
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Wed May 9 18:33:41 2012 +0000
+
+    HBASE-5963 ClassCastException: FileSystem$Cache$ClientFinalizer cannot be cast to Thread
+    
+    Reason: Bug
+    Author: Zhhong Yu
+    Ref: CDH-5732
+
+commit 1398432c0980002ff9e106b4ce17b8e67fed48f5
+Author: Michael Stack <stack@apache.org>
+Date:   Tue Apr 10 19:23:38 2012 +0000
+
+    HBASE-5739 Upgrade guava to 11.0.2
+    
+    Reason: Improvement
+    Author: Todd Lipcon
+    Ref: CDH-5732
+
+commit 438a122483a91ca98efab4149b21afd9f790d58f
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Mon May 7 14:28:30 2012 -0700
+
+    HBASE-5952 Sync hardcoded default flush size and max file size with hbase-default.xml
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-5679
+
+commit 94c71e4a9673787d451a23c1793d7442e73f0d55
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri May 4 20:35:48 2012 +0200
+
+    HBASE-5886 Add new metric for possible data loss due to puts without WAL
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1333676 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Debug Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-5090
+
+commit eceb21b2bbe7a705ad2465ee97a35f4eba27ed13
+Author: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
+Date:   Mon Apr 23 16:47:04 2012 +0000
+
+    HBASE-5635 If getTaskList() returns null, splitlogWorker would go down and it won't serve any requests (Ram)
+    
+    Reason: Bug
+    Author: Chinna Rao Lalam
+    Ref: CDH-5196
+
+commit 6769fbcab73a8be559343675dc7189a8cf9a1426
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Apr 19 02:31:40 2012 +0200
+
+    HBASE-5787 Table owner can't disable/delete its own table (Matteo)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1327605 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-5207
+
+commit 588eb534db02c68ddc86b38825d824f41fa0320c
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Mon Apr 16 21:59:17 2012 +0000
+
+    HBASE-5780 Fix race in HBase regionserver startup vs ZK SASL authentication (Shaneal)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1326815 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Low risk bug fix
+    Author: Shaneal Manek
+    Ref: CDH-4989
+
+commit 68271b4189396cb905b3eb130f5b10654623d53c
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Sat Apr 14 15:40:42 2012 -0700
+
+    HBASE-5781 [hbck] hbck -fix fails due to closed zk connection.
+    
+    Reason: Bug - Functionality regression
+    Author: Jonathan Hsieh
+    Ref: CDH-5278
+
+commit cef89fb11bb6b98e6018c13142bba6cf28188ae9
+Author: hudson <hudson@cloudera.com>
+Date:   Sun Apr 15 14:39:20 2012 -0700
+
+    Updating for 4.0.0 development.
+
+commit a2760bf7fc5f2a192cdabc2c4d76067ca048667b
+Author: Michael Stack <stack@apache.org>
+Date:   Wed Apr 4 15:41:17 2012 +0000
+
+    HBASE-5533 Add more metrics to HBase
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1309466 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Improved metrics for CM4
+    Author: Shaneal Manek
+    Ref: CDH-3917
+    Note: This commit also includes fixes for the issues HBASE-5706 and HBASE-5641 (those were separate commits/issues on TRUNK, but all included in one commit/issue on 0.92).
+
+commit 512faa296f54514a2beeed712fc01404ebc8128c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Apr 3 07:07:24 2012 +0200
+
+    HBASE-5665 Repeated split causes HRegionServer failures and breaks table
+    
+    Reason: Bug
+    Author: Cosmin Lehene
+    Ref: CDH-4771
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1308549 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 6411f6b8c8532fc81a655b793f1e54ddaad9c9c4
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Mar 30 15:58:46 2012 -0600
+
+    HBASE-5655 Cap space usage of default log4j rolling policy
+    
+    Reason: Improvement
+    Author: Himanshu Vashishtha
+    Ref: CDH-3602 (sub task: CDH-5069)
+    
+    	modified:   bin/hbase-daemon.sh
+    	modified:   conf/hbase-env.sh
+    	modified:   conf/log4j.properties
+
+commit 0859ff763129366d8cdcf3d2dfc667afcd471145
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Mar 30 12:30:16 2012 -0600
+
+    CDH-4562 Overriding/setting HBase build revision tag.
+
+commit ce5dd182cfb863d5ef64db587f18781ef84c5b23
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Thu Mar 29 20:05:50 2012 +0000
+
+    HBASE-5638 Readability improvements and backport HBASE-5633: NPE reading ZK config in HBase (Matteo Bertozzi)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1307087 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 4f45f481292f1c1205bd22a1da8cd86c4febbad7
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Thu Mar 29 11:58:37 2012 -0700
+
+    HBASE-5624 Aborting regionserver when splitting region, may cause daughter region not assigned by ServerShutdownHandler
+    
+    Reason: Bug
+    Author: Gregory Chanan
+    Ref: CDH-4754
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1304606 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Conflicts:
+    
+    	CHANGES.txt
+
+commit d38c78a4b5864287d268428fa451638be8ce774e
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Mon Mar 26 23:06:24 2012 +0000
+
+    HBASE-5596 Few minor bugs from HBASE-5209 (David S. Wang)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1305663 13f79535-47bb-0310-9956-ffa450edef68
+    
+        Reason: Bug
+        Author: David S. Wang
+        Ref: CDH-5050
+
+commit b236e0ecea08591d25b15494f79ac1be91193a77
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Fri Mar 23 23:54:31 2012 +0000
+
+    HBASE-5128 [uber hbck] Online automated repair of table integrity and region consistency problems
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1304667 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Supportability
+    Author: Jonathan Hsieh
+    Ref: CDH-4040
+
+commit 2e9f70e172d842322b5bd48d21963e4ed3da8c15
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Thu Mar 22 12:57:36 2012 -0700
+
+    CLOUDERA-BUILD. Bumping Surefire version to 2.12. Helps prevent issues
+    when running Sonar analysis, provides better logging of unit test issues.
+
+commit de0f8fd77f3f781565e5df1d992bc69fbf775d07
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Wed Mar 21 23:48:45 2012 +0000
+
+    HBASE-5589 Add of the offline call to the Master Interface
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1303621 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: hbck prerequisite
+    Author: Jonahtan Hsieh
+    Ref: CDH-4040
+
+commit 63e85e0249f580dfb015573ef743760aeda3a4f4
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat Mar 17 07:29:35 2012 +0000
+
+    HBASE-5588 Deprecate/remove AssignmentManager#clearRegionFromTransition
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1301881 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: hbck prerequisite
+    Author: Jonathan Hsieh
+    Ref: CDH-4040
+
+commit f7be3b57a42a22955c6f9446ca1457660f8fa95c
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Fri Mar 16 21:53:15 2012 +0000
+
+    HBASE-5563 Add comparison of regionId to HRegionInfo#compareTo (chunhui and jmhsieh)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1301780 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: hbck prerequisite
+    Author: Jonathan Hsieh
+    Ref: CDH-4040
+
+commit fa8126e0c90947b057a09e32138e3ae18101bf3b
+Author: Nicolas Spiegelberg <nspiegelberg@apache.org>
+Date:   Tue Dec 6 02:34:00 2011 +0000
+
+    HBASE-4440 add an option to presplit table to PerformanceEvaluation
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1210752 13f79535-47bb-0310-9956-ffa450edef68
+
+commit aa34ad4c7ff38cf45146aa9ba835d374e75088fd
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Mar 20 09:47:13 2012 -0700
+
+    CLOUDERA-BUILD. Re-adding cloudera to assembly.
+
+commit f54ea99a1807c7b15798c25822cc4865ba743206
+Author: Shaneal Manek <smanek@cloudera.com>
+Date:   Mon Mar 19 16:04:05 2012 -0700
+
+    CLOUDERA-BUILD. Setting up HBase 0.92.1 CDH4 branch

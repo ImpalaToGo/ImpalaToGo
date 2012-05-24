@@ -1,0 +1,47 @@
+From b6946f166b15c479a5781c9957b009a8003bfceb Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <carl@cloudera.com>
+Date: Tue, 15 May 2012 20:29:00 -0700
+Subject: [PATCH 56/58] HIVE-3029. Update ShimLoader to work with Hadoop 2.x
+
+Reason: Bug
+Author: Carl Steinbach
+Ref: CDH-5860
+---
+ .../org/apache/hadoop/hive/shims/ShimLoader.java   |   12 +++++++++++-
+ 1 files changed, 11 insertions(+), 1 deletions(-)
+
+diff --git a/src/shims/src/common/java/org/apache/hadoop/hive/shims/ShimLoader.java b/src/shims/src/common/java/org/apache/hadoop/hive/shims/ShimLoader.java
+index ec2e44f..542e55f 100644
+--- a/src/shims/src/common/java/org/apache/hadoop/hive/shims/ShimLoader.java
++++ b/src/shims/src/common/java/org/apache/hadoop/hive/shims/ShimLoader.java
+@@ -17,6 +17,7 @@
+  */
+ package org.apache.hadoop.hive.shims;
+ 
++import java.lang.IllegalArgumentException;
+ import java.util.HashMap;
+ import java.util.Map;
+ 
+@@ -116,9 +117,18 @@ public abstract class ShimLoader {
+       throw new RuntimeException("Illegal Hadoop Version: " + vers +
+           " (expected A.B.* format)");
+     }
+-    if (Integer.parseInt(parts[0]) > 0){
++
++    switch (Integer.parseInt(parts[0])) {
++    case 0:
++      break;
++    case 1:
+       return "0.20S";
++    case 2:
++      return "0.23";
++    default:
++      throw new IllegalArgumentException("Unrecognized Hadoop major version number: " + vers);
+     }
++    
+     String majorVersion = parts[0] + "." + parts[1];
+ 
+     // If we are running a security release, we won't have UnixUserGroupInformation
+-- 
+1.7.0.4
+

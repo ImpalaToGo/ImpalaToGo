@@ -1,0 +1,27 @@
+From 3e2369a3f2e3f89ae7698ae31884849b7c6da6df Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Wed, 14 Mar 2012 07:40:06 -0700
+Subject: [PATCH 37/58] CLOUDERA-BUILD. Excluding hadoop-core from haivvreo dependency.
+
+---
+ cloudera/maven-packaging/hive-exec/pom.xml |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/src/cloudera/maven-packaging/hive-exec/pom.xml b/src/cloudera/maven-packaging/hive-exec/pom.xml
+index a1293f1..c1841bc 100644
+--- a/src/cloudera/maven-packaging/hive-exec/pom.xml
++++ b/src/cloudera/maven-packaging/hive-exec/pom.xml
+@@ -114,6 +114,10 @@
+       <artifactId>haivvreo</artifactId>
+       <exclusions>
+         <exclusion>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </exclusion>
++        <exclusion>
+           <groupId>org.apache.hadoop.hive</groupId>
+           <artifactId>hive-exec</artifactId>
+         </exclusion>
+-- 
+1.7.0.4
+

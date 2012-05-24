@@ -1,0 +1,33 @@
+From fcdfb91cd870ae39905320ed82b1d283b977e73f Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Wed, 28 Mar 2012 11:08:17 -0700
+Subject: [PATCH 42/58] CLOUDERA-BUILD. Fix TestHiveConf.testConfProperties
+
+Reason: Bug
+Author: Zhenxiao Luo
+Ref: CDH-4529
+---
+ build-common.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 0b75a2f..3ca943e 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -109,12 +109,12 @@
+   </path>
+   
+   <path id="test.classpath">
+-    <path refid="hadoop-23.test.classpath"/>
+     <pathelement location="${test.build.classes}" />
+     <pathelement location="${test.build.resources}" />
+     <pathelement location="" />
+     <pathelement location="${test.src.data.dir}/conf"/>
+     <pathelement location="${hive.conf.dir}"/>
++    <path refid="hadoop-23.test.classpath"/>
+     <path refid="classpath"/>
+   </path>
+ 
+-- 
+1.7.0.4
+

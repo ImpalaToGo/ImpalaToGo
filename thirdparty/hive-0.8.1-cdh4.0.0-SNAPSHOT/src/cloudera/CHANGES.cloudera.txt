@@ -1,0 +1,537 @@
+commit f900beecf9043181b491b87215394103af9af14a
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Fri May 18 14:53:18 2012 -0700
+
+    CDH-5753. Fixes for local mode tests
+
+commit 67565d8c9cc20d3f8794d6da5b556d68855a24ed
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Thu May 17 19:27:33 2012 -0700
+
+    HIVE-2804. Task log retrieval fails on secure cluster
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4488
+
+commit b6946f166b15c479a5781c9957b009a8003bfceb
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Tue May 15 20:29:00 2012 -0700
+
+    HIVE-3029. Update ShimLoader to work with Hadoop 2.x
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5860
+
+commit c8e0f539abc78f9acc126b55cc5764b0a1911069
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon May 14 15:09:49 2012 -0700
+
+    HIVE-3025. Fix Hive ARCHIVE command on 0.22 and 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4608
+
+commit b6873f9ffade4b20234e608cee78522caf557180
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon May 14 16:25:31 2012 -0700
+
+    HIVE-3014. Fix metastore test failures caused by HIVE-2757
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-5790
+
+commit 78ab68970e968ed78637b47ade66ca67a2141d40
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Sat May 12 22:44:57 2012 -0700
+
+    HIVE-3019. Add JUnit to list of test dependencies managed by Ivy
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5813
+
+commit cd1b2731bd1e7c1e7eba86fc1695790265235703
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed May 9 22:41:13 2012 -0700
+
+    HIVE-2918. Hive Dynamic Partition Insert - move task not considering 'hive.exec.max.dynamic.partitions' from CLI
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5105
+
+commit 365bbaecb2284682d627a2c84a184f7c649221d3
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed May 9 22:33:55 2012 -0700
+
+    HIVE-2757.  hive can't find hadoop executor scripts without HADOOP_HOME set
+    
+    Reason: Bug
+    Author: Roman Shaposhnik
+    Ref: CDH-5694
+
+commit b809751a3e0632f370abd753d6742b1a225ca87c
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed May 9 19:25:25 2012 -0700
+
+    HIVE-2979. Implement INCLUDE_HADOOP_MAJOR_VERSION test macro
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-5678
+
+commit ef64fab9feca5d1741d9590a37485e1f59ae5f5e
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Sun May 6 22:46:28 2012 -0700
+
+    HIVE-2928- Support for Oracle-backed Hive-Metastore
+    
+    Reason: Bug
+    Author: Prasad Mujumdar
+    Ref: CDH-5650
+
+commit 7d99dcabf19bbeb635c6663c730ad0049267c67c
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Sun May 6 21:46:25 2012 -0700
+
+    HIVE-2529. Fix and backport HIVE-2529. metastore 0.8 upgrade script for PostgreSQL
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4157
+
+commit 4e82a3481c22cec1ccdfcc4655accdeee8fbd253
+Author: hudson <hudson@cloudera.com>
+Date:   Sun Apr 15 14:42:19 2012 -0700
+
+    Updating for 4.0.0 development.
+
+commit 90a570bdd7cfb86c4c71c4bdcb590abe89d80f4a
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Apr 2 14:45:12 2012 -0700
+
+    HIVE-2920. TestStatsPublisherEnhanced throws NPE on JDBC connection failure
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5120
+
+commit 8cc1b1ddc0397fca912c3289d28ecd53229b78fc
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Apr 3 09:45:33 2012 -0700
+
+    CDH-5083. Using new Haivvreo version.
+
+commit 67a12010ed17670060ac699c89de2f64ede7d975
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Fri Mar 30 21:58:38 2012 -0700
+
+    CLOUDERA-BUILD. Add test.junit.exclude build property
+
+commit 433e700e5620bb39f5be40fffa097401f2432ff2
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Fri Mar 30 19:28:11 2012 -0700
+
+    CLOUDERA-BUILD. PDK tests are failing
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5085
+
+commit fcdfb91cd870ae39905320ed82b1d283b977e73f
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Mar 28 11:08:17 2012 -0700
+
+    CLOUDERA-BUILD. Fix TestHiveConf.testConfProperties
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4529
+
+commit f23c925e83eb3cded7766948f7407b0814a86737
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Mar 19 16:12:18 2012 -0700
+
+    HIVE-2878. TestHBaseMinimrCliDriver hbase_bulk.m fails on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4782
+
+commit b750ce207a09d91cb0c5d97aef0ad0b17d6b08e4
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Mar 15 18:56:33 2012 -0700
+
+    HIVE-2778. TABLESAMPLE(x PERCENT) triggers NPE
+    
+    Reason: Bug
+    Author: Navis
+    Ref: CDH-4610
+
+commit 4565aa48ac45910967d2722cb0a6001369874525
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Fri Mar 16 09:40:17 2012 -0700
+
+    HIVE-2748. Upgrade Hbase and ZK dependcies
+    
+    Reason: Bug
+    Author: Enis Soztutar
+    Ref:    CDH-4532
+
+commit 8415e658739f0adf169e386f0e75484738cb3194
+Author: Chip Clouderan <chip@cloudera.com>
+Date:   Thu Mar 15 13:47:45 2012 -0700
+
+    HIVE-2856. Fix TestCliDriver escape1.q failure on MR2
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref:    CDH-4241
+
+commit 3e2369a3f2e3f89ae7698ae31884849b7c6da6df
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Mar 14 07:40:06 2012 -0700
+
+    CLOUDERA-BUILD. Excluding hadoop-core from haivvreo dependency.
+
+commit 6954fd7a0800729ff7f2e07a960f9294740f74e3
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Mar 13 08:12:04 2012 -0700
+
+    CDH-4642. Add Haivvreo dependency.
+
+commit 2eb41a69c6e165064386ff9d498ae6450787d504
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Fri Mar 9 21:02:03 2012 -0800
+
+    HIVE-2860. TestNegativeCliDriver autolocal1.q fails on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4783
+
+commit dd1a5a659da496968a2e1ab580f89bcdbe312bf6
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Mar 8 20:41:04 2012 -0800
+
+    HIVE-2857. QTestUtil.cleanUp() fails with FileNotException on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4626
+
+commit 886a93a5fc63f00a285c0850627ec2bd16a177eb
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Mar 8 02:55:28 2012 -0800
+
+    CLOUDERA-BUILD. Set hive.archive.har.parentdir.settable=true in HiveConf
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4765
+
+commit c660afa7ede810cf515653eb6486037b6b1b3949
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Mar 5 20:23:16 2012 -0800
+
+    HIVE-2840 [jira] INPUT__FILE__NAME virtual column returns unqualified paths on Hadoop 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4242
+
+commit b838d9d22f1eb6a7b2160043d1b62b5952c197ac
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Fri Mar 2 12:39:00 2012 -0800
+
+    CLOUDERA-BUILD. Update Eclipse classpath template
+
+commit 565331b0bc84161e2aa3482bf0b4e5ac0cc06a48
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Mar 1 15:10:15 2012 -0800
+
+    HIVE-2831. TestContribCliDriver.dboutput and TestCliDriver.input45 fail on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4612
+
+commit 95427de40c069fc7da8b86df5c8a4e2ef97b6d2c
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Mar 1 15:35:42 2012 -0800
+
+    CLOUDERA-BUILD. Fix missing MiniYARNCluster dependency
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4540
+
+commit aed333ea0c0df767c4659704b25be96a6ffffd9d
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Feb 13 15:03:56 2012 -0800
+
+    CLOUDERA-BUILD. Adding test classpath to shims test compilation.
+
+commit b63449019641e73c8a40b12ea2450538d77902ac
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Feb 13 14:14:51 2012 -0800
+
+    HIVE-2782. New BINARY type produces unexpected results with supported UDFS when using MapReduce2
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4239
+
+commit 3fc218b702b8aff2277e0fdf3211794007196b10
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Feb 13 14:11:24 2012 -0800
+
+    HIVE-2789. query_properties.q test contains nondeterministic queries
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4245
+
+commit a13d5bf7f5ccb2b881df491dc10b9519b7e1039c
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed Feb 8 20:07:34 2012 -0800
+
+    HIVE-2793. Disable loadpart_err.q on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4246
+
+commit 089a5c30831067a99b6334480fdf9d0a02e6e621
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Feb 6 19:06:15 2012 -0800
+
+    CDH-4197. RCFile BlockMergeTask triggers IOE in o.a.h.mapreduce.Cluster.initialize()
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4197
+
+commit 1b0bd7d76c7267f6da23bff6d96f6b4a15435420
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Feb 7 16:42:27 2012 -0800
+
+    CLOUDERA-BUILD. Updating POMs to 0.8.1-cdh4b2-SNAPSHOT.
+
+commit 2354b846d42d35f61cfce13033b16541d0f9b4f5
+Author: Roman Shaposhnik <rvs@cloudera.com>
+Date:   Tue Feb 7 15:59:57 2012 -0800
+
+    CLOUDERA-BUILD. Restricting the included shims to 0.23 only
+
+commit 9318ba0f3b3ce325c5fc9f1b867fee9c2a7fb223
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Feb 6 21:05:59 2012 -0800
+
+    CLOUDERA-BUILD. Modifying Ivy pattern to handle classifiers in dependencies.
+
+commit 4754ea71f465ddc28f7bfb3caeb1024178d53514
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Feb 6 12:08:56 2012 -0800
+
+    Prepping for CDH4b2 development.
+
+commit 146ab751d263ea905cc4f0be4ef052900cafb9f6
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Jan 30 17:57:24 2012 -0800
+
+    CDH-4318. Update Hive's Eclipse templates for CDH4
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4318
+
+commit 2e07e675080912182be82b80ad6b49cad05667bf
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Fri Jan 27 14:46:25 2012 -0800
+
+    HIVE-2760. TestCliDriver should log elapsed time
+    
+    Reason: Improvement
+    Author: Carl Steinbach
+    Ref: CDH-4299
+
+commit e3b95fd45f18df6a310d0fa407b21289bacc4061
+Author: Chip Clouderan <chip@cloudera.com>
+Date:   Fri Jan 27 13:11:18 2012 -0800
+
+    HIVE-2734.  Fix some nondeterministic test output
+    
+    Description:    Many Hive query tests lack an ORDER BY clause, and consequently the ordering of the rows in the result set is nondeterministic:
+    
+    groupby1_limit
+    input11_limit
+    input1_limit
+    input_lazyserde
+    join18_multi_distinct
+    join_1to1
+    join_casesensitive
+    join_filters
+    join_nulls
+    merge3
+    rcfile_columnar
+    rcfile_lazydecompress
+    rcfile_union
+    sample10
+    udf_sentences
+    union24
+    columnarserde_create_shortcut
+    combine1
+    global_limit
+    
+    Author: Zhenxiao Luo
+    Ref:    CDH-4200
+
+commit ac1c0ecb7a1612c4629c306ec2e35676a4ba3209
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed Jan 25 17:53:45 2012 -0800
+
+    HIVE-2748. Upgrade HBase and ZK dependencies
+    
+    Reason: Task
+    Author: Ashutosh Chauhan
+    Ref: CDH-4271
+
+commit 95f131721d0c6941c4eeb009c38a8d7a171e0468
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Jan 23 13:50:44 2012 -0800
+
+    HIVE-2724. Remove unused lib/log4j-1.2.15.jar
+    
+    Reason: Bug
+    Author: Andrew Bayer
+    Ref: CDH-4237, CDH-4180
+
+commit 90332556d0497dc8660a22e51e2c9b4601ddcf28
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Jan 17 10:50:45 2012 -0800
+
+    CDH-4042. Add hadoop-archives.jar to Hive test classpath.
+
+commit 10223d1aa3dd7bbbca805edd9d32a73402d428e9
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Jan 16 09:29:59 2012 -0800
+
+    CLOUDERA-BUILD. Fix Ivy test classpath to function if directory
+    doesn't exist.
+
+commit b15ad1d1e67ec061d9224d5490728c205eddcb80
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Jan 12 03:16:33 2012 -0800
+
+    HIVE-2697. Ant compile-test target should be triggered from subprojects, not from top-level targets
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4122
+
+commit 81acfb6939754df6934199375496fae6860a0fcc
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Tue Jan 10 18:18:49 2012 -0800
+
+    HIVE-2707. Ant's untar task can't handle symlinks
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4090
+
+commit 971390cac84afe4eeb7c39c8adca502e9da20436
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Jan 11 10:52:16 2012 -0800
+
+    CDH-4069. Exclude clover jar from tarball/install.
+    
+    The clover jar shouldn't be included in the tarball or packages, so
+    we're removing it here.
+
+commit d6cfbf910d2719a297d7fd42bb31f64f3e296ac6
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Jan 9 16:36:22 2012 -0800
+
+    CDH-4071. Introduce Ivy 'test' configuration.
+    
+    Switch the test dependency in ql on
+    hadoop-mapreduce-client-jobclient-*-tests.jar to be part of a new
+    test configuration in Ivy, distinct from the default/compile
+    configuration. This'll help us keep the test dependencies from
+    bleeding over into the compile dependencies, and is a starting point
+    for the overall reworking of the dependency management.
+    
+    For right now, the only jar in the test configuration that actually
+    makes it onto the classpath is the one explicitly specified, since
+    this is the only Hadoop dependency being handled directly via Ivy,
+    rather than indirectly through the tarball, but that'll change. The
+    make-pom target in build-common.xml has also been tweaked to support
+    adding dependencies in the test configuration as test-scoped
+    dependencies to the generated POMs.
+    
+    Reason: Improvement
+    Author: Andrew Bayer
+    Ref: CDH-4071
+
+commit 42781f0a952fe3ca39ecb334a678d4ab101aeac2
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Tue Jan 10 15:26:17 2012 -0800
+
+    HIVE-2700. Add 'ivy-clean-cache' and 'very-clean' Ant targets
+    
+    Reason: Improvement
+    Author: Carl Steinbach
+    Ref: CDH-4053
+
+commit 5e7d215772ad31852fab777949c5ce040e7d0df4
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Jan 9 13:48:01 2012 -0800
+
+    CLOUDERA-BUILD. Add hadoop-mapreduce-client-jobclient-*-tests.jar as
+    dependency for hive-exec tests.
+
+commit 5cd97c7974ef31ec9643522d8765205d7b28848f
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Jan 9 10:44:58 2012 -0800
+
+    CLOUDERA-BUILD. Fixing build-time dependencies to work with Hadoop
+    tarball layout.
+
+commit e1d715c19080619965c15aaa517deee5b809aaf1
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Thu Jan 5 12:58:58 2012 -0800
+
+    CDH-4053. Set hadoop.security.version.prefix in cdh.build.template
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4053
+
+commit 9b78912be0737a6d636e89d1ed704b489c19554a
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Dec 28 14:26:25 2011 -0800
+
+    Missed build.properties.
+
+commit afa236c3d6afe81ac79e0d3dceaf88c4ab8c6525
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Dec 28 13:33:49 2011 -0800
+
+    Updating for cdh4b1.
+
+commit 083c5793dd9a84915799f06e51df48c47cb1d145
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Dec 20 15:10:34 2011 -0800
+
+    Switching functional POM versioning.
+
+commit 2f660b15ca58b69ad3f19bfd2a466632606535d8
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Dec 12 12:37:55 2011 -0800
+
+    CLOUDERA-BUILD. CDHifying Hive 0.8.0 RC3.

@@ -1,0 +1,184 @@
+From 94c71e4a9673787d451a23c1793d7442e73f0d55 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 4 May 2012 20:35:48 +0200
+Subject: [PATCH 21/36] HBASE-5886 Add new metric for possible data loss due to puts without WAL
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1333676 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Debug Improvement
+Author: Matteo Bertozzi
+Ref: CDH-5090
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   39 ++++++++++++++++++--
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    6 +++
+ .../regionserver/metrics/RegionServerMetrics.java  |   18 +++++++++
+ 3 files changed, 60 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 8e7e6b3..78cc578 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -192,6 +192,10 @@ public class HRegion implements HeapSize { // , Writable{
+ 
+   final AtomicLong memstoreSize = new AtomicLong(0);
+ 
++  // Debug possible data loss due to WAL off
++  final AtomicLong numPutsWithoutWAL = new AtomicLong(0);
++  final AtomicLong dataInMemoryWithoutWAL = new AtomicLong(0);
++
+   final Counter readRequestsCount = new Counter();
+   final Counter writeRequestsCount = new Counter();
+ 
+@@ -1095,6 +1099,10 @@ public class HRegion implements HeapSize { // , Writable{
+         status.setStatus("Running coprocessor pre-flush hooks");
+         coprocessorHost.preFlush();
+       }
++      if (numPutsWithoutWAL.get() > 0) {
++        numPutsWithoutWAL.set(0);
++        dataInMemoryWithoutWAL.set(0);
++      }
+       try {
+         synchronized (writestate) {
+           if (!writestate.flushing && writestate.writesEnabled) {
+@@ -1853,7 +1861,10 @@ public class HRegion implements HeapSize { // , Writable{
+         }
+ 
+         Put p = batchOp.operations[i].getFirst();
+-        if (!p.getWriteToWAL()) continue;
++        if (!p.getWriteToWAL()) {
++          recordPutWithoutWal(p.getFamilyMap());
++          continue;
++        }
+         addFamilyMapToWALEdit(familyMaps[i], walEdit);
+       }
+ 
+@@ -2135,6 +2146,8 @@ public class HRegion implements HeapSize { // , Writable{
+         addFamilyMapToWALEdit(familyMap, walEdit);
+         this.log.append(regionInfo, this.htableDescriptor.getName(),
+             walEdit, clusterId, now, this.htableDescriptor);
++      } else {
++        recordPutWithoutWal(familyMap);
+       }
+ 
+       long addedSize = applyFamilyMapToMemstore(familyMap);
+@@ -3926,14 +3939,14 @@ public class HRegion implements HeapSize { // , Writable{
+   public static final long FIXED_OVERHEAD = ClassSize.align(
+       ClassSize.OBJECT +
+       ClassSize.ARRAY +
+-      30 * ClassSize.REFERENCE + Bytes.SIZEOF_INT +
++      32 * ClassSize.REFERENCE + Bytes.SIZEOF_INT +
+       (4 * Bytes.SIZEOF_LONG) +
+       Bytes.SIZEOF_BOOLEAN);
+ 
+   public static final long DEEP_OVERHEAD = FIXED_OVERHEAD +
+       ClassSize.OBJECT + // closeLock
+       (2 * ClassSize.ATOMIC_BOOLEAN) + // closed, closing
+-      ClassSize.ATOMIC_LONG + // memStoreSize
++      (3 * ClassSize.ATOMIC_LONG) + // memStoreSize, numPutsWithoutWAL, dataInMemoryWithoutWAL
+       ClassSize.ATOMIC_INTEGER + // lockIdGenerator
+       (3 * ClassSize.CONCURRENT_HASHMAP) +  // lockedRows, lockIds, scannerReadPoints
+       WriteState.HEAP_SIZE + // writestate
+@@ -3953,6 +3966,26 @@ public class HRegion implements HeapSize { // , Writable{
+     return heapSize;
+   }
+ 
++  /**
++   * Update counters for numer of puts without wal and the size of possible data loss.
++   * These information are exposed by the region server metrics.
++   */
++  private void recordPutWithoutWal(final Map<byte [], List<KeyValue>> familyMap) {
++    if (numPutsWithoutWAL.getAndIncrement() == 0) {
++      LOG.info("writing data to region " + this +
++               " with WAL disabled. Data may be lost in the event of a crash.");
++    }
++
++    long putSize = 0;
++    for (List<KeyValue> edits : familyMap.values()) {
++      for (KeyValue kv : edits) {
++        putSize += kv.heapSize();
++      }
++    }
++
++    dataInMemoryWithoutWAL.addAndGet(putSize);
++  }
++
+   /*
+    * This method calls System.exit.
+    * @param message Message to print out.  May be null.
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index a2b6119..d907278 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -1276,6 +1276,8 @@ public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
+     int readRequestsCount = 0;
+     int writeRequestsCount = 0;
+     long storefileIndexSize = 0;
++    long numPutsWithoutWAL = 0;
++    long dataInMemoryWithoutWAL = 0;
+     HDFSBlocksDistribution hdfsBlocksDistribution =
+       new HDFSBlocksDistribution();
+     long totalStaticIndexSize = 0;
+@@ -1283,6 +1285,8 @@ public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
+     for (Map.Entry<String, HRegion> e : this.onlineRegions.entrySet()) {
+         HRegion r = e.getValue();
+         memstoreSize += r.memstoreSize.get();
++        numPutsWithoutWAL += r.numPutsWithoutWAL.get();
++        dataInMemoryWithoutWAL += r.dataInMemoryWithoutWAL.get();
+         readRequestsCount += r.readRequestsCount.get();
+         writeRequestsCount += r.writeRequestsCount.get();
+         synchronized (r.stores) {
+@@ -1301,6 +1305,8 @@ public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
+     this.metrics.stores.set(stores);
+     this.metrics.storefiles.set(storefiles);
+     this.metrics.memstoreSizeMB.set((int) (memstoreSize / (1024 * 1024)));
++    this.metrics.mbInMemoryWithoutWAL.set((int) (dataInMemoryWithoutWAL / (1024 * 1024)));
++    this.metrics.numPutsWithoutWAL.set(numPutsWithoutWAL);
+     this.metrics.storefileIndexSizeMB.set(
+         (int) (storefileIndexSize / (1024 * 1024)));
+     this.metrics.rootIndexSizeKB.set(
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java b/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
+index 7238958..6d2e702 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
+@@ -201,6 +201,18 @@ public class RegionServerMetrics implements Updater {
+     new MetricsIntValue("memstoreSizeMB", registry);
+ 
+   /**
++   * Number of put with WAL disabled in this regionserver in MB
++   */
++  public final MetricsLongValue numPutsWithoutWAL =
++    new MetricsLongValue("numPutsWithoutWAL", registry);
++
++  /**
++   * Possible data loss sizes (due to put with WAL disabled) in this regionserver in MB
++   */
++  public final MetricsIntValue mbInMemoryWithoutWAL =
++    new MetricsIntValue("mbInMemoryWithoutWAL", registry);
++
++  /**
+    * Size of the compaction queue.
+    */
+   public final MetricsIntValue compactionQueueSize =
+@@ -335,6 +347,8 @@ public class RegionServerMetrics implements Updater {
+       this.totalStaticIndexSizeKB.pushMetric(this.metricsRecord);
+       this.totalStaticBloomSizeKB.pushMetric(this.metricsRecord);
+       this.memstoreSizeMB.pushMetric(this.metricsRecord);
++      this.mbInMemoryWithoutWAL.pushMetric(this.metricsRecord);
++      this.numPutsWithoutWAL.pushMetric(this.metricsRecord);
+       this.readRequestsCount.pushMetric(this.metricsRecord);
+       this.writeRequestsCount.pushMetric(this.metricsRecord);
+       this.regions.pushMetric(this.metricsRecord);
+@@ -461,6 +475,10 @@ public class RegionServerMetrics implements Updater {
+         Integer.valueOf(this.totalStaticBloomSizeKB.get()));
+     sb = Strings.appendKeyValue(sb, this.memstoreSizeMB.getName(),
+       Integer.valueOf(this.memstoreSizeMB.get()));
++    sb = Strings.appendKeyValue(sb, "mbInMemoryWithoutWAL",
++      Integer.valueOf(this.mbInMemoryWithoutWAL.get()));
++    sb = Strings.appendKeyValue(sb, "numberOfPutsWithoutWAL",
++      Long.valueOf(this.numPutsWithoutWAL.get()));
+     sb = Strings.appendKeyValue(sb, "readRequestsCount",
+         Long.valueOf(this.readRequestsCount.get()));
+     sb = Strings.appendKeyValue(sb, "writeRequestsCount",
+-- 
+1.7.0.4
+

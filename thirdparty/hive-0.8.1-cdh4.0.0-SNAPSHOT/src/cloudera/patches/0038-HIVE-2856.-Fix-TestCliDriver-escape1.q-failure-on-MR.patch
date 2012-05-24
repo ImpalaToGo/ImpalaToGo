@@ -1,0 +1,69 @@
+From 8415e658739f0adf169e386f0e75484738cb3194 Mon Sep 17 00:00:00 2001
+From: Chip Clouderan <chip@cloudera.com>
+Date: Thu, 15 Mar 2012 13:47:45 -0700
+Subject: [PATCH 38/58] HIVE-2856. Fix TestCliDriver escape1.q failure on MR2
+
+Reason: Bug
+Author: Zhenxiao Luo
+Ref:    CDH-4241
+---
+ .../org/apache/hadoop/hive/common/FileUtils.java   |    2 +-
+ ql/src/test/queries/clientpositive/escape1.q       |    2 ++
+ ql/src/test/results/clientpositive/escape1.q.out   |  Bin 83386 -> 103257 bytes
+ 3 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+index 1195cb8..3ca3d29 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
++++ b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+@@ -144,7 +144,7 @@ public final class FileUtils {
+         '\u0013', '\u0014', '\u0015', '\u0016', '\u0017', '\u0018', '\u0019',
+         '\u001A', '\u001B', '\u001C', '\u001D', '\u001E', '\u001F',
+         '"', '#', '%', '\'', '*', '/', ':', '=', '?', '\\', '\u007F', '{',
+-        '[', ']'};
++        '[', ']', '^'};
+     for (char c : clist) {
+       charToEscape.set(c);
+     }
+diff --git a/src/ql/src/test/queries/clientpositive/escape1.q b/src/ql/src/test/queries/clientpositive/escape1.q
+index 9979814..e85a7d9 100644
+--- a/src/ql/src/test/queries/clientpositive/escape1.q
++++ b/src/ql/src/test/queries/clientpositive/escape1.q
+@@ -6,12 +6,14 @@ DROP TABLE escape_raw;
+ CREATE TABLE escape_raw (s STRING) STORED AS TEXTFILE;
+ LOAD DATA LOCAL INPATH '../data/files/escapetest.txt' INTO TABLE  escape_raw;
+ 
++SELECT count(*) from escape_raw;
+ SELECT * from escape_raw;
+ 
+ CREATE TABLE escape1 (a STRING) PARTITIONED BY (ds STRING, part STRING);
+ INSERT OVERWRITE TABLE escape1 PARTITION (ds='1', part) SELECT '1', s from 
+ escape_raw;
+ 
++SELECT count(*) from escape1;
+ SELECT * from escape1;
+ SHOW PARTITIONS escape1;
+ 
+diff --git a/src/ql/src/test/results/clientpositive/escape1.q.out b/src/ql/src/test/results/clientpositive/escape1.q.out
+index fa33196ac309c306b1bbb43e1120c921eb7b13ec..1597b65fbc66e0d4290ee155d03531e1b5221e79 100644
+GIT binary patch
+delta 823
+zcmdnh&3bbg+Xi)Jj^zB(yb=v9&B+?fDHh2&`K2kTMTz<unPsW*Mh1pPx(3F&hNkg`
+z#=6F4x`rn4W@eW0CI;pPMkW>(hK44Vmd1vLrlym31*`DEOj1ZI%Fk7p9-z)BI{5(;
+z+vLB&s+09u6y3=++*n^Xw@BB}00_7YjVvbfGuK)YFw4jw-pCl}YI9RFpbJfm4J|B8
+zEKPw7%gMWg4W@^wGx8%ljeO%ace32)W-@i1d{9bvvP}%%<TFxAle1%Z!1Rn5p3VKc
+zEjT9MPJswmZjj#GAbCp}9_X8+Z4Ed;+8OP1Hg~%^a%}$L+r^4M8q9T#jN^?g%;QZA
+zjZF>BjZ7_!Of7+IV+(Vj=a9_49~=iUJ4|=8ZA>A@=G!T&$TxfQzN~CHCUEepZcevV
+z!E`qMP&C&y1v=Z@Fy7SA%*e>n($WwZA*R4Y1Qgr6JGcqcsT7#EFRM(RF>bSd*G6Sv
+l=x)BU)|Y9s?uMUSB*xSg<;nMYBsQ<_IU=|H9UJ2rI{*XH`IP_w
+
+delta 403
+zcmcb)jBQsp>jrh^$#ty4lP|CYS*8^w=4Iz(=ILi-mZioU85kPs8kp%C7{`MchPp-u
+z@rGvR@g`<Q7UrhLCWa;!Mi$0~Mh0dkll>MNOzvilCf|h3@@)6HC;wl`yN#1^3I}7{
+z<b~3@lM6QSY+oSAD5x?yd!g9o-(89vo4qDGf@Ckw*52GbyNeaSg+{uD#_`5xCh?}0
+zMusK^mc}Lq=B7sGW=4hv#+&^XHgRnJzp@ZyT;V3&$rq%!H%~~L$LfqX6!00TubW$>
+tYiIxjlQ$|FY+jIKD7SgvHEzbu=dZ6(-rV`yk%=*G^Zvgqxcs@Z5ddbtfE@q;
+
+-- 
+1.7.0.4
+
