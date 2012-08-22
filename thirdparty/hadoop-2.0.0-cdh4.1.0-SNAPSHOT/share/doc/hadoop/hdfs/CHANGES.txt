@@ -512,6 +512,9 @@ Release 2.0.0 - UNRELEASED
     HDFS-860. fuse-dfs truncate behavior causes issues with scp.
     (Brian Bockelman via eli)
 
+    HDFS-3415. Make sure all layout versions are the same for all storage
+    directories in the Namenode.  (Brandon Li via szetszwo)
+
   BREAKDOWN OF HDFS-1623 SUBTASKS
 
     HDFS-2179. Add fencing framework and mechanisms for NameNode HA. (todd)
@@ -867,6 +870,18 @@ Release 0.23.3 - UNRELEASED
 
     HDFS-3331. In namenode, check superuser privilege for setBalancerBandwidth
     and acquire the write lock for finalizeUpgrade.  (szetszwo)
+
+    HDFS-3577. In DatanodeWebHdfsMethods, use MessageBodyWriter instead of
+    StreamingOutput, otherwise, it will fail to transfer large files.
+    (szetszwo)
+
+    HDFS-3646. LeaseRenewer can hold reference to inactive DFSClient
+    instances forever. (Kihwal Lee via daryn)
+
+    HDFS-3696. Set chunked streaming mode in WebHdfsFileSystem write operations
+    to get around a Java library bug causing OutOfMemoryError.  (szetszwo)
+
+    HDFS-3553. Hftp proxy tokens are broken (daryn)
 
 Release 0.23.2 - UNRELEASED
 
