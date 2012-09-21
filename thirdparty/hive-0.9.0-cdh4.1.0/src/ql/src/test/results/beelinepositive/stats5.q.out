@@ -1,0 +1,46 @@
+Saving all output to "!!{outputDirectory}!!/stats5.q.raw". Enter "record" with no arguments to stop it.
+>>>  !run !!{qFileDirectory}!!/stats5.q
+>>>  set datanucleus.cache.collections=false;
+No rows affected 
+>>>  set hive.stats.autogather=false;
+No rows affected 
+>>>  
+>>>  create table analyze_src as select * from src;
+'key','value'
+No rows selected 
+>>>  
+>>>  explain analyze table analyze_src compute statistics;
+'Explain'
+'ABSTRACT SYNTAX TREE:'
+'  (TOK_ANALYZE (TOK_TAB (TOK_TABNAME analyze_src)))'
+''
+'STAGE DEPENDENCIES:'
+'  Stage-0 is a root stage'
+'  Stage-1 depends on stages: Stage-0'
+''
+'STAGE PLANS:'
+'  Stage: Stage-0'
+'    Map Reduce'
+'      Alias -> Map Operator Tree:'
+'        analyze_src '
+'          TableScan'
+'            alias: analyze_src'
+''
+'  Stage: Stage-1'
+'    Stats-Aggr Operator'
+''
+''
+19 rows selected 
+>>>  
+>>>  analyze table analyze_src compute statistics;
+'key','value'
+No rows selected 
+>>>  
+>>>  describe extended analyze_src;
+'col_name','data_type','comment'
+'key','string',''
+'value','string',''
+'','',''
+'Detailed Table Information','Table(tableName:analyze_src, dbName:stats5, owner:!!{user.name}!!, createTime:!!UNIXTIME!!, lastAccessTime:0, retention:0, sd:StorageDescriptor(cols:[FieldSchema(name:key, type:string, comment:null), FieldSchema(name:value, type:string, comment:null)], location:!!{hive.metastore.warehouse.dir}!!/stats5.db/analyze_src, inputFormat:org.apache.hadoop.mapred.TextInputFormat, outputFormat:org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat, compressed:false, numBuckets:-1, serdeInfo:SerDeInfo(name:null, serializationLib:org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe, parameters:{serialization.format=1}), bucketCols:[], sortCols:[], parameters:{}), partitionKeys:[], parameters:{numPartitions=0, numFiles=1, transient_lastDdlTime=!!UNIXTIME!!, numRows=500, totalSize=5812, rawDataSize=5312}, viewOriginalText:null, viewExpandedText:null, tableType:MANAGED_TABLE)',''
+4 rows selected 
+>>>  !record

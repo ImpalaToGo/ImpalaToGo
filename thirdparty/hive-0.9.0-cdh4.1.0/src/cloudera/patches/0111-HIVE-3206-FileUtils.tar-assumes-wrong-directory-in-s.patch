@@ -1,0 +1,55 @@
+From 0a09bbce6c459b459b846817fb077b1db997bbb9 Mon Sep 17 00:00:00 2001
+From: Edward Capriolo <ecapriolo@apache.org>
+Date: Thu, 28 Jun 2012 05:00:10 +0000
+Subject: [PATCH 111/144] HIVE-3206 FileUtils.tar assumes wrong directory in some cases. Navis Ryu (via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354816 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit a386a34fbe41cf4bc8db9836b8ba90e97dd0b1bb)
+---
+ .../org/apache/hadoop/hive/common/FileUtils.java   |   20 +++++++++-----------
+ 1 files changed, 9 insertions(+), 11 deletions(-)
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+index 3f2b56a..010c0ca 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
++++ b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+@@ -255,27 +255,25 @@ public final class FileUtils {
+    */
+   public static void tar(String parentDir, String[] inputFiles, String outputFile)
+       throws IOException {
+-    TarArchiveOutputStream tOut = null;
+ 
++    FileOutputStream out = null;
+     try {
+-      tOut = new TarArchiveOutputStream(
+-          new GzipCompressorOutputStream(
+-              new BufferedOutputStream(
+-                  new FileOutputStream(new File(parentDir, outputFile)))));
++      out = new FileOutputStream(new File(parentDir, outputFile));
++      TarArchiveOutputStream tOut = new TarArchiveOutputStream(
++          new GzipCompressorOutputStream(new BufferedOutputStream(out)));
+ 
+       for (int i = 0; i < inputFiles.length; i++) {
+-        File f = new File(inputFiles[i]);
++        File f = new File(parentDir, inputFiles[i]);
+         TarArchiveEntry tarEntry = new TarArchiveEntry(f, f.getName());
+         tOut.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
+         tOut.putArchiveEntry(tarEntry);
+-        IOUtils.copy(new FileInputStream(f), tOut);
++        IOUtils.copy(new FileInputStream(f), tOut); // copy with 8K buffer, not close
+         tOut.closeArchiveEntry();
+       }
++      tOut.close(); // finishes inside
+     } finally {
+-      if(tOut != null ) {
+-        tOut.finish();
+-        tOut.close();
+-      }
++      // TarArchiveOutputStream seemed not to close files properly in error situation
++      org.apache.hadoop.io.IOUtils.closeStream(out);
+     }
+   }
+ }
+-- 
+1.7.0.4
+

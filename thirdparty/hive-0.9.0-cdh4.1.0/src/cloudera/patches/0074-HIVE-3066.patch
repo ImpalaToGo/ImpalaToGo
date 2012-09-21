@@ -1,0 +1,92 @@
+From 6547ce333a2a5566d8fc10eb55345c86e23e80d1 Mon Sep 17 00:00:00 2001
+From: Namit Jain <namit@apache.org>
+Date: Fri, 1 Jun 2012 18:08:24 +0000
+Subject: [PATCH 074/144] HIVE-3066
+ Add the option -database DATABASE in hive cli to specify a default database to use for the cli session. (herman via namit)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345293 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 2014a92e24bed6d504731b2a64c9a71dd5cc74a0)
+---
+ .../java/org/apache/hadoop/hive/cli/CliDriver.java |   13 +++++++++++++
+ .../apache/hadoop/hive/cli/CliSessionState.java    |    5 +++++
+ .../apache/hadoop/hive/cli/OptionsProcessor.java   |   10 ++++++++++
+ 3 files changed, 28 insertions(+), 0 deletions(-)
+
+diff --git a/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java b/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
+index 79c5bc1..0d609e4 100644
+--- a/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
++++ b/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
+@@ -487,6 +487,16 @@ public class CliDriver {
+     ss.setIsSilent(saveSilent);
+   }
+ 
++  public void processSelectDatabase(CliSessionState ss) throws IOException {
++    String database = ss.database;
++    if (database != null) {
++      int rc = processLine("use " + database + ";");
++      if (rc != 0) {
++        System.exit(rc);
++      }
++    }
++  }
++
+   public static Completor getCommandCompletor () {
+     // SimpleCompletor matches against a pre-defined wordlist
+     // We start with an empty wordlist and build it up
+@@ -635,6 +645,9 @@ public class CliDriver {
+     CliDriver cli = new CliDriver();
+     cli.setHiveVariables(oproc.getHiveVariables());
+ 
++    // use the specified database if specified
++    cli.processSelectDatabase(ss);
++
+     // Execute -i init files (always in silent mode)
+     cli.processInitFiles(ss);
+ 
+diff --git a/src/cli/src/java/org/apache/hadoop/hive/cli/CliSessionState.java b/src/cli/src/java/org/apache/hadoop/hive/cli/CliSessionState.java
+index a36a53c..dfb30e2 100644
+--- a/src/cli/src/java/org/apache/hadoop/hive/cli/CliSessionState.java
++++ b/src/cli/src/java/org/apache/hadoop/hive/cli/CliSessionState.java
+@@ -40,6 +40,11 @@ import org.apache.thrift.transport.TTransportException;
+  */
+ public class CliSessionState extends SessionState {
+   /**
++   * -database option if any that the session has been invoked with.
++   */
++  public String database;
++
++  /**
+    * -e option if any that the session has been invoked with.
+    */
+   public String execString;
+diff --git a/src/cli/src/java/org/apache/hadoop/hive/cli/OptionsProcessor.java b/src/cli/src/java/org/apache/hadoop/hive/cli/OptionsProcessor.java
+index d9ec9d7..865848a 100644
+--- a/src/cli/src/java/org/apache/hadoop/hive/cli/OptionsProcessor.java
++++ b/src/cli/src/java/org/apache/hadoop/hive/cli/OptionsProcessor.java
+@@ -45,6 +45,14 @@ public class OptionsProcessor {
+   @SuppressWarnings("static-access")
+   public OptionsProcessor() {
+ 
++    // -database database
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("databasename")
++        .withLongOpt("database")
++        .withDescription("Specify the database to use")
++        .create());
++
+     // -e 'quoted-query-string'
+     options.addOption(OptionBuilder
+         .hasArg()
+@@ -153,6 +161,8 @@ public class OptionsProcessor {
+ 
+     ss.setIsSilent(commandLine.hasOption('S'));
+ 
++    ss.database = commandLine.getOptionValue("database");
++
+     ss.execString = commandLine.getOptionValue('e');
+ 
+     ss.fileName = commandLine.getOptionValue('f');
+-- 
+1.7.0.4
+

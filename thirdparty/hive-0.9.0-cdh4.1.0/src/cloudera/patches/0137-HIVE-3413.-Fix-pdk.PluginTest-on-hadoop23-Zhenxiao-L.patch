@@ -1,0 +1,158 @@
+From d56f7e018014676b00be638212e5e54a39ba110d Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Tue, 4 Sep 2012 08:00:36 +0000
+Subject: [PATCH 137/144] HIVE-3413. Fix pdk.PluginTest on hadoop23 (Zhenxiao Luo via cws)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380478 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 336a372481437578dda304ddf409c9a3e5627e82)
+---
+ builtins/build.xml                         |    2 +-
+ builtins/ivy.xml                           |    8 +++
+ pdk/scripts/build-plugin.xml               |    2 +
+ pdk/test-plugin/test/conf/log4j.properties |   82 ++++++++++++++++++++++++++++
+ 4 files changed, 93 insertions(+), 1 deletions(-)
+ create mode 100644 pdk/test-plugin/test/conf/log4j.properties
+
+diff --git a/src/builtins/build.xml b/src/builtins/build.xml
+index 2be90b6..639828a 100644
+--- a/src/builtins/build.xml
++++ b/src/builtins/build.xml
+@@ -43,7 +43,7 @@
+                  artifactspattern="${build.dir}/${ivy.publish.pattern}"/>
+   </target>
+ 
+-  <target name="test" unless="testcase" depends="init, setup, ivy-retrieve">
++  <target name="test" unless="testcase" depends="init, setup, ivy-retrieve, ivy-retrieve-test">
+     <echo message="Project: ${ant.project.name}"/>
+     <ant antfile="build-plugin.xml" target="test" inheritAll="false">
+       <property name="hive.install.dir" value="${build.dir.hive}/dist"/>
+diff --git a/src/builtins/ivy.xml b/src/builtins/ivy.xml
+index 3bb8302..348d1bf 100644
+--- a/src/builtins/ivy.xml
++++ b/src/builtins/ivy.xml
+@@ -31,6 +31,14 @@
+                 conf="compile->default" />
+     <dependency org="org.apache.hive" name="hive-pdk" rev="${version}"
+                 conf="compile->default" transitive="false" />
++
++    <!-- Test Dependencies -->
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.version.ant-internal}" conf="hadoop23.test->default">
++      <artifact name="hadoop-minicluster" ext="jar" />
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
+   </dependencies>
+ 
+ </ivy-module>
+diff --git a/src/pdk/scripts/build-plugin.xml b/src/pdk/scripts/build-plugin.xml
+index 05730b7..8e9adb9 100644
+--- a/src/pdk/scripts/build-plugin.xml
++++ b/src/pdk/scripts/build-plugin.xml
+@@ -25,6 +25,7 @@
+   <property name="build.classes" location="${build.dir}/classes"/>
+   <property name="build.metadata" location="${build.dir}/metadata"/>
+   <property name="install.dir" location="${pdk.script.dir}/../.."/>
++  <property name="pdk.test.conf.dir" location="${pdk.script.dir}/../test-plugin/test/conf"/>
+   <property name="function.sql.prefix" value=""/>
+   <property name="plugin.jar.basename" 
+             value="${plugin.libname}-${plugin.version}.jar"/>
+@@ -133,6 +134,7 @@
+       <sysproperty key="hive.metastore.warehouse.dir" value="${build.dir}/warehouse"/>
+       <env key="HIVE_HADOOP_TEST_CLASSPATH" value="${hive.hadoop.mock.classpath}"/>
+       <env key="HADOOP_HOME" value="${hadoop.home}"/>
++      <env key="HADOOP_CONF_DIR" value="${pdk.test.conf.dir}"/>
+       <env key="HIVE_CONF_DIR" value="${install.dir}/conf"/>
+       <env key="HIVE_HOME" value="${install.dir}"/>
+       <env key="HIVE_PLUGIN_ROOT_DIR" value="${plugin.dir}"/>
+diff --git a/src/pdk/test-plugin/test/conf/log4j.properties b/src/pdk/test-plugin/test/conf/log4j.properties
+new file mode 100644
+index 0000000..80433fd
+--- /dev/null
++++ b/src/pdk/test-plugin/test/conf/log4j.properties
+@@ -0,0 +1,82 @@
++# Licensed to the Apache Software Foundation (ASF) under one
++# or more contributor license agreements.  See the NOTICE file
++# distributed with this work for additional information
++# regarding copyright ownership.  The ASF licenses this file
++# to you under the Apache License, Version 2.0 (the
++# "License"); you may not use this file except in compliance
++# with the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++# This file is to configure hadoop log4j
++# Define some default values that can be overridden by system properties
++hive.root.logger=DEBUG,DRFA
++hive.log.dir=/tmp/
++hive.log.file=hive.log
++
++# Define the root logger to the system property "hadoop.root.logger".
++log4j.rootLogger=${hive.root.logger}, EventCounter
++
++# Logging Threshold
++log4j.threshhold=WARN
++
++# Null Appender
++log4j.appender.NullAppender=org.apache.log4j.varia.NullAppender
++
++#
++# Daily Rolling File Appender
++#
++
++log4j.appender.DRFA=org.apache.log4j.DailyRollingFileAppender
++log4j.appender.DRFA.File=${hive.log.dir}/${hive.log.file}
++
++# Rollver at midnight
++log4j.appender.DRFA.DatePattern=.yyyy-MM-dd
++
++# 30-day backup
++#log4j.appender.DRFA.MaxBackupIndex=30
++log4j.appender.DRFA.layout=org.apache.log4j.PatternLayout
++
++# Pattern format: Date LogLevel LoggerName LogMessage
++#log4j.appender.DRFA.layout.ConversionPattern=%d{ISO8601} %p %c: %m%n
++# Debugging Pattern format
++log4j.appender.DRFA.layout.ConversionPattern=%d{ISO8601} %-5p %c{2} (%F:%M(%L)) - %m%n
++
++
++#
++# console
++# Add "console" to rootlogger above if you want to use this
++#
++
++log4j.appender.console=org.apache.log4j.ConsoleAppender
++log4j.appender.console.target=System.err
++log4j.appender.console.layout=org.apache.log4j.PatternLayout
++log4j.appender.console.layout.ConversionPattern=%d{yy/MM/dd HH:mm:ss} %p %c{2}: %m%n
++
++#custom logging levels
++#log4j.logger.xxx=DEBUG
++
++#
++# Event Counter Appender
++# Sends counts of logging messages at different severity levels to Hadoop Metrics.
++#
++log4j.appender.EventCounter=org.apache.hadoop.metrics.jvm.EventCounter
++
++
++log4j.category.DataNucleus=ERROR,DRFA
++log4j.category.Datastore=ERROR,DRFA
++log4j.category.Datastore.Schema=ERROR,DRFA
++log4j.category.JPOX.Datastore=ERROR,DRFA
++log4j.category.JPOX.Plugin=ERROR,DRFA
++log4j.category.JPOX.MetaData=ERROR,DRFA
++log4j.category.JPOX.Query=ERROR,DRFA
++log4j.category.JPOX.General=ERROR,DRFA
++log4j.category.JPOX.Enhancer=ERROR,DRFA
++log4j.logger.org.apache.hadoop.conf.Configuration=ERROR,DRFA
++
+-- 
+1.7.0.4
+

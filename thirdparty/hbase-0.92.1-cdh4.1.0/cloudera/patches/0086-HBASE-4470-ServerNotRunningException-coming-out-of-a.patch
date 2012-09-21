@@ -1,0 +1,88 @@
+From b0a5f3fcebb27b9a04de08b5af0d7f0125e86c2a Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Mon, 23 Jul 2012 07:18:34 +0000
+Subject: [PATCH 086/151] HBASE-4470 ServerNotRunningException coming out of assignRootAndMeta kills the Master (Gregory Chanan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1364533 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/catalog/TestCatalogTracker.java   |   43 +++++++++++++++----
+ 1 files changed, 34 insertions(+), 9 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java b/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
+index 11c88d5..47da6f5 100644
+--- a/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
++++ b/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
+@@ -54,6 +54,7 @@ import org.apache.hadoop.hbase.zookeeper.ZKUtil;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ import org.apache.hadoop.util.Progressable;
+ import org.apache.zookeeper.KeeperException;
++import org.apache.hadoop.hbase.ipc.ServerNotRunningYetException;
+ import org.junit.After;
+ import org.junit.AfterClass;
+ import org.junit.Before;
+@@ -213,14 +214,7 @@ public class TestCatalogTracker {
+     }
+   }
+ 
+-  /**
+-   * Test we survive a connection refused {@link ConnectException}
+-   * @throws IOException
+-   * @throws InterruptedException
+-   * @throws KeeperException
+-   */
+-  @Test
+-  public void testGetMetaServerConnectionFails()
++  private void testVerifyMetaRegionLocationWithException(Exception ex)
+   throws IOException, InterruptedException, KeeperException {
+     // Mock an HRegionInterface.
+     final HRegionInterface implementation = Mockito.mock(HRegionInterface.class);
+@@ -228,7 +222,7 @@ public class TestCatalogTracker {
+     try {
+       // If a 'get' is called on mocked interface, throw connection refused.
+       Mockito.when(implementation.get((byte[]) Mockito.any(), (Get) Mockito.any())).
+-        thenThrow(new ConnectException("Connection refused"));
++        thenThrow(ex);
+       // Now start up the catalogtracker with our doctored Connection.
+       final CatalogTracker ct = constructAndStartCatalogTracker(connection);
+       try {
+@@ -248,6 +242,37 @@ public class TestCatalogTracker {
+   }
+ 
+   /**
++   * Test we survive a connection refused {@link ConnectException}
++   * @throws IOException
++   * @throws InterruptedException
++   * @throws KeeperException
++   */
++  @Test
++  public void testGetMetaServerConnectionFails()
++  throws IOException, InterruptedException, KeeperException {
++    testVerifyMetaRegionLocationWithException(new ConnectException("Connection refused"));
++  }
++
++  /**
++   * Test that verifyMetaRegionLocation properly handles getting a
++   * ServerNotRunningException. See HBASE-4470.
++   * Note this doesn't check the exact exception thrown in the
++   * HBASE-4470 as there it is thrown from getHConnection() and
++   * here it is thrown from get() -- but those are both called
++   * from the same function anyway, and this way is less invasive than
++   * throwing from getHConnection would be.
++   *
++   * @throws IOException
++   * @throws InterruptedException
++   * @throws KeeperException
++   */
++  @Test
++  public void testVerifyMetaRegionServerNotRunning()
++  throws IOException, InterruptedException, KeeperException {
++    testVerifyMetaRegionLocationWithException(new ServerNotRunningYetException("mock"));
++  }
++
++  /**
+    * Test get of root region fails properly if nothing to connect to.
+    * @throws IOException
+    * @throws InterruptedException
+-- 
+1.7.0.4
+

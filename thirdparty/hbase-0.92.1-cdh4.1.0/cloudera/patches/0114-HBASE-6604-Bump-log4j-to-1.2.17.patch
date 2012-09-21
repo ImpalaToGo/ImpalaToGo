@@ -1,0 +1,28 @@
+From 08d8e0e51b55e45a87fb6dbe317b0a2a0cb26189 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jon@cloudera.com>
+Date: Tue, 21 Aug 2012 06:31:10 -0700
+Subject: [PATCH 114/151] HBASE-6604 Bump log4j to 1.2.17
+
+Reason: Dependency Harmonization
+Author: Jonathan Hsieh
+Ref: CDH-6878
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 35bd660..da3513c 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -837,7 +837,7 @@
+     <jersey.version>1.8</jersey.version>
+     <jruby.version>1.6.5</jruby.version>
+     <junit.version>4.10</junit.version>
+-    <log4j.version>1.2.16</log4j.version>
++    <log4j.version>1.2.17</log4j.version>
+     <mockito-all.version>1.8.5</mockito-all.version>
+     <protobuf.version>2.4.0a</protobuf.version>
+     <stax-api.version>1.0.1</stax-api.version>
+-- 
+1.7.0.4
+

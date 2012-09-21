@@ -1,0 +1,47 @@
+From c4a60711325bcd9f63dabdcdf6b4cebd86603959 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Tue, 31 Jul 2012 12:34:57 -0700
+Subject: [PATCH 120/144] HIVE-3273. Add avro jars into hive execution classpath
+
+Reason: Bug
+Author: Zhenxiao Luo
+Ref: CDH-7113
+---
+ ql/build.xml |   14 ++++++++++++++
+ 1 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/src/ql/build.xml b/src/ql/build.xml
+index 0bb2750..5de3f78 100644
+--- a/src/ql/build.xml
++++ b/src/ql/build.xml
+@@ -195,6 +195,18 @@
+         <exclude name="meta-inf/manifest.mf"/>
+       </patternset>
+     </unzip>
++    <unzip src="${build.ivy.lib.dir}/default/avro-${avro.version}.jar" dest="${build.dir.hive}/avro/classes">
++      <patternset>
++        <exclude name="META-INF"/>
++        <exclude name="META-INF/MANIFEST.MF"/>
++      </patternset>
++    </unzip>
++    <unzip src="${build.ivy.lib.dir}/default/avro-mapred-${avro.version}.jar" dest="${build.dir.hive}/avro-mapred/classes">
++      <patternset>
++        <exclude name="META-INF"/>
++        <exclude name="META-INF/MANIFEST.MF"/>
++      </patternset>
++    </unzip>
+     <!-- jar jarfile="${build.dir}/hive_${name}.jar" basedir="${build.classes}" / -->
+     <jar jarfile="${build.dir}/hive-exec-${version}.jar">
+       <fileset dir="${build.dir.hive}/common/classes" includes="**/*.class"/>
+@@ -203,6 +215,8 @@
+       <fileset dir="${build.dir.hive}/thrift/classes" includes="**/*.class"/>
+       <fileset dir="${build.dir.hive}/commons-lang/classes" includes="**/StringUtils.class,**/WordUtils.class"/>
+       <fileset dir="${build.dir.hive}/json/classes" includes="**/*.class"/>
++      <fileset dir="${build.dir.hive}/avro/classes" includes="**/*.class"/>
++      <fileset dir="${build.dir.hive}/avro-mapred/classes" includes="**/*.class"/>
+       <fileset dir="${build.dir.hive}/shims/classes" includes="**/*.class"/>
+       <fileset dir="${build.dir.hive}/javaewah/classes" includes="**/*.class"/>
+       <manifest>
+-- 
+1.7.0.4
+

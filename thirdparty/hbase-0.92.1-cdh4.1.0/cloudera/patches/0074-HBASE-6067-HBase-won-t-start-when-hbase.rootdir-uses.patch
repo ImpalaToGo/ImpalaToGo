@@ -1,0 +1,71 @@
+From adac989f11f42e0b88c41fee0da076cdba11bcdf Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Tue, 24 Jul 2012 12:48:29 -0700
+Subject: [PATCH 074/151] HBASE-6067  HBase won't start when hbase.rootdir uses ViewFileSystem
+
+Reason: Backport
+Author: Zhihong Ted Yu
+Ref: CDH-5902
+---
+ .../apache/hadoop/hbase/regionserver/wal/HLog.java |   31 ++++++++++++++++++-
+ 1 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/wal/HLog.java b/src/main/java/org/apache/hadoop/hbase/regionserver/wal/HLog.java
+index ed69384..314d7de 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/wal/HLog.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/wal/HLog.java
+@@ -364,7 +364,7 @@ public class HLog implements Syncable {
+   public HLog(final FileSystem fs, final Path dir, final Path oldLogDir,
+       final Configuration conf, final List<WALActionsListener> listeners,
+       final boolean failIfLogDirExists, final String prefix)
+- throws IOException {
++  throws IOException {
+     super();
+     this.fs = fs;
+     this.dir = dir;
+@@ -375,7 +375,7 @@ public class HLog implements Syncable {
+       }
+     }
+     this.blocksize = conf.getLong("hbase.regionserver.hlog.blocksize",
+-      this.fs.getDefaultBlockSize());
++        getDefaultBlockSize());
+     // Roll at 95% of block size.
+     float multi = conf.getFloat("hbase.regionserver.logroll.multiplier", 0.95f);
+     this.logrollsize = (long)(this.blocksize * multi);
+@@ -422,6 +422,33 @@ public class HLog implements Syncable {
+         Thread.currentThread().getName() + ".logSyncer");
+     coprocessorHost = new WALCoprocessorHost(this, conf);
+   }
++  
++  // use reflection to search for getDefaultBlockSize(Path f)
++  // if the method doesn't exist, fall back to using getDefaultBlockSize()
++  private long getDefaultBlockSize() throws IOException {
++    Method m = null;
++    Class<? extends FileSystem> cls = this.fs.getClass();
++    try {
++      m = cls.getMethod("getDefaultBlockSize",
++          new Class<?>[] { Path.class });
++    } catch (NoSuchMethodException e) {
++      LOG.info("FileSystem doesn't support getDefaultBlockSize");
++    } catch (SecurityException e) {
++      LOG.info("Doesn't have access to getDefaultBlockSize on "
++          + "FileSystems", e);
++      m = null; // could happen on setAccessible()
++    }
++    if (null == m) {
++      return this.fs.getDefaultBlockSize();
++    } else {
++      try {
++        Object ret = m.invoke(this.fs, this.dir);
++        return ((Long)ret).longValue();
++      } catch (Exception e) {
++        throw new IOException(e);
++      }
++    }
++  }
+ 
+   /**
+    * Find the 'getNumCurrentReplicas' on the passed <code>os</code> stream.
+-- 
+1.7.0.4
+

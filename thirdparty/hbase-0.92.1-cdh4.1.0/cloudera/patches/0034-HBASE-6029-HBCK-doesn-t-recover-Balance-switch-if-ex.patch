@@ -1,0 +1,34 @@
+From 07574ab4a5ab16b7d4030347eacd98fc7ea42b40 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Thu, 17 May 2012 10:21:22 -0700
+Subject: [PATCH 034/151] HBASE-6029 HBCK doesn't recover Balance switch if exception occurs in onlineHbck()
+
+Reason: Improvement
+Author: Maryann Xue
+Ref: CDH-5889
+---
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |    8 +++++---
+ 1 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index c49181c..af79496 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -372,9 +372,11 @@ public class HBaseFsck {
+     // turn the balancer off
+     boolean oldBalancer = admin.balanceSwitch(false);
+ 
+-    onlineConsistencyRepair();
+-
+-    admin.balanceSwitch(oldBalancer);
++    try {
++      onlineConsistencyRepair();
++    } finally {
++      admin.balanceSwitch(oldBalancer);
++    }
+ 
+     // Print table summary
+     printTableSummary(tablesInfo);
+-- 
+1.7.0.4
+

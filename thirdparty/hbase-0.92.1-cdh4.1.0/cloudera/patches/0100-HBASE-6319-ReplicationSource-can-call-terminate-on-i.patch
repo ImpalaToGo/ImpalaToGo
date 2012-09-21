@@ -1,0 +1,28 @@
+From c81c79700a3a1bdfdc7a1be6de916323f55c4055 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Sat, 4 Aug 2012 19:14:55 -0600
+Subject: [PATCH 100/151] HBASE-6319 ReplicationSource can call terminate on itself and deadlock
+
+---
+ .../regionserver/ReplicationSource.java            |    5 ++++-
+ 1 files changed, 4 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
+index ee0cc12..7f9404b 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
+@@ -705,7 +705,10 @@ public class ReplicationSource extends Thread
+           + " because an error occurred: " + reason, cause);
+     }
+     this.running = false;
+-    Threads.shutdown(this, this.sleepForRetries);
++    // Only wait for the thread to die if it's not us
++    if (!Thread.currentThread().equals(this)) {
++      Threads.shutdown(this, this.sleepForRetries);
++    }
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

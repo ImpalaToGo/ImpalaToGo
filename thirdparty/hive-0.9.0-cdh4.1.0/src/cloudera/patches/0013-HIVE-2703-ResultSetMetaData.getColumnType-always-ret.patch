@@ -1,0 +1,255 @@
+From ce51ccef5a7abe4d98da429633ad3ee387b74431 Mon Sep 17 00:00:00 2001
+From: Namit Jain <namit@apache.org>
+Date: Mon, 23 Apr 2012 22:31:14 +0000
+Subject: [PATCH 013/144] HIVE-2703 ResultSetMetaData.getColumnType() always returns VARCHAR(string) for partition columns
+ irrespective of partition column type (tamtam180 via namit)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329492 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../apache/hadoop/hive/jdbc/TestJdbcDriver.java    |   95 +++++++++++++++++++-
+ .../hadoop/hive/ql/parse/SemanticAnalyzer.java     |   16 ++--
+ 2 files changed, 98 insertions(+), 13 deletions(-)
+
+diff --git a/src/jdbc/src/test/org/apache/hadoop/hive/jdbc/TestJdbcDriver.java b/src/jdbc/src/test/org/apache/hadoop/hive/jdbc/TestJdbcDriver.java
+index 0ed2878..de03c15 100644
+--- a/src/jdbc/src/test/org/apache/hadoop/hive/jdbc/TestJdbcDriver.java
++++ b/src/jdbc/src/test/org/apache/hadoop/hive/jdbc/TestJdbcDriver.java
+@@ -55,6 +55,8 @@ public class TestJdbcDriver extends TestCase {
+   private static final String partitionedTableName = "testHiveJdbcDriverPartitionedTable";
+   private static final String partitionedColumnName = "partcolabc";
+   private static final String partitionedColumnValue = "20090619";
++  private static final String partitionedIntColumnName = "partcolint";
++  private static final int partitionedIntColumnValue = 777;
+   private static final String partitionedTableComment = "Partitioned table";
+   private static final String dataTypeTableName = "testDataTypeTable";
+   private static final String dataTypeTableComment = "Table with many column data types";
+@@ -122,14 +124,16 @@ public class TestJdbcDriver extends TestCase {
+ 
+     res = stmt.executeQuery("create table " + partitionedTableName
+         + " (under_col int, value string) comment '"+partitionedTableComment
+-            +"' partitioned by (" + partitionedColumnName + " STRING)");
++            +"' partitioned by (" + partitionedColumnName + " STRING,"
++            + partitionedIntColumnName + " INT)");
+     assertFalse(res.next());
+ 
+     // load data
+     res = stmt.executeQuery("load data local inpath '"
+         + dataFilePath.toString() + "' into table " + partitionedTableName
+         + " PARTITION (" + partitionedColumnName + "="
+-        + partitionedColumnValue + ")");
++        + partitionedColumnValue + ","
++        + partitionedIntColumnName + "=" + partitionedIntColumnValue + ")");
+     assertFalse(res.next());
+ 
+     // drop table. ignore error.
+@@ -437,7 +441,7 @@ public class TestJdbcDriver extends TestCase {
+     int i = 0;
+ 
+     ResultSetMetaData meta = res.getMetaData();
+-    int expectedColCount = isPartitionTable ? 3 : 2;
++    int expectedColCount = isPartitionTable ? 4 : 2;
+     assertEquals(
+       "Unexpected column count", expectedColCount, meta.getColumnCount());
+ 
+@@ -451,6 +455,8 @@ public class TestJdbcDriver extends TestCase {
+         if (isPartitionTable) {
+           assertEquals(res.getString(3), partitionedColumnValue);
+           assertEquals(res.getString(3), res.getString(partitionedColumnName));
++          assertEquals(res.getInt(4), partitionedIntColumnValue);
++          assertEquals(res.getInt(4), res.getInt(partitionedIntColumnName));
+         }
+         assertFalse("Last result value was not null", res.wasNull());
+         assertNull("No warnings should be found on ResultSet", res
+@@ -657,7 +663,7 @@ public class TestJdbcDriver extends TestCase {
+   public void testMetaDataGetColumns() throws SQLException {
+     Map<String[], Integer> tests = new HashMap<String[], Integer>();
+     tests.put(new String[]{"testhivejdbcdriver\\_table", null}, 2);
+-    tests.put(new String[]{"testhivejdbc%", null}, 7);
++    tests.put(new String[]{"testhivejdbc%", null}, 8);
+     tests.put(new String[]{"%jdbcdriver\\_table", null}, 2);
+     tests.put(new String[]{"%jdbcdriver\\_table%", "under\\_col"}, 1);
+     tests.put(new String[]{"%jdbcdriver\\_table%", "under\\_co_"}, 1);
+@@ -1003,6 +1009,87 @@ public class TestJdbcDriver extends TestCase {
+     }
+   }
+ 
++  public void testPartitionedResultSetMetaData() throws SQLException {
++    Statement stmt = con.createStatement();
++
++    ResultSet res = stmt.executeQuery(
++        "select under_col, value, partcolabc, partcolint " +
++        "from " + partitionedTableName + " limit 1");
++    ResultSetMetaData meta = res.getMetaData();
++
++    ResultSet colRS = con.getMetaData().getColumns(null, null,
++        partitionedTableName.toLowerCase(), null);
++
++    assertEquals(4, meta.getColumnCount());
++
++    assertTrue(colRS.next());
++
++    assertEquals("under_col", meta.getColumnName(1));
++    assertEquals(Types.INTEGER, meta.getColumnType(1));
++    assertEquals("int", meta.getColumnTypeName(1));
++    assertEquals(11, meta.getColumnDisplaySize(1));
++    assertEquals(10, meta.getPrecision(1));
++    assertEquals(0, meta.getScale(1));
++
++    assertEquals("under_col", colRS.getString("COLUMN_NAME"));
++    assertEquals(Types.INTEGER, colRS.getInt("DATA_TYPE"));
++    assertEquals("int", colRS.getString("TYPE_NAME").toLowerCase());
++    assertEquals(meta.getPrecision(1), colRS.getInt("COLUMN_SIZE"));
++    assertEquals(meta.getScale(1), colRS.getInt("DECIMAL_DIGITS"));
++
++    assertTrue(colRS.next());
++
++    assertEquals("value", meta.getColumnName(2));
++    assertEquals(Types.VARCHAR, meta.getColumnType(2));
++    assertEquals("string", meta.getColumnTypeName(2));
++    assertEquals(Integer.MAX_VALUE, meta.getColumnDisplaySize(2));
++    assertEquals(Integer.MAX_VALUE, meta.getPrecision(2));
++    assertEquals(0, meta.getScale(2));
++
++    assertEquals("value", colRS.getString("COLUMN_NAME"));
++    assertEquals(Types.VARCHAR, colRS.getInt("DATA_TYPE"));
++    assertEquals("string", colRS.getString("TYPE_NAME").toLowerCase());
++    assertEquals(meta.getPrecision(2), colRS.getInt("COLUMN_SIZE"));
++    assertEquals(meta.getScale(2), colRS.getInt("DECIMAL_DIGITS"));
++
++    assertTrue(colRS.next());
++
++    assertEquals("partcolabc", meta.getColumnName(3));
++    assertEquals(Types.VARCHAR, meta.getColumnType(3));
++    assertEquals("string", meta.getColumnTypeName(3));
++    assertEquals(Integer.MAX_VALUE, meta.getColumnDisplaySize(3));
++    assertEquals(Integer.MAX_VALUE, meta.getPrecision(3));
++    assertEquals(0, meta.getScale(3));
++
++    assertEquals("partcolabc", colRS.getString("COLUMN_NAME"));
++    assertEquals(Types.VARCHAR, colRS.getInt("DATA_TYPE"));
++    assertEquals("string", colRS.getString("TYPE_NAME").toLowerCase());
++    assertEquals(meta.getPrecision(3), colRS.getInt("COLUMN_SIZE"));
++    assertEquals(meta.getScale(3), colRS.getInt("DECIMAL_DIGITS"));
++
++    assertTrue(colRS.next());
++
++    assertEquals("partcolint", meta.getColumnName(4));
++    assertEquals(Types.INTEGER, meta.getColumnType(4));
++    assertEquals("int", meta.getColumnTypeName(4));
++    assertEquals(11, meta.getColumnDisplaySize(4));
++    assertEquals(10, meta.getPrecision(4));
++    assertEquals(0, meta.getScale(4));
++
++    assertEquals("partcolint", colRS.getString("COLUMN_NAME"));
++    assertEquals(Types.INTEGER, colRS.getInt("DATA_TYPE"));
++    assertEquals("int", colRS.getString("TYPE_NAME").toLowerCase());
++    assertEquals(meta.getPrecision(4), colRS.getInt("COLUMN_SIZE"));
++    assertEquals(meta.getScale(4), colRS.getInt("DECIMAL_DIGITS"));
++
++    for (int i = 1; i <= meta.getColumnCount(); i++) {
++      assertFalse(meta.isAutoIncrement(i));
++      assertFalse(meta.isCurrency(i));
++      assertEquals(ResultSetMetaData.columnNullable, meta.isNullable(i));
++    }
++  }
++
++
+   // [url] [host] [port] [db]
+   private static final String[][] URL_PROPERTIES = new String[][] {
+       {"jdbc:hive://", "", "", "default"},
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
+index 0a6b0da..b471bee 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
+@@ -27,9 +27,9 @@ import java.util.Iterator;
+ import java.util.LinkedHashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Map.Entry;
+ import java.util.Set;
+ import java.util.TreeSet;
+-import java.util.Map.Entry;
+ import java.util.regex.Pattern;
+ import java.util.regex.PatternSyntaxException;
+ 
+@@ -42,6 +42,7 @@ import org.apache.hadoop.hive.common.FileUtils;
+ import org.apache.hadoop.hive.common.JavaUtils;
+ import org.apache.hadoop.hive.conf.HiveConf;
+ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
++import org.apache.hadoop.hive.metastore.TableType;
+ import org.apache.hadoop.hive.metastore.Warehouse;
+ import org.apache.hadoop.hive.metastore.api.FieldSchema;
+ import org.apache.hadoop.hive.metastore.api.MetaException;
+@@ -96,6 +97,7 @@ import org.apache.hadoop.hive.ql.metadata.VirtualColumn;
+ import org.apache.hadoop.hive.ql.optimizer.GenMRFileSink1;
+ import org.apache.hadoop.hive.ql.optimizer.GenMROperator;
+ import org.apache.hadoop.hive.ql.optimizer.GenMRProcContext;
++import org.apache.hadoop.hive.ql.optimizer.GenMRProcContext.GenMapRedCtx;
+ import org.apache.hadoop.hive.ql.optimizer.GenMRRedSink1;
+ import org.apache.hadoop.hive.ql.optimizer.GenMRRedSink2;
+ import org.apache.hadoop.hive.ql.optimizer.GenMRRedSink3;
+@@ -105,7 +107,6 @@ import org.apache.hadoop.hive.ql.optimizer.GenMRUnion1;
+ import org.apache.hadoop.hive.ql.optimizer.GenMapRedUtils;
+ import org.apache.hadoop.hive.ql.optimizer.MapJoinFactory;
+ import org.apache.hadoop.hive.ql.optimizer.Optimizer;
+-import org.apache.hadoop.hive.ql.optimizer.GenMRProcContext.GenMapRedCtx;
+ import org.apache.hadoop.hive.ql.optimizer.physical.PhysicalContext;
+ import org.apache.hadoop.hive.ql.optimizer.physical.PhysicalOptimizer;
+ import org.apache.hadoop.hive.ql.optimizer.ppr.PartitionPruner;
+@@ -126,6 +127,7 @@ import org.apache.hadoop.hive.ql.plan.ExtractDesc;
+ import org.apache.hadoop.hive.ql.plan.FetchWork;
+ import org.apache.hadoop.hive.ql.plan.FileSinkDesc;
+ import org.apache.hadoop.hive.ql.plan.FilterDesc;
++import org.apache.hadoop.hive.ql.plan.FilterDesc.sampleDesc;
+ import org.apache.hadoop.hive.ql.plan.ForwardDesc;
+ import org.apache.hadoop.hive.ql.plan.GroupByDesc;
+ import org.apache.hadoop.hive.ql.plan.HiveOperation;
+@@ -148,14 +150,13 @@ import org.apache.hadoop.hive.ql.plan.TableDesc;
+ import org.apache.hadoop.hive.ql.plan.TableScanDesc;
+ import org.apache.hadoop.hive.ql.plan.UDTFDesc;
+ import org.apache.hadoop.hive.ql.plan.UnionDesc;
+-import org.apache.hadoop.hive.ql.plan.FilterDesc.sampleDesc;
+ import org.apache.hadoop.hive.ql.session.SessionState;
+ import org.apache.hadoop.hive.ql.session.SessionState.ResourceType;
+ import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator;
++import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator.Mode;
+ import org.apache.hadoop.hive.ql.udf.generic.GenericUDFHash;
+ import org.apache.hadoop.hive.ql.udf.generic.GenericUDFOPOr;
+ import org.apache.hadoop.hive.ql.udf.generic.GenericUDTF;
+-import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator.Mode;
+ import org.apache.hadoop.hive.serde.Constants;
+ import org.apache.hadoop.hive.serde2.Deserializer;
+ import org.apache.hadoop.hive.serde2.MetadataTypedColumnsetSerDe;
+@@ -163,16 +164,15 @@ import org.apache.hadoop.hive.serde2.SerDeException;
+ import org.apache.hadoop.hive.serde2.SerDeUtils;
+ import org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe;
+ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
+ import org.apache.hadoop.hive.serde2.objectinspector.StructField;
+ import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
+-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
+ import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorUtils;
+ import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorUtils.PrimitiveTypeEntry;
+ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
+ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
+ import org.apache.hadoop.mapred.InputFormat;
+-import org.apache.hadoop.hive.metastore.TableType;
+ 
+ /**
+  * Implementation of the semantic analyzer.
+@@ -6468,10 +6468,8 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
+       // Finally add the partitioning columns
+       for (FieldSchema part_col : tab.getPartCols()) {
+         LOG.trace("Adding partition col: " + part_col);
+-        // TODO: use the right type by calling part_col.getType() instead of
+-        // String.class
+         rwsch.put(alias, part_col.getName(), new ColumnInfo(part_col.getName(),
+-            TypeInfoFactory.stringTypeInfo, alias, true));
++            TypeInfoFactory.getPrimitiveTypeInfo(part_col.getType()), alias, true));
+       }
+ 
+       //put all virutal columns in RowResolver.
+-- 
+1.7.0.4
+

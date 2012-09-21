@@ -1,0 +1,168 @@
+From f7f57f45565ff132b3ad684b50b7ca6df775cc8d Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Tue, 19 Jun 2012 21:14:09 +0000
+Subject: [PATCH 097/144] Fixing bug in removing ProtectMode from a Table
+ (Bhushan Mandhani via Carl Steinbach)
+
+Summary:
+When ProtectMode has every member set to the default false value, the toString() method returns null. When this happens, we should realize that the PROTECT_MODE parameter is
+no longer needed and should be removed for the Table or Partition. Currently, we try to persist this null value and get an error.
+
+Test Plan: Ran Hive. Checked that "alter table some_table disable NO_DROP CASCADE" successfully removed the PROTECT_MODE parameter and did not give any error. Running unit tests.
+
+Reviewers: njain, kevinwilfong, cwsteinbach
+
+Reviewed By: cwsteinbach
+
+Differential Revision: https://reviews.facebook.net/D3615
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1351859 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 8f425e82258d884129adba54e95a10deda075461)
+---
+ .../apache/hadoop/hive/ql/metadata/Partition.java  |    7 ++-
+ .../org/apache/hadoop/hive/ql/metadata/Table.java  |    7 ++-
+ ql/src/test/queries/clientpositive/protectmode2.q  |    3 +-
+ .../test/results/clientpositive/protectmode2.q.out |   67 ++++++++++++++++++-
+ 4 files changed, 77 insertions(+), 7 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Partition.java b/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Partition.java
+index 14c82fa..f1bb368 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Partition.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Partition.java
+@@ -544,7 +544,12 @@ public class Partition implements Serializable {
+    */
+   public void setProtectMode(ProtectMode protectMode){
+     Map<String, String> parameters = tPartition.getParameters();
+-    parameters.put(ProtectMode.PARAMETER_NAME, protectMode.toString());
++    String pm = protectMode.toString();
++    if (pm != null) {
++      parameters.put(ProtectMode.PARAMETER_NAME, pm);
++    } else {
++      parameters.remove(ProtectMode.PARAMETER_NAME);
++    }
+     tPartition.setParameters(parameters);
+   }
+ 
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Table.java b/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Table.java
+index 8a0831b..6b432ac 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Table.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/metadata/Table.java
+@@ -767,7 +767,12 @@ public class Table implements Serializable {
+    */
+   public void setProtectMode(ProtectMode protectMode){
+     Map<String, String> parameters = tTable.getParameters();
+-    parameters.put(ProtectMode.PARAMETER_NAME, protectMode.toString());
++    String pm = protectMode.toString();
++    if (pm != null) {
++      parameters.put(ProtectMode.PARAMETER_NAME, pm);
++    } else {
++      parameters.remove(ProtectMode.PARAMETER_NAME);
++    }
+     tTable.setParameters(parameters);
+   }
+ 
+diff --git a/src/ql/src/test/queries/clientpositive/protectmode2.q b/src/ql/src/test/queries/clientpositive/protectmode2.q
+index 159e4ea..978b032 100644
+--- a/src/ql/src/test/queries/clientpositive/protectmode2.q
++++ b/src/ql/src/test/queries/clientpositive/protectmode2.q
+@@ -17,6 +17,7 @@ alter table tbl2 add partition (p='p1');
+ alter table tbl2 add partition (p='p2');
+ alter table tbl2 add partition (p='p3');
+ alter table tbl2 enable no_drop cascade;
+-desc extended tbl2;
++desc formatted tbl2;
+ alter table tbl2 disable no_drop cascade;
++desc formatted tbl2;
+ drop table tbl2;
+diff --git a/src/ql/src/test/results/clientpositive/protectmode2.q.out b/src/ql/src/test/results/clientpositive/protectmode2.q.out
+index be16f6c..471620a 100644
+--- a/src/ql/src/test/results/clientpositive/protectmode2.q.out
++++ b/src/ql/src/test/results/clientpositive/protectmode2.q.out
+@@ -106,14 +106,40 @@ POSTHOOK: query: alter table tbl2 enable no_drop cascade
+ POSTHOOK: type: ALTERTABLE_PROTECTMODE
+ POSTHOOK: Input: default@tbl2
+ POSTHOOK: Output: default@tbl2
+-PREHOOK: query: desc extended tbl2
++PREHOOK: query: desc formatted tbl2
+ PREHOOK: type: DESCTABLE
+-POSTHOOK: query: desc extended tbl2
++POSTHOOK: query: desc formatted tbl2
+ POSTHOOK: type: DESCTABLE
+-col	string	
+-p	string	
++# col_name            	data_type           	comment             
++	 	 
++col                 	string              	None                
++	 	 
++# Partition Information	 	 
++# col_name            	data_type           	comment             
+ 	 	 
++p                   	string              	None                
++	 	 
++# Detailed Table Information	 	 
++Database:           	default             	 
++#### A masked pattern was here ####
++Protect Mode:       	NO_DROP_CASCADE     	 
++Retention:          	0                   	 
+ #### A masked pattern was here ####
++Table Type:         	MANAGED_TABLE       	 
++Table Parameters:	 	 
++	PROTECT_MODE        	NO_DROP_CASCADE     
++#### A masked pattern was here ####
++	 	 
++# Storage Information	 	 
++SerDe Library:      	org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe	 
++InputFormat:        	org.apache.hadoop.mapred.TextInputFormat	 
++OutputFormat:       	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	 
++Compressed:         	No                  	 
++Num Buckets:        	-1                  	 
++Bucket Columns:     	[]                  	 
++Sort Columns:       	[]                  	 
++Storage Desc Params:	 	 
++	serialization.format	1                   
+ PREHOOK: query: alter table tbl2 disable no_drop cascade
+ PREHOOK: type: ALTERTABLE_PROTECTMODE
+ PREHOOK: Input: default@tbl2
+@@ -122,6 +148,39 @@ POSTHOOK: query: alter table tbl2 disable no_drop cascade
+ POSTHOOK: type: ALTERTABLE_PROTECTMODE
+ POSTHOOK: Input: default@tbl2
+ POSTHOOK: Output: default@tbl2
++PREHOOK: query: desc formatted tbl2
++PREHOOK: type: DESCTABLE
++POSTHOOK: query: desc formatted tbl2
++POSTHOOK: type: DESCTABLE
++# col_name            	data_type           	comment             
++	 	 
++col                 	string              	None                
++	 	 
++# Partition Information	 	 
++# col_name            	data_type           	comment             
++	 	 
++p                   	string              	None                
++	 	 
++# Detailed Table Information	 	 
++Database:           	default             	 
++#### A masked pattern was here ####
++Protect Mode:       	None                	 
++Retention:          	0                   	 
++#### A masked pattern was here ####
++Table Type:         	MANAGED_TABLE       	 
++Table Parameters:	 	 
++#### A masked pattern was here ####
++	 	 
++# Storage Information	 	 
++SerDe Library:      	org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe	 
++InputFormat:        	org.apache.hadoop.mapred.TextInputFormat	 
++OutputFormat:       	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	 
++Compressed:         	No                  	 
++Num Buckets:        	-1                  	 
++Bucket Columns:     	[]                  	 
++Sort Columns:       	[]                  	 
++Storage Desc Params:	 	 
++	serialization.format	1                   
+ PREHOOK: query: drop table tbl2
+ PREHOOK: type: DROPTABLE
+ PREHOOK: Input: default@tbl2
+-- 
+1.7.0.4
+

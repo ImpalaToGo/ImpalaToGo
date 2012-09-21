@@ -1,0 +1,28 @@
+From 1359806d299ef282ab6c2bdd9e383c584a9af1b1 Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Thu, 26 Jul 2012 18:44:41 -0700
+Subject: [PATCH 091/151] HBASE-5773 HtablePool constructor not reading config files in certain cases
+
+Reason: Backport
+Author: Ioan Eugen Stan
+Ref: CDH-6929
+---
+ .../org/apache/hadoop/hbase/client/HTablePool.java |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java b/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
+index a5c198f..729be54 100755
+--- a/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
+@@ -136,7 +136,7 @@ public class HTablePool implements Closeable {
+       final HTableInterfaceFactory tableFactory, PoolType poolType) {
+     // Make a new configuration instance so I can safely cleanup when
+     // done with the pool.
+-    this.config = config == null ? new Configuration() : config;
++    this.config = config == null ? HBaseConfiguration.create() : config;
+     this.maxSize = maxSize;
+     this.tableFactory = tableFactory == null ? new HTableFactory()
+         : tableFactory;
+-- 
+1.7.0.4
+

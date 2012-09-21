@@ -1,0 +1,37 @@
+From 050010b25cbd80204bcc6d17d36ed57d5c44dc04 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Sun, 29 Jul 2012 20:40:13 +0200
+Subject: [PATCH 093/151] Remove InterfaceAudience from HLogPerformanceEvaluation
+
+InterfaceAudience is not available in cdh3.
+
+Reason: Build
+Author: Matteo Bertozzi
+Ref: CDH-7022
+---
+ .../wal/HLogPerformanceEvaluation.java             |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/regionserver/wal/HLogPerformanceEvaluation.java b/src/test/java/org/apache/hadoop/hbase/regionserver/wal/HLogPerformanceEvaluation.java
+index 216b88c..87605db 100644
+--- a/src/test/java/org/apache/hadoop/hbase/regionserver/wal/HLogPerformanceEvaluation.java
++++ b/src/test/java/org/apache/hadoop/hbase/regionserver/wal/HLogPerformanceEvaluation.java
+@@ -32,7 +32,6 @@ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.util.Tool;
+ import org.apache.hadoop.util.ToolRunner;
+ import org.apache.hadoop.conf.Configured;
+-import org.apache.hadoop.classification.InterfaceAudience;
+ 
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+@@ -53,7 +52,6 @@ import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
+  * See usage for this tool by running:
+  * <code>$ hbase org.apache.hadoop.hbase.regionserver.wal.HLogPerformanceEvaluation -h</code>
+  */
+-@InterfaceAudience.Private
+ public final class HLogPerformanceEvaluation extends Configured implements Tool {
+   static final Log LOG = LogFactory.getLog(HLogPerformanceEvaluation.class.getName());
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,81 @@
+From c11f6582fa9f73228ccffe7134cbee2b597ff6c8 Mon Sep 17 00:00:00 2001
+From: Namit Jain <namit@apache.org>
+Date: Tue, 12 Jun 2012 21:22:55 +0000
+Subject: [PATCH 086/144] HIVE-3120 make copyLocal work for parallel tests
+ (Shuai Ding via namit)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349548 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit ade6dfb3d013214f25b48e3bb543f7e34e99e656)
+---
+ testutils/ptest/hivetest.py |   27 ++++++++++++++++++++++++---
+ 1 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/src/testutils/ptest/hivetest.py b/src/testutils/ptest/hivetest.py
+index 1c5e698..947e8ea 100755
+--- a/src/testutils/ptest/hivetest.py
++++ b/src/testutils/ptest/hivetest.py
+@@ -53,6 +53,7 @@ all_set = None
+ 
+ master_base_path = None
+ host_base_path = None
++runtest_dir = os.getcwd()
+ 
+ # End of user configurated things.
+ 
+@@ -160,6 +161,19 @@ def get_clean_hive():
+     local.run('git pull')
+     local.run('ant arc-setup')
+ 
++def copy_local_hive():
++    # Copy local repo to the destination path instead of using git clone
++    if local.run('test -d "{0}"'.format(code_path), warn_only = True,
++            abandon_output = False) is None:
++      local.run('mkdir -p "{0}"'.format(os.path.dirname(code_path)))
++    local.run('rm -rf "{0}"'.format(code_path), warn_only = True)
++    local.run('mkdir -p "{0}"'.format(code_path))
++    local.run('echo "{0}"'.format(runtest_dir))
++    local.cd(runtest_dir)
++    local.run('cp -rf * "{0}"'.format(code_path))
++    local.cd(code_path)
++    local.run('ant arc-setup')
++
+ def prepare_for_reports():
+     # Generates directories for test reports.  All test nodes will copy results
+     # to this directories.
+@@ -189,7 +203,7 @@ def patch_hive(patches = [], revision = None):
+     if patches:
+         print('\n-- Patching Hive repo using a patch from local file system\n')
+         for patch in patches:
+-            local.run('patch -f -p0 < "{0}"'.format(patch))
++            local.run('patch -rf -p0 < "{0}"'.format(patch))
+ 
+ def build_hive():
+     print('\n-- Building Hive\n')
+@@ -431,8 +445,12 @@ def overwrite_results():
+ def cmd_prepare(patches = [], revision = None):
+     get_ant()
+     get_arc()
+-    get_clean_hive()
+-    patch_hive(patches, revision)
++    if (args.copylocal):
++      copy_local_hive()
++    else :
++      get_clean_hive()
++      patch_hive(patches, revision)
++
+     build_hive()
+     propagate_hive()
+     prepare_tests()
+@@ -494,6 +512,9 @@ parser.add_argument('--one-file-report', dest = 'one_file_report',
+         help = 'Generate one (huge) report file instead of multiple small ones')
+ parser.add_argument('--overwrite', dest = 'overwrite', action = 'store_true',
+         help = 'Overwrite result files in master repo')
++parser.add_argument('--copylocal', dest = 'copylocal', action = 'store_true',
++        help = 'Copy local repo instead of using git clone and git hub')
++
+ args = parser.parse_args()
+ 
+ read_conf(args.config)
+-- 
+1.7.0.4
+

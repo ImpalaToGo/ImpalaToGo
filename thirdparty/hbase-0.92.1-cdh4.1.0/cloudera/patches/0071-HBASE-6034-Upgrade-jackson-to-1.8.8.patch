@@ -1,0 +1,28 @@
+From de2cda4cf3419e49fa70ec23d5a6270aefbc7fc2 Mon Sep 17 00:00:00 2001
+From: David S. Wang <dsw@cloudera.com>
+Date: Wed, 18 Jul 2012 14:04:11 -0700
+Subject: [PATCH 071/151] HBASE-6034: Upgrade jackson to 1.8.8
+
+Reason: Backport
+Author: Michael Stack
+Ref: CDH-6602
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 2929505..5d32d94 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -851,7 +851,7 @@
+     <commons-configuration.version>1.6</commons-configuration.version>
+     <commons-io.version>2.1</commons-io.version>
+     <guava.version>11.0.2</guava.version>
+-    <jackson.version>1.5.5</jackson.version>
++    <jackson.version>1.8.8</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+     <jaxb-api.version>2.1</jaxb-api.version>
+     <jetty.version>6.1.26</jetty.version>
+-- 
+1.7.0.4
+

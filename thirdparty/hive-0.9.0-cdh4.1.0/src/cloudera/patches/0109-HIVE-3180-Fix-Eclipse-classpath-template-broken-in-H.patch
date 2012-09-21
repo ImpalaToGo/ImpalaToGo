@@ -1,0 +1,27 @@
+From a88a09a89308821f3f17f11f2da16df7d6fff2e4 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Mon, 9 Jul 2012 22:18:30 -0700
+Subject: [PATCH 109/144] HIVE-3180 Fix Eclipse classpath template broken in HIVE-3128. Carl Steinbach (via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354187 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit ea5c1dc7410d5c17d2550c952c10b8a42ad831fd)
+---
+ eclipse-templates/.classpath |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/eclipse-templates/.classpath b/src/eclipse-templates/.classpath
+index b550bc5..d45fa70 100644
+--- a/src/eclipse-templates/.classpath
++++ b/src/eclipse-templates/.classpath
+@@ -27,7 +27,7 @@
+   <classpathentry kind="lib" path="build/ivy/lib/default/jline-@jline.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/json-@json.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/asm-@asm.version@.jar"/>
+-  <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/commons-codec-@commons-codec.version@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/default/commons-compress-@commons-compress.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-lang-@commons-lang.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-logging-@commons-logging.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-logging-api-@commons-logging-api.version@.jar"/>
+-- 
+1.7.0.4
+

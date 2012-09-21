@@ -1,0 +1,32 @@
+From 31e7d4db851739f20aab0a75941c85391854597d Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Tue, 10 Jul 2012 17:42:02 +0000
+Subject: [PATCH 069/151] HBASE-6357 Failed distributed log splitting stuck on master web UI
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-6598
+---
+ .../hadoop/hbase/master/SplitLogManager.java       |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java b/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+index f455e6d..f856c44 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+@@ -266,8 +266,10 @@ public class SplitLogManager extends ZooKeeperListener {
+       tot_mgr_log_split_batch_err.incrementAndGet();
+       LOG.warn("error while splitting logs in " + logDirs +
+       " installed = " + batch.installed + " but only " + batch.done + " done");
+-      throw new IOException("error or interrupt while splitting logs in "
+-          + logDirs + " Task = " + batch);
++      String msg = "error or interrupted while splitting logs in "
++        + logDirs + " Task = " + batch;
++      status.abort(msg);
++      throw new IOException(msg);
+     }
+     for(Path logDir: logDirs){
+       status.setStatus("Cleaning up log directory...");
+-- 
+1.7.0.4
+

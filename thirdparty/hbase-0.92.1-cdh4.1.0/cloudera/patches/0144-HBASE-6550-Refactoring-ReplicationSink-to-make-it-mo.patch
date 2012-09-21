@@ -1,0 +1,171 @@
+From 103f0bbbaa0e0eaba236436cbf8bc7476411c9d3 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Fri, 31 Aug 2012 18:26:33 -0600
+Subject: [PATCH 144/151] HBASE-6550 Refactoring ReplicationSink to make it more responsive of cluster health
+
+Reason: Improvement
+Author: Himanshu Vashishtha
+Ref: CDH-6768
+---
+ .../replication/regionserver/Replication.java      |    1 +
+ .../replication/regionserver/ReplicationSink.java  |   67 +++++++++++++++++---
+ 2 files changed, 58 insertions(+), 10 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/Replication.java b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/Replication.java
+index 0bbb88c..329749f 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/Replication.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/Replication.java
+@@ -96,6 +96,7 @@ public class Replication implements WALActionsListener {
+   public void join() {
+     if (this.replication) {
+       this.replicationManager.join();
++      this.replicationSink.stopReplicationSinkServices();
+     }
+   }
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSink.java b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSink.java
+index c206d3e..9180ca5 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSink.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSink.java
+@@ -22,22 +22,32 @@ package org.apache.hadoop.hbase.replication.regionserver;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.KeyValue.Type;
+ import org.apache.hadoop.hbase.client.Delete;
++import org.apache.hadoop.hbase.client.HConnection;
++import org.apache.hadoop.hbase.client.HConnectionManager;
++import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.HTableInterface;
+-import org.apache.hadoop.hbase.client.HTablePool;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.regionserver.wal.HLog;
+ import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
+ import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.hbase.Stoppable;
++import org.jruby.threading.DaemonThreadFactory;
+ 
+ import java.io.IOException;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.TreeMap;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.SynchronousQueue;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
+ 
+ /**
+  * This class is responsible for replicating the edits coming
+@@ -59,10 +69,11 @@ public class ReplicationSink {
+   // Name of the HDFS directory that contains the temporary rep logs
+   public static final String REPLICATION_LOG_DIR = ".replogs";
+   private final Configuration conf;
+-  // Pool used to replicated
+-  private final HTablePool pool;
+   // Chain to pull on when we want all to stop.
+   private final Stoppable stopper;
++  private final ExecutorService sharedThreadPool;
++  private final HConnection sharedHtableCon;
++
+   private final ReplicationSinkMetrics metrics;
+ 
+   /**
+@@ -74,14 +85,30 @@ public class ReplicationSink {
+    */
+   public ReplicationSink(Configuration conf, Stoppable stopper)
+       throws IOException {
+-    this.conf = conf;
+-    this.pool = new HTablePool(this.conf,
+-        conf.getInt("replication.sink.htablepool.capacity", 10));
++    this.conf = HBaseConfiguration.create(conf);
++    decorateConf();
+     this.stopper = stopper;
++    this.sharedHtableCon = HConnectionManager.createConnection(this.conf);
++    this.sharedThreadPool = new ThreadPoolExecutor(1, 
++        conf.getInt("hbase.htable.threads.max", Integer.MAX_VALUE), 
++        conf.getLong("hbase.htable.threads.keepalivetime", 60), TimeUnit.SECONDS,
++        new SynchronousQueue<Runnable>(), Threads.newDaemonThreadFactory("hbase-repl"));
++    ((ThreadPoolExecutor) this.sharedThreadPool).allowCoreThreadTimeOut(true);
+     this.metrics = new ReplicationSinkMetrics();
+   }
+ 
+   /**
++   * decorate the Configuration object to make replication more receptive to
++   * delays: lessen the timeout and numTries.
++   */
++  private void decorateConf() {
++    this.conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
++        this.conf.getInt("replication.sink.client.retries.number", 1));
++    this.conf.setInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT,
++        this.conf.getInt("replication.sink.client.ops.timeout", 20));
++  }  
++
++  /**
+    * Replicate this array of entries directly into the local cluster
+    * using the native client.
+    *
+@@ -165,6 +192,26 @@ public class ReplicationSink {
+   }
+ 
+   /**
++   * stop the thread pool executor. It is called when the regionserver is stopped.
++   */
++  public void stopReplicationSinkServices() {
++    try {
++      this.sharedThreadPool.shutdown();
++      if (!this.sharedThreadPool.awaitTermination(60000, TimeUnit.MILLISECONDS)) {
++        this.sharedThreadPool.shutdownNow();
++      }
++    } catch (InterruptedException e) {
++      LOG.warn("Interrupted while closing the table pool", e); // ignoring it as we are closing.
++      Thread.currentThread().interrupt();
++    }
++    try {
++      this.sharedHtableCon.close();
++    } catch (IOException e) {
++      LOG.warn("IOException while closing the connection", e); // ignoring as we are closing.
++    }
++  }
++  
++  /**
+    * Do the puts and handle the pool
+    * @param tableName table to insert into
+    * @param puts list of puts
+@@ -176,12 +223,12 @@ public class ReplicationSink {
+     }
+     HTableInterface table = null;
+     try {
+-      table = this.pool.getTable(tableName);
++      table = new HTable(tableName, this.sharedHtableCon, this.sharedThreadPool);
+       table.put(puts);
+       this.metrics.appliedOpsRate.inc(puts.size());
+     } finally {
+       if (table != null) {
+-        this.pool.putTable(table);
++        table.close();
+       }
+     }
+   }
+@@ -195,12 +242,12 @@ public class ReplicationSink {
+   private void delete(byte[] tableName, Delete delete) throws IOException {
+     HTableInterface table = null;
+     try {
+-      table = this.pool.getTable(tableName);
++      table = new HTable(tableName, this.sharedHtableCon, this.sharedThreadPool);
+       table.delete(delete);
+       this.metrics.appliedOpsRate.inc(1);
+     } finally {
+       if (table != null) {
+-        this.pool.putTable(table);
++        table.close();
+       }
+     }
+   }
+-- 
+1.7.0.4
+

@@ -1,0 +1,99 @@
+From 6cc0dd422f25192898e1bfdc0b9c171feed00ce1 Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Fri, 27 Jul 2012 12:44:20 -0700
+Subject: [PATCH 094/151] HBASE-5189 Add metrics to keep track of region-splits in RS
+
+Reason: Backport
+Author: Mubarak Seyed
+Ref: CDH-6929
+---
+ .../hadoop/hbase/regionserver/SplitRequest.java    |    3 +++
+ .../regionserver/metrics/RegionServerMetrics.java  |   19 ++++++++++++++++++-
+ 2 files changed, 21 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/SplitRequest.java b/src/main/java/org/apache/hadoop/hbase/regionserver/SplitRequest.java
+index 20a5b33..6bfcc90 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/SplitRequest.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/SplitRequest.java
+@@ -65,6 +65,7 @@ class SplitRequest implements Runnable {
+       if (!st.prepare()) return;
+       try {
+         st.execute(this.server, this.server);
++        this.server.getMetrics().incrementSplitSuccessCount();
+       } catch (Exception e) {
+         try {
+           LOG.info("Running rollback/cleanup of failed split of " +
+@@ -72,6 +73,7 @@ class SplitRequest implements Runnable {
+           if (st.rollback(this.server, this.server)) {
+             LOG.info("Successful rollback of failed split of " +
+               parent.getRegionNameAsString());
++            this.server.getMetrics().incrementSplitFailureCount();
+           } else {
+             this.server.abort("Abort; we got an error after point-of-no-return");
+           }
+@@ -92,6 +94,7 @@ class SplitRequest implements Runnable {
+     } catch (IOException ex) {
+       LOG.error("Split failed " + this, RemoteExceptionHandler
+           .checkIOException(ex));
++      this.server.getMetrics().incrementSplitFailureCount();
+       server.checkFileSystem();
+     }
+   }
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java b/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
+index a61d35a..bd450c9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/metrics/RegionServerMetrics.java
+@@ -1,4 +1,4 @@
+-/**
++ /**
+  * Copyright 2010 The Apache Software Foundation
+  *
+  * Licensed to the Apache Software Foundation (ASF) under one
+@@ -46,6 +46,7 @@ import org.apache.hadoop.metrics.util.MetricsIntValue;
+ import org.apache.hadoop.metrics.util.MetricsLongValue;
+ import org.apache.hadoop.metrics.util.MetricsRegistry;
+ import org.apache.hadoop.metrics.util.MetricsTimeVaryingRate;
++import org.apache.hadoop.metrics.util.MetricsTimeVaryingLong;
+ import org.apache.hadoop.util.StringUtils;
+ 
+ /**
+@@ -287,6 +288,12 @@ public class RegionServerMetrics implements Updater {
+ 
+   protected final PersistentMetricsTimeVaryingRate flushSize =
+     new PersistentMetricsTimeVaryingRate("flushSize", registry);
++   
++  public final MetricsTimeVaryingLong regionSplitSuccessCount =
++      new MetricsTimeVaryingLong("regionSplitSuccessCount", registry);
++  
++  public final MetricsTimeVaryingLong regionSplitFailureCount =
++      new MetricsTimeVaryingLong("regionSplitFailureCount", registry);
+ 
+   public RegionServerMetrics() {
+     MetricsContext context = MetricsUtil.getContext("hbase");
+@@ -410,6 +417,8 @@ public class RegionServerMetrics implements Updater {
+       this.compactionSize.pushMetric(this.metricsRecord);
+       this.flushTime.pushMetric(this.metricsRecord);
+       this.flushSize.pushMetric(this.metricsRecord);
++      this.regionSplitSuccessCount.pushMetric(this.metricsRecord);
++      this.regionSplitFailureCount.pushMetric(this.metricsRecord);
+     }
+     this.metricsRecord.update();
+   }
+@@ -453,6 +462,14 @@ public class RegionServerMetrics implements Updater {
+   public void incrementRequests(final int inc) {
+     this.requests.inc(inc);
+   }
++  
++  public void incrementSplitSuccessCount() {
++    this.regionSplitSuccessCount.inc();
++  }
++  
++  public void incrementSplitFailureCount() {
++    this.regionSplitFailureCount.inc();
++  }
+ 
+   @Override
+   public String toString() {
+-- 
+1.7.0.4
+

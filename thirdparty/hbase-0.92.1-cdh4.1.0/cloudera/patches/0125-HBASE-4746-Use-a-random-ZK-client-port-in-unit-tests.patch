@@ -1,0 +1,942 @@
+From 15c84f195ffbf569f651639e4d9ecbaac1bfc76c Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Mon, 27 Aug 2012 15:32:29 -0700
+Subject: [PATCH 125/151] HBASE-4746  Use a random ZK client port in unit tests so we can run them in parallel
+                (Mikhail Bautin)
+
+Reason: Test Improvement
+Author: Mikhail Bautin
+Ref: CDH-7151
+---
+ .../java/org/apache/hadoop/hbase/HConstants.java   |   28 +++++-
+ .../org/apache/hadoop/hbase/client/HTable.java     |   10 ++-
+ .../hadoop/hbase/coprocessor/CoprocessorHost.java  |    2 +-
+ .../hadoop/hbase/mapreduce/TableOutputFormat.java  |    8 ++-
+ .../hadoop/hbase/master/HMasterCommandLine.java    |    9 +-
+ .../hadoop/hbase/util/FSTableDescriptors.java      |    2 +-
+ .../apache/hadoop/hbase/util/RegionSplitter.java   |    2 +-
+ .../hbase/zookeeper/MiniZooKeeperCluster.java      |  108 ++++++++++++--------
+ .../apache/hadoop/hbase/zookeeper/ZKConfig.java    |   16 +--
+ .../org/apache/hadoop/hbase/zookeeper/ZKUtil.java  |    2 +-
+ .../apache/hadoop/hbase/HBaseTestingUtility.java   |   10 ++-
+ .../apache/hadoop/hbase/PerformanceEvaluation.java |    2 +-
+ .../hadoop/hbase/TestHBaseTestingUtility.java      |    8 +-
+ .../org/apache/hadoop/hbase/TestZooKeeper.java     |    2 +-
+ .../hbase/replication/TestMasterReplication.java   |   68 ++++++-------
+ .../replication/TestMultiSlaveReplication.java     |   13 +--
+ .../hadoop/hbase/replication/TestReplication.java  |    9 +-
+ .../regionserver/TestReplicationSourceManager.java |    6 +-
+ .../apache/hadoop/hbase/util/TestMergeTool.java    |    2 +-
+ .../hadoop/hbase/zookeeper/TestHQuorumPeer.java    |    6 +-
+ .../zookeeper/TestZooKeeperMainServerArg.java      |    7 +-
+ 21 files changed, 182 insertions(+), 138 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/HConstants.java b/src/main/java/org/apache/hadoop/hbase/HConstants.java
+index 67e0e3c..0746b84 100644
+--- a/src/main/java/org/apache/hadoop/hbase/HConstants.java
++++ b/src/main/java/org/apache/hadoop/hbase/HConstants.java
+@@ -105,8 +105,22 @@ public final class HConstants {
+   /** Name of ZooKeeper config file in conf/ directory. */
+   public static final String ZOOKEEPER_CONFIG_NAME = "zoo.cfg";
+ 
++  /** Common prefix of ZooKeeper configuration properties */
++  public static final String ZK_CFG_PROPERTY_PREFIX =
++      "hbase.zookeeper.property.";
++
++  public static final int ZK_CFG_PROPERTY_PREFIX_LEN =
++      ZK_CFG_PROPERTY_PREFIX.length();
++
++  /**
++   * The ZK client port key in the ZK properties map. The name reflects the
++   * fact that this is not an HBase configuration key.
++   */
++  public static final String CLIENT_PORT_STR = "clientPort";
++
+   /** Parameter name for the client port that the zookeeper listens on */
+-  public static final String ZOOKEEPER_CLIENT_PORT = "hbase.zookeeper.property.clientPort";
++  public static final String ZOOKEEPER_CLIENT_PORT =
++      ZK_CFG_PROPERTY_PREFIX + CLIENT_PORT_STR;
+ 
+   /** Default client port that the zookeeper listens on */
+   public static final int DEFAULT_ZOOKEPER_CLIENT_PORT = 2181;
+@@ -122,8 +136,16 @@ public final class HConstants {
+ 
+   public static final String DEFAULT_ZOOKEEPER_ZNODE_PARENT = "/hbase";
+ 
+-  /** Parameter name for the limit on concurrent client-side zookeeper connections */
+-  public static final String ZOOKEEPER_MAX_CLIENT_CNXNS = "hbase.zookeeper.property.maxClientCnxns";
++  /**
++   * Parameter name for the limit on concurrent client-side zookeeper
++   * connections
++   */
++  public static final String ZOOKEEPER_MAX_CLIENT_CNXNS =
++      ZK_CFG_PROPERTY_PREFIX + "maxClientCnxns";
++
++  /** Parameter name for the ZK data directory */
++  public static final String ZOOKEEPER_DATA_DIR =
++      ZK_CFG_PROPERTY_PREFIX + "dataDir";
+ 
+   /** Default limit on concurrent client-side zookeeper connections */
+   public static final int DEFAULT_ZOOKEPER_MAX_CLIENT_CNXNS = 300;
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HTable.java b/src/main/java/org/apache/hadoop/hbase/client/HTable.java
+index 91abaef..2aba827 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HTable.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HTable.java
+@@ -278,7 +278,9 @@ public class HTable implements HTableInterface, Closeable {
+   }
+ 
+   /**
+-   * Tells whether or not a table is enabled or not.
++   * Tells whether or not a table is enabled or not. This method creates a
++   * new HBase configuration, so it might make your unit tests fail due to
++   * incorrect ZK client port.
+    * @param tableName Name of table to check.
+    * @return {@code true} if table is online.
+    * @throws IOException if a remote or network exception occurs
+@@ -290,11 +292,13 @@ public class HTable implements HTableInterface, Closeable {
+   }
+ 
+   /**
+-   * Tells whether or not a table is enabled or not.
++   * Tells whether or not a table is enabled or not. This method creates a
++   * new HBase configuration, so it might make your unit tests fail due to
++   * incorrect ZK client port.
+    * @param tableName Name of table to check.
+    * @return {@code true} if table is online.
+    * @throws IOException if a remote or network exception occurs
+-	* @deprecated use {@link HBaseAdmin#isTableEnabled(byte[])}
++   * @deprecated use {@link HBaseAdmin#isTableEnabled(byte[])}
+    */
+   @Deprecated
+   public static boolean isTableEnabled(byte[] tableName) throws IOException {
+diff --git a/src/main/java/org/apache/hadoop/hbase/coprocessor/CoprocessorHost.java b/src/main/java/org/apache/hadoop/hbase/coprocessor/CoprocessorHost.java
+index 43a1861..25a7161 100644
+--- a/src/main/java/org/apache/hadoop/hbase/coprocessor/CoprocessorHost.java
++++ b/src/main/java/org/apache/hadoop/hbase/coprocessor/CoprocessorHost.java
+@@ -345,7 +345,7 @@ public abstract class CoprocessorHost<E extends CoprocessorEnvironment> {
+ 
+       public HTableWrapper(byte[] tableName) throws IOException {
+         this.tableName = tableName;
+-        this.table = new HTable(tableName);
++        this.table = new HTable(conf, tableName);
+         openTables.add(this);
+       }
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableOutputFormat.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableOutputFormat.java
+index c10f85e..89c9603 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableOutputFormat.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableOutputFormat.java
+@@ -28,7 +28,6 @@ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.client.Delete;
+-import org.apache.hadoop.hbase.client.HConnectionManager;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.zookeeper.ZKUtil;
+@@ -62,6 +61,9 @@ implements Configurable {
+    */
+   public static final String QUORUM_ADDRESS = "hbase.mapred.output.quorum";
+ 
++  /** Optional job parameter to specify peer cluster's ZK client port */
++  public static final String QUORUM_PORT = "hbase.mapred.output.quorum.port";
++
+   /** Optional specification of the rs class name of the peer cluster */
+   public static final String
+       REGION_SERVER_CLASS = "hbase.mapred.output.rs.class";
+@@ -182,6 +184,7 @@ implements Configurable {
+       throw new IllegalArgumentException("Must specify table name");
+     }
+     String address = this.conf.get(QUORUM_ADDRESS);
++    int zkClientPort = conf.getInt(QUORUM_PORT, 0);
+     String serverClass = this.conf.get(REGION_SERVER_CLASS);
+     String serverImpl = this.conf.get(REGION_SERVER_IMPL);
+     try {
+@@ -192,6 +195,9 @@ implements Configurable {
+         this.conf.set(HConstants.REGION_SERVER_CLASS, serverClass);
+         this.conf.set(HConstants.REGION_SERVER_IMPL, serverImpl);
+       }
++      if (zkClientPort != 0) {
++        conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zkClientPort);
++      }
+       this.table = new HTable(this.conf, tableName);
+       this.table.setAutoFlush(false);
+       LOG.info("Created table instance for "  + tableName);
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java b/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
+index 66ee021..ae9faf9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
+@@ -117,10 +117,11 @@ public class HMasterCommandLine extends ServerCommandLine {
+       if (LocalHBaseCluster.isLocal(conf)) {
+         final MiniZooKeeperCluster zooKeeperCluster =
+           new MiniZooKeeperCluster();
+-        File zkDataPath = new File(conf.get("hbase.zookeeper.property.dataDir"));
+-        int zkClientPort = conf.getInt("hbase.zookeeper.property.clientPort", 0);
++        File zkDataPath = new File(conf.get(HConstants.ZOOKEEPER_DATA_DIR));
++        int zkClientPort = conf.getInt(HConstants.ZOOKEEPER_CLIENT_PORT, 0);
+         if (zkClientPort == 0) {
+-          throw new IOException("No config value for hbase.zookeeper.property.clientPort");
++          throw new IOException("No config value for "
++              + HConstants.ZOOKEEPER_CLIENT_PORT);
+         }
+         zooKeeperCluster.setDefaultClientPort(zkClientPort);
+         int clientPort = zooKeeperCluster.startup(zkDataPath);
+@@ -132,7 +133,7 @@ public class HMasterCommandLine extends ServerCommandLine {
+           System.err.println(errorMsg);
+           throw new IOException(errorMsg);
+         }
+-        conf.set("hbase.zookeeper.property.clientPort",
++        conf.set(HConstants.ZOOKEEPER_CLIENT_PORT,
+                  Integer.toString(clientPort));
+         // Need to have the zk cluster shutdown when master is shutdown.
+         // Run a subclass that does the zk cluster shutdown on its way out.
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java b/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
+index 04d7894..ff1168e 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
+@@ -431,7 +431,7 @@ public class FSTableDescriptors implements TableDescriptors {
+     FileSystem fs = FSUtils.getCurrentFileSystem(conf);
+     FileStatus status = getTableInfoPath(fs, FSUtils.getRootDir(conf), tableName);
+     // The below deleteDirectory works for either file or directory.
+-    if (status != null && fs.exists(status.getPath()))  {
++    if (status != null && fs.exists(status.getPath())) {
+       FSUtils.deleteDirectory(fs, status.getPath());
+     }
+   }
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java b/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
+index 74f4091..25d94e0 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
+@@ -326,7 +326,7 @@ public class RegionSplitter {
+ 
+     if (!conf.getBoolean("split.verify", true)) {
+       // NOTE: createTable is synchronous on the table, but not on the regions
+-      HTable table = new HTable(tableName);
++      HTable table = new HTable(conf, tableName);
+       int onlineRegions = 0;
+       while (onlineRegions < splitCount) {
+         onlineRegions = table.getRegionsInfo().size();
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
+index 7572881..e381b8a 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
+@@ -30,6 +30,7 @@ import java.net.InetSocketAddress;
+ import java.net.Socket;
+ import java.util.ArrayList;
+ import java.util.List;
++import java.util.Random;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -53,13 +54,15 @@ public class MiniZooKeeperCluster {
+ 
+   private boolean started;
+ 
+-  private int defaultClientPort = 21818; // use non-standard port
+-  private int clientPort = defaultClientPort; 
+-  
++  /** The default port. If zero, we use a random port. */
++  private int defaultClientPort = 0;
++
++  private int clientPort;
++
+   private List<NIOServerCnxnFactory> standaloneServerFactoryList;
+   private List<ZooKeeperServer> zooKeeperServers;
+   private List<Integer> clientPortList;
+-  
++
+   private int activeZKServerIndex;
+   private int tickTime = 0;
+   private Configuration configuration;
+@@ -78,21 +81,34 @@ public class MiniZooKeeperCluster {
+   }
+ 
+   public void setDefaultClientPort(int clientPort) {
++    if (clientPort <= 0) {
++      throw new IllegalArgumentException("Invalid default ZK client port: "
++          + clientPort);
++    }
+     this.defaultClientPort = clientPort;
+   }
+ 
+-  public int getDefaultClientPort() {
+-    return defaultClientPort;
++  /**
++   * Selects a ZK client port. Returns the default port if specified.
++   * Otherwise, returns a random port. The random port is selected from the
++   * range between 49152 to 65535. These ports cannot be registered with IANA
++   * and are intended for dynamic allocation (see http://bit.ly/dynports).
++   */
++  private int selectClientPort() {
++    if (defaultClientPort > 0) {
++      return defaultClientPort;
++    }
++    return 0xc000 + new Random().nextInt(0x3f00);
+   }
+ 
+   public void setTickTime(int tickTime) {
+     this.tickTime = tickTime;
+   }
+-  
++
+   public int getBackupZooKeeperServerNum() {
+     return zooKeeperServers.size()-1;
+   }
+-  
++
+   public int getZooKeeperServerNum() {
+     return zooKeeperServers.size();
+   }
+@@ -106,9 +122,8 @@ public class MiniZooKeeperCluster {
+     System.setProperty("zookeeper.preAllocSize", "100");
+     FileTxnLog.setPreallocSize(100);
+   }
+-  
+-  public int startup(File baseDir) throws IOException,
+-  InterruptedException {
++
++  public int startup(File baseDir) throws IOException, InterruptedException {
+     return startup(baseDir,1);
+   }
+ 
+@@ -126,53 +141,56 @@ public class MiniZooKeeperCluster {
+ 
+     setupTestEnv();
+     shutdown();
+-    
++
++    int tentativePort = selectClientPort();
++
+     // running all the ZK servers
+     for (int i = 0; i < numZooKeeperServers; i++) {
+       File dir = new File(baseDir, "zookeeper_"+i).getAbsoluteFile();
+       recreateDir(dir);
+-      clientPort = defaultClientPort;
+       int tickTimeToUse;
+       if (this.tickTime > 0) {
+         tickTimeToUse = this.tickTime;
+       } else {
+         tickTimeToUse = TICK_TIME;
+       }
+-      ZooKeeperServer server = new ZooKeeperServer(dir, dir, tickTimeToUse);    
++      ZooKeeperServer server = new ZooKeeperServer(dir, dir, tickTimeToUse);
+       NIOServerCnxnFactory standaloneServerFactory;
+       while (true) {
+         try {
+           standaloneServerFactory = new NIOServerCnxnFactory();
+           standaloneServerFactory.configure(
+-            new InetSocketAddress(clientPort),
++            new InetSocketAddress(tentativePort),
+             configuration.getInt(HConstants.ZOOKEEPER_MAX_CLIENT_CNXNS,
+               1000));
+         } catch (BindException e) {
+-          LOG.info("Failed binding ZK Server to client port: " + clientPort);
+-          //this port is already in use. try to use another
+-          clientPort++;
++          LOG.debug("Failed binding ZK Server to client port: " +
++              tentativePort);
++          // This port is already in use, try to use another.
++          tentativePort++;
+           continue;
+         }
+         break;
+       }
+-      
++
+       // Start up this ZK server
+-      standaloneServerFactory.startup(server);  
+-      if (!waitForServerUp(clientPort, CONNECTION_TIMEOUT)) {
++      standaloneServerFactory.startup(server);
++      if (!waitForServerUp(tentativePort, CONNECTION_TIMEOUT)) {
+         throw new IOException("Waiting for startup of standalone server");
+       }
+-      
+-      clientPortList.add(clientPort);
++
++      // We have selected this port as a client port.
++      clientPortList.add(tentativePort);
+       standaloneServerFactoryList.add(standaloneServerFactory);
+       zooKeeperServers.add(server);
+     }
+-    
++
+     // set the first one to be active ZK; Others are backups
+     activeZKServerIndex = 0;
+     started = true;
+     clientPort = clientPortList.get(activeZKServerIndex);
+     LOG.info("Started MiniZK Cluster and connect 1 ZK server " +
+-    		"on client port: " + clientPort);
++        "on client port: " + clientPort);
+     return clientPort;
+   }
+ 
+@@ -199,7 +217,7 @@ public class MiniZooKeeperCluster {
+       NIOServerCnxnFactory standaloneServerFactory =
+         standaloneServerFactoryList.get(i);      
+       int clientPort = clientPortList.get(i);
+-      
++
+       standaloneServerFactory.shutdown();
+       if (!waitForServerDown(clientPort, CONNECTION_TIMEOUT)) {
+         throw new IOException("Waiting for shutdown of standalone server");
+@@ -212,38 +230,38 @@ public class MiniZooKeeperCluster {
+     standaloneServerFactoryList.clear();
+     clientPortList.clear();
+     zooKeeperServers.clear();
+-    
++
+     LOG.info("Shutdown MiniZK cluster with all ZK servers");
+   }
+-  
++
+   /**@return clientPort return clientPort if there is another ZK backup can run
+    *         when killing the current active; return -1, if there is no backups.
+    * @throws IOException
+-   * @throws InterruptedException 
++   * @throws InterruptedException
+    */
+-  public int killCurrentActiveZooKeeperServer() throws IOException, 
++  public int killCurrentActiveZooKeeperServer() throws IOException,
+                                         InterruptedException {
+     if (!started || activeZKServerIndex < 0 ) {
+       return -1;
+     }
+-    
++
+     // Shutdown the current active one
+     NIOServerCnxnFactory standaloneServerFactory =
+       standaloneServerFactoryList.get(activeZKServerIndex);
+     int clientPort = clientPortList.get(activeZKServerIndex);
+-    
++
+     standaloneServerFactory.shutdown();
+     if (!waitForServerDown(clientPort, CONNECTION_TIMEOUT)) {
+       throw new IOException("Waiting for shutdown of standalone server");
+     }
+-    
++
+     // remove the current active zk server
+     standaloneServerFactoryList.remove(activeZKServerIndex);
+     clientPortList.remove(activeZKServerIndex);
+-    zooKeeperServers.remove(activeZKServerIndex);    
++    zooKeeperServers.remove(activeZKServerIndex);
+     LOG.info("Kill the current active ZK servers in the cluster " +
+         "on client port: " + clientPort);
+-    
++
+     if (standaloneServerFactoryList.size() == 0) {
+       // there is no backup servers;
+       return -1;
+@@ -254,34 +272,34 @@ public class MiniZooKeeperCluster {
+     // return the next back zk server's port
+     return clientPort;
+   }
+-  
++
+   /**
+    * Kill one back up ZK servers
+    * @throws IOException
+-   * @throws InterruptedException 
++   * @throws InterruptedException
+    */
+-  public void killOneBackupZooKeeperServer() throws IOException, 
++  public void killOneBackupZooKeeperServer() throws IOException,
+                                         InterruptedException {
+-    if (!started || activeZKServerIndex < 0 || 
++    if (!started || activeZKServerIndex < 0 ||
+         standaloneServerFactoryList.size() <= 1) {
+       return ;
+     }
+-    
++
+     int backupZKServerIndex = activeZKServerIndex+1;
+     // Shutdown the current active one
+     NIOServerCnxnFactory standaloneServerFactory =
+       standaloneServerFactoryList.get(backupZKServerIndex);
+     int clientPort = clientPortList.get(backupZKServerIndex);
+-    
++
+     standaloneServerFactory.shutdown();
+     if (!waitForServerDown(clientPort, CONNECTION_TIMEOUT)) {
+       throw new IOException("Waiting for shutdown of standalone server");
+     }
+-    
++
+     // remove this backup zk server
+     standaloneServerFactoryList.remove(backupZKServerIndex);
+     clientPortList.remove(backupZKServerIndex);
+-    zooKeeperServers.remove(backupZKServerIndex);    
++    zooKeeperServers.remove(backupZKServerIndex);
+     LOG.info("Kill one backup ZK servers in the cluster " +
+         "on client port: " + clientPort);
+   }
+@@ -355,4 +373,8 @@ public class MiniZooKeeperCluster {
+     }
+     return false;
+   }
++
++  public int getClientPort() {
++    return clientPort;
++  }
+ }
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
+index 3e61689..5227e1d 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
+@@ -45,10 +45,6 @@ public class ZKConfig {
+   private static final String VARIABLE_END = "}";
+   private static final int VARIABLE_END_LENGTH = VARIABLE_END.length();
+ 
+-  private static final String ZK_CFG_PROPERTY = "hbase.zookeeper.property.";
+-  private static final int ZK_CFG_PROPERTY_SIZE = ZK_CFG_PROPERTY.length();
+-  private static final String ZK_CLIENT_PORT_KEY = "clientPort";
+-
+   /**
+    * Make a Properties object holding ZooKeeper config equivalent to zoo.cfg.
+    * If there is a zoo.cfg in the classpath, simply read it in. Otherwise parse
+@@ -78,8 +74,8 @@ public class ZKConfig {
+     // Directly map all of the hbase.zookeeper.property.KEY properties.
+     for (Entry<String, String> entry : conf) {
+       String key = entry.getKey();
+-      if (key.startsWith(ZK_CFG_PROPERTY)) {
+-        String zkKey = key.substring(ZK_CFG_PROPERTY_SIZE);
++      if (key.startsWith(HConstants.ZK_CFG_PROPERTY_PREFIX)) {
++        String zkKey = key.substring(HConstants.ZK_CFG_PROPERTY_PREFIX_LEN);
+         String value = entry.getValue();
+         // If the value has variables substitutions, need to do a get.
+         if (value.contains(VARIABLE_START)) {
+@@ -89,10 +85,10 @@ public class ZKConfig {
+       }
+     }
+ 
+-    // If clientPort is not set, assign the default
+-    if (zkProperties.getProperty(ZK_CLIENT_PORT_KEY) == null) {
+-      zkProperties.put(ZK_CLIENT_PORT_KEY,
+-                       HConstants.DEFAULT_ZOOKEPER_CLIENT_PORT);
++    // If clientPort is not set, assign the default.
++    if (zkProperties.getProperty(HConstants.CLIENT_PORT_STR) == null) {
++      zkProperties.put(HConstants.CLIENT_PORT_STR,
++          HConstants.DEFAULT_ZOOKEPER_CLIENT_PORT);
+     }
+ 
+     // Create the server.X properties.
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
+index 20f30b3..6f5fa2e 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
+@@ -184,7 +184,7 @@ public class ZKUtil {
+       throws IOException{
+     String[] parts = transformClusterKey(key);
+     conf.set(HConstants.ZOOKEEPER_QUORUM, parts[0]);
+-    conf.set("hbase.zookeeper.property.clientPort", parts[1]);
++    conf.set(HConstants.ZOOKEEPER_CLIENT_PORT, parts[1]);
+     conf.set(HConstants.ZOOKEEPER_ZNODE_PARENT, parts[2]);
+   }
+ 
+diff --git a/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java b/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+index cb2ffd7..f4c1648 100644
+--- a/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
++++ b/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+@@ -393,7 +393,7 @@ public class HBaseTestingUtility {
+     this.passedZkCluster = false;
+     this.zkCluster = new MiniZooKeeperCluster(this.getConfiguration());
+     int clientPort =   this.zkCluster.startup(dir,zooKeeperServerNum);
+-    this.conf.set("hbase.zookeeper.property.clientPort",
++    this.conf.set(HConstants.ZOOKEEPER_CLIENT_PORT,
+       Integer.toString(clientPort));
+     return this.zkCluster;
+   }
+@@ -1347,6 +1347,7 @@ public class HBaseTestingUtility {
+   public void setZkCluster(MiniZooKeeperCluster zkCluster) {
+     this.passedZkCluster = true;
+     this.zkCluster = zkCluster;
++    conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, zkCluster.getClientPort());
+   }
+ 
+   public MiniDFSCluster getDFSCluster() {
+@@ -1611,4 +1612,11 @@ public class HBaseTestingUtility {
+     return zkw;
+   }
+   
++  public String getClusterKey() {
++    return conf.get(HConstants.ZOOKEEPER_QUORUM) + ":"
++        + conf.get(HConstants.ZOOKEEPER_CLIENT_PORT) + ":" 
++        + conf.get(HConstants.ZOOKEEPER_ZNODE_PARENT,
++            HConstants.DEFAULT_ZOOKEEPER_ZNODE_PARENT);
++  }
++
+ }
+diff --git a/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java b/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
+index ff59de5..71be53b 100644
+--- a/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
++++ b/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
+@@ -1176,7 +1176,7 @@ public class PerformanceEvaluation {
+       // just started up
+       FileSystem fs = dfsCluster.getFileSystem();
+       conf.set("fs.default.name", fs.getUri().toString());
+-      conf.set("hbase.zookeeper.property.clientPort", Integer.toString(zooKeeperPort));
++      conf.set(HConstants.ZOOKEEPER_CLIENT_PORT, Integer.toString(zooKeeperPort));
+       Path parentdir = fs.getHomeDirectory();
+       conf.set(HConstants.HBASE_DIR, parentdir.toString());
+       fs.mkdirs(parentdir);
+diff --git a/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java b/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
+index c5b5ec4..55a918b 100644
+--- a/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
++++ b/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
+@@ -69,8 +69,8 @@ public class TestHBaseTestingUtility {
+     // Cluster 2
+     HBaseTestingUtility htu2 = new HBaseTestingUtility();
+     htu2.getConfiguration().set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/2");
+-    htu2.getConfiguration().set("hbase.zookeeper.property.clientPort",
+-      htu1.getConfiguration().get("hbase.zookeeper.property.clientPort", "-1"));
++    htu2.getConfiguration().set(HConstants.ZOOKEEPER_CLIENT_PORT,
++      htu1.getConfiguration().get(HConstants.ZOOKEEPER_CLIENT_PORT, "-1"));
+     htu2.setZkCluster(htu1.getZkCluster());
+ 
+     // Cluster 3; seed it with the conf from htu1 so we pickup the 'right'
+@@ -78,8 +78,8 @@ public class TestHBaseTestingUtility {
+     // start of minizkcluster.
+     HBaseTestingUtility htu3 = new HBaseTestingUtility();
+     htu3.getConfiguration().set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/3");
+-    htu3.getConfiguration().set("hbase.zookeeper.property.clientPort",
+-      htu1.getConfiguration().get("hbase.zookeeper.property.clientPort", "-1"));
++    htu3.getConfiguration().set(HConstants.ZOOKEEPER_CLIENT_PORT,
++      htu1.getConfiguration().get(HConstants.ZOOKEEPER_CLIENT_PORT, "-1"));
+     htu3.setZkCluster(htu1.getZkCluster());
+ 
+     try {
+diff --git a/src/test/java/org/apache/hadoop/hbase/TestZooKeeper.java b/src/test/java/org/apache/hadoop/hbase/TestZooKeeper.java
+index 2f136dc..9c1d856 100644
+--- a/src/test/java/org/apache/hadoop/hbase/TestZooKeeper.java
++++ b/src/test/java/org/apache/hadoop/hbase/TestZooKeeper.java
+@@ -235,7 +235,7 @@ public class TestZooKeeper {
+     assertEquals(znode, parts[2]);
+     ZKUtil.applyClusterKeyToConf(conf, key);
+     assertEquals(parts[0], conf.get(HConstants.ZOOKEEPER_QUORUM));
+-    assertEquals(parts[1], conf.get("hbase.zookeeper.property.clientPort"));
++    assertEquals(parts[1], conf.get(HConstants.ZOOKEEPER_CLIENT_PORT));
+     assertEquals(parts[2], conf.get(HConstants.ZOOKEEPER_ZNODE_PARENT));
+     String reconstructedKey = ZKUtil.getZooKeeperClusterKey(conf);
+     assertEquals(key, reconstructedKey);
+diff --git a/src/test/java/org/apache/hadoop/hbase/replication/TestMasterReplication.java b/src/test/java/org/apache/hadoop/hbase/replication/TestMasterReplication.java
+index 497e14f..5b75d7a 100644
+--- a/src/test/java/org/apache/hadoop/hbase/replication/TestMasterReplication.java
++++ b/src/test/java/org/apache/hadoop/hbase/replication/TestMasterReplication.java
+@@ -25,7 +25,6 @@ import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+ import java.util.List;
+-import java.util.Map;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -48,30 +47,27 @@ import org.apache.hadoop.hbase.coprocessor.CoprocessorHost;
+ import org.apache.hadoop.hbase.coprocessor.ObserverContext;
+ import org.apache.hadoop.hbase.coprocessor.RegionCoprocessorEnvironment;
+ import org.apache.hadoop.hbase.util.Bytes;
+-import org.apache.hadoop.hbase.util.JVMClusterUtil;
+ import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
+ import org.apache.hadoop.hbase.zookeeper.MiniZooKeeperCluster;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ import org.junit.After;
+-import org.junit.AfterClass;
+-import org.junit.BeforeClass;
++import org.junit.Before;
+ import org.junit.Test;
+ 
+ public class TestMasterReplication {
+ 
+   private static final Log LOG = LogFactory.getLog(TestReplication.class);
+ 
+-  private static Configuration conf1;
+-  private static Configuration conf2;
+-  private static Configuration conf3;
++  private Configuration conf1;
++  private Configuration conf2;
++  private Configuration conf3;
+ 
+-  private static String clusterKey1;
+-  private static String clusterKey2;
+-  private static String clusterKey3;
++  private HBaseTestingUtility utility1;
++  private HBaseTestingUtility utility2;
++  private HBaseTestingUtility utility3;
++  
++  private MiniZooKeeperCluster miniZK; 
+ 
+-  private static HBaseTestingUtility utility1;
+-  private static HBaseTestingUtility utility2;
+-  private static HBaseTestingUtility utility3;
+   private static final long SLEEP_TIME = 500;
+   private static final int NB_RETRIES = 10;
+ 
+@@ -86,10 +82,10 @@ public class TestMasterReplication {
+   private static final byte[] put = Bytes.toBytes("put");
+   private static final byte[] delete = Bytes.toBytes("delete");
+ 
+-  private static HTableDescriptor table;
++  private HTableDescriptor table;
+ 
+-  @BeforeClass
+-  public static void setUpBeforeClass() throws Exception {
++  @Before
++  public void setUp() throws Exception {
+     conf1 = HBaseConfiguration.create();
+     conf1.set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/1");
+     // smaller block size and capacity to trigger more operations
+@@ -103,36 +99,31 @@ public class TestMasterReplication {
+     conf1.setBoolean("dfs.support.append", true);
+     conf1.setLong(HConstants.THREAD_WAKE_FREQUENCY, 100);
+     conf1.setStrings(CoprocessorHost.USER_REGION_COPROCESSOR_CONF_KEY,
+-        "org.apache.hadoop.hbase.replication.TestMasterReplication$CoprocessorCounter");
++        CoprocessorCounter.class.getName());
+ 
+     utility1 = new HBaseTestingUtility(conf1);
+     utility1.startMiniZKCluster();
+-    MiniZooKeeperCluster miniZK = utility1.getZkCluster();
++    miniZK = utility1.getZkCluster();
++    // By setting the mini ZK cluster through this method, even though this is
++    // already utility1's mini ZK cluster, we are telling utility1 not to shut
++    // the mini ZK cluster when we shut down the HBase cluster.
++    utility1.setZkCluster(miniZK);
+     new ZooKeeperWatcher(conf1, "cluster1", null, true);
+ 
+     conf2 = new Configuration(conf1);
+     conf2.set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/2");
+ 
+-    conf3 = new Configuration(conf1);
+-    conf3.set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/3");
+-
+     utility2 = new HBaseTestingUtility(conf2);
+     utility2.setZkCluster(miniZK);
+-    new ZooKeeperWatcher(conf2, "cluster3", null, true);
++    new ZooKeeperWatcher(conf2, "cluster2", null, true);
++
++    conf3 = new Configuration(conf1);
++    conf3.set(HConstants.ZOOKEEPER_ZNODE_PARENT, "/3");
+ 
+     utility3 = new HBaseTestingUtility(conf3);
+     utility3.setZkCluster(miniZK);
+     new ZooKeeperWatcher(conf3, "cluster3", null, true);
+ 
+-    clusterKey1 = conf1.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-    conf1.get("hbase.zookeeper.property.clientPort")+":/1";
+-
+-    clusterKey2 = conf2.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-    conf2.get("hbase.zookeeper.property.clientPort")+":/2";
+-
+-    clusterKey3 = conf3.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-    conf3.get("hbase.zookeeper.property.clientPort")+":/3";
+-    
+     table = new HTableDescriptor(tableName);
+     HColumnDescriptor fam = new HColumnDescriptor(famName);
+     fam.setScope(HConstants.REPLICATION_SCOPE_GLOBAL);
+@@ -141,6 +132,11 @@ public class TestMasterReplication {
+     table.addFamily(fam);
+   }
+ 
++  @After
++  public void tearDown() throws IOException {
++    miniZK.shutdown();
++  }
++
+   @Test(timeout=300000)
+   public void testCyclicReplication() throws Exception {
+     LOG.info("testCyclicReplication");
+@@ -161,9 +157,9 @@ public class TestMasterReplication {
+     HTable htable3 = new HTable(conf3, tableName);
+     htable3.setWriteBufferSize(1024);
+     
+-    admin1.addPeer("1", clusterKey2);
+-    admin2.addPeer("1", clusterKey3);
+-    admin3.addPeer("1", clusterKey1);
++    admin1.addPeer("1", utility2.getClusterKey());
++    admin2.addPeer("1", utility3.getClusterKey());
++    admin3.addPeer("1", utility1.getClusterKey());
+ 
+     // put "row" and wait 'til it got around
+     putAndWait(row, famName, htable1, htable3);
+@@ -213,8 +209,8 @@ public class TestMasterReplication {
+     htable2.setWriteBufferSize(1024);
+ 
+     // set M-M
+-    admin1.addPeer("1", clusterKey2);
+-    admin2.addPeer("1", clusterKey1);
++    admin1.addPeer("1", utility2.getClusterKey());
++    admin2.addPeer("1", utility1.getClusterKey());
+ 
+     // add rows to both clusters,
+     // make sure they are both replication
+diff --git a/src/test/java/org/apache/hadoop/hbase/replication/TestMultiSlaveReplication.java b/src/test/java/org/apache/hadoop/hbase/replication/TestMultiSlaveReplication.java
+index b0a3688..79f435e 100644
+--- a/src/test/java/org/apache/hadoop/hbase/replication/TestMultiSlaveReplication.java
++++ b/src/test/java/org/apache/hadoop/hbase/replication/TestMultiSlaveReplication.java
+@@ -56,9 +56,6 @@ public class TestMultiSlaveReplication {
+   private static Configuration conf2;
+   private static Configuration conf3;
+ 
+-  private static String clusterKey2;
+-  private static String clusterKey3;
+-
+   private static HBaseTestingUtility utility1;
+   private static HBaseTestingUtility utility2;
+   private static HBaseTestingUtility utility3;
+@@ -111,12 +108,6 @@ public class TestMultiSlaveReplication {
+     utility3.setZkCluster(miniZK);
+     new ZooKeeperWatcher(conf3, "cluster3", null, true);
+ 
+-    clusterKey2 = conf2.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-    conf2.get("hbase.zookeeper.property.clientPort")+":/2";
+-
+-    clusterKey3 = conf3.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-    conf3.get("hbase.zookeeper.property.clientPort")+":/3";
+-    
+     table = new HTableDescriptor(tableName);
+     HColumnDescriptor fam = new HColumnDescriptor(famName);
+     fam.setScope(HConstants.REPLICATION_SCOPE_GLOBAL);
+@@ -143,7 +134,7 @@ public class TestMultiSlaveReplication {
+     HTable htable3 = new HTable(conf3, tableName);
+     htable3.setWriteBufferSize(1024);
+     
+-    admin1.addPeer("1", clusterKey2);
++    admin1.addPeer("1", utility2.getClusterKey());
+ 
+     // put "row" and wait 'til it got around, then delete
+     putAndWait(row, famName, htable1, htable2);
+@@ -158,7 +149,7 @@ public class TestMultiSlaveReplication {
+     // after the log was rolled put a new row
+     putAndWait(row3, famName, htable1, htable2);
+ 
+-    admin1.addPeer("2", clusterKey3);
++    admin1.addPeer("2", utility3.getClusterKey());
+ 
+     // put a row, check it was replicated to all clusters
+     putAndWait(row1, famName, htable1, htable2, htable3);
+diff --git a/src/test/java/org/apache/hadoop/hbase/replication/TestReplication.java b/src/test/java/org/apache/hadoop/hbase/replication/TestReplication.java
+index 9893048..59e3a96 100644
+--- a/src/test/java/org/apache/hadoop/hbase/replication/TestReplication.java
++++ b/src/test/java/org/apache/hadoop/hbase/replication/TestReplication.java
+@@ -66,7 +66,6 @@ public class TestReplication {
+   private static ZooKeeperWatcher zkw2;
+ 
+   private static ReplicationAdmin admin;
+-  private static String slaveClusterKey;
+ 
+   private static HTable htable1;
+   private static HTable htable2;
+@@ -107,7 +106,7 @@ public class TestReplication {
+     MiniZooKeeperCluster miniZK = utility1.getZkCluster();
+     // Have to reget conf1 in case zk cluster location different
+     // than default
+-    conf1 = utility1.getConfiguration();
++    conf1 = utility1.getConfiguration();  
+     zkw1 = new ZooKeeperWatcher(conf1, "cluster1", null, true);
+     admin = new ReplicationAdmin(conf1);
+     LOG.info("Setup first Zk");
+@@ -123,9 +122,7 @@ public class TestReplication {
+     utility2.setZkCluster(miniZK);
+     zkw2 = new ZooKeeperWatcher(conf2, "cluster2", null, true);
+ 
+-    slaveClusterKey = conf2.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-            conf2.get("hbase.zookeeper.property.clientPort")+":/2";
+-    admin.addPeer("2", slaveClusterKey);
++    admin.addPeer("2", utility2.getClusterKey());
+     setIsReplication(true);
+ 
+     LOG.info("Setup second Zk");
+@@ -478,7 +475,7 @@ public class TestReplication {
+       }
+     }
+ 
+-    admin.addPeer("2", slaveClusterKey);
++    admin.addPeer("2", utility2.getClusterKey());
+     Thread.sleep(SLEEP_TIME);
+     rowKey = Bytes.toBytes("do rep");
+     put = new Put(rowKey);
+diff --git a/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java b/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
+index e130f5b..72643c4 100644
+--- a/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
++++ b/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
+@@ -103,9 +103,9 @@ public class TestReplicationSourceManager {
+     zkw = new ZooKeeperWatcher(conf, "test", null);
+     ZKUtil.createWithParents(zkw, "/hbase/replication");
+     ZKUtil.createWithParents(zkw, "/hbase/replication/peers/1");
+-    ZKUtil.setData(zkw, "/hbase/replication/peers/1",Bytes.toBytes(
+-          conf.get(HConstants.ZOOKEEPER_QUORUM)+":" +
+-          conf.get("hbase.zookeeper.property.clientPort")+":/1"));
++    ZKUtil.setData(zkw, "/hbase/replication/peers/1",
++        Bytes.toBytes(conf.get(HConstants.ZOOKEEPER_QUORUM) + ":"
++            + conf.get(HConstants.ZOOKEEPER_CLIENT_PORT) + ":/1"));
+     ZKUtil.createWithParents(zkw, "/hbase/replication/state");
+     ZKUtil.setData(zkw, "/hbase/replication/state", Bytes.toBytes("true"));
+ 
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestMergeTool.java b/src/test/java/org/apache/hadoop/hbase/util/TestMergeTool.java
+index 6ac46bb..87f8dd4 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestMergeTool.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestMergeTool.java
+@@ -60,7 +60,7 @@ public class TestMergeTool extends HBaseTestCase {
+     // find a zk ensemble put up by another concurrent test and this will
+     // mess up this test.  Choose unlikely port. Default test port is 21818.
+     // Default zk port is 2181.
+-    this.conf.setInt("hbase.zookeeper.property.clientPort", 10001);
++    this.conf.setInt(HConstants.ZOOKEEPER_CLIENT_PORT, 10001);
+ 
+     this.conf.set("hbase.hstore.compactionThreshold", "2");
+ 
+diff --git a/src/test/java/org/apache/hadoop/hbase/zookeeper/TestHQuorumPeer.java b/src/test/java/org/apache/hadoop/hbase/zookeeper/TestHQuorumPeer.java
+index ddde289..8a1cc73 100644
+--- a/src/test/java/org/apache/hadoop/hbase/zookeeper/TestHQuorumPeer.java
++++ b/src/test/java/org/apache/hadoop/hbase/zookeeper/TestHQuorumPeer.java
+@@ -50,8 +50,8 @@ public class TestHQuorumPeer {
+ 
+   @Before public void setup() throws IOException {
+     // Set it to a non-standard port.
+-    TEST_UTIL.getConfiguration().setInt("hbase.zookeeper.property.clientPort",
+-      PORT_NO);
++    TEST_UTIL.getConfiguration().setInt(HConstants.ZOOKEEPER_CLIENT_PORT,
++        PORT_NO);
+     this.dataDir = TEST_UTIL.getDataTestDir(this.getClass().getName());
+     FileSystem fs = FileSystem.get(TEST_UTIL.getConfiguration());
+     if (fs.exists(this.dataDir)) {
+@@ -66,7 +66,7 @@ public class TestHQuorumPeer {
+ 
+   @Test public void testMakeZKProps() {
+     Configuration conf = new Configuration(TEST_UTIL.getConfiguration());
+-    conf.set("hbase.zookeeper.property.dataDir", this.dataDir.toString());
++    conf.set(HConstants.ZOOKEEPER_DATA_DIR, this.dataDir.toString());
+     Properties properties = ZKConfig.makeZKProps(conf);
+     assertEquals(dataDir.toString(), (String)properties.get("dataDir"));
+     assertEquals(Integer.valueOf(PORT_NO),
+diff --git a/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperMainServerArg.java b/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperMainServerArg.java
+index 9ec3a77..e9cf7b5 100644
+--- a/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperMainServerArg.java
++++ b/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperMainServerArg.java
+@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
+ 
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.HConstants;
+ import org.junit.Test;
+ 
+ 
+@@ -32,13 +33,13 @@ public class TestZooKeeperMainServerArg {
+ 
+   @Test public void test() {
+     Configuration c = HBaseConfiguration.create();
+-    assertEquals("localhost:" + c.get("hbase.zookeeper.property.clientPort"),
++    assertEquals("localhost:" + c.get(HConstants.ZOOKEEPER_CLIENT_PORT),
+       parser.parse(c));
+     final String port = "1234";
+-    c.set("hbase.zookeeper.property.clientPort", port);
++    c.set(HConstants.ZOOKEEPER_CLIENT_PORT, port);
+     c.set("hbase.zookeeper.quorum", "example.com");
+     assertEquals("example.com:" + port, parser.parse(c));
+     c.set("hbase.zookeeper.quorum", "example1.com,example2.com,example3.com");
+     assertTrue(port, parser.parse(c).matches("example[1-3]\\.com:" + port));
+   }
+-}
+\ No newline at end of file
++}
+-- 
+1.7.0.4
+

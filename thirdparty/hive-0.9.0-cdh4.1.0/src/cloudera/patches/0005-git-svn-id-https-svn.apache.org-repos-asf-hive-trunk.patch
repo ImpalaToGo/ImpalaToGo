@@ -1,0 +1,25 @@
+From 2ddab60e4abd660ca5b5151d24cb98271aed55dd Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Fri, 13 Apr 2012 14:51:12 +0000
+Subject: [PATCH 005/144] git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325793 13f79535-47bb-0310-9956-ffa450edef68
+
+---
+ .../hive/ql/io/rcfile/merge/RCFileMergeMapper.java |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/io/rcfile/merge/RCFileMergeMapper.java b/src/ql/src/java/org/apache/hadoop/hive/ql/io/rcfile/merge/RCFileMergeMapper.java
+index 249194a..9dba903 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/io/rcfile/merge/RCFileMergeMapper.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/io/rcfile/merge/RCFileMergeMapper.java
+@@ -204,7 +204,7 @@ public class RCFileMergeMapper extends MapReduceBase implements
+ 
+     if (!exception) {
+       FileStatus fss = fs.getFileStatus(outPath);
+-      System.out.println("renamed path " + outPath + " to " + finalPath
++      LOG.info("renamed path " + outPath + " to " + finalPath
+           + " . File size is " + fss.getLen());
+       if (!fs.rename(outPath, finalPath)) {
+         throw new IOException("Unable to rename output to " + finalPath);
+-- 
+1.7.0.4
+

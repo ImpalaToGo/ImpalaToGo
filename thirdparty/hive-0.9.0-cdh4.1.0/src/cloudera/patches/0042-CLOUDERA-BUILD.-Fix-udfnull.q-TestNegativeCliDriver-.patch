@@ -1,0 +1,75 @@
+From 917cd2cb15179806b773e5135868d1b4488f3ec2 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Tue, 26 Jun 2012 11:46:53 -0700
+Subject: [PATCH 042/144] CLOUDERA-BUILD. Fix udfnull.q TestNegativeCliDriver in Hive0.9.0 on MR1
+
+---
+ build-common.xml |   32 +++++++++++++++++++++++++++++++-
+ 1 files changed, 31 insertions(+), 1 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 33c4807..0a28ee8 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -99,12 +99,27 @@
+       <path id="test.classpath">
+         <path refid="mr1.test.classpath" />
+       </path>
++      <path id="test.hadoop.classpath">
++        <path refid="test.hive.jar.classpath"/>
++        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr1.test" includes="*.jar" />
++      </path>
+     </then>
+     <else>
+       <echo message="USING MR2 CLASSPATH"/>
+       <path id="test.classpath">
+         <path refid="mr2.test.classpath" />
+       </path>
++      <path id="test.hadoop.classpath">
++        <path refid="test.hive.jar.classpath"/>
++        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar"/>
++        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar" />
++        <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr2.test" includes="*.jar" />
++      </path>
+     </else>
+   </if>
+ 
+@@ -126,6 +141,21 @@
+     <pathelement location="${build.dir.hive}/shims/test/classes"/>
+   </path>
+ 
++  <path id="test.hive.jar.classpath">
++    <!-- The runtime execution JARs excluding hive-contrib" -->
++    <pathelement location="${build.dir.hive}/builtins/hive-builtins-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/cli/hive-cli-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/common/hive-common-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/hbase-handler/hive-hbase-handler-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/jdbc/hive-jdbc-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/metastore/hive-metastore-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/pdk/hive-pdk-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/ql/hive-ql-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/serde/hive-serde-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/service/hive-service-${version}.jar"/>
++    <pathelement location="${build.dir.hive}/shims/hive-shims-${version}.jar"/>
++  </path>
++
+   <path id="mr1.test.classpath">
+     <path refid="base.test.classpath" />
+     <path refid="mr1-classpath"/>
+@@ -463,7 +493,7 @@
+   <target name="test"
+   	depends="test-conditions,gen-test,compile-test,test-jar,test-init">
+     <echo message="Project: ${ant.project.name}"/>
+-    <property name="hadoop.testcp" refid="test.classpath"/>
++    <property name="hadoop.testcp" refid="test.hadoop.classpath"/>
+     <if>
+       <equals arg1="${test.print.classpath}" arg2="true" />
+       <then>        
+-- 
+1.7.0.4
+

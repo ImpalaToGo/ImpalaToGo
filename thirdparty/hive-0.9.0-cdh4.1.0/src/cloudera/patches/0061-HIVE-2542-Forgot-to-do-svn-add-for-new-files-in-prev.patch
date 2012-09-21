@@ -1,0 +1,197 @@
+From 49e559bc688b5f32e387ddf06a7493119ff303cc Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Fri, 18 May 2012 16:25:12 +0000
+Subject: [PATCH 061/144] HIVE-2542 : Forgot to do svn add for new  files in previous patch.
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340158 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 3b7e33b04eff0670bdd3b26b4dddb162f3b9e8fc)
+---
+ .../src/test/queries/negative/cascade_dbdrop.q     |   19 +++
+ .../src/test/results/negative/cascade_dbdrop.q.out |   22 ++++
+ .../test/templates/TestHBaseNegativeCliDriver.vm   |  119 ++++++++++++++++++++
+ 3 files changed, 160 insertions(+), 0 deletions(-)
+ create mode 100644 hbase-handler/src/test/queries/negative/cascade_dbdrop.q
+ create mode 100644 hbase-handler/src/test/results/negative/cascade_dbdrop.q.out
+ create mode 100644 hbase-handler/src/test/templates/TestHBaseNegativeCliDriver.vm
+
+diff --git a/src/hbase-handler/src/test/queries/negative/cascade_dbdrop.q b/src/hbase-handler/src/test/queries/negative/cascade_dbdrop.q
+new file mode 100644
+index 0000000..7c70c88
+--- /dev/null
++++ b/src/hbase-handler/src/test/queries/negative/cascade_dbdrop.q
+@@ -0,0 +1,19 @@
++
++CREATE DATABASE hbaseDB;
++
++CREATE TABLE hbaseDB.hbase_table_0(key int, value string)
++STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
++WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf:string")
++TBLPROPERTIES ("hbase.table.name" = "hbase_table_0");
++
++dfs -ls ../build/ql/tmp/hbase/hbase_table_0;
++
++DROP DATABASE IF EXISTS hbaseDB CASCADE;
++
++dfs -ls ../build/ql/tmp/hbase/hbase_table_0;
++
++
++
++
++
++
+diff --git a/src/hbase-handler/src/test/results/negative/cascade_dbdrop.q.out b/src/hbase-handler/src/test/results/negative/cascade_dbdrop.q.out
+new file mode 100644
+index 0000000..072b951
+--- /dev/null
++++ b/src/hbase-handler/src/test/results/negative/cascade_dbdrop.q.out
+@@ -0,0 +1,22 @@
++PREHOOK: query: CREATE DATABASE hbaseDB
++PREHOOK: type: CREATEDATABASE
++POSTHOOK: query: CREATE DATABASE hbaseDB
++POSTHOOK: type: CREATEDATABASE
++PREHOOK: query: CREATE TABLE hbaseDB.hbase_table_0(key int, value string)
++STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
++WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf:string")
++TBLPROPERTIES ("hbase.table.name" = "hbase_table_0")
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: CREATE TABLE hbaseDB.hbase_table_0(key int, value string)
++STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
++WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf:string")
++TBLPROPERTIES ("hbase.table.name" = "hbase_table_0")
++POSTHOOK: type: CREATETABLE
++POSTHOOK: Output: hbaseDB@hbase_table_0
++Found 3 items
++#### A masked pattern was here ####
++PREHOOK: query: DROP DATABASE IF EXISTS hbaseDB CASCADE
++PREHOOK: type: DROPDATABASE
++POSTHOOK: query: DROP DATABASE IF EXISTS hbaseDB CASCADE
++POSTHOOK: type: DROPDATABASE
++Command failed with exit code = -1
+diff --git a/src/hbase-handler/src/test/templates/TestHBaseNegativeCliDriver.vm b/src/hbase-handler/src/test/templates/TestHBaseNegativeCliDriver.vm
+new file mode 100644
+index 0000000..c61cbd5
+--- /dev/null
++++ b/src/hbase-handler/src/test/templates/TestHBaseNegativeCliDriver.vm
+@@ -0,0 +1,119 @@
++package org.apache.hadoop.hive.cli;
++
++import junit.framework.Test;
++import junit.framework.TestCase;
++import junit.framework.TestSuite;
++
++import java.io.*;
++import java.util.*;
++
++import org.apache.hadoop.hive.hbase.HBaseQTestUtil;
++import org.apache.hadoop.hive.hbase.HBaseTestSetup;
++import org.apache.hadoop.hive.ql.exec.Task;
++import org.apache.hadoop.hive.ql.history.HiveHistoryViewer;
++import org.apache.hadoop.hive.ql.history.HiveHistory.QueryInfo;
++import org.apache.hadoop.hive.ql.history.HiveHistory.Keys;
++import org.apache.hadoop.hive.ql.history.HiveHistory.TaskInfo;
++import org.apache.hadoop.hive.ql.session.SessionState;
++
++
++
++import org.antlr.runtime.*;
++import org.antlr.runtime.tree.*;
++
++public class $className extends TestCase {
++
++  private HBaseQTestUtil qt;
++  private HBaseTestSetup setup;
++
++  public $className(String name, HBaseTestSetup setup) {
++    super(name);
++    qt = null;
++    this.setup = setup;
++  }
++
++  @Override
++  protected void setUp() {
++    try {
++      boolean miniMR = false;
++      if ("$clusterMode".equals("miniMR")) {
++        miniMR = true;
++      }
++
++      qt = new HBaseQTestUtil(
++        "$resultsDir.getCanonicalPath()",
++        "$logDir.getCanonicalPath()", miniMR, setup);
++
++#foreach ($qf in $qfiles)
++      qt.addFile("$qf.getCanonicalPath()");
++#end
++    } catch (Exception e) {
++      System.out.println("Exception: " + e.getMessage());
++      e.printStackTrace();
++      System.out.flush();
++      fail("Unexpected exception in setup");
++    }
++  }
++
++  @Override
++  protected void tearDown() {
++    try {
++      qt.shutdown();
++    }
++    catch (Exception e) {
++      System.out.println("Exception: " + e.getMessage());
++      e.printStackTrace();
++      System.out.flush();
++      fail("Unexpected exception in tearDown");
++    }
++  }
++
++  public static Test suite() {
++    TestSuite suite = new TestSuite();
++    HBaseTestSetup setup = new HBaseTestSetup(suite);
++#foreach ($qf in $qfiles)
++  #set ($fname = $qf.getName())
++  #set ($eidx = $fname.indexOf('.'))
++  #set ($tname = $fname.substring(0, $eidx))
++    suite.addTest(new $className("testCliDriver_$tname", setup));
++#end
++    return setup;
++  }
++
++#foreach ($qf in $qfiles)
++  #set ($fname = $qf.getName())
++  #set ($eidx = $fname.indexOf('.'))
++  #set ($tname = $fname.substring(0, $eidx))
++  public void testCliDriver_$tname() throws Exception {
++    long startTime = System.currentTimeMillis();
++    try {
++      System.out.println("Begin query: " + "$fname");
++      qt.cliInit("$fname");
++      qt.clearTestSideEffects();
++      int ecode = qt.executeClient("$fname");
++      if (ecode == 0) {
++        fail("Client Execution failed with error code = " + ecode);
++      }
++
++      ecode = qt.checkCliDriverResults("$fname");
++      if (ecode != 0) {
++        fail("Client execution results failed with error code = " + ecode);
++      }
++      qt.clearPostTestEffects();
++
++    } catch (Throwable e) {
++      System.out.println("Exception: " + e.getMessage());
++      e.printStackTrace();
++      System.out.println("Failed query: " + "$fname");
++      System.out.flush();
++      fail("Unexpected exception");
++    }
++
++    long elapsedTime = System.currentTimeMillis() - startTime;
++    System.out.println("Done query: " + "$fname" + " elapsedTime=" + elapsedTime/1000 + "s");
++    assertTrue("Test passed", true);
++  }
++
++#end
++}
++
+-- 
+1.7.0.4
+

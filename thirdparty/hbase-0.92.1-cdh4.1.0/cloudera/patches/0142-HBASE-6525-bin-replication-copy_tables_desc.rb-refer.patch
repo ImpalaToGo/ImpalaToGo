@@ -1,0 +1,27 @@
+From f473b35556e85bc2eca1135b3f2e383a2d4670a5 Mon Sep 17 00:00:00 2001
+From: David S. Wang <dsw@cloudera.com>
+Date: Fri, 31 Aug 2012 15:17:35 -0700
+Subject: [PATCH 142/151] HBASE-6525 bin/replication/copy_tables_desc.rb references non-existent class
+
+Reason: Bug
+Author: David S. Wang
+Ref: CDH-7770
+---
+ bin/replication/copy_tables_desc.rb |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/bin/replication/copy_tables_desc.rb b/bin/replication/copy_tables_desc.rb
+index ed85655..13cfaff 100644
+--- a/bin/replication/copy_tables_desc.rb
++++ b/bin/replication/copy_tables_desc.rb
+@@ -32,7 +32,6 @@ import org.apache.hadoop.hbase.EmptyWatcher
+ import org.apache.hadoop.hbase.client.HBaseAdmin
+ import org.apache.hadoop.hbase.HTableDescriptor
+ import org.apache.hadoop.conf.Configuration
+-import org.apache.hadoop.hbase.zookeeper.ZooKeeperWrapper
+ 
+ # Name of this script
+ NAME = "copy_tables_desc"
+-- 
+1.7.0.4
+

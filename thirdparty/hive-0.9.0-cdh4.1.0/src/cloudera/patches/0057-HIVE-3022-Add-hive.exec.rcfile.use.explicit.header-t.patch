@@ -1,0 +1,35 @@
+From a7b9a77443147b6455f1a3176e954c360fe3fcf2 Mon Sep 17 00:00:00 2001
+From: Namit Jain <namit@apache.org>
+Date: Mon, 14 May 2012 17:44:58 +0000
+Subject: [PATCH 057/144] HIVE-3022 Add hive.exec.rcfile.use.explicit.header to hive-default.xml.template
+ (Kevin Wilfong via namit)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1338311 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit ca9feed6dbed3dfb04797599accd3a6cb8166335)
+---
+ conf/hive-default.xml.template |   10 ++++++++++
+ 1 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/src/conf/hive-default.xml.template b/src/conf/hive-default.xml.template
+index f8c063f..a60a84b 100644
+--- a/src/conf/hive-default.xml.template
++++ b/src/conf/hive-default.xml.template
+@@ -1282,5 +1282,15 @@
+   </description>
+ </property>
+ 
++<property>
++  <name>hive.exec.rcfile.use.explicit.header</name>
++  <value>true</value>
++  <description>
++    If this is set the header for RC Files will simply be RCF.  If this is not
++    set the header will be that borrowed from sequence files, e.g. SEQ- followed
++    by the input and output RC File formats.
++  </description>
++</property>
++
+ </configuration>
+ 
+-- 
+1.7.0.4
+

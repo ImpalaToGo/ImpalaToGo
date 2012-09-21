@@ -1,0 +1,117 @@
+PREHOOK: query: CREATE TABLE set_bucketing_test (key INT, value STRING) CLUSTERED BY (key) INTO 10 BUCKETS
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE set_bucketing_test (key INT, value STRING) CLUSTERED BY (key) INTO 10 BUCKETS
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@set_bucketing_test
+PREHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+POSTHOOK: type: DESCTABLE
+key	int	
+value	string	
+	 	 
+#### A masked pattern was here ####
+PREHOOK: query: ALTER TABLE set_bucketing_test NOT CLUSTERED
+PREHOOK: type: ALTERTABLE_CLUSTER_SORT
+PREHOOK: Input: default@set_bucketing_test
+PREHOOK: Output: default@set_bucketing_test
+POSTHOOK: query: ALTER TABLE set_bucketing_test NOT CLUSTERED
+POSTHOOK: type: ALTERTABLE_CLUSTER_SORT
+POSTHOOK: Input: default@set_bucketing_test
+POSTHOOK: Output: default@set_bucketing_test
+PREHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+POSTHOOK: type: DESCTABLE
+key	int	
+value	string	
+	 	 
+#### A masked pattern was here ####
+PREHOOK: query: -- Cleanup
+DROP TABLE set_bucketing_test
+PREHOOK: type: DROPTABLE
+PREHOOK: Input: default@set_bucketing_test
+PREHOOK: Output: default@set_bucketing_test
+POSTHOOK: query: -- Cleanup
+DROP TABLE set_bucketing_test
+POSTHOOK: type: DROPTABLE
+POSTHOOK: Input: default@set_bucketing_test
+POSTHOOK: Output: default@set_bucketing_test
+PREHOOK: query: SHOW TABLES
+PREHOOK: type: SHOWTABLES
+POSTHOOK: query: SHOW TABLES
+POSTHOOK: type: SHOWTABLES
+src
+src1
+src_json
+src_sequencefile
+src_thrift
+srcbucket
+srcbucket2
+srcpart
+PREHOOK: query: -- with non-default Database
+
+CREATE DATABASE alter4_db
+PREHOOK: type: CREATEDATABASE
+POSTHOOK: query: -- with non-default Database
+
+CREATE DATABASE alter4_db
+POSTHOOK: type: CREATEDATABASE
+PREHOOK: query: USE alter4_db
+PREHOOK: type: SWITCHDATABASE
+POSTHOOK: query: USE alter4_db
+POSTHOOK: type: SWITCHDATABASE
+PREHOOK: query: SHOW TABLES
+PREHOOK: type: SHOWTABLES
+POSTHOOK: query: SHOW TABLES
+POSTHOOK: type: SHOWTABLES
+PREHOOK: query: CREATE TABLE set_bucketing_test (key INT, value STRING) CLUSTERED BY (key) INTO 10 BUCKETS
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE set_bucketing_test (key INT, value STRING) CLUSTERED BY (key) INTO 10 BUCKETS
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: alter4_db@set_bucketing_test
+PREHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+POSTHOOK: type: DESCTABLE
+key	int	
+value	string	
+	 	 
+#### A masked pattern was here ####
+PREHOOK: query: ALTER TABLE set_bucketing_test NOT CLUSTERED
+PREHOOK: type: ALTERTABLE_CLUSTER_SORT
+PREHOOK: Input: alter4_db@set_bucketing_test
+PREHOOK: Output: alter4_db@set_bucketing_test
+POSTHOOK: query: ALTER TABLE set_bucketing_test NOT CLUSTERED
+POSTHOOK: type: ALTERTABLE_CLUSTER_SORT
+POSTHOOK: Input: alter4_db@set_bucketing_test
+POSTHOOK: Output: alter4_db@set_bucketing_test
+PREHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE EXTENDED set_bucketing_test
+POSTHOOK: type: DESCTABLE
+key	int	
+value	string	
+	 	 
+#### A masked pattern was here ####
+PREHOOK: query: DROP TABLE set_bucketing_test
+PREHOOK: type: DROPTABLE
+PREHOOK: Input: alter4_db@set_bucketing_test
+PREHOOK: Output: alter4_db@set_bucketing_test
+POSTHOOK: query: DROP TABLE set_bucketing_test
+POSTHOOK: type: DROPTABLE
+POSTHOOK: Input: alter4_db@set_bucketing_test
+POSTHOOK: Output: alter4_db@set_bucketing_test
+PREHOOK: query: USE default
+PREHOOK: type: SWITCHDATABASE
+POSTHOOK: query: USE default
+POSTHOOK: type: SWITCHDATABASE
+PREHOOK: query: DROP DATABASE alter4_db
+PREHOOK: type: DROPDATABASE
+POSTHOOK: query: DROP DATABASE alter4_db
+POSTHOOK: type: DROPDATABASE
+PREHOOK: query: SHOW DATABASES
+PREHOOK: type: SHOWDATABASES
+POSTHOOK: query: SHOW DATABASES
+POSTHOOK: type: SHOWDATABASES
+default

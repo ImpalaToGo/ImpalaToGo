@@ -1,0 +1,32 @@
+From 87181d611ede4abf3ffda1ed8f006b8684ab66b2 Mon Sep 17 00:00:00 2001
+From: Kevin Wilfong <kevinwilfong@apache.org>
+Date: Wed, 13 Jun 2012 23:30:37 +0000
+Subject: [PATCH 090/144] HIVE-3123. Hadoop20Shim. CombineFileRecordReader does not report progress within files (Dmytro Molkov via kevinwilfong)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350054 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 4caebd196163050510eac210329d42dcbd07477c)
+---
+ .../apache/hadoop/hive/shims/Hadoop20Shims.java    |    7 ++++++-
+ 1 files changed, 6 insertions(+), 1 deletions(-)
+
+diff --git a/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java b/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
+index 997dc42..a09851a 100644
+--- a/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
++++ b/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
+@@ -260,7 +260,12 @@ public class Hadoop20Shims implements HadoopShims {
+      * Return progress based on the amount of data processed so far.
+      */
+     public float getProgress() throws IOException {
+-      return Math.min(1.0f, progress / (float) (split.getLength()));
++      long subprogress = 0;    // bytes processed in current split
++      if (null != curReader) {
++        // idx is always one past the current subsplit's true index.
++        subprogress = (long)(curReader.getProgress() * split.getLength(idx - 1));
++      }
++      return Math.min(1.0f, (progress + subprogress) / (float) (split.getLength()));
+     }
+ 
+     /**
+-- 
+1.7.0.4
+

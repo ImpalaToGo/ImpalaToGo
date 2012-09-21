@@ -1,0 +1,184 @@
+From f63a72fd25f7dbb416fb8597674ae4ce301aafa9 Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Thu, 12 Apr 2012 18:57:52 +0000
+Subject: [PATCH 004/144] HIVE-2767 [jira] Optionally use framed transport with metastore
+ (Travis Crawford via Ashutosh Chauhan)
+
+Summary:
+Add support for optionally using the thrift framed transport, enabling
+integration with environments where that is necessary.
+
+Users may want/need to use thrift's framed transport when communicating with the
+Hive MetaStore. This patch adds a new property
+hive.metastore.thrift.framed.transport.enabled that enables the framed transport
+(defaults to off, aka no change from before the patch). This property must be
+set for both clients and the HMS server.
+
+It wasn't immediately clear how to use the framed transport with SASL, so as
+written an exception is thrown if you try starting the server with both options.
+If SASL and the framed transport will indeed work together I can update the
+patch (although I don't have a secured environment to test in).
+
+Test Plan:
+Tested locally that client and server can connect, both with and
+without the flag. Tests pass.
+
+Reviewers: JIRA, ashutoshc
+
+Reviewed By: ashutoshc
+
+Differential Revision: https://reviews.facebook.net/D2661
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325446 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hive/conf/HiveConf.java |    1 +
+ conf/hive-default.xml.template                     |    6 +++
+ .../hadoop/hive/metastore/HiveMetaStore.java       |   33 ++++++++++++++++++-
+ .../hadoop/hive/metastore/HiveMetaStoreClient.java |    9 ++++-
+ 4 files changed, 45 insertions(+), 4 deletions(-)
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+index 8aefbdc..42e261a 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
++++ b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+@@ -268,6 +268,7 @@ public class HiveConf extends Configuration {
+     METASTORE_KERBEROS_PRINCIPAL("hive.metastore.kerberos.principal",
+         "hive-metastore/_HOST@EXAMPLE.COM"),
+     METASTORE_USE_THRIFT_SASL("hive.metastore.sasl.enabled", false),
++    METASTORE_USE_THRIFT_FRAMED_TRANSPORT("hive.metastore.thrift.framed.transport.enabled", false),
+     METASTORE_CLUSTER_DELEGATION_TOKEN_STORE_CLS(
+         "hive.cluster.delegation.token.store.class",
+         "org.apache.hadoop.hive.thrift.MemoryTokenStore"),
+diff --git a/src/conf/hive-default.xml.template b/src/conf/hive-default.xml.template
+index 64e7640..1f6796e 100644
+--- a/src/conf/hive-default.xml.template
++++ b/src/conf/hive-default.xml.template
+@@ -748,6 +748,12 @@
+ </property>
+ 
+ <property>
++  <name>hive.metastore.thrift.framed.transport.enabled</name>
++  <value>false</value>
++  <description>If true, the metastore thrift interface will use TFramedTransport. When false (default) a standard TTransport is used.</description>
++</property>
++
++<property>
+   <name>hive.metastore.kerberos.keytab.file</name>
+   <value></value>
+   <description>The path to the Kerberos Keytab file containing the metastore thrift server's service principal.</description>
+diff --git a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStore.java b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStore.java
+index b7bb7e3..5626af3 100644
+--- a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStore.java
++++ b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStore.java
+@@ -122,8 +122,10 @@ import org.apache.thrift.TProcessor;
+ import org.apache.thrift.protocol.TBinaryProtocol;
+ import org.apache.thrift.server.TServer;
+ import org.apache.thrift.server.TThreadPoolServer;
++import org.apache.thrift.transport.TFramedTransport;
+ import org.apache.thrift.transport.TServerSocket;
+ import org.apache.thrift.transport.TServerTransport;
++import org.apache.thrift.transport.TTransport;
+ import org.apache.thrift.transport.TTransportFactory;
+ 
+ import com.facebook.fb303.FacebookBase;
+@@ -144,6 +146,23 @@ public class HiveMetaStore extends ThriftHiveMetastore {
+   private static HadoopThriftAuthBridge.Server saslServer;
+   private static boolean useSasl;
+ 
++  private static final class ChainedTTransportFactory extends TTransportFactory {
++    private final TTransportFactory parentTransFactory;
++    private final TTransportFactory childTransFactory;
++
++    private ChainedTTransportFactory(
++        TTransportFactory parentTransFactory,
++        TTransportFactory childTransFactory) {
++      this.parentTransFactory = parentTransFactory;
++      this.childTransFactory = childTransFactory;
++    }
++
++    @Override
++    public TTransport getTransport(TTransport trans) {
++      return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
++    }
++  }
++
+   public static class HMSHandler extends FacebookBase implements
+       ThriftHiveMetastore.Iface {
+     public static final Log LOG = HiveMetaStore.LOG;
+@@ -2994,6 +3013,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
+       int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
+       int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
+       boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
++      boolean useFramedTransport = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
+       useSasl = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL);
+ 
+       TServerTransport serverTransport = tcpKeepAlive ?
+@@ -3003,6 +3023,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
+       TTransportFactory transFactory;
+       if (useSasl) {
+         // we are in secure mode.
++        if (useFramedTransport) {
++          throw new HiveMetaException("Framed transport is not supported with SASL enabled.");
++        }
+         saslServer = bridge.createServer(
+             conf.getVar(HiveConf.ConfVars.METASTORE_KERBEROS_KEYTAB_FILE),
+             conf.getVar(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL));
+@@ -3015,12 +3038,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
+       } else {
+         // we are in unsecure mode.
+         HMSHandler handler = new HMSHandler("new db based metaserver", conf);
++
+         if (conf.getBoolVar(ConfVars.METASTORE_EXECUTE_SET_UGI)) {
+-          transFactory = new TUGIContainingTransport.Factory();
++          transFactory = useFramedTransport ?
++              new ChainedTTransportFactory(new TFramedTransport.Factory(),
++                  new TUGIContainingTransport.Factory())
++              : new TUGIContainingTransport.Factory();
++
+           processor = new TUGIBasedProcessor<HMSHandler>(handler);
+           LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
+         } else {
+-          transFactory = new TTransportFactory();
++          transFactory = useFramedTransport ?
++              new TFramedTransport.Factory() : new TTransportFactory();
+           processor = new TSetIpAddressProcessor<HMSHandler>(handler);
+           LOG.info("Starting DB backed MetaStore Server");
+         }
+diff --git a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
+index a41e13d..d239454 100644
+--- a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
++++ b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
+@@ -70,6 +70,7 @@ import org.apache.hadoop.security.UserGroupInformation;
+ import org.apache.hadoop.util.StringUtils;
+ import org.apache.thrift.TException;
+ import org.apache.thrift.protocol.TBinaryProtocol;
++import org.apache.thrift.transport.TFramedTransport;
+ import org.apache.thrift.transport.TSocket;
+ import org.apache.thrift.transport.TTransport;
+ import org.apache.thrift.transport.TTransportException;
+@@ -215,9 +216,11 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
+     TTransportException tte = null;
+     HadoopShims shim = ShimLoader.getHadoopShims();
+     boolean useSasl = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_SASL);
++    boolean useFramedTransport = conf.getBoolVar(ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
+     transport = new TSocket(store.getHost(), store.getPort());
+-    ((TSocket)transport).setTimeout(1000 * conf.getIntVar(ConfVars.
+-        METASTORE_CLIENT_SOCKET_TIMEOUT));
++    int clientSocketTimeout = conf.getIntVar(ConfVars.METASTORE_CLIENT_SOCKET_TIMEOUT);
++
++    transport = new TSocket(store.getHost(), store.getPort(), 1000 * clientSocketTimeout);
+ 
+     if (useSasl) {
+       // Wrap thrift connection with SASL for secure connection.
+@@ -248,6 +251,8 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
+         LOG.error("Couldn't create client transport", ioe);
+         throw new MetaException(ioe.toString());
+       }
++    } else if (useFramedTransport) {
++      transport = new TFramedTransport(transport);
+     }
+ 
+     client = new ThriftHiveMetastore.Client(new TBinaryProtocol(transport));
+-- 
+1.7.0.4
+

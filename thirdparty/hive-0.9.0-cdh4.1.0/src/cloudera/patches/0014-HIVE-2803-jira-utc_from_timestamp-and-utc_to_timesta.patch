@@ -1,0 +1,187 @@
+From a5706219a00e9d30170369080d8d134aa19aed00 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Mon, 23 Apr 2012 23:21:48 +0000
+Subject: [PATCH 014/144] HIVE-2803 [jira] utc_from_timestamp and utc_to_timestamp returns incorrect
+ results.
+ (Kiyotaka Suzuki via Carl Steinbach)
+
+Summary:
+https://issues.apache.org/jira/browse/HIVE-2803
+
+HIVE-2803 utc_from_timestamp and utc_to_timestamp returns incorrect results.
+
+It changed so that applyOffset() return a new instance.
+
+How to reproduce:
+
+$ echo "2011-12-25 09:00:00.123456" > /tmp/data5.txt
+hive> create table ts1(t1 timestamp);
+hive> load data local inpath '/tmp/data5.txt' overwrite into table ts1;
+hive> select t1, from_utc_timestamp(t1, 'JST'), from_utc_timestamp(t1, 'JST')
+from ts1 limit 1;
+
+The following result is expected:
+
+ 2011-12-25 09:00:00.123456      2011-12-25 18:00:00.123456      2011-12-25
+18:00:00.123456
+
+However, the above query return incorrect result like this:
+
+ 2011-12-26 03:00:00.492456      2011-12-26 03:00:00.492456      2011-12-26
+03:00:00.492456
+
+This is because GenericUDFFromUtcTimestamp.applyOffset() does setTime()
+improperly.
+On evaluating query, timestamp argument always returns the same instance.
+GenericUDFFromUtcTimestamp.applyOffset() does setTime() on the instance.
+That means it adds all offsets in the query.
+
+Test Plan: EMPTY
+
+Reviewers: JIRA
+
+Differential Revision: https://reviews.facebook.net/D1959
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329507 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../ql/udf/generic/GenericUDFFromUtcTimestamp.java |    7 +-
+ ql/src/test/queries/clientpositive/timestamp_udf.q |   11 ++++
+ .../results/clientpositive/timestamp_udf.q.out     |   60 ++++++++++++++++++-
+ 3 files changed, 70 insertions(+), 8 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFFromUtcTimestamp.java b/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFFromUtcTimestamp.java
+index aff47c4..25c2028 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFFromUtcTimestamp.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFFromUtcTimestamp.java
+@@ -96,11 +96,10 @@ public class GenericUDFFromUtcTimestamp extends GenericUDF {
+ 
+   protected Timestamp applyOffset(long offset, Timestamp t) {
+     long newTime = t.getTime() + offset;
+-    int nanos = (int) (t.getNanos() + (newTime % 1000) * 1000000);
+-    t.setTime(newTime);
+-    t.setNanos(nanos);
++    Timestamp t2 = new Timestamp(newTime);
++    t2.setNanos(t.getNanos());
+ 
+-    return t;
++    return t2;
+   }
+ 
+   @Override
+diff --git a/src/ql/src/test/queries/clientpositive/timestamp_udf.q b/src/ql/src/test/queries/clientpositive/timestamp_udf.q
+index 6ac670a..2620ace 100644
+--- a/src/ql/src/test/queries/clientpositive/timestamp_udf.q
++++ b/src/ql/src/test/queries/clientpositive/timestamp_udf.q
+@@ -26,6 +26,17 @@ select from_utc_timestamp(t, 'America/Chicago')
+ select to_utc_timestamp(t, 'America/Chicago')
+   from timestamp_udf;
+ 
++select t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf;
++
++select t, from_utc_timestamp(t, 'America/Chicago'), t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf;
++
++select t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf;
++
++select t, to_utc_timestamp(t, 'America/Chicago'), t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf;
+ 
+ -- Test UDFs with string input
+ select unix_timestamp(t), year(t), month(t), day(t), dayofmonth(t), 
+diff --git a/src/ql/src/test/results/clientpositive/timestamp_udf.q.out b/src/ql/src/test/results/clientpositive/timestamp_udf.q.out
+index 280d736..c04de7a 100644
+--- a/src/ql/src/test/results/clientpositive/timestamp_udf.q.out
++++ b/src/ql/src/test/results/clientpositive/timestamp_udf.q.out
+@@ -91,7 +91,7 @@ POSTHOOK: Input: default@timestamp_udf
+ #### A masked pattern was here ####
+ POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
+ POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
+-2011-05-06 02:08:09.2464567
++2011-05-06 02:08:09.1234567
+ PREHOOK: query: select to_utc_timestamp(t, 'America/Chicago')
+   from timestamp_udf
+ PREHOOK: type: QUERY
+@@ -104,7 +104,59 @@ POSTHOOK: Input: default@timestamp_udf
+ #### A masked pattern was here ####
+ POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
+ POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
+-2011-05-06 12:08:09.2464567
++2011-05-06 12:08:09.1234567
++PREHOOK: query: select t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++PREHOOK: type: QUERY
++PREHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: query: select t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
++POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
++2011-05-06 07:08:09.1234567	2011-05-06 02:08:09.1234567
++PREHOOK: query: select t, from_utc_timestamp(t, 'America/Chicago'), t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++PREHOOK: type: QUERY
++PREHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: query: select t, from_utc_timestamp(t, 'America/Chicago'), t, from_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
++POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
++2011-05-06 07:08:09.1234567	2011-05-06 02:08:09.1234567	2011-05-06 07:08:09.1234567	2011-05-06 02:08:09.1234567
++PREHOOK: query: select t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++PREHOOK: type: QUERY
++PREHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: query: select t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
++POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
++2011-05-06 07:08:09.1234567	2011-05-06 12:08:09.1234567
++PREHOOK: query: select t, to_utc_timestamp(t, 'America/Chicago'), t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++PREHOOK: type: QUERY
++PREHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: query: select t, to_utc_timestamp(t, 'America/Chicago'), t, to_utc_timestamp(t, 'America/Chicago')
++  from timestamp_udf
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@timestamp_udf
++#### A masked pattern was here ####
++POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
++POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
++2011-05-06 07:08:09.1234567	2011-05-06 12:08:09.1234567	2011-05-06 07:08:09.1234567	2011-05-06 12:08:09.1234567
+ PREHOOK: query: -- Test UDFs with string input
+ select unix_timestamp(t), year(t), month(t), day(t), dayofmonth(t), 
+     weekofyear(t), hour(t), minute(t), second(t), to_date(t)
+@@ -158,7 +210,7 @@ POSTHOOK: Input: default@timestamp_udf_string
+ #### A masked pattern was here ####
+ POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
+ POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
+-2011-05-06 02:08:09.2464567
++2011-05-06 02:08:09.1234567
+ PREHOOK: query: select to_utc_timestamp(t, 'America/Chicago')
+   from timestamp_udf_string
+ PREHOOK: type: QUERY
+@@ -171,7 +223,7 @@ POSTHOOK: Input: default@timestamp_udf_string
+ #### A masked pattern was here ####
+ POSTHOOK: Lineage: timestamp_udf.t EXPRESSION []
+ POSTHOOK: Lineage: timestamp_udf_string.t SIMPLE []
+-2011-05-06 12:08:09.2464567
++2011-05-06 12:08:09.1234567
+ PREHOOK: query: drop table timestamp_udf
+ PREHOOK: type: DROPTABLE
+ PREHOOK: Input: default@timestamp_udf
+-- 
+1.7.0.4
+

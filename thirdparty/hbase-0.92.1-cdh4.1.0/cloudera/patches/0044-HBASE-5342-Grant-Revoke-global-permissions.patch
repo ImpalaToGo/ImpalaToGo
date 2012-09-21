@@ -1,0 +1,1542 @@
+From 4835a0081e9b7a61d39221737d8169b31a8139e5 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 23 May 2012 23:50:55 +0200
+Subject: [PATCH 044/151] HBASE-5342 Grant/Revoke global permissions
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1339924 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Bug+Improvement
+Author: Matteo Bertozzi
+Ref: CDH-5207
+---
+ .../hbase/security/access/AccessControlLists.java  |  158 ++++++++++++++------
+ .../hbase/security/access/AccessController.java    |  130 +++++++++-------
+ .../security/access/AccessControllerProtocol.java  |   27 ++++-
+ .../hbase/security/access/TableAuthManager.java    |   52 ++++---
+ .../hbase/security/access/UserPermission.java      |   29 ++++
+ .../hbase/security/access/ZKPermissionWatcher.java |   16 +-
+ .../security/access/TestAccessControlFilter.java   |   10 +-
+ .../security/access/TestAccessController.java      |   95 +++++++-----
+ .../security/access/TestTablePermissions.java      |   85 ++++++++---
+ src/main/ruby/hbase/security.rb                    |  121 +++++++++++----
+ src/main/ruby/shell.rb                             |    1 +
+ src/main/ruby/shell/commands/grant.rb              |    5 +-
+ src/main/ruby/shell/commands/revoke.rb             |    8 +-
+ src/main/ruby/shell/commands/user_permission.rb    |    5 +-
+ src/main/ruby/shell/commands/whoami.rb             |   38 +++++
+ 15 files changed, 548 insertions(+), 232 deletions(-)
+ create mode 100644 src/main/ruby/shell/commands/whoami.rb
+
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+index fa00189..8a100e4 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+@@ -41,6 +41,9 @@ import org.apache.hadoop.hbase.master.MasterServices;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.InternalScanner;
+ import org.apache.hadoop.hbase.regionserver.StoreFile;
++import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
++import org.apache.hadoop.hbase.filter.RegexStringComparator;
++import org.apache.hadoop.hbase.filter.QualifierFilter;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.io.Text;
+@@ -79,6 +82,7 @@ public class AccessControlLists {
+   /** Internal storage table for access control lists */
+   public static final String ACL_TABLE_NAME_STR = "_acl_";
+   public static final byte[] ACL_TABLE_NAME = Bytes.toBytes(ACL_TABLE_NAME_STR);
++  public static final byte[] ACL_GLOBAL_NAME = ACL_TABLE_NAME;
+   /** Column family used to store ACL grants */
+   public static final String ACL_LIST_FAMILY_STR = "l";
+   public static final byte[] ACL_LIST_FAMILY = Bytes.toBytes(ACL_LIST_FAMILY_STR);
+@@ -117,31 +121,20 @@ public class AccessControlLists {
+   }
+ 
+   /**
+-   * Stores a new table permission grant in the access control lists table.
++   * Stores a new user permission grant in the access control lists table.
+    * @param conf the configuration
+-   * @param tableName the table to which access is being granted
+-   * @param username the user or group being granted the permission
+-   * @param perm the details of the permission being granted
++   * @param userPerm the details of the permission to be granted
+    * @throws IOException in the case of an error accessing the metadata table
+    */
+-  static void addTablePermission(Configuration conf,
+-      byte[] tableName, String username, TablePermission perm)
+-    throws IOException {
++  static void addUserPermission(Configuration conf, UserPermission userPerm)
++      throws IOException {
++    Permission.Action[] actions = userPerm.getActions();
+ 
+-    Put p = new Put(tableName);
+-    byte[] key = Bytes.toBytes(username);
+-    if (perm.getFamily() != null && perm.getFamily().length > 0) {
+-      key = Bytes.add(key,
+-          Bytes.add(new byte[]{ACL_KEY_DELIMITER}, perm.getFamily()));
+-      if (perm.getQualifier() != null && perm.getQualifier().length > 0) {
+-        key = Bytes.add(key,
+-            Bytes.add(new byte[]{ACL_KEY_DELIMITER}, perm.getQualifier()));
+-      }
+-    }
++    Put p = new Put(userPerm.isGlobal() ? ACL_GLOBAL_NAME : userPerm.getTable());
++    byte[] key = userPermissionKey(userPerm);
+ 
+-    TablePermission.Action[] actions = perm.getActions();
+     if ((actions == null) || (actions.length == 0)) {
+-      LOG.warn("No actions associated with user '"+username+"'");
++      LOG.warn("No actions associated with user '"+Bytes.toString(userPerm.getUser())+"'");
+       return;
+     }
+ 
+@@ -152,7 +145,7 @@ public class AccessControlLists {
+     p.add(ACL_LIST_FAMILY, key, value);
+     if (LOG.isDebugEnabled()) {
+       LOG.debug("Writing permission for table "+
+-          Bytes.toString(tableName)+" "+
++          Bytes.toString(userPerm.getTable())+" "+
+           Bytes.toString(key)+": "+Bytes.toStringBinary(value)
+       );
+     }
+@@ -175,34 +168,17 @@ public class AccessControlLists {
+    * column qualifier "info:colA") will have no effect.
+    *
+    * @param conf the configuration
+-   * @param tableName the table of the current permission grant
+-   * @param userName the user or group currently granted the permission
+-   * @param perm the details of the permission to be revoked
++   * @param userPerm the details of the permission to be revoked
+    * @throws IOException if there is an error accessing the metadata table
+    */
+-  static void removeTablePermission(Configuration conf,
+-      byte[] tableName, String userName, TablePermission perm)
+-    throws IOException {
++  static void removeUserPermission(Configuration conf, UserPermission userPerm)
++      throws IOException {
++
++    Delete d = new Delete(userPerm.isGlobal() ? ACL_GLOBAL_NAME : userPerm.getTable());
++    byte[] key = userPermissionKey(userPerm);
+ 
+-    Delete d = new Delete(tableName);
+-    byte[] key = null;
+-    if (perm.getFamily() != null && perm.getFamily().length > 0) {
+-      key = Bytes.toBytes(userName + ACL_KEY_DELIMITER +
+-          Bytes.toString(perm.getFamily()));
+-      if (perm.getQualifier() != null && perm.getQualifier().length > 0) {
+-       key = Bytes.toBytes(userName + ACL_KEY_DELIMITER +
+-          Bytes.toString(perm.getFamily()) + ACL_KEY_DELIMITER +
+-          Bytes.toString(perm.getQualifier()));
+-      } else {
+-        key = Bytes.toBytes(userName + ACL_KEY_DELIMITER +
+-          Bytes.toString(perm.getFamily()));
+-      }
+-    } else {
+-      key = Bytes.toBytes(userName);
+-    }
+     if (LOG.isDebugEnabled()) {
+-      LOG.debug("Removing permission for user '" + userName+ "': "+
+-          perm.toString());
++      LOG.debug("Removing permission "+ userPerm.toString());
+     }
+     d.deleteColumns(ACL_LIST_FAMILY, key);
+     HTable acls = null;
+@@ -215,6 +191,95 @@ public class AccessControlLists {
+   }
+ 
+   /**
++   * Remove specified table from the _acl_ table.
++   */
++  static void removeTablePermissions(Configuration conf, byte[] tableName)
++      throws IOException{
++    Delete d = new Delete(tableName);
++
++    if (LOG.isDebugEnabled()) {
++      LOG.debug("Removing permissions of removed table "+ Bytes.toString(tableName));
++    }
++
++    HTable acls = null;
++    try {
++      acls = new HTable(conf, ACL_TABLE_NAME);
++      acls.delete(d);
++    } finally {
++      if (acls != null) acls.close();
++    }
++  }
++
++  /**
++   * Remove specified table column from the _acl_ table.
++   */
++  static void removeTablePermissions(Configuration conf, byte[] tableName, byte[] column)
++      throws IOException{
++
++    if (LOG.isDebugEnabled()) {
++      LOG.debug("Removing permissions of removed column " + Bytes.toString(column) +
++                " from table "+ Bytes.toString(tableName));
++    }
++
++    HTable acls = null;
++    try {
++      acls = new HTable(conf, ACL_TABLE_NAME);
++
++      Scan scan = new Scan();
++      scan.addFamily(ACL_LIST_FAMILY);
++
++      String columnName = Bytes.toString(column);
++      scan.setFilter(new QualifierFilter(CompareOp.EQUAL, new RegexStringComparator(
++                     String.format("(%s%s%s)|(%s%s)$",
++                     ACL_KEY_DELIMITER, columnName, ACL_KEY_DELIMITER,
++                     ACL_KEY_DELIMITER, columnName))));
++
++      Set<byte[]> qualifierSet = new TreeSet<byte[]>(Bytes.BYTES_COMPARATOR);
++      ResultScanner scanner = acls.getScanner(scan);
++      try {
++        for (Result res : scanner) {
++          for (byte[] q : res.getFamilyMap(ACL_LIST_FAMILY).navigableKeySet()) {
++            qualifierSet.add(q);
++          }
++        }
++      } finally {
++        scanner.close();
++      }
++
++      if (qualifierSet.size() > 0) {
++        Delete d = new Delete(tableName);
++        for (byte[] qualifier : qualifierSet) {
++          d.deleteColumns(ACL_LIST_FAMILY, qualifier);
++        }
++        acls.delete(d);
++      }
++    } finally {
++      if (acls != null) acls.close();
++    }
++  }
++
++  /**
++   * Build qualifier key from user permission:
++   *  username
++   *  username,family
++   *  username,family,qualifier
++   */
++  static byte[] userPermissionKey(UserPermission userPerm) {
++    byte[] qualifier = userPerm.getQualifier();
++    byte[] family = userPerm.getFamily();
++    byte[] key = userPerm.getUser();
++
++    if (family != null && family.length > 0) {
++      key = Bytes.add(key, Bytes.add(new byte[]{ACL_KEY_DELIMITER}, family));
++      if (qualifier != null && qualifier.length > 0) {
++        key = Bytes.add(key, Bytes.add(new byte[]{ACL_KEY_DELIMITER}, qualifier));
++      }
++    }
++
++    return key;
++  }
++
++  /**
+    * Returns {@code true} if the given region is part of the {@code _acl_}
+    * metadata table.
+    */
+@@ -328,12 +393,13 @@ public class AccessControlLists {
+   static ListMultimap<String,TablePermission> getTablePermissions(
+       Configuration conf, byte[] tableName)
+   throws IOException {
++    if (tableName == null) tableName = ACL_TABLE_NAME;
++
+     /* TODO: -ROOT- and .META. cannot easily be handled because they must be
+      * online before _acl_ table.  Can anything be done here?
+      */
+     if (Bytes.equals(tableName, HConstants.ROOT_TABLE_NAME) ||
+-        Bytes.equals(tableName, HConstants.META_TABLE_NAME) ||
+-        Bytes.equals(tableName, AccessControlLists.ACL_TABLE_NAME)) {
++        Bytes.equals(tableName, HConstants.META_TABLE_NAME)) {
+       return ArrayListMultimap.create(0,0);
+     }
+ 
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index e47437b..260b0f1 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -18,13 +18,14 @@ import java.io.IOException;
+ import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.HashMap;
+-import java.util.HashSet;
++import java.util.TreeSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.CoprocessorEnvironment;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HRegionInfo;
+@@ -188,12 +189,10 @@ public class AccessController extends BaseRegionObserver
+     for (Map.Entry<byte[],ListMultimap<String,TablePermission>> t:
+       tables.entrySet()) {
+       byte[] table = t.getKey();
+-      String tableName = Bytes.toString(table);
+       ListMultimap<String,TablePermission> perms = t.getValue();
+       byte[] serialized = AccessControlLists.writePermissionsAsBytes(perms,
+-          e.getRegion().getConf());
+-      this.authManager.getZKPermissionWatcher().writeToZookeeper(tableName,
+-        serialized);
++          regionEnv.getConfiguration());
++      this.authManager.getZKPermissionWatcher().writeToZookeeper(table, serialized);
+     }
+   }
+ 
+@@ -204,31 +203,28 @@ public class AccessController extends BaseRegionObserver
+    */
+   void updateACL(RegionCoprocessorEnvironment e,
+       final Map<byte[], List<KeyValue>> familyMap) {
+-    Set<String> tableSet = new HashSet<String>();
++    Set<byte[]> tableSet = new TreeSet<byte[]>(Bytes.BYTES_COMPARATOR);
+     for (Map.Entry<byte[], List<KeyValue>> f : familyMap.entrySet()) {
+       List<KeyValue> kvs = f.getValue();
+       for (KeyValue kv: kvs) {
+-        if (Bytes.compareTo(kv.getBuffer(), kv.getFamilyOffset(),
++        if (Bytes.equals(kv.getBuffer(), kv.getFamilyOffset(),
+             kv.getFamilyLength(), AccessControlLists.ACL_LIST_FAMILY, 0,
+-            AccessControlLists.ACL_LIST_FAMILY.length) == 0) {
+-          String tableName = Bytes.toString(kv.getRow());
+-          tableSet.add(tableName);
++            AccessControlLists.ACL_LIST_FAMILY.length)) {
++          tableSet.add(kv.getRow());
+         }
+       }
+     }
+ 
+-    for (String tableName: tableSet) {
++    ZKPermissionWatcher zkw = this.authManager.getZKPermissionWatcher();
++    Configuration conf = regionEnv.getConfiguration();
++    for (byte[] tableName: tableSet) {
+       try {
+         ListMultimap<String,TablePermission> perms =
+-          AccessControlLists.getTablePermissions(regionEnv.getConfiguration(),
+-              Bytes.toBytes(tableName));
+-        byte[] serialized = AccessControlLists.writePermissionsAsBytes(
+-            perms, e.getRegion().getConf());
+-        this.authManager.getZKPermissionWatcher().writeToZookeeper(tableName,
+-          serialized);
++          AccessControlLists.getTablePermissions(conf, tableName);
++        byte[] serialized = AccessControlLists.writePermissionsAsBytes(perms, conf);
++        zkw.writeToZookeeper(tableName, serialized);
+       } catch (IOException ex) {
+-        LOG.error("Failed updating permissions mirror for '" + tableName +
+-          "'", ex);
++        LOG.error("Failed updating permissions mirror for '" + tableName + "'", ex);
+       }
+     }
+   }
+@@ -256,29 +252,40 @@ public class AccessController extends BaseRegionObserver
+ 
+     // 1. All users need read access to .META. and -ROOT- tables.
+     // this is a very common operation, so deal with it quickly.
+-    if ((hri.isRootRegion() || hri.isMetaRegion()) &&
+-        (permRequest == TablePermission.Action.READ)) {
+-      return AuthResult.allow("All users allowed", user, permRequest,
+-          hri.getTableName());
++    if (hri.isRootRegion() || hri.isMetaRegion()) {
++      if (permRequest == TablePermission.Action.READ) {
++        return AuthResult.allow("All users allowed", user, permRequest, tableName);
++      }
+     }
+ 
+     if (user == null) {
+-      return AuthResult.deny("No user associated with request!", null,
+-          permRequest, hri.getTableName());
++      return AuthResult.deny("No user associated with request!", null, permRequest, tableName);
++    }
++
++    // Users with CREATE/ADMIN rights need to modify .META. and _acl_ table
++    // e.g. When a new table is created a new entry in .META. is added,
++    // so the user need to be allowed to write on it.
++    // e.g. When a table is removed an entry is removed from .META. and _acl_
++    // and the user need to be allowed to write on both tables.
++    if (permRequest == TablePermission.Action.WRITE &&
++       (hri.isRootRegion() || hri.isMetaRegion() ||
++        Bytes.equals(tableName, AccessControlLists.ACL_GLOBAL_NAME)) &&
++       (authManager.authorize(user, Permission.Action.CREATE) ||
++        authManager.authorize(user, Permission.Action.ADMIN)))
++    {
++       return AuthResult.allow("Table permission granted", user, permRequest, tableName);
+     }
+ 
+     // 2. The table owner has full privileges
+     String owner = htd.getOwnerString();
+     if (user.getShortName().equals(owner)) {
+       // owner of the table has full access
+-      return AuthResult.allow("User is table owner", user, permRequest,
+-          hri.getTableName());
++      return AuthResult.allow("User is table owner", user, permRequest, tableName);
+     }
+ 
+     // 3. check for the table-level, if successful we can short-circuit
+     if (authManager.authorize(user, tableName, (byte[])null, permRequest)) {
+-      return AuthResult.allow("Table permission granted", user,
+-          permRequest, tableName);
++      return AuthResult.allow("Table permission granted", user, permRequest, tableName);
+     }
+ 
+     // 4. check permissions against the requested families
+@@ -350,6 +357,7 @@ public class AccessController extends BaseRegionObserver
+       // for non-rpc handling, fallback to system user
+       user = User.getCurrent();
+     }
++
+     return user;
+   }
+ 
+@@ -513,8 +521,9 @@ public class AccessController extends BaseRegionObserver
+   }
+   @Override
+   public void postDeleteTable(ObserverContext<MasterCoprocessorEnvironment> c,
+-      byte[] tableName) throws IOException {}
+-
++      byte[] tableName) throws IOException {
++    AccessControlLists.removeTablePermissions(c.getEnvironment().getConfiguration(), tableName);
++  }
+ 
+   @Override
+   public void preModifyTable(ObserverContext<MasterCoprocessorEnvironment> c,
+@@ -535,7 +544,6 @@ public class AccessController extends BaseRegionObserver
+   public void postAddColumn(ObserverContext<MasterCoprocessorEnvironment> c,
+       byte[] tableName, HColumnDescriptor column) throws IOException {}
+ 
+-
+   @Override
+   public void preModifyColumn(ObserverContext<MasterCoprocessorEnvironment> c,
+       byte[] tableName, HColumnDescriptor descriptor) throws IOException {
+@@ -553,8 +561,10 @@ public class AccessController extends BaseRegionObserver
+   }
+   @Override
+   public void postDeleteColumn(ObserverContext<MasterCoprocessorEnvironment> c,
+-      byte[] tableName, byte[] col) throws IOException {}
+-
++      byte[] tableName, byte[] col) throws IOException {
++    AccessControlLists.removeTablePermissions(c.getEnvironment().getConfiguration(),
++                                              tableName, col);
++  }
+ 
+   @Override
+   public void preEnableTable(ObserverContext<MasterCoprocessorEnvironment> c,
+@@ -664,7 +674,7 @@ public class AccessController extends BaseRegionObserver
+     try {
+       this.authManager = TableAuthManager.get(
+           e.getRegionServerServices().getZooKeeper(),
+-          e.getRegion().getConf());
++          regionEnv.getConfiguration());
+     } catch (IOException ioe) {
+       // pass along as a RuntimeException, so that the coprocessor is unloaded
+       throw new RuntimeException("Error obtaining TableAuthManager", ioe);
+@@ -892,10 +902,10 @@ public class AccessController extends BaseRegionObserver
+   private void requireScannerOwner(InternalScanner s)
+       throws AccessDeniedException {
+     if (RequestContext.isInRequestContext()) {
++      String requestUserName = RequestContext.getRequestUserName();
+       String owner = scannerOwners.get(s);
+-      if (owner != null && !owner.equals(RequestContext.getRequestUserName())) {
+-        throw new AccessDeniedException("User '"+
+-            RequestContext.getRequestUserName()+"' is not the scanner owner!");
++      if (owner != null && !owner.equals(requestUserName)) {
++        throw new AccessDeniedException("User '"+ requestUserName +"' is not the scanner owner!");
+       }
+     }
+   }
+@@ -906,24 +916,20 @@ public class AccessController extends BaseRegionObserver
+    * This will be restricted by both client side and endpoint implementations.
+    */
+   @Override
+-  public void grant(byte[] user, TablePermission permission)
++  public void grant(UserPermission userPermission)
+       throws IOException {
+     // verify it's only running at .acl.
+     if (aclRegion) {
+       if (LOG.isDebugEnabled()) {
+-        LOG.debug("Received request to grant access permission to '"
+-            + Bytes.toString(user) + "'. "
+-            + permission.toString());
++        LOG.debug("Received request to grant access permission " + userPermission.toString());
+       }
+ 
+       requirePermission(Permission.Action.ADMIN);
+ 
+-      AccessControlLists.addTablePermission(regionEnv.getConfiguration(),
+-          permission.getTable(), Bytes.toString(user), permission);
++      AccessControlLists.addUserPermission(regionEnv.getConfiguration(), userPermission);
+       if (AUDITLOG.isTraceEnabled()) {
+         // audit log should store permission changes in addition to auth results
+-        AUDITLOG.trace("Granted user '" + Bytes.toString(user) + "' permission "
+-            + permission.toString());
++        AUDITLOG.trace("Granted permission " + userPermission.toString());
+       }
+     } else {
+       throw new CoprocessorException(AccessController.class, "This method " +
+@@ -933,24 +939,29 @@ public class AccessController extends BaseRegionObserver
+   }
+ 
+   @Override
+-  public void revoke(byte[] user, TablePermission permission)
++  @Deprecated
++  public void grant(byte[] user, TablePermission permission)
++      throws IOException {
++    grant(new UserPermission(user, permission.getTable(),
++            permission.getFamily(), permission.getQualifier(),
++            permission.getActions()));
++  }
++
++  @Override
++  public void revoke(UserPermission userPermission)
+       throws IOException{
+     // only allowed to be called on _acl_ region
+     if (aclRegion) {
+       if (LOG.isDebugEnabled()) {
+-        LOG.debug("Received request to revoke access permission for '"
+-            + Bytes.toString(user) + "'. "
+-            + permission.toString());
++        LOG.debug("Received request to revoke access permission " + userPermission.toString());
+       }
+ 
+       requirePermission(Permission.Action.ADMIN);
+ 
+-      AccessControlLists.removeTablePermission(regionEnv.getConfiguration(),
+-          permission.getTable(), Bytes.toString(user), permission);
++      AccessControlLists.removeUserPermission(regionEnv.getConfiguration(), userPermission);
+       if (AUDITLOG.isTraceEnabled()) {
+         // audit log should record all permission changes
+-        AUDITLOG.trace("Revoked user '" + Bytes.toString(user) + "' permission "
+-            + permission.toString());
++        AUDITLOG.trace("Revoked permission " + userPermission.toString());
+       }
+     } else {
+       throw new CoprocessorException(AccessController.class, "This method " +
+@@ -960,6 +971,15 @@ public class AccessController extends BaseRegionObserver
+   }
+ 
+   @Override
++  @Deprecated
++  public void revoke(byte[] user, TablePermission permission)
++      throws IOException {
++    revoke(new UserPermission(user, permission.getTable(),
++            permission.getFamily(), permission.getQualifier(),
++            permission.getActions()));
++  }
++
++  @Override
+   public List<UserPermission> getUserPermissions(final byte[] tableName)
+       throws IOException {
+     // only allowed to be called on _acl_ region
+@@ -1038,7 +1058,7 @@ public class AccessController extends BaseRegionObserver
+     return tableName;
+   }
+ 
+-  private String getTableOwner(MasterCoprocessorEnvironment e, 
++  private String getTableOwner(MasterCoprocessorEnvironment e,
+       byte[] tableName) throws IOException {
+     HTableDescriptor htd = e.getTable(tableName).getTableDescriptor();
+     return htd.getOwnerString();
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControllerProtocol.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControllerProtocol.java
+index c11f339..2ecb60a 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControllerProtocol.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessControllerProtocol.java
+@@ -32,12 +32,22 @@ public interface AccessControllerProtocol extends CoprocessorProtocol {
+ 
+   /**
+    * Grants the given user or group the privilege to perform the given actions
++   * @param userPermission the details of the provided user permissions
++   * @throws IOException if the grant could not be applied
++   */
++  public void grant(UserPermission userPermission)
++      throws IOException;
++
++  /**
++   * Grants the given user or group the privilege to perform the given actions
+    * over the specified scope contained in {@link TablePermission}
+    * @param user the user name, or, if prefixed with "@", group name receiving
+    * the grant
+    * @param permission the details of the provided permissions
+    * @throws IOException if the grant could not be applied
++   * @deprecated Use {@link #revoke(UserPermission userPermission)} instead
+    */
++  @Deprecated
+   public void grant(byte[] user, TablePermission permission)
+       throws IOException;
+ 
+@@ -49,11 +59,27 @@ public interface AccessControllerProtocol extends CoprocessorProtocol {
+    * table, column family and column qualifier must all be specified.
+    * Attempting to revoke permissions over just the "data" table will have
+    * no effect.
++   * @param permission the details of the previously granted permission to revoke
++   * @throws IOException if the revocation could not be performed
++   */
++  public void revoke(UserPermission userPermission)
++      throws IOException;
++
++  /**
++   * Revokes a previously granted privilege from a user or group.
++   * Note that the provided {@link TablePermission} details must exactly match
++   * a stored grant.  For example, if user "bob" has been granted "READ" access
++   * to table "data", over column family and qualifer "info:colA", then the
++   * table, column family and column qualifier must all be specified.
++   * Attempting to revoke permissions over just the "data" table will have
++   * no effect.
+    * @param user the user name, or, if prefixed with "@", group name whose
+    * privileges are being revoked
+    * @param permission the details of the previously granted permission to revoke
+    * @throws IOException if the revocation could not be performed
++   * @deprecated Use {@link #revoke(UserPermission userPermission)} instead
+    */
++  @Deprecated
+   public void revoke(byte[] user, TablePermission permission)
+       throws IOException;
+ 
+@@ -81,5 +107,4 @@ public interface AccessControllerProtocol extends CoprocessorProtocol {
+    */
+   public void checkPermissions(Permission[] permissions)
+       throws IOException;
+-
+ }
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/TableAuthManager.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/TableAuthManager.java
+index 2c3870f..970317b 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/TableAuthManager.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/TableAuthManager.java
+@@ -40,8 +40,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
+  * Performs authorization checks for a given user's assigned permissions
+  */
+ public class TableAuthManager {
+-  /** Key for the user and group cache maps for globally assigned permissions */
+-  private static final String GLOBAL_CACHE_KEY = ".access.";
+   private static Log LOG = LogFactory.getLog(TableAuthManager.class);
+ 
+   private static TableAuthManager instance;
+@@ -103,15 +101,37 @@ public class TableAuthManager {
+ 
+   public void refreshCacheFromWritable(byte[] table, byte[] data) throws IOException {
+     if (data != null && data.length > 0) {
+-      DataInput in = new DataInputStream( new ByteArrayInputStream(data) );
++      DataInput in = new DataInputStream(new ByteArrayInputStream(data));
+       ListMultimap<String,TablePermission> perms = AccessControlLists.readPermissions(in, conf);
+-      cache(table, perms);
++      if (perms != null) {
++        if (Bytes.equals(table, AccessControlLists.ACL_GLOBAL_NAME)) {
++          updateGlobalCache(perms);
++        } else {
++          updateTableCache(table, perms);
++        }
++      }
+     } else {
+       LOG.debug("Skipping permission cache refresh because writable data is empty");
+     }
+   }
+ 
+   /**
++   * Updates the internal global permissions cache
++   *
++   * @param userPerms
++   */
++  private void updateGlobalCache(ListMultimap<String,TablePermission> userPerms) {
++    for (Map.Entry<String,TablePermission> entry : userPerms.entries()) {
++      if (AccessControlLists.isGroupPrincipal(entry.getKey())) {
++        GROUP_CACHE.put(AccessControlLists.getGroupName(entry.getKey()),
++                        new Permission(entry.getValue().getActions()));
++      } else {
++        USER_CACHE.put(entry.getKey(), new Permission(entry.getValue().getActions()));
++      }
++    }
++  }
++
++  /**
+    * Updates the internal permissions cache for a single table, splitting
+    * the permissions listed into separate caches for users and groups to optimize
+    * group lookups.
+@@ -119,26 +139,22 @@ public class TableAuthManager {
+    * @param table
+    * @param tablePerms
+    */
+-  private void cache(byte[] table,
+-      ListMultimap<String,TablePermission> tablePerms) {
++  private void updateTableCache(byte[] table, ListMultimap<String,TablePermission> tablePerms) {
+     // split user from group assignments so we don't have to prepend the group
+     // prefix every time we query for groups
+     ListMultimap<String,TablePermission> userPerms = ArrayListMultimap.create();
+     ListMultimap<String,TablePermission> groupPerms = ArrayListMultimap.create();
+ 
+-    if (tablePerms != null) {
+-      for (Map.Entry<String,TablePermission> entry : tablePerms.entries()) {
+-        if (AccessControlLists.isGroupPrincipal(entry.getKey())) {
+-          groupPerms.put(
+-              entry.getKey().substring(AccessControlLists.GROUP_PREFIX.length()),
+-              entry.getValue());
+-        } else {
+-          userPerms.put(entry.getKey(), entry.getValue());
+-        }
++    for (Map.Entry<String,TablePermission> entry : tablePerms.entries()) {
++      if (AccessControlLists.isGroupPrincipal(entry.getKey())) {
++        groupPerms.put(AccessControlLists.getGroupName(entry.getKey()), entry.getValue());
++      } else {
++        userPerms.put(entry.getKey(), entry.getValue());
+       }
+-      TABLE_GROUP_CACHE.put(table, groupPerms);
+-      TABLE_USER_CACHE.put(table, userPerms);
+     }
++
++    TABLE_GROUP_CACHE.put(table, groupPerms);
++    TABLE_USER_CACHE.put(table, userPerms);
+   }
+ 
+   private List<TablePermission> getUserPermissions(String username, byte[] table) {
+@@ -464,7 +480,7 @@ public class TableAuthManager {
+       }
+     }
+     byte[] serialized = AccessControlLists.writePermissionsAsBytes(tmp, conf);
+-    zkperms.writeToZookeeper(Bytes.toString(table), serialized);
++    zkperms.writeToZookeeper(table, serialized);
+   }
+ 
+   static Map<ZooKeeperWatcher,TableAuthManager> managerMap =
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/UserPermission.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/UserPermission.java
+index 8a5c467..fd5b755 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/UserPermission.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/UserPermission.java
+@@ -41,6 +41,27 @@ public class UserPermission extends TablePermission {
+   }
+ 
+   /**
++   * Creates a new instance for the given user.
++   * @param user the user
++   * @param assigned the list of allowed actions
++   */
++  public UserPermission(byte[] user, Action... assigned) {
++    super(null, null, null, assigned);
++    this.user = user;
++  }
++
++  /**
++   * Creates a new instance for the given user,
++   * matching the actions with the given codes.
++   * @param user the user
++   * @param actionCodes the list of allowed action codes
++   */
++  public UserPermission(byte[] user, byte[] actionCodes) {
++    super(null, null, null, actionCodes);
++    this.user = user;
++  }
++
++  /**
+    * Creates a new instance for the given user, table and column family.
+    * @param user the user
+    * @param table the table
+@@ -92,6 +113,14 @@ public class UserPermission extends TablePermission {
+     return user;
+   }
+ 
++  /**
++   * Returns true if this permission describes a global user permission.
++   */
++  public boolean isGlobal() {
++    byte[] tableName = getTable();
++    return(tableName == null || tableName.length == 0);
++  }
++
+   @Override
+   public boolean equals(Object obj) {
+     if (!(obj instanceof UserPermission)) {
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/ZKPermissionWatcher.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/ZKPermissionWatcher.java
+index f7e8654..ae00d6f 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/ZKPermissionWatcher.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/ZKPermissionWatcher.java
+@@ -146,18 +146,16 @@ public class ZKPermissionWatcher extends ZooKeeperListener {
+    * @param tableName
+    * @param permsData
+    */
+-  public void writeToZookeeper(String tableName, 
+-      byte[] permsData) {
+-    String zkNode =
+-        ZKUtil.joinZNode(ZKUtil.joinZNode(watcher.baseZNode, ACL_NODE),
+-          tableName);
++  public void writeToZookeeper(byte[] tableName, byte[] parmsData) {
++    String zkNode = ZKUtil.joinZNode(watcher.baseZNode, ACL_NODE);
++    zkNode = ZKUtil.joinZNode(zkNode, Bytes.toString(tableName));
++
+     try {
+       ZKUtil.createWithParents(watcher, zkNode);
+-      ZKUtil.updateExistingNodeData(watcher, zkNode,
+-        permsData, -1);
++      ZKUtil.updateExistingNodeData(watcher, zkNode, parmsData, -1);
+     } catch (KeeperException e) {
+-      LOG.error("Failed updating permissions for table '" + tableName +
+-          "'", e);
++      LOG.error("Failed updating permissions for table '" +
++                Bytes.toString(tableName) + "'", e);
+       watcher.abort("Failed writing node "+zkNode+" to zookeeper", e);
+     }
+   }
+diff --git a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessControlFilter.java b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessControlFilter.java
+index 1cd8fac..7b4ad18 100644
+--- a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessControlFilter.java
++++ b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessControlFilter.java
+@@ -89,10 +89,12 @@ public class TestAccessControlFilter {
+             AccessControlLists.ACL_TABLE_NAME);
+         AccessControllerProtocol acls = aclmeta.coprocessorProxy(
+             AccessControllerProtocol.class, Bytes.toBytes("testtable"));
+-        TablePermission perm = new TablePermission(TABLE, null, Permission.Action.READ);
+-        acls.grant(Bytes.toBytes(READER.getShortName()), perm);
+-        perm = new TablePermission(TABLE, FAMILY, PUBLIC_COL, Permission.Action.READ);
+-        acls.grant(Bytes.toBytes(LIMITED.getShortName()), perm);
++        UserPermission perm = new UserPermission(Bytes.toBytes(READER.getShortName()), 
++                                                 TABLE, null, Permission.Action.READ);
++        acls.grant(perm);
++        perm = new UserPermission(Bytes.toBytes(LIMITED.getShortName()), 
++                                  TABLE, FAMILY, PUBLIC_COL, Permission.Action.READ);
++        acls.grant(perm);
+         return null;
+       }
+     });
+diff --git a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+index f94cd06..4bb7ebb 100644
+--- a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
++++ b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+@@ -69,6 +69,8 @@ public class TestAccessController {
+ 
+   // user with all permissions
+   private static User SUPERUSER;
++  // user granted with all global permission
++  private static User USER_ADMIN;
+   // table owner user
+   private static User USER_OWNER;
+   // user with rw permissions
+@@ -101,6 +103,7 @@ public class TestAccessController {
+ 
+     // create a set of test users
+     SUPERUSER = User.createUserForTesting(conf, "admin", new String[]{"supergroup"});
++    USER_ADMIN = User.createUserForTesting(conf, "admin2", new String[0]);
+     USER_OWNER = User.createUserForTesting(conf, "owner", new String[0]);
+     USER_RW = User.createUserForTesting(conf, "rwuser", new String[0]);
+     USER_RO = User.createUserForTesting(conf, "rouser", new String[0]);
+@@ -116,12 +119,16 @@ public class TestAccessController {
+     HTable meta = new HTable(conf, AccessControlLists.ACL_TABLE_NAME);
+     AccessControllerProtocol protocol =
+         meta.coprocessorProxy(AccessControllerProtocol.class, TEST_TABLE);
+-    protocol.grant(Bytes.toBytes(USER_RW.getShortName()),
+-        new TablePermission(TEST_TABLE, TEST_FAMILY, Permission.Action.READ,
+-            Permission.Action.WRITE));
+ 
+-    protocol.grant(Bytes.toBytes(USER_RO.getShortName()),
+-        new TablePermission(TEST_TABLE, TEST_FAMILY, Permission.Action.READ));
++    protocol.grant(new UserPermission(Bytes.toBytes(USER_ADMIN.getShortName()),
++                      Permission.Action.ADMIN, Permission.Action.CREATE,
++                      Permission.Action.READ, Permission.Action.WRITE));
++
++    protocol.grant(new UserPermission(Bytes.toBytes(USER_RW.getShortName()),
++        TEST_TABLE, TEST_FAMILY, Permission.Action.READ, Permission.Action.WRITE));
++
++    protocol.grant(new UserPermission(Bytes.toBytes(USER_RO.getShortName()),
++                   TEST_TABLE, TEST_FAMILY, Permission.Action.READ));
+   }
+ 
+   @AfterClass
+@@ -192,6 +199,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, createTable);
++    verifyAllowed(USER_ADMIN, createTable);
+ 
+     // all others should be denied
+     verifyDenied(USER_OWNER, createTable);
+@@ -220,6 +228,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, modifyTable);
++    verifyAllowed(USER_ADMIN, modifyTable);
+   }
+ 
+   @Test
+@@ -239,6 +248,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, deleteTable);
++    verifyAllowed(USER_ADMIN, deleteTable);
+   }
+ 
+   @Test
+@@ -259,6 +269,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -280,6 +291,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -299,6 +311,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -318,6 +331,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, disableTable);
++    verifyAllowed(USER_ADMIN, disableTable);
+   }
+ 
+   @Test
+@@ -337,6 +351,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, enableTable);
++    verifyAllowed(USER_ADMIN, enableTable);
+   }
+ 
+   @Test
+@@ -362,6 +377,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -387,6 +403,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -412,6 +429,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -431,6 +449,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -450,6 +469,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -469,6 +489,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   @Test
+@@ -488,6 +509,7 @@ public class TestAccessController {
+ 
+     // verify that superuser can create tables
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+   }
+ 
+   private void verifyWrite(PrivilegedExceptionAction action) throws Exception {
+@@ -497,6 +519,7 @@ public class TestAccessController {
+ 
+     // should be allowed
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+     verifyAllowed(USER_OWNER, action);
+     verifyAllowed(USER_RW, action);
+   }
+@@ -507,6 +530,7 @@ public class TestAccessController {
+ 
+     // should be allowed
+     verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
+     verifyAllowed(USER_OWNER, action);
+     verifyAllowed(USER_RW, action);
+     verifyAllowed(USER_RO, action);
+@@ -717,8 +741,8 @@ public class TestAccessController {
+     verifyDenied(user, deleteAction2);
+ 
+     // grant table read permission
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, null, Permission.Action.READ));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, null, Permission.Action.READ));
+     Thread.sleep(100);
+     // check
+     verifyAllowed(user, getActionAll);
+@@ -734,8 +758,8 @@ public class TestAccessController {
+     verifyDenied(user, deleteAction2);
+ 
+     // grant table write permission
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, null, Permission.Action.WRITE));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, null, Permission.Action.WRITE));
+     Thread.sleep(100);
+     verifyDenied(user, getActionAll);
+     verifyDenied(user, getAction1);
+@@ -750,12 +774,11 @@ public class TestAccessController {
+     verifyAllowed(user, deleteAction2);
+ 
+     // revoke table permission
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, null, Permission.Action.READ,
+-        Permission.Action.WRITE));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, null, Permission.Action.READ, Permission.Action.WRITE));
+ 
+-    protocol.revoke(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, null));
++    protocol.revoke(new UserPermission(Bytes.toBytes(user.getShortName()),
++                    tableName, null));
+     Thread.sleep(100);
+     verifyDenied(user, getActionAll);
+     verifyDenied(user, getAction1);
+@@ -770,8 +793,8 @@ public class TestAccessController {
+     verifyDenied(user, deleteAction2);
+ 
+     // grant column family read permission
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, family1, Permission.Action.READ));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, family1, Permission.Action.READ));
+     Thread.sleep(100);
+ 
+     verifyAllowed(user, getActionAll);
+@@ -787,8 +810,8 @@ public class TestAccessController {
+     verifyDenied(user, deleteAction2);
+ 
+     // grant column family write permission
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, family2, Permission.Action.WRITE));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, family2, Permission.Action.WRITE));
+     Thread.sleep(100);
+ 
+     verifyAllowed(user, getActionAll);
+@@ -804,8 +827,8 @@ public class TestAccessController {
+     verifyAllowed(user, deleteAction2);
+ 
+     // revoke column family permission
+-    protocol.revoke(Bytes.toBytes(user.getShortName()),
+-      new TablePermission(tableName, family2));
++    protocol.revoke(new UserPermission(Bytes.toBytes(user.getShortName()),
++                    tableName, family2));
+     Thread.sleep(100);
+ 
+     verifyAllowed(user, getActionAll);
+@@ -887,15 +910,14 @@ public class TestAccessController {
+       }
+     };
+ 
+-    protocol.revoke(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, family1));
++    protocol.revoke(new UserPermission(Bytes.toBytes(user.getShortName()),
++                    tableName, family1));
+     verifyDenied(user, getQualifierAction);
+     verifyDenied(user, putQualifierAction);
+     verifyDenied(user, deleteQualifierAction);
+ 
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, family1, qualifier,
+-            Permission.Action.READ));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, family1, qualifier, Permission.Action.READ));
+     Thread.sleep(100);
+ 
+     verifyAllowed(user, getQualifierAction);
+@@ -904,9 +926,8 @@ public class TestAccessController {
+ 
+     // only grant write permission
+     // TODO: comment this portion after HBASE-3583
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, family1, qualifier,
+-            Permission.Action.WRITE));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, family1, qualifier, Permission.Action.WRITE));
+     Thread.sleep(100);
+ 
+     verifyDenied(user, getQualifierAction);
+@@ -914,9 +935,9 @@ public class TestAccessController {
+     verifyAllowed(user, deleteQualifierAction);
+ 
+     // grant both read and write permission.
+-    protocol.grant(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, family1, qualifier,
+-            Permission.Action.READ, Permission.Action.WRITE));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()),
++                   tableName, family1, qualifier,
++                   Permission.Action.READ, Permission.Action.WRITE));
+     Thread.sleep(100);
+ 
+     verifyAllowed(user, getQualifierAction);
+@@ -924,8 +945,8 @@ public class TestAccessController {
+     verifyAllowed(user, deleteQualifierAction);
+ 
+     // revoke family level permission won't impact column level.
+-    protocol.revoke(Bytes.toBytes(user.getShortName()),
+-        new TablePermission(tableName, family1, qualifier));
++    protocol.revoke(new UserPermission(Bytes.toBytes(user.getShortName()),
++                    tableName, family1, qualifier));
+     Thread.sleep(100);
+ 
+     verifyDenied(user, getQualifierAction);
+@@ -971,7 +992,7 @@ public class TestAccessController {
+     // grant read permission
+     UserPermission upToSet = new UserPermission(user,
+         tableName, family1, qualifier, Permission.Action.READ);
+-    protocol.grant(user, upToSet);
++    protocol.grant(upToSet);
+     perms = protocol.getUserPermissions(tableName);
+ 
+     UserPermission upToVerify = new UserPermission(user,
+@@ -987,7 +1008,7 @@ public class TestAccessController {
+     // grant read+write
+     upToSet = new UserPermission(user, tableName, family1, qualifier,
+         Permission.Action.WRITE, Permission.Action.READ);
+-    protocol.grant(user, upToSet);
++    protocol.grant(upToSet);
+     perms = protocol.getUserPermissions(tableName);
+ 
+     upToVerify = new UserPermission(user, tableName, family1, qualifier,
+@@ -995,7 +1016,7 @@ public class TestAccessController {
+     assertTrue("User should be granted permission: " + upToVerify.toString(),
+             hasFoundUserPermission(upToVerify, perms));
+ 
+-    protocol.revoke(user, upToSet);
++    protocol.revoke(upToSet);
+     perms = protocol.getUserPermissions(tableName);
+     assertFalse("User should not be granted permission: " + upToVerify.toString(),
+       hasFoundUserPermission(upToVerify, perms));
+@@ -1050,7 +1071,7 @@ public class TestAccessController {
+ 
+   public void grant(AccessControllerProtocol protocol, User user, byte[] t, byte[] f,
+       byte[] q, Permission.Action... actions) throws IOException {
+-    protocol.grant(Bytes.toBytes(user.getShortName()), new TablePermission(t, f, q, actions));
++    protocol.grant(new UserPermission(Bytes.toBytes(user.getShortName()), t, f, q, actions));
+   }
+ 
+   @Test
+diff --git a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestTablePermissions.java b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestTablePermissions.java
+index 8a4dbb6..e066055 100644
+--- a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestTablePermissions.java
++++ b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestTablePermissions.java
+@@ -92,15 +92,16 @@ public class TestTablePermissions {
+   public void testBasicWrite() throws Exception {
+     Configuration conf = UTIL.getConfiguration();
+     // add some permissions
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE,
+-        "george", new TablePermission(TEST_TABLE, null,
+-            TablePermission.Action.READ, TablePermission.Action.WRITE));
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE,
+-        "hubert", new TablePermission(TEST_TABLE, null,
+-            TablePermission.Action.READ));
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE,
+-        "humphrey", new TablePermission(TEST_TABLE, TEST_FAMILY, TEST_QUALIFIER,
+-            TablePermission.Action.READ));
++    AccessControlLists.addUserPermission(conf,
++            new UserPermission(Bytes.toBytes("george"), TEST_TABLE, null, (byte[])null,
++            UserPermission.Action.READ, UserPermission.Action.WRITE));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("hubert"), TEST_TABLE, null, (byte[])null,
++            UserPermission.Action.READ));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("humphrey"),
++            TEST_TABLE, TEST_FAMILY, TEST_QUALIFIER,
++            UserPermission.Action.READ));
+ 
+     // retrieve the same
+     ListMultimap<String,TablePermission> perms =
+@@ -154,8 +155,8 @@ public class TestTablePermissions {
+     assertFalse(actions.contains(TablePermission.Action.WRITE));
+ 
+     // table 2 permissions
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE2, "hubert",
+-        new TablePermission(TEST_TABLE2, null,
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("hubert"), TEST_TABLE2, null, (byte[])null,
+             TablePermission.Action.READ, TablePermission.Action.WRITE));
+ 
+     // check full load
+@@ -186,16 +187,21 @@ public class TestTablePermissions {
+   @Test
+   public void testPersistence() throws Exception {
+     Configuration conf = UTIL.getConfiguration();
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE, "albert",
+-        new TablePermission(TEST_TABLE, null, TablePermission.Action.READ));
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE, "betty",
+-        new TablePermission(TEST_TABLE, null, TablePermission.Action.READ,
+-            TablePermission.Action.WRITE));
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE, "clark",
+-        new TablePermission(TEST_TABLE, TEST_FAMILY, TablePermission.Action.READ));
+-    AccessControlLists.addTablePermission(conf, TEST_TABLE, "dwight",
+-        new TablePermission(TEST_TABLE, TEST_FAMILY, TEST_QUALIFIER,
+-            TablePermission.Action.WRITE));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("albert"), TEST_TABLE, null,
++                           (byte[])null, TablePermission.Action.READ));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("betty"), TEST_TABLE, null,
++                           (byte[])null, TablePermission.Action.READ,
++                           TablePermission.Action.WRITE));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("clark"),
++                           TEST_TABLE, TEST_FAMILY,
++                           TablePermission.Action.READ));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("dwight"),
++                           TEST_TABLE, TEST_FAMILY, TEST_QUALIFIER,
++                           TablePermission.Action.WRITE));
+ 
+     // verify permissions survive changes in table metadata
+     ListMultimap<String,TablePermission> preperms =
+@@ -302,4 +308,41 @@ public class TestTablePermissions {
+     assertFalse(p1.equals(p2));
+     assertFalse(p2.equals(p1));
+   }
++
++  @Test
++  public void testGlobalPermission() throws Exception {
++    Configuration conf = UTIL.getConfiguration();
++
++    // add some permissions
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("user1"),
++            Permission.Action.READ, Permission.Action.WRITE));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("user2"),
++            Permission.Action.CREATE));
++    AccessControlLists.addUserPermission(conf,
++        new UserPermission(Bytes.toBytes("user3"),
++            Permission.Action.ADMIN, Permission.Action.READ, Permission.Action.CREATE));
++
++    ListMultimap<String,TablePermission> perms = AccessControlLists.getTablePermissions(conf, null);
++    List<TablePermission> user1Perms = perms.get("user1");
++    assertEquals("Should have 1 permission for user1", 1, user1Perms.size());
++    assertEquals("user1 should have WRITE permission",
++                 new Permission.Action[] { Permission.Action.READ, Permission.Action.WRITE },
++                 user1Perms.get(0).getActions());
++
++    List<TablePermission> user2Perms = perms.get("user2");
++    assertEquals("Should have 1 permission for user2", 1, user2Perms.size());
++    assertEquals("user2 should have CREATE permission",
++                 new Permission.Action[] { Permission.Action.CREATE },
++                 user2Perms.get(0).getActions());
++
++    List<TablePermission> user3Perms = perms.get("user3");
++    assertEquals("Should have 1 permission for user3", 1, user3Perms.size());
++    assertEquals("user3 should have ADMIN, READ, CREATE permission",
++                 new Permission.Action[] {
++                    Permission.Action.ADMIN, Permission.Action.READ, Permission.Action.CREATE
++                 },
++                 user3Perms.get(0).getActions());
++  }
+ }
+diff --git a/src/main/ruby/hbase/security.rb b/src/main/ruby/hbase/security.rb
+index 54965ae..e3b9903 100644
+--- a/src/main/ruby/hbase/security.rb
++++ b/src/main/ruby/hbase/security.rb
+@@ -31,62 +31,117 @@ module Hbase
+     end
+ 
+     #----------------------------------------------------------------------------------------------
+-    def grant(user, permissions, table_name, family=nil, qualifier=nil)
++    def grant(user, permissions, table_name=nil, family=nil, qualifier=nil)
+       security_available?
+ 
+-      # Table should exist
+-      raise(ArgumentError, "Can't find a table: #{table_name}") unless exists?(table_name)
++      # TODO: need to validate user name
+ 
+-      htd = @admin.getTableDescriptor(table_name.to_java_bytes)
++      if (table_name != nil)
++        # Table should exist
++        raise(ArgumentError, "Can't find a table: #{table_name}") unless exists?(table_name)
+ 
+-      if (family != nil)
+-        raise(ArgumentError, "Can't find a family: #{family}") unless htd.hasFamily(family.to_java_bytes)
+-      end
++        htd = @admin.getTableDescriptor(table_name.to_java_bytes)
++
++        if (family != nil)
++          raise(ArgumentError, "Can't find a family: #{family}") unless htd.hasFamily(family.to_java_bytes)
++        end
+ 
+-      #TODO: need to validate user name
++        # invoke cp endpoint to perform access controlse
++        fambytes = family.to_java_bytes if (family != nil)
++        qualbytes = qualifier.to_java_bytes if (qualifier != nil)
++        user_permission = org.apache.hadoop.hbase.security.access.UserPermission.new(
++                                                user.to_java_bytes, table_name.to_java_bytes, 
++                                                fambytes, qualbytes, permissions.to_java_bytes)
++      else
++        user_permission = org.apache.hadoop.hbase.security.access.UserPermission.new(
++                                                user.to_java_bytes, permissions.to_java_bytes)
++      end
+ 
+-      # invoke cp endpoint to perform access control
+-      fambytes = family.to_java_bytes if (family != nil)
+-      qualbytes = qualifier.to_java_bytes if (qualifier != nil)
+-      tp = org.apache.hadoop.hbase.security.access.TablePermission.new(table_name.to_java_bytes, fambytes, qualbytes, permissions.to_java_bytes)
+-      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config, org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
+-      protocol = meta_table.coprocessorProxy(org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
++      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config,
++                      org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
++      protocol = meta_table.coprocessorProxy(
++                      org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
+                                              org.apache.hadoop.hbase.HConstants::EMPTY_START_ROW)
+-      protocol.grant(user.to_java_bytes, tp)
++      begin
++        protocol.grant(user_permission)
++      rescue java.io.IOException => e
++        if !(e.message.include? "java.lang.NoSuchMethodException")
++          raise e
++        end
++
++        # Server has not the new API, try the old one
++        if (table_name == nil)
++          raise "Global permissions not supported by HBase Server"
++        end
++
++        tp = org.apache.hadoop.hbase.security.access.TablePermission.new(table_name.to_java_bytes, fambytes, qualbytes, permissions.to_java_bytes)
++        protocol.grant(user.to_java_bytes, tp)
++      end
+     end
+ 
+     #----------------------------------------------------------------------------------------------
+-    def revoke(user, table_name, family=nil, qualifier=nil)
++    def revoke(user, table_name=nil, family=nil, qualifier=nil)
+       security_available?
+ 
+-      # Table should exist
+-      raise(ArgumentError, "Can't find table: #{table_name}") unless exists?(table_name)
++      # TODO: need to validate user name
++
++      if (table_name != nil)
++        # Table should exist
++        raise(ArgumentError, "Can't find a table: #{table_name}") unless exists?(table_name)
+ 
+-      htd = @admin.getTableDescriptor(table_name.to_java_bytes)
++        htd = @admin.getTableDescriptor(table_name.to_java_bytes)
+ 
+-      if (family != nil)
+-        raise(ArgumentError, "Can't find a family: #{family}") unless htd.hasFamily(family.to_java_bytes)
++        if (family != nil)
++          raise(ArgumentError, "Can't find family: #{family}") unless htd.hasFamily(family.to_java_bytes)
++        end
++
++        # invoke cp endpoint to perform access control
++        fambytes = family.to_java_bytes if (family != nil)
++        qualbytes = qualifier.to_java_bytes if (qualifier != nil)
++        user_permission = org.apache.hadoop.hbase.security.access.UserPermission.new(
++                                                    user.to_java_bytes, table_name.to_java_bytes,
++                                                    fambytes, qualbytes, "".to_java_bytes)
++      else
++        user_permission = org.apache.hadoop.hbase.security.access.UserPermission.new(
++                                                    user.to_java_bytes, "".to_java_bytes)
+       end
+ 
+-      fambytes = family.to_java_bytes if (family != nil)
+-      qualbytes = qualifier.to_java_bytes if (qualifier != nil)
+-      tp = org.apache.hadoop.hbase.security.access.TablePermission.new(table_name.to_java_bytes, fambytes, qualbytes, "".to_java_bytes)
+-      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config, org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
+-      protocol = meta_table.coprocessorProxy(org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
++      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config,
++                        org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
++      protocol = meta_table.coprocessorProxy(
++                        org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
+                                              org.apache.hadoop.hbase.HConstants::EMPTY_START_ROW)
+-      protocol.revoke(user.to_java_bytes, tp)
++      begin
++        protocol.revoke(user_permission)
++      rescue java.io.IOException => e
++        if !(e.message.include? "java.lang.NoSuchMethodException")
++          raise e
++        end
++
++        # Server has not the new API, try the old one
++        if (table_name == nil)
++          raise "Global permissions not supported by HBase Server"
++        end
++
++        tp = org.apache.hadoop.hbase.security.access.TablePermission.new(table_name.to_java_bytes, fambytes, qualbytes, "".to_java_bytes)
++        protocol.revoke(user.to_java_bytes, tp)
++      end
+     end
+ 
+     #----------------------------------------------------------------------------------------------
+-    def user_permission(table_name)
++    def user_permission(table_name=nil)
+       security_available?
+ 
+-      raise(ArgumentError, "Can't find table: #{table_name}") unless exists?(table_name)
++      if (table_name != nil)
++        raise(ArgumentError, "Can't find table: #{table_name}") unless exists?(table_name)
++      end
+ 
+-      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config, org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
+-      protocol = meta_table.coprocessorProxy(org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
+-                                             org.apache.hadoop.hbase.HConstants::EMPTY_START_ROW)
+-      perms = protocol.getUserPermissions(table_name.to_java_bytes)
++      meta_table = org.apache.hadoop.hbase.client.HTable.new(@config, 
++                        org.apache.hadoop.hbase.security.access.AccessControlLists::ACL_TABLE_NAME)
++      protocol = meta_table.coprocessorProxy(
++                      org.apache.hadoop.hbase.security.access.AccessControllerProtocol.java_class,
++                      org.apache.hadoop.hbase.HConstants::EMPTY_START_ROW)
++      perms = protocol.getUserPermissions(table_name != nil ? table_name.to_java_bytes : nil)
+ 
+       res = {}
+       count  = 0
+diff --git a/src/main/ruby/shell.rb b/src/main/ruby/shell.rb
+index 53f3de8..f0d96e6 100644
+--- a/src/main/ruby/shell.rb
++++ b/src/main/ruby/shell.rb
+@@ -211,6 +211,7 @@ Shell.load_command_group(
+   :commands => %w[
+     status
+     version
++    whoami
+   ]
+ )
+ 
+diff --git a/src/main/ruby/shell/commands/grant.rb b/src/main/ruby/shell/commands/grant.rb
+index 7504f43..a4e9330 100644
+--- a/src/main/ruby/shell/commands/grant.rb
++++ b/src/main/ruby/shell/commands/grant.rb
+@@ -21,7 +21,7 @@ module Shell
+     class Grant < Command
+       def help
+         return <<-EOF
+-Grant users specific rights to tables.
++Grant users specific rights.
+ Syntax : grant <user> <permissions> <table> <column family> <column qualifier>
+ 
+ permissions is either zero or more letters from the set "RWXCA".
+@@ -29,11 +29,12 @@ READ('R'), WRITE('W'), EXEC('X'), CREATE('C'), ADMIN('A')
+ 
+ For example:
+ 
++    hbase> grant 'bobsmith', 'RWXCA'
+     hbase> grant 'bobsmith', 'RW', 't1', 'f1', 'col1'
+ EOF
+       end
+ 
+-      def command(user, rights, table_name, family=nil, qualifier=nil)
++      def command(user, rights, table_name=nil, family=nil, qualifier=nil)
+         format_simple_command do
+           security_admin.grant(user, rights, table_name, family, qualifier)
+         end
+diff --git a/src/main/ruby/shell/commands/revoke.rb b/src/main/ruby/shell/commands/revoke.rb
+index e94c364..fe9391c 100644
+--- a/src/main/ruby/shell/commands/revoke.rb
++++ b/src/main/ruby/shell/commands/revoke.rb
+@@ -21,15 +21,15 @@ module Shell
+     class Revoke < Command
+       def help
+         return <<-EOF
+-Revoke a user's access rights to tables.
+-Syntax : revoke <user> <table> <column family>
++Revoke a user's access rights.
++Syntax : revoke <user> <table> <column family> <column qualifier>
+ For example:
+ 
+-    hbase> revoke 'bobsmith', 't1', 'f1'
++    hbase> revoke 'bobsmith', 't1', 'f1', 'col1'
+ EOF
+       end
+ 
+-      def command(user, table_name, family=nil, qualifier=nil)
++      def command(user, table_name=nil, family=nil, qualifier=nil)
+         format_simple_command do
+           security_admin.revoke(user, table_name, family, qualifier)
+         end
+diff --git a/src/main/ruby/shell/commands/user_permission.rb b/src/main/ruby/shell/commands/user_permission.rb
+index a4da082..ad4a7b0 100644
+--- a/src/main/ruby/shell/commands/user_permission.rb
++++ b/src/main/ruby/shell/commands/user_permission.rb
+@@ -21,15 +21,16 @@ module Shell
+     class UserPermission < Command
+       def help
+         return <<-EOF
+-Show all table access permissions for the particular user.
++Show all permissions for the particular user.
+ Syntax : user_permission <table>
+ For example:
+ 
++    hbase> user_permission
+     hbase> user_permission 'table1'
+ EOF
+       end
+ 
+-      def command(table)
++      def command(table=nil)
+         #format_simple_command do
+         #admin.user_permission(table)
+         now = Time.now
+diff --git a/src/main/ruby/shell/commands/whoami.rb b/src/main/ruby/shell/commands/whoami.rb
+new file mode 100644
+index 0000000..8c6abda
+--- /dev/null
++++ b/src/main/ruby/shell/commands/whoami.rb
+@@ -0,0 +1,38 @@
++#
++# Licensed to the Apache Software Foundation (ASF) under one
++# or more contributor license agreements.  See the NOTICE file
++# distributed with this work for additional information
++# regarding copyright ownership.  The ASF licenses this file
++# to you under the Apache License, Version 2.0 (the
++# "License"); you may not use this file except in compliance
++# with the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++
++module Shell
++  module Commands
++    class Whoami < Command
++      def help
++        return <<-EOF
++Show the current hbase user.
++Syntax : whoami
++For example:
++
++    hbase> whoami
++EOF
++      end
++
++      def command()
++        puts "#{org.apache.hadoop.hbase.security.User.getCurrent().toString()}"
++      end
++    end
++  end
++end
++
+-- 
+1.7.0.4
+

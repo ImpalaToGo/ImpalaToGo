@@ -1,0 +1,99 @@
+From c504626f0c5c2df2cf835de2b7c7a1afedc5f7dc Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Thu, 26 Jul 2012 23:23:50 +0000
+Subject: [PATCH 122/144] HIVE-3301 : Fix quote printing bug in mapreduce_stack_trace.q testcase failure when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1366233 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 82bdad64a44df3e72b018ee1dfec11740e8351d3)
+---
+ .../hive/ql/exec/errors/TaskLogProcessor.java      |    4 +++-
+ .../apache/hadoop/hive/shims/Hadoop20Shims.java    |    6 ++++++
+ .../hadoop/hive/shims/HadoopShimsSecure.java       |    6 ++++++
+ .../org/apache/hadoop/hive/shims/HadoopShims.java  |    8 ++++++++
+ 4 files changed, 23 insertions(+), 1 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/errors/TaskLogProcessor.java b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/errors/TaskLogProcessor.java
+index 2f4906f..de785d6 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/errors/TaskLogProcessor.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/errors/TaskLogProcessor.java
+@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.hive.conf.HiveConf;
++import org.apache.hadoop.hive.shims.ShimLoader;
+ import org.apache.hadoop.mapred.JobConf;
+ 
+ /**
+@@ -206,7 +207,8 @@ public class TaskLogProcessor {
+         Pattern endStackTracePattern =
+             Pattern.compile("^\t... [0-9]+ more.*", Pattern.CASE_INSENSITIVE);
+ 
+-        while ((inputLine = in.readLine()) != null) {
++        while ((inputLine =
++          ShimLoader.getHadoopShims().unquoteHtmlChars(in.readLine())) != null) {
+ 
+           if (stackTracePattern.matcher(inputLine).matches() ||
+               endStackTracePattern.matcher(inputLine).matches()) {
+diff --git a/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java b/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
+index a09851a..d0f971f 100644
+--- a/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
++++ b/src/shims/src/0.20/java/org/apache/hadoop/hive/shims/Hadoop20Shims.java
+@@ -558,6 +558,12 @@ public class Hadoop20Shims implements HadoopShims {
+   }
+ 
+   @Override
++  public String unquoteHtmlChars(String item) {
++    return item;
++  }
++
++
++  @Override
+   public org.apache.hadoop.mapreduce.TaskAttemptContext newTaskAttemptContext(Configuration conf, final Progressable progressable) {
+     return new org.apache.hadoop.mapreduce.TaskAttemptContext(conf, new TaskAttemptID()) {
+       @Override
+diff --git a/src/shims/src/common-secure/java/org/apache/hadoop/hive/shims/HadoopShimsSecure.java b/src/shims/src/common-secure/java/org/apache/hadoop/hive/shims/HadoopShimsSecure.java
+index 620c014..73d2045 100644
+--- a/src/shims/src/common-secure/java/org/apache/hadoop/hive/shims/HadoopShimsSecure.java
++++ b/src/shims/src/common-secure/java/org/apache/hadoop/hive/shims/HadoopShimsSecure.java
+@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.PathFilter;
+ import org.apache.hadoop.hdfs.MiniDFSCluster;
+ import org.apache.hadoop.hive.io.HiveIOExceptionHandlerUtil;
+ import org.apache.hadoop.hive.thrift.DelegationTokenSelector;
++import org.apache.hadoop.http.HtmlQuoting;
+ import org.apache.hadoop.io.Text;
+ import org.apache.hadoop.mapred.ClusterStatus;
+ import org.apache.hadoop.mapred.FileInputFormat;
+@@ -78,6 +79,11 @@ public abstract class HadoopShimsSecure implements HadoopShims {
+     // gone in 0.18+
+   }
+ 
++  @Override
++  public String unquoteHtmlChars(String item) {
++    return HtmlQuoting.unquoteHtmlChars(item);
++  }
++
+   public boolean isJobPreparing(RunningJob job) throws IOException {
+     return job.getJobState() == JobStatus.PREP;
+   }
+diff --git a/src/shims/src/common/java/org/apache/hadoop/hive/shims/HadoopShims.java b/src/shims/src/common/java/org/apache/hadoop/hive/shims/HadoopShims.java
+index 146295b..ee38781 100644
+--- a/src/shims/src/common/java/org/apache/hadoop/hive/shims/HadoopShims.java
++++ b/src/shims/src/common/java/org/apache/hadoop/hive/shims/HadoopShims.java
+@@ -170,6 +170,14 @@ public interface HadoopShims {
+   void prepareJobOutput(JobConf conf);
+ 
+   /**
++   * Used by TaskLogProcessor to Remove HTML quoting from a string
++   * @param item the string to unquote
++   * @return the unquoted string
++   *
++   */
++  public String unquoteHtmlChars(String item);
++
++  /**
+    * Get the UGI that the given job configuration will run as.
+    *
+    * In secure versions of Hadoop, this simply returns the current
+-- 
+1.7.0.4
+

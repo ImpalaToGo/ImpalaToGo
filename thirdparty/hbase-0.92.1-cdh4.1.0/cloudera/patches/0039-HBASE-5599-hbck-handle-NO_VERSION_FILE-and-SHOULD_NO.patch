@@ -1,0 +1,295 @@
+From 9e870f0145d7e87e5428bfd77393a3c7196ca3f8 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Wed, 11 Apr 2012 17:20:02 +0000
+Subject: [PATCH 039/151] HBASE-5599 [hbck] handle NO_VERSION_FILE and SHOULD_NOT_BE_DEPLOYED inconsistencies (fulin wang)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1324879 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Supportability
+Author: Fulin Wang
+Ref: CDH-5883
+---
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |   35 ++++++-
+ .../apache/hadoop/hbase/util/TestHBaseFsck.java    |  104 +++++++++++++++++++-
+ .../hadoop/hbase/util/hbck/HbckTestingUtil.java    |    5 +-
+ 3 files changed, 137 insertions(+), 7 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index f3b9469..5dde9ff 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -160,6 +160,7 @@ public class HBaseFsck {
+   private boolean fixHdfsHoles = false; // fix fs holes?
+   private boolean fixHdfsOverlaps = false; // fix fs overlaps (risky)
+   private boolean fixHdfsOrphans = false; // fix fs holes (missing .regioninfo)
++  private boolean fixVersionFile = false; // fix missing hbase.version file in hdfs
+ 
+   // limit fixes to listed tables, if empty atttempt to fix all
+   private List<byte[]> tablesToFix = new ArrayList<byte[]>();
+@@ -1003,6 +1004,15 @@ public class HBaseFsck {
+     if (!foundVersionFile) {
+       errors.reportError(ERROR_CODE.NO_VERSION_FILE,
+           "Version file does not exist in root dir " + rootDir);
++      if (shouldFixVersionFile()) {
++        LOG.info("Trying to create a new " + HConstants.VERSION_FILE_NAME
++            + " file.");
++        setShouldRerun();
++        FSUtils.setVersion(fs, rootDir, conf.getInt(
++            HConstants.THREAD_WAKE_FREQUENCY, 10 * 1000), conf.getInt(
++            HConstants.VERSION_FILE_WRITE_ATTEMPTS,
++            HConstants.DEFAULT_VERSION_FILE_WRITE_ATTEMPTS));
++      }
+     }
+ 
+     // level 1:  <HBASE_DIR>/*
+@@ -1353,10 +1363,14 @@ public class HBaseFsck {
+           + " not deployed on any region server.");
+       tryAssignmentRepair(hbi, "Trying to fix unassigned region...");
+     } else if (inMeta && inHdfs && isDeployed && !shouldBeDeployed) {
+-      errors.reportError(ERROR_CODE.SHOULD_NOT_BE_DEPLOYED, "UNHANDLED CASE:" +
+-          " Region " + descriptiveName + " should not be deployed according " +
++      errors.reportError(ERROR_CODE.SHOULD_NOT_BE_DEPLOYED, 
++          "Region " + descriptiveName + " should not be deployed according " +
+           "to META, but is deployed on " + Joiner.on(", ").join(hbi.deployedOn));
+-      // TODO test and handle this case.
++      if (shouldFixAssignments()) {
++        errors.print("Trying to close the region " + descriptiveName);
++        setShouldRerun();
++        HBaseFsckRepair.fixMultiAssignment(admin, hbi.metaEntry, hbi.deployedOn);
++      }
+     } else if (inMeta && inHdfs && isMultiplyDeployed) {
+       errors.reportError(ERROR_CODE.MULTI_DEPLOYED, "Region " + descriptiveName
+           + " is listed in META on region server " + hbi.metaEntry.regionServer
+@@ -2730,6 +2744,14 @@ public class HBaseFsck {
+   boolean shouldFixHdfsOrphans() {
+     return fixHdfsOrphans;
+   }
++  
++  public void setFixVersionFile(boolean shouldFix) {
++    fixVersionFile = shouldFix;
++  }
++
++  public boolean shouldFixVersionFile() {
++    return fixVersionFile;
++  }
+ 
+   /**
+    * @param mm maximum number of regions to merge into a single region.
+@@ -2789,9 +2811,10 @@ public class HBaseFsck {
+     System.err.println("   -fixHdfsHoles     Try to fix region holes in hdfs.");
+     System.err.println("   -fixHdfsOrphans   Try to fix region dirs with no .regioninfo file in hdfs");
+     System.err.println("   -fixHdfsOverlaps  Try to fix region overlaps in hdfs.");
++    System.err.println("   -fixVersionFile   Try to fix missing hbase.version file in hdfs.");
+     System.err.println("   -maxMerge <n>     When fixing region overlaps, allow at most <n> regions to merge. (n=" + DEFAULT_MAX_MERGE +" by default)");
+     System.err.println("");
+-    System.err.println("   -repair           Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans -fixHdfsOverlaps");
++    System.err.println("   -repair           Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans -fixHdfsOverlaps -fixVersionFile");
+     System.err.println("   -repairHoles      Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans");
+ 
+     Runtime.getRuntime().exit(-2);
+@@ -2854,6 +2877,8 @@ public class HBaseFsck {
+         fsck.setFixHdfsOrphans(true);
+       } else if (cmd.equals("-fixHdfsOverlaps")) {
+         fsck.setFixHdfsOverlaps(true);
++      } else if (cmd.equals("-fixVersionFile")) {
++        fsck.setFixVersionFile(true);
+       } else if (cmd.equals("-repair")) {
+         // this attempts to merge overlapping hdfs regions, needs testing
+         // under load
+@@ -2862,6 +2887,7 @@ public class HBaseFsck {
+         fsck.setFixMeta(true);
+         fsck.setFixAssignments(true);
+         fsck.setFixHdfsOverlaps(true);
++        fsck.setFixVersionFile(true);
+       } else if (cmd.equals("-repairHoles")) {
+         // this will make all missing hdfs regions available but may lose data
+         fsck.setFixHdfsHoles(true);
+@@ -2911,6 +2937,7 @@ public class HBaseFsck {
+       fsck.setFixMeta(false);
+       fsck.setFixHdfsHoles(false);
+       fsck.setFixHdfsOverlaps(false);
++      fsck.setFixVersionFile(false);
+       fsck.errors.resetErrors();
+       code = fsck.onlineHbck();
+     }
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+index c4ca32c..c7c043e 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+@@ -23,6 +23,7 @@ import static org.apache.hadoop.hbase.util.hbck.HbckTestingUtil.assertErrors;
+ import static org.apache.hadoop.hbase.util.hbck.HbckTestingUtil.assertNoErrors;
+ import static org.apache.hadoop.hbase.util.hbck.HbckTestingUtil.doFsck;
+ import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+@@ -36,7 +37,6 @@ import java.util.Map.Entry;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+-import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.ClusterStatus;
+@@ -45,6 +45,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.MiniHBaseCluster;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+@@ -54,9 +55,15 @@ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.executor.RegionTransitionData;
++import org.apache.hadoop.hbase.executor.EventHandler.EventType;
+ import org.apache.hadoop.hbase.ipc.HRegionInterface;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
++import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.util.HBaseFsck;
+ import org.apache.hadoop.hbase.util.HBaseFsck.ErrorReporter.ERROR_CODE;
++import org.apache.hadoop.hbase.zookeeper.ZKAssign;
++import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ import org.apache.zookeeper.KeeperException;
+ import org.junit.AfterClass;
+ import org.junit.BeforeClass;
+@@ -70,6 +77,7 @@ public class TestHBaseFsck {
+   private final static HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
+   private final static Configuration conf = TEST_UTIL.getConfiguration();
+   private final static byte[] FAM = Bytes.toBytes("fam");
++  private final static int REGION_ONLINE_TIMEOUT = 300;
+ 
+   // for the instance, reset every test run
+   private HTable tbl;
+@@ -841,4 +849,98 @@ public class TestHBaseFsck {
+     }
+     fail("Should have failed with IOException");
+   }
++
++
++  /**
++   * when the hbase.version file missing, It is fix the fault.
++   */
++  @Test
++  public void testNoVersionFile() throws Exception {
++    // delete the hbase.version file
++    Path rootDir = new Path(conf.get(HConstants.HBASE_DIR));
++    FileSystem fs = rootDir.getFileSystem(conf);
++    Path versionFile = new Path(rootDir, HConstants.VERSION_FILE_NAME);
++    fs.delete(versionFile, true);
++
++    // test
++    HBaseFsck hbck = doFsck(conf, false);
++    assertErrors(hbck, new ERROR_CODE[] { ERROR_CODE.NO_VERSION_FILE });
++    // fix hbase.version missing
++    doFsck(conf, true);
++
++    // no version file fixed
++    assertNoErrors(doFsck(conf, false));
++  }
++
++  /**
++   * the region is not deployed when the table is disabled.
++   */
++  @Test
++  public void testRegionShouldNotDeployed() throws Exception {
++    String table = "tableRegionShouldNotDeployed";
++    try {
++      LOG.info("Starting testRegionShouldNotDeployed.");
++      MiniHBaseCluster cluster = TEST_UTIL.getHBaseCluster();
++      assertTrue(cluster.waitForActiveAndReadyMaster());
++
++      // Create a ZKW to use in the test
++      ZooKeeperWatcher zkw = HBaseTestingUtility.getZooKeeperWatcher(TEST_UTIL);
++
++      FileSystem filesystem = FileSystem.get(conf);
++      Path rootdir = filesystem.makeQualified(new Path(conf
++          .get(HConstants.HBASE_DIR)));
++
++      byte[][] SPLIT_KEYS = new byte[][] { new byte[0], Bytes.toBytes("aaa"),
++          Bytes.toBytes("bbb"), Bytes.toBytes("ccc"), Bytes.toBytes("ddd") };
++      HTableDescriptor htdDisabled = new HTableDescriptor(Bytes.toBytes(table));
++      htdDisabled.addFamily(new HColumnDescriptor(FAM));
++
++      // Write the .tableinfo
++      FSTableDescriptors
++          .createTableDescriptor(filesystem, rootdir, htdDisabled);
++      List<HRegionInfo> disabledRegions = TEST_UTIL.createMultiRegionsInMeta(
++          TEST_UTIL.getConfiguration(), htdDisabled, SPLIT_KEYS);
++
++      // Let's just assign everything to first RS
++      HRegionServer hrs = cluster.getRegionServer(0);
++      ServerName serverName = hrs.getServerName();
++
++      // create region files.
++      TEST_UTIL.getHBaseAdmin().disableTable(table);
++      TEST_UTIL.getHBaseAdmin().enableTable(table);
++
++      // Region of disable table was opened on RS
++      TEST_UTIL.getHBaseAdmin().disableTable(table);
++      HRegionInfo region = disabledRegions.remove(0);
++      ZKAssign.createNodeOffline(zkw, region, serverName);
++      hrs.openRegion(region);
++
++      int iTimes = 0;
++      while (true) {
++        RegionTransitionData rtd = ZKAssign.getData(zkw,
++            region.getEncodedName());
++        if (rtd != null && rtd.getEventType() == EventType.RS_ZK_REGION_OPENED) {
++          break;
++        }
++        Thread.sleep(100);
++        iTimes++;
++        if (iTimes >= REGION_ONLINE_TIMEOUT) {
++          break;
++        }
++      }
++      assertTrue(iTimes < REGION_ONLINE_TIMEOUT);
++
++      HBaseFsck hbck = doFsck(conf, false);
++      assertErrors(hbck, new ERROR_CODE[] { ERROR_CODE.SHOULD_NOT_BE_DEPLOYED });
++
++      // fix this fault
++      doFsck(conf, true);
++
++      // check result
++      assertNoErrors(doFsck(conf, false));
++    } finally {
++      TEST_UTIL.getHBaseAdmin().enableTable(table);
++      deleteTable(table);
++    }
++  }
+ }
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java b/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
+index 75d24da..393cbba 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
+@@ -29,12 +29,12 @@ import org.apache.hadoop.hbase.util.HBaseFsck.ErrorReporter.ERROR_CODE;
+ 
+ public class HbckTestingUtil {
+   public static HBaseFsck doFsck(Configuration conf, boolean fix) throws Exception {
+-    return doFsck(conf, fix, fix, fix, fix,fix);
++    return doFsck(conf, fix, fix, fix, fix,fix, fix);
+   }
+ 
+   public static HBaseFsck doFsck(Configuration conf, boolean fixAssignments,
+       boolean fixMeta, boolean fixHdfsHoles, boolean fixHdfsOverlaps,
+-      boolean fixHdfsOrphans) throws Exception {
++      boolean fixHdfsOrphans, boolean fixVersionFile) throws Exception {
+     HBaseFsck fsck = new HBaseFsck(conf);
+     fsck.connect();
+     fsck.setDisplayFullReport(); // i.e. -details
+@@ -44,6 +44,7 @@ public class HbckTestingUtil {
+     fsck.setFixHdfsHoles(fixHdfsHoles);
+     fsck.setFixHdfsOverlaps(fixHdfsOverlaps);
+     fsck.setFixHdfsOrphans(fixHdfsOrphans);
++    fsck.setFixVersionFile(fixVersionFile);
+     fsck.onlineHbck();
+     return fsck;
+   }
+-- 
+1.7.0.4
+

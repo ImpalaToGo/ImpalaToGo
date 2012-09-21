@@ -1,0 +1,51 @@
+From e997430fc1e6086c199ebc9ee4782c1ff902ad2d Mon Sep 17 00:00:00 2001
+From: Edward Capriolo <ecapriolo@apache.org>
+Date: Wed, 13 Jun 2012 02:18:18 +0000
+Subject: [PATCH 088/144] HIVE-2911 Move Global .hiverc file (Owen O'Malley via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349611 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 0f6781bb2f7406764417ebcca0cfba04ad468add)
+---
+ .../java/org/apache/hadoop/hive/cli/CliDriver.java |   19 +++++++++++++++++--
+ 1 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java b/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
+index 0d609e4..34fc843 100644
+--- a/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
++++ b/src/cli/src/java/org/apache/hadoop/hive/cli/CliDriver.java
+@@ -466,7 +466,21 @@ public class CliDriver {
+     }
+     if (ss.initFiles.size() == 0) {
+       if (System.getenv("HIVE_HOME") != null) {
+-        String hivercDefault = System.getenv("HIVE_HOME") + File.separator + "bin" + File.separator + HIVERCFILE;
++        String hivercDefault = System.getenv("HIVE_HOME") + File.separator +
++          "bin" + File.separator + HIVERCFILE;
++        if (new File(hivercDefault).exists()) {
++          int rc = processFile(hivercDefault);
++          if (rc != 0) {
++            System.exit(rc);
++          }
++          console.printError("Putting the global hiverc in " +
++                             "$HIVE_HOME/bin/.hiverc is deprecated. Please "+
++                             "use $HIVE_CONF_DIR/.hiverc instead.");
++        }
++      }
++      if (System.getenv("HIVE_CONF_DIR") != null) {
++        String hivercDefault = System.getenv("HIVE_CONF_DIR") + File.separator
++          + HIVERCFILE;
+         if (new File(hivercDefault).exists()) {
+           int rc = processFile(hivercDefault);
+           if (rc != 0) {
+@@ -475,7 +489,8 @@ public class CliDriver {
+         }
+       }
+       if (System.getProperty("user.home") != null) {
+-        String hivercUser = System.getProperty("user.home") + File.separator + HIVERCFILE;
++        String hivercUser = System.getProperty("user.home") + File.separator +
++          HIVERCFILE;
+         if (new File(hivercUser).exists()) {
+           int rc = processFile(hivercUser);
+           if (rc != 0) {
+-- 
+1.7.0.4
+

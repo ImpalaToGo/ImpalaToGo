@@ -1,0 +1,287 @@
+From f877877b1218ba9fa91fcb6eb425b74d55feeb1d Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Wed, 25 Jul 2012 14:44:15 -0700
+Subject: [PATCH 081/151] HBASE-6173 hbck check specified tables only
+
+Reason: Backport
+Author: Jimmy Xiang
+Ref: CDH-6919
+---
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |   70 +++++++++-----------
+ .../apache/hadoop/hbase/util/TestHBaseFsck.java    |   45 +++++++++++++
+ .../hadoop/hbase/util/hbck/HbckTestingUtil.java    |   17 ++++-
+ 3 files changed, 90 insertions(+), 42 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index 3d7a2bf..0191715 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -139,7 +139,6 @@ public class HBaseFsck {
+   public static final long DEFAULT_TIME_LAG = 60000; // default value of 1 minute
+   public static final long DEFAULT_SLEEP_BEFORE_RERUN = 10000;
+   private static final int MAX_NUM_THREADS = 50; // #threads to contact regions
+-  private static final long THREADS_KEEP_ALIVE_SECONDS = 60;
+   private static boolean rsSupportsOffline = true;
+   private static final int DEFAULT_OVERLAPS_TO_SIDELINE = 2;
+   private static final int DEFAULT_MAX_MERGE = 5;
+@@ -169,8 +168,9 @@ public class HBaseFsck {
+   private boolean fixHdfsOrphans = false; // fix fs holes (missing .regioninfo)
+   private boolean fixVersionFile = false; // fix missing hbase.version file in hdfs
+ 
+-  // limit fixes to listed tables, if empty atttempt to fix all
+-  private List<byte[]> tablesToFix = new ArrayList<byte[]>();
++  // limit checking/fixes to listed tables, if empty attempt to check/fix all
++  // -ROOT- and .META. are always checked
++  private Set<String> tablesIncluded = new HashSet<String>();
+   private int maxMerge = DEFAULT_MAX_MERGE; // maximum number of overlapping regions to merge
+   private int maxOverlapsToSideline = DEFAULT_OVERLAPS_TO_SIDELINE; // maximum number of overlapping regions to sideline
+   private boolean sidelineBigOverlaps = false; // sideline overlaps with >maxMerge regions
+@@ -200,6 +200,11 @@ public class HBaseFsck {
+    * This map from Tablename -> TableInfo contains the structures necessary to
+    * detect table consistency problems (holes, dupes, overlaps).  It is sorted
+    * to prevent dupes.
++   *
++   * If tablesIncluded is empty, this map contains all tables.
++   * Otherwise, it contains only meta tables and tables in tablesIncluded,
++   * unless checkMetaOnly is specified, in which case, it contains only
++   * the meta tables (.META. and -ROOT-).
+    */
+   private SortedMap<String, TableInfo> tablesInfo = new ConcurrentSkipListMap<String,TableInfo>();
+ 
+@@ -672,6 +677,7 @@ public class HBaseFsck {
+         // only executed once per table.
+         modTInfo = new TableInfo(tableName);
+         Path hbaseRoot = new Path(conf.get(HConstants.HBASE_DIR));
++        tablesInfo.put(tableName, modTInfo);
+         try {
+           HTableDescriptor htd =
+               FSTableDescriptors.getTableDescriptor(hbaseRoot.getFileSystem(conf),
+@@ -681,10 +687,8 @@ public class HBaseFsck {
+           LOG.error("Unable to read .tableinfo from " + hbaseRoot, ioe);
+           throw ioe;
+         }
+-
+       }
+       modTInfo.addRegionInfo(hbi);
+-      tablesInfo.put(tableName, modTInfo);
+     }
+ 
+     return tablesInfo;
+@@ -839,14 +843,8 @@ public class HBaseFsck {
+     for (TableInfo tInfo : tablesInfo.values()) {
+       TableIntegrityErrorHandler handler;
+       if (fixHoles || fixOverlaps) {
+-        if (shouldFixTable(Bytes.toBytes(tInfo.getName()))) {
+-          handler = tInfo.new HDFSIntegrityFixer(tInfo, errors, conf,
+-              fixHoles, fixOverlaps);
+-        } else {
+-          LOG.info("Table " + tInfo.getName() + " is not in the include table " +
+-            "list.  Just suggesting fixes.");
+-          handler = tInfo.new IntegrityFixSuggester(tInfo, errors);
+-        }
++        handler = tInfo.new HDFSIntegrityFixer(tInfo, errors, conf,
++          fixHoles, fixOverlaps);
+       } else {
+         handler = tInfo.new IntegrityFixSuggester(tInfo, errors);
+       }
+@@ -1050,7 +1048,7 @@ public class HBaseFsck {
+       if (dirName.equals(HConstants.VERSION_FILE_NAME)) {
+         foundVersionFile = true;
+       } else {
+-        if (!checkMetaOnly ||
++        if ((!checkMetaOnly && isTableIncluded(dirName)) ||
+             dirName.equals("-ROOT-") ||
+             dirName.equals(".META.")) {
+           tableDirs.add(file);
+@@ -2243,9 +2241,14 @@ public class HBaseFsck {
+           if (pair.getSecond() != null) {
+             sn = pair.getSecond();
+           }
+-          MetaEntry m = new MetaEntry(pair.getFirst(), sn, ts);
++          HRegionInfo hri = pair.getFirst();
++          if (!(isTableIncluded(hri.getTableNameAsString())
++              || hri.isMetaRegion() || hri.isRootRegion())) {
++            return true;
++          }
++          MetaEntry m = new MetaEntry(hri, sn, ts);
+           HbckInfo hbInfo = new HbckInfo(m);
+-          HbckInfo previous = regionInfoMap.put(pair.getFirst().getEncodedName(), hbInfo);
++          HbckInfo previous = regionInfoMap.put(hri.getEncodedName(), hbInfo);
+           if (previous != null) {
+             throw new IOException("Two entries in META are same " + previous);
+           }
+@@ -2271,7 +2274,7 @@ public class HBaseFsck {
+       // Scan .META. to pick up user regions
+       MetaScanner.metaScan(conf, visitor);
+     }
+-    
++
+     errors.print("");
+     return true;
+   }
+@@ -2677,9 +2680,7 @@ public class HBaseFsck {
+ 
+         // list all online regions from this region server
+         List<HRegionInfo> regions = server.getOnlineRegions();
+-        if (hbck.checkMetaOnly) {
+-          regions = filterOnlyMetaRegions(regions);
+-        }
++        regions = filterRegions(regions);
+         if (details) {
+           errors.detail("RegionServer: " + rsinfo.getServerName() +
+                            " number of regions: " + regions.size());
+@@ -2705,10 +2706,11 @@ public class HBaseFsck {
+       return null;
+     }
+ 
+-    private List<HRegionInfo> filterOnlyMetaRegions(List<HRegionInfo> regions) {
++    private List<HRegionInfo> filterRegions(List<HRegionInfo> regions) {
+       List<HRegionInfo> ret = Lists.newArrayList();
+       for (HRegionInfo hri : regions) {
+-        if (hri.isMetaTable()) {
++        if (hri.isMetaTable() || (!hbck.checkMetaOnly
++            && hbck.isTableIncluded(hri.getTableNameAsString()))) {
+           ret.add(hri);
+         }
+       }
+@@ -2953,22 +2955,15 @@ public class HBaseFsck {
+   }
+ 
+   /**
+-   * Only fix tables specified by the list
++   * Only check/fix tables specified by the list,
++   * Empty list means all tables are included.
+    */
+-  boolean shouldFixTable(byte[] table) {
+-    if (tablesToFix.size() == 0) {
+-      return true;
+-    }
+-
+-    // doing this naively since byte[] equals may not do what we want.
+-    for (byte[] t : tablesToFix) {
+-      if (Bytes.equals(t, table)) return true;
+-    }
+-    return false;
++  boolean isTableIncluded(String table) {
++    return (tablesIncluded.size() == 0) || tablesIncluded.contains(table);
+   }
+ 
+-  void includeTable(byte[] table) {
+-    tablesToFix.add(table);
++  public void includeTable(String table) {
++    tablesIncluded.add(table);
+   }
+ 
+   /**
+@@ -3129,9 +3124,8 @@ public class HBaseFsck {
+         System.err.println("Unrecognized option:" + cmd);
+         printUsageAndExit();
+       } else {
+-        byte[] table = Bytes.toBytes(cmd);
+-        fsck.includeTable(table);
+-        System.out.println("Allow fixes for table: " + cmd);
++        fsck.includeTable(cmd);
++        System.out.println("Allow checking/fixes for table: " + cmd);
+       }
+     }
+     // do the real work of fsck
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+index 79d8107..2a4c869 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+@@ -1053,4 +1053,49 @@ public class TestHBaseFsck {
+       deleteTable(table);
+     }
+   }
++
++  /**
++   * This creates two tables and mess both of them and fix them one by one
++   */
++  @Test
++  public void testFixByTable() throws Exception {
++    String table1 = "testFixByTable1";
++    String table2 = "testFixByTable2";
++    try {
++      setupTable(table1);
++      // make sure data in regions, if in hlog only there is no data loss
++      TEST_UTIL.getHBaseAdmin().flush(table1);
++      // Mess them up by leaving a hole in the hdfs data
++      deleteRegion(conf, tbl.getTableDescriptor(), Bytes.toBytes("B"),
++        Bytes.toBytes("C"), false, false, true); // don't rm meta
++
++      setupTable(table2);
++      // make sure data in regions, if in hlog only there is no data loss
++      TEST_UTIL.getHBaseAdmin().flush(table2);
++      // Mess them up by leaving a hole in the hdfs data
++      deleteRegion(conf, tbl.getTableDescriptor(), Bytes.toBytes("B"),
++        Bytes.toBytes("C"), false, false, true); // don't rm meta
++
++      HBaseFsck hbck = doFsck(conf, false);
++      assertErrors(hbck, new ERROR_CODE[] {
++        ERROR_CODE.NOT_IN_HDFS, ERROR_CODE.NOT_IN_HDFS});
++
++      // fix hole in table 1
++      doFsck(conf, true, table1);
++      // check that hole in table 1 fixed
++      assertNoErrors(doFsck(conf, false, table1));
++      // check that hole in table 2 still there
++      assertErrors(doFsck(conf, false, table2),
++        new ERROR_CODE[] {ERROR_CODE.NOT_IN_HDFS});
++
++      // fix hole in table 2
++      doFsck(conf, true, table2);
++      // check that hole in both tables fixed
++      assertNoErrors(doFsck(conf, false));
++      assertEquals(ROWKEYS.length - 2, countRows());
++    } finally {
++      deleteTable(table1);
++      deleteTable(table2);
++    }
++  }
+ }
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java b/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
+index 393cbba..f4c5983 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/hbck/HbckTestingUtil.java
+@@ -28,13 +28,20 @@ import org.apache.hadoop.hbase.util.HBaseFsck;
+ import org.apache.hadoop.hbase.util.HBaseFsck.ErrorReporter.ERROR_CODE;
+ 
+ public class HbckTestingUtil {
+-  public static HBaseFsck doFsck(Configuration conf, boolean fix) throws Exception {
+-    return doFsck(conf, fix, fix, fix, fix,fix, fix);
++  public static HBaseFsck doFsck(
++      Configuration conf, boolean fix) throws Exception {
++    return doFsck(conf, fix, null);
++  }
++
++  public static HBaseFsck doFsck(
++      Configuration conf, boolean fix, String table) throws Exception {
++    return doFsck(conf, fix, fix, fix, fix,fix, fix, table);
+   }
+ 
+   public static HBaseFsck doFsck(Configuration conf, boolean fixAssignments,
+       boolean fixMeta, boolean fixHdfsHoles, boolean fixHdfsOverlaps,
+-      boolean fixHdfsOrphans, boolean fixVersionFile) throws Exception {
++      boolean fixHdfsOrphans, boolean fixVersionFile,
++      String table) throws Exception {
+     HBaseFsck fsck = new HBaseFsck(conf);
+     fsck.connect();
+     fsck.setDisplayFullReport(); // i.e. -details
+@@ -45,11 +52,13 @@ public class HbckTestingUtil {
+     fsck.setFixHdfsOverlaps(fixHdfsOverlaps);
+     fsck.setFixHdfsOrphans(fixHdfsOrphans);
+     fsck.setFixVersionFile(fixVersionFile);
++    if (table != null) {
++      fsck.includeTable(table);
++    }
+     fsck.onlineHbck();
+     return fsck;
+   }
+ 
+-
+   public static void assertNoErrors(HBaseFsck fsck) throws Exception {
+     List<ERROR_CODE> errs = fsck.getErrors().getErrorList();
+     assertEquals(new ArrayList<ERROR_CODE>(), errs);
+-- 
+1.7.0.4
+

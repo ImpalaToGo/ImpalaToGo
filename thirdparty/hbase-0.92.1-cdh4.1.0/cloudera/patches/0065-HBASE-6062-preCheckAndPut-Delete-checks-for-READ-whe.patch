@@ -1,0 +1,105 @@
+From cd7b881506ba4449c5cdbb629d217dc25065be1f Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Thu, 31 May 2012 19:35:10 +0200
+Subject: [PATCH 065/151] HBASE-6062 preCheckAndPut/Delete() checks for READ when also a WRITE is performed
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1344488 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/security/access/AccessController.java    |   10 +++--
+ .../security/access/TestAccessController.java      |   45 ++++++++++++++++++++
+ 2 files changed, 51 insertions(+), 4 deletions(-)
+
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index b4a90e6..d815be7 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -793,8 +793,9 @@ public class AccessController extends BaseRegionObserver
+       final CompareFilter.CompareOp compareOp,
+       final WritableByteArrayComparable comparator, final Put put,
+       final boolean result) throws IOException {
+-    requirePermission(TablePermission.Action.READ, c.getEnvironment(),
+-        Arrays.asList(new byte[][]{family}));
++    Collection<byte[]> familyMap = Arrays.asList(new byte[][]{family});
++    requirePermission(TablePermission.Action.READ, c.getEnvironment(), familyMap);
++    requirePermission(TablePermission.Action.WRITE, c.getEnvironment(), familyMap);
+     return result;
+   }
+ 
+@@ -804,8 +805,9 @@ public class AccessController extends BaseRegionObserver
+       final CompareFilter.CompareOp compareOp,
+       final WritableByteArrayComparable comparator, final Delete delete,
+       final boolean result) throws IOException {
+-    requirePermission(TablePermission.Action.READ, c.getEnvironment(),
+-        Arrays.asList( new byte[][] {family}));
++    Collection<byte[]> familyMap = Arrays.asList(new byte[][]{family});
++    requirePermission(TablePermission.Action.READ, c.getEnvironment(), familyMap);
++    requirePermission(TablePermission.Action.WRITE, c.getEnvironment(), familyMap);
+     return result;
+   }
+ 
+diff --git a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+index 4bb7ebb..45d75c3 100644
+--- a/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
++++ b/security/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+@@ -536,6 +536,18 @@ public class TestAccessController {
+     verifyAllowed(USER_RO, action);
+   }
+ 
++  private void verifyReadWrite(PrivilegedExceptionAction action) throws Exception {
++    // should be denied
++    verifyDenied(USER_NONE, action);
++    verifyDenied(USER_RO, action);
++
++    // should be allowed
++    verifyAllowed(SUPERUSER, action);
++    verifyAllowed(USER_ADMIN, action);
++    verifyAllowed(USER_OWNER, action);
++    verifyAllowed(USER_RW, action);
++  }
++
+   @Test
+   public void testRead() throws Exception {
+     // get action
+@@ -613,6 +625,39 @@ public class TestAccessController {
+   }
+ 
+   @Test
++  public void testReadWrite() throws Exception {
++    // action for checkAndDelete
++    PrivilegedExceptionAction checkAndDeleteAction = new PrivilegedExceptionAction() {
++      public Object run() throws Exception {
++        Delete d = new Delete(Bytes.toBytes("random_row"));
++        d.deleteFamily(TEST_FAMILY);
++
++        HTable t = new HTable(conf, TEST_TABLE);
++        t.checkAndDelete(Bytes.toBytes("random_row"),
++                         TEST_FAMILY, Bytes.toBytes("q"),
++                         Bytes.toBytes("test_value"), d);
++        return null;
++      }
++    };
++    verifyReadWrite(checkAndDeleteAction);
++
++    // action for checkAndPut()
++    PrivilegedExceptionAction checkAndPut = new PrivilegedExceptionAction() {
++      public Object run() throws Exception {
++        Put p = new Put(Bytes.toBytes("random_row"));
++        p.add(TEST_FAMILY, Bytes.toBytes("Qualifier"), Bytes.toBytes(1));
++
++        HTable t = new HTable(conf, TEST_TABLE);
++        t.checkAndPut(Bytes.toBytes("random_row"),
++                      TEST_FAMILY, Bytes.toBytes("q"),
++                      Bytes.toBytes("test_value"), p);
++        return null;
++      }
++    };
++    verifyReadWrite(checkAndPut);
++  }
++
++  @Test
+   public void testGrantRevoke() throws Exception {
+     final byte[] tableName = Bytes.toBytes("TempTable");
+     final byte[] family1 = Bytes.toBytes("f1");
+-- 
+1.7.0.4
+

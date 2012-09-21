@@ -1,0 +1,1571 @@
+commit 0b7dc955a661f4f1236bc157a87ba84f802d9b05
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Thu Sep 13 15:45:01 2012 -0700
+
+    Preparing for CDH4.1.0 Release
+
+commit db5fd738c1f517fc871e374400c33a531af392e0
+Author: Carl Steinbach <cws@apache.org>
+Date:   Thu Sep 13 17:50:19 2012 +0000
+
+    HIVE-2957. Hive JDBC doesn't support TIMESTAMP column (Richard Ding via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1384433 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 6ff3573e9b2663466457185fd14546f2ff12c97c)
+
+commit 24ba2213793bc39a097c12ae1cf67392e9d39655
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 09:22:32 2012 +0000
+
+    HIVE-2935. Implement HiveServer2
+
+commit b95f011c88f806e92bea8b079915a167967b9991
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 09:22:32 2012 +0000
+
+    HIVE-3056. Ability to bulk update location field in Db/Table/Partition records (Shreepadma Venugopalan via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380500 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 02f18092bf25aee7eb47e821d96b787195da6b51
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 08:45:05 2012 +0000
+
+    HIVE-3416 [jira] Fix TestAvroSerdeUtils.determineSchemaCanReadSchemaFromHDFS when running Hive on hadoop23
+    (Zhenxiao Luo via Carl Steinbach)
+    
+    Summary:
+    HIVE-3416: Fix TestAvroSerdeUtils.determineSchemaCanReadSchemaFromHDFS when running Hive on hadoop23
+    
+    TestAvroSerdeUtils determinSchemaCanReadSchemaFromHDFS is failing when running hive on hadoop23:
+    
+    $ant very-clean package -Dhadoop.version=0.23.1 -Dhadoop-0.23.version=0.23.1 -Dhadoop.mr.rev=23
+    
+    $ant test -Dhadoop.version=0.23.1 -Dhadoop-0.23.version=0.23.1 -Dhadoop.mr.rev=23 -Dtestcase=TestAvroSerdeUtils
+    
+     <testcase classname="org.apache.hadoop.hive.serde2.avro.TestAvroSerdeUtils" name="determineSchemaCanReadSchemaFromHDFS" time="0.21">
+        <error message="org/apache/hadoop/net/StaticMapping" type="java.lang.NoClassDefFoundError">java.lang.NoClassDefFoundError: org/apache/hadoop/net/StaticMapping
+        at org.apache.hadoop.hdfs.MiniDFSCluster.initMiniDFSCluster(MiniDFSCluster.java:534)
+        at org.apache.hadoop.hdfs.MiniDFSCluster.<init>(MiniDFSCluster.java:489)
+        at org.apache.hadoop.hdfs.MiniDFSCluster.<init>(MiniDFSCluster.java:360)
+        at org.apache.hadoop.hive.serde2.avro.TestAvroSerdeUtils.determineSchemaCanReadSchemaFromHDFS(TestAvroSerdeUtils.java:187)
+        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)
+        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+        at java.lang.reflect.Method.invoke(Method.java:616)
+        at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:44)
+        at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:15)
+        at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:41)
+        at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:20)
+        at org.junit.runners.BlockJUnit4ClassRunner.runNotIgnored(BlockJUnit4ClassRunner.java:79)
+        at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:71)
+        at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:49)
+        at org.junit.runners.ParentRunner$3.run(ParentRunner.java:193)
+        at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:52)
+        at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:191)
+        at org.junit.runners.ParentRunner.access$000(ParentRunner.java:42)
+        at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:184)
+        at org.junit.runners.ParentRunner.run(ParentRunner.java:236)
+        at junit.framework.JUnit4TestAdapter.run(JUnit4TestAdapter.java:39)
+        at org.apache.tools.ant.taskdefs.optional.junit.JUnitTestRunner.run(JUnitTestRunner.java:420)
+        at org.apache.tools.ant.taskdefs.optional.junit.JUnitTestRunner.launch(JUnitTestRunner.java:911)
+        at org.apache.tools.ant.taskdefs.optional.junit.JUnitTestRunner.main(JUnitTestRunner.java:768)
+    Caused by: java.lang.ClassNotFoundException: org.apache.hadoop.net.StaticMapping
+        at java.net.URLClassLoader$1.run(URLClassLoader.java:217)
+        at java.security.AccessController.doPrivileged(Native Method)
+        at java.net.URLClassLoader.findClass(URLClassLoader.java:205)
+        at java.lang.ClassLoader.loadClass(ClassLoader.java:321)
+        at sun.misc.Launcher$AppClassLoader.loadClass(Launcher.java:294)
+        at java.lang.ClassLoader.loadClass(ClassLoader.java:266)
+        ... 25 more
+    </error>
+      </testcase>
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA
+    
+    Differential Revision: https://reviews.facebook.net/D5025
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380490 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 97746a7146ae9448d5ad4e2ec53e2896f17784b7)
+
+commit 1cafd0d7513d32b30a8d478b9be49293fe21a2ba
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 08:26:05 2012 +0000
+
+    HIVE-3424. Error by upgrading a Hive 0.7.0 database to 0.8.0 (008-HIVE-2246.mysql.sql) (Alexander Alten-Lorenz via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380483 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 20b7cf85f132450724f3ca1bee643b1c1db933af)
+
+commit 733e1e063d321c2cb501717971059ccb29bedc5c
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 08:04:59 2012 +0000
+
+    HIVE-3412. Fix TestCliDriver.repair on Hadoop 0.23.3, 3.0.0, and 2.2.0-alpha (Zhenxiao Luo via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380479 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 09b4974ab158a315c594abe8142890d4f63a5916)
+
+commit d56f7e018014676b00be638212e5e54a39ba110d
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 4 08:00:36 2012 +0000
+
+    HIVE-3413. Fix pdk.PluginTest on hadoop23 (Zhenxiao Luo via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380478 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 336a372481437578dda304ddf409c9a3e5627e82)
+
+commit 1f856d7b67ba8bf04d27db477acf62cf6c867633
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Wed Jul 25 06:19:21 2012 +0000
+
+    HIVE-3295. HIVE-3128 introduced bug causing dynamic partitioning to fail. (kevinwilfong reviewed by njain, ashutoshc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365460 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit d0c18c7c678bd8ce5bd9401b458fe106a2b9bf54)
+
+commit 9341acab6ae7f15cc8702946f7a809d8187ae2d0
+Author: Carl Steinbach <cws@apache.org>
+Date:   Wed Aug 29 08:06:38 2012 +0000
+
+    HIVE-3265. HiveHistory.printRowCount() throws NPE (Shreepadma Venugopalan via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1378472 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 4c14682e0835b171d169d377bd8ea20d0b76c232)
+
+commit 784a01f2164bfff92c2e74e0751da133a541bd22
+Author: Carl Steinbach <cws@apache.org>
+Date:   Wed Aug 29 08:02:57 2012 +0000
+
+    HIVE-3409. Increase test.junit.timeout value (Carl Steinbach via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1378470 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 5ab02843a04755bb2b5dc393a03b5b932cb022ce)
+    
+    Conflicts:
+    	build.properties
+
+commit f29f10f2d76f827a8df1799db4e7d1c0a5e94e27
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Aug 28 14:48:31 2012 -0700
+
+    Fixing Hive exec pom to avoid circular dependency
+
+commit 9177d480be4094facca88bc8c90284c8f44e9a97
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Aug 28 12:11:55 2012 -0700
+
+    CDH-7622. Update Hive POMs to use same dependencies as upstream
+
+commit f86aab8931706fd2ecf7f7b969bcf0ab155b8c8a
+Author: Carl Steinbach <cws@apache.org>
+Date:   Sun Aug 26 02:19:17 2012 +0000
+
+    HIVE-3365. Upgrade Hive's Avro dependency to version 1.7 (Shreepadma Venugopalan via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1377370 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 73ad1898d8424f355223a51f07410a7b8f6eacbb)
+
+commit 37cf736bcbe6c440c606add862335ee0f35bb9a7
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Fri Aug 24 11:31:37 2012 -0700
+
+    HIVE-3240. Fix non-deterministic results in newline.q and timestamp_lazy.q
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-6677
+
+commit b2991845b6f8912609b39a0686db051bad3f1bcc
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Thu Aug 23 12:57:08 2012 -0700
+
+    HIVE-3242. Fix cascade_dbdrop.q when building hive on hadoop0.23
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-6676
+
+commit 9b9abde24e5adb47f4ae0ff2fa6000d7f1a85332
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Sun Aug 19 20:55:48 2012 -0700
+
+    CLOUDERA-BUILD. Fix eclipse classpath template
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-7401
+
+commit 27ce7a64ef6c6bd74e311a396298de90aa696846
+Author: Carl Steinbach <cws@apache.org>
+Date:   Mon Jun 11 20:32:40 2012 +0000
+
+    HIVE-3013 [jira] TestCliDriver cannot be debugged with eclipse since hadoop_home is set wrongly
+    
+    Summary:
+    HIVE-3013
+    
+    fix typo
+    
+    cp Fix
+    
+    cp
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA, njain, kevinwilfong
+    
+    Differential Revision: https://reviews.facebook.net/D3555
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348995 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 084bc13ac31ae01df4d8b47a5faf69f90651c2d8
+Author: Namit Jain <namit@apache.org>
+Date:   Fri May 25 19:16:52 2012 +0000
+
+    HIVE-3049 setup classpath for templates correctly for eclipse (Shuai Ding via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342785 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Conflicts:
+    	eclipse-templates/.classpath
+
+commit f6e2501f0c9a6cb50322447fc565286aa388a42b
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed Aug 8 21:26:08 2012 -0700
+
+    CLOUDERA-BUILD. Add test.submodule.exclude Ant property
+
+commit 31a89660cf2cb9fe5573b4168f1be8991f3384ce
+Author: Carl Steinbach <cws@apache.org>
+Date:   Wed Jul 25 00:50:22 2012 +0000
+
+    HIVE-3249 [jira] Upgrade guava to 11.0.2
+    (Zhenxiao Luo via Carl Steinbach)
+    
+    Summary:
+    HIVE-3249: Upgrade guava to 11.0.2
+    
+    Hadoop has upgraded to this new version of Guava. We should, too, so we don't have compatibility issues running on Hadoop 2.0+
+    
+    currently, hive is using guava-r09.jar
+    we should update it to guava-11.0.2.jar
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA
+    
+    Differential Revision: https://reviews.facebook.net/D4083
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365371 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b6b59f98603639654cec0f595d4c4e89e9bb31c1
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Jul 26 05:42:11 2012 +0000
+
+    HIVE-3275 : Fix autolocal1.q testcase failure when building hive on hadoop0.23 MR2 (Zhenxiao Luo via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365888 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 737ba0afacc506450e7069b0992dee61e9b7a71c)
+
+commit c504626f0c5c2df2cf835de2b7c7a1afedc5f7dc
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Jul 26 23:23:50 2012 +0000
+
+    HIVE-3301 : Fix quote printing bug in mapreduce_stack_trace.q testcase failure when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1366233 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 82bdad64a44df3e72b018ee1dfec11740e8351d3)
+
+commit 8857093bc76c4e353ac0cc231334d91da5380e5b
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Tue Jul 31 05:42:34 2012 +0000
+
+    HIVE-3303: Fix error code inconsistency bug in mapreduce_stack_trace.q and mapreduce_stack_trace_turnoff.q when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1367413 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 8ff1fd6df3734ce08a0db24d5ec5659768652bd9)
+    
+    Conflicts:
+    
+    	build-common.xml
+
+commit c4a60711325bcd9f63dabdcdf6b4cebd86603959
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jul 31 12:34:57 2012 -0700
+
+    HIVE-3273. Add avro jars into hive execution classpath
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-7113
+
+commit 03677b0799289598b82264225fef66c9a455ac83
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jul 24 17:10:52 2012 -0700
+
+    CLOUDERA-BUILD. CDH-6964: Add junit exclude utility to disable testcases in cdh4-0.9.0
+
+commit 8c20da61d35e2894dd901d84d4a26b839f97acc2
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon Jul 23 14:02:25 2012 -0700
+
+    CLOUDERA-BUILD. Hive should depend on datanucleus-core-2.0.3 JAR with fix for NUCCORE-689
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-5812
+
+commit 2eea83f01ef06d80cdc27a469e44c7f031861117
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Sat Jul 14 12:53:10 2012 +0000
+
+    HIVE-3257 Fix avro_joins.q testcase failure when building hive on hadoop0.23. Zhenxiao Luo (via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1361537 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit aaabd8836c14d8cd769b1cf550ef0e8ac68f8d0c)
+
+commit 354b0f227c2a5181262be2822554c016e9d58afc
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 22:27:32 2012 -0700
+
+    HIVE-2990 Remove hadoop-source Ivy resolvers and Ant targets (Carl Steinbach via Ashutosh Chauhan)
+    
+        git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1333249 13f79535-47bb-0310-9956-ffa450edef68
+        (cherry picked from commit a5b597e906d9ff54d7ea4fd0af2c458edb03e5b5)
+
+commit abf4915eae213bc8a4b2fd729e50d6053c8f21c2
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Sat May 19 06:24:52 2012 +0000
+
+    HIVE-3031 : hive docs target does not work (Sushanth Sowmyan via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340348 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 6da5f0b69f2182cea19d59bfaee9e0bfe630d594)
+
+commit 201871b0dcc2517de766cc36dbb22bb92368189a
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Mon Jul 2 23:52:44 2012 +0000
+
+    HIVE-3146 : Support external hive tables whose data are stored in Azure blob store/Azure Storage Volumes (ASV) (Kanna Karanam via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356524 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 187e48e3e4799258426361da3c1f2439f5a5bad7)
+
+commit 27d5f93a5b494ebe8cc656e3aec406c620da35b5
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 22:21:31 2012 -0700
+
+    HIVE-3100. Add HiveCLI that runs over JDBC (Prasad Mujumdar via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356516 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ca6980d326ab86171dfba262ea1efa01c0002676)
+
+commit 84142076f6952e74a7d48388c8f3f2f2ea50218a
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Mon Jul 2 08:36:06 2012 +0000
+
+    HIVE-3207 : FileUtils.tar does not close input files (Navis Ryu via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356108 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit bf339f73e3fd7fe3df6617ca98044084340106cc)
+
+commit 0a09bbce6c459b459b846817fb077b1db997bbb9
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Thu Jun 28 05:00:10 2012 +0000
+
+    HIVE-3206 FileUtils.tar assumes wrong directory in some cases. Navis Ryu (via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354816 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit a386a34fbe41cf4bc8db9836b8ba90e97dd0b1bb)
+
+commit 72686d1cb8eb18259b5a4ba6329c6ccc8f3c1f1b
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Thu Jun 28 00:28:12 2012 +0000
+
+    HIVE-3127 Pass hconf values as XML instead of command line arguments to child JVM. Kanna Karanam (via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354781 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit fab856855d0369c4b3b34371d4dfe69f697a6b23)
+
+commit a88a09a89308821f3f17f11f2da16df7d6fff2e4
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 22:18:30 2012 -0700
+
+    HIVE-3180 Fix Eclipse classpath template broken in HIVE-3128. Carl Steinbach (via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354187 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ea5c1dc7410d5c17d2550c952c10b8a42ad831fd)
+
+commit 5b8018d780e555ca0905bc049b4d981c56a73866
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Tue Jun 26 16:03:51 2012 +0000
+
+    HIVE-3048 : Collect_set Aggregate does uneccesary check for value. (Ed Capriolo via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354079 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ce506ed5104c2bab31f627272facfc2c9e8c2b48)
+
+commit 0ab18ae1ec1d0e4435db068c7b7aaaf0b077dd31
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Tue Jun 26 03:30:54 2012 +0000
+
+    HIVE-2021 : Add a configuration property that sets the variable substitution max depth (Edward Capriolo via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353808 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 32c9345893f2ffde685c2c8fe4fe466be9917a7e)
+
+commit e76648fae0296a6f9ced90a1ab741cac885f14fc
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 22:15:47 2012 -0700
+
+    Hive thrift code doesnt generate quality hashCode()
+    (Liu Tim via Carl Steinbach)
+    
+    Summary:
+    
+    Hive thrift code doesnt generate quality hashCode(). Right now, it all has
+    @Override
+    public int hashCode() { return 0; }
+    
+    It will cause all entries go to the same bucket if it's used as hash key.
+    
+    Test Plan:
+    ant clean package test
+    
+    pass 1946 tests
+    
+    Reviewers: njain, kevinwilfong, cwsteinbach
+    
+    Reviewed By: cwsteinbach
+    
+    Differential Revision: https://reviews.facebook.net/D3759
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353720 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit fc069edbe13def89277746757b9e27014837cc6d)
+
+commit c8b707662898ee6e6041650dd0c9bde07f98e8ea
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Sat Jun 23 21:28:41 2012 +0000
+
+    HIVE-3125 sort_array does not work with LazyPrimitive Philip Tromans (via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353203 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7fdc0e0451e99a7b647724c7c1c162f5f03270e6)
+
+commit 44fce67827958ea005651ca0a027276a48debd7d
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Sat Jun 23 01:47:22 2012 +0000
+
+    HIVE-3178. retry not honored in RetryingRawMetastore. (Namit Jain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353059 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7134f434abd9b354a4ae0c4c265a41562eb1fcd8)
+
+commit d656fb85b2dcadb2d3cf76d7853be97abb5309a5
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Fri Jun 22 22:11:23 2012 +0000
+
+    HIVE-3128 Use commons-compress instead of forking tar process (Kanna Karanam via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353044 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7d3b6dbfcf53f52e6dc15cb8c689072657edd6c9)
+
+commit 1f359bf8928afd895500b07d1428455376c98776
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Fri Jun 22 16:59:16 2012 +0000
+
+    HIVE-3135. add an option in ptest to run on a single machine (Namit Jain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352973 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit fbb5e17fe29b54baf6517d8d3e83a07b534e3de2)
+
+commit ae98629d017ea6057d0e8ba21b69063fa0612c4c
+Author: Namit Jain <namit@apache.org>
+Date:   Fri Jun 22 04:26:59 2012 +0000
+
+    HIVE-2955 Queries consists of metadata-only-query returns always empty value
+    (Navis via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352771 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit c26d4b71c81dfb8d0c45be317f3d79147ebac935)
+
+commit ad467db43c51c153bf0b99096991c5146b4b49b4
+Author: Carl Steinbach <cws@apache.org>
+Date:   Thu Jun 21 22:39:30 2012 +0000
+
+    HIVE-3161. A minor test update
+    (Namit Jain via Carl Steinbach)
+    
+    Summary: The correct long term fix is HIVE-3160
+    
+    Test Plan: manual
+    
+    Differential Revision: https://reviews.facebook.net/D3723
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352719 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 41b8753d7595539a44ed9295b23368c9a820ee11)
+
+commit 15576ce2385736baef5283d9173d8a91460dbede
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Wed Jun 20 21:26:00 2012 +0000
+
+    HIVE-2585 Collapse hive.metastore.uris and hive.metastore.local (Ashutosh Chauhan via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352333 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 11015a25391c7110977a419c75dc27f4404296ad)
+
+commit 299d4c5acec5b242a30d67b6168db9c1a35bfdc7
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Wed Jun 20 18:41:16 2012 +0000
+
+    HIVE-3009 Memory leak in TUGIContainingTransport (Ashutosh Chauhan via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352260 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 40eff1037813f22b89f146a7253b39ade1e6b7bb)
+
+commit f7f57f45565ff132b3ad684b50b7ca6df775cc8d
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Jun 19 21:14:09 2012 +0000
+
+    Fixing bug in removing ProtectMode from a Table
+    (Bhushan Mandhani via Carl Steinbach)
+    
+    Summary:
+    When ProtectMode has every member set to the default false value, the toString() method returns null. When this happens, we should realize that the PROTECT_MODE parameter is
+    no longer needed and should be removed for the Table or Partition. Currently, we try to persist this null value and get an error.
+    
+    Test Plan: Ran Hive. Checked that "alter table some_table disable NO_DROP CASCADE" successfully removed the PROTECT_MODE parameter and did not give any error. Running unit tests.
+    
+    Reviewers: njain, kevinwilfong, cwsteinbach
+    
+    Reviewed By: cwsteinbach
+    
+    Differential Revision: https://reviews.facebook.net/D3615
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1351859 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 8f425e82258d884129adba54e95a10deda075461)
+
+commit 9df69ea747acb64195354db039f024a25f1a3ef2
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 22:05:06 2012 -0700
+
+    HIVE-3019 [jira] Add JUnit to list of test dependencies managed by Ivy
+    
+    Summary: HIVE-3019. Add JUnit to list of test dependencies managed by Ivy
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA, ashutoshc
+    
+    Reviewed By: ashutoshc
+    
+    Differential Revision: https://reviews.facebook.net/D3171
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1351467 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 06dcb1120510d4360fc8008a06768308087f2a20)
+
+commit 738d9cab16ad9aed7668f90723b900c1bc3cf4bf
+Author: Carl Steinbach <cws@apache.org>
+Date:   Sun Jun 17 22:22:13 2012 +0000
+
+    HIVE-3134 Drop table/index/database can result in orphaned locations
+    (Kevin Wilfong via Carl Steinbach)
+    
+    Summary:
+    Today when a managed table has a partition with a location which is not a subdirectory of the table's location, when the table is dropped the partition's data is not deleted from HDFS, resulting in an orphaned directory (the data exists but nothing points to it).
+    
+    The same applies to dropping a database with cascade and a table has a location outside the database.
+    
+    I think it is safe to assume managed tables/partitions own the directories they point to, so we should clean these up.
+    
+    Test Plan: Added test cases to verify that the directories which would be orphaned are cleaned up by drop table/index/database.
+    
+    Reviewers: JIRA, njain, cwsteinbach
+    
+    Reviewed By: cwsteinbach
+    
+    Differential Revision: https://reviews.facebook.net/D3633
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1351174 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 94cdb0e59a9b4d24a881515d27c838eaee319aea)
+
+commit cb8feacc37461344d920cff26114a800d8975f33
+Author: Namit Jain <namit@apache.org>
+Date:   Sat Jun 16 15:13:41 2012 +0000
+
+    HIVE-3149 Dynamically generated paritions deleted by Block level merge
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350946 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 0d1ee81a3c8f38083cd49758e822de2ebea3e5d8)
+
+commit 55cb57bed3a0b0b2e2548f834f258850c54867ee
+Author: Namit Jain <namit@apache.org>
+Date:   Sat Jun 16 06:41:51 2012 +0000
+
+    HIVE-3062 Insert into table overwrites existing table if table name
+    contains uppercase character (Navis via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350866 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 03a0b9667923bd61f42b77fe46e38b2f680cdb50)
+
+commit 0f0aa0a4abded3a5360361ec02119183710ced35
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri Jun 15 21:23:33 2012 +0000
+
+    HIVE-2796 [jira] Support auto completion for hive configs in CliDriver
+    (Navis Ryu via Ashutosh Chauhan)
+    
+    Summary:
+    DPAL-747 Support auto completion for hive configs in CliDriver
+    
+    It's very cumbersome to memorize hive conf vars.
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA, ashutoshc
+    
+    Reviewed By: ashutoshc
+    
+    Differential Revision: https://reviews.facebook.net/D1689
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350807 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 95393432cdd5e722f28ff41b440147eccab31554)
+
+commit e7b1800b35d662ff350bcc188de56e903341ee16
+Author: Namit Jain <namit@apache.org>
+Date:   Fri Jun 15 20:48:46 2012 +0000
+
+    HIVE-3106 Add option to make multi inserts more atomic
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350792 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit a06a67ff9363aad94250660f7e58e5ed078f3fdf)
+
+commit 87181d611ede4abf3ffda1ed8f006b8684ab66b2
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Wed Jun 13 23:30:37 2012 +0000
+
+    HIVE-3123. Hadoop20Shim. CombineFileRecordReader does not report progress within files (Dmytro Molkov via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350054 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 4caebd196163050510eac210329d42dcbd07477c)
+
+commit 182ddf257d7a6a869c5b83122f20ff08ab1b0114
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Wed Jun 13 15:37:32 2012 +0000
+
+    HIVE-3090 Timestamp types not having nano-second part breaks row (Navis via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349907 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 9bc918059d53039736dbd0e0aae643c7bf5953a4)
+
+commit e997430fc1e6086c199ebc9ee4782c1ff902ad2d
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Wed Jun 13 02:18:18 2012 +0000
+
+    HIVE-2911 Move Global .hiverc file (Owen O'Malley via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349611 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 0f6781bb2f7406764417ebcca0cfba04ad468add)
+
+commit bdc3b4ebac0f4e7bd85a0af9cae80f70df336ba7
+Author: Namit Jain <namit@apache.org>
+Date:   Tue Jun 12 23:12:03 2012 +0000
+
+    HIVE-3081 ROFL Moment. Numberator and denaminator typos
+    (Edward Capriolo via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349584 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit cbdc10f13f4ba83d42742a86f5b30cbd29091fb8)
+
+commit c11f6582fa9f73228ccffe7134cbee2b597ff6c8
+Author: Namit Jain <namit@apache.org>
+Date:   Tue Jun 12 21:22:55 2012 +0000
+
+    HIVE-3120 make copyLocal work for parallel tests
+    (Shuai Ding via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349548 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ade6dfb3d013214f25b48e3bb543f7e34e99e656)
+
+commit ae36743e83fd6500f1af92cc8fcc63f7f70b96ea
+Author: Namit Jain <namit@apache.org>
+Date:   Tue Jun 12 15:37:18 2012 +0000
+
+    HIVE-3085 make parallel tests work
+    (Shuai Ding via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349398 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 79fdc77e5c6d585ec54cacb13bfb5859de209ffe)
+
+commit eeaee4bfc5cb2ca0254bd2a63b4b27108b0c3574
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Tue Jun 12 02:29:03 2012 +0000
+
+    HIVE-3112 clear hive.metastore.partition.inherit.table.properties till HIVE-3109 is fixed (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349096 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 491567d52074e53d28d812cac930ee90948692b1)
+
+commit 30ffb8d386c4a3608a2c1f2128c2bf10ec3b0808
+Author: Carl Steinbach <cws@apache.org>
+Date:   Mon Jun 11 19:16:28 2012 +0000
+
+    HIVE-2694. Add FORMAT UDF (Zhenxiao Luo via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348976 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit fb5e41d8242f50f8b0ba244e19fc0e9276806363)
+
+commit af701fa34e93affdc80da2e825fa280a236073ed
+Author: Namit Jain <namit@apache.org>
+Date:   Mon Jun 11 11:54:02 2012 +0000
+
+    HIVE-3061 hive.binary.record.max.length is a magic string
+    (Edward Capriolo via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348808 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 00f6d0ace79debc44a672ab765de92b7afcbfebd)
+
+commit 114344b566bc71c69ad3a15d57e1eec869673e72
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Sun Jun 10 02:07:25 2012 +0000
+
+    HIVE-3101. Drop table rollback hook always called. (Ransom Hezhiqiang via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348523 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 9424872a03bee13b82090edbf0226fe4814f2f24)
+
+commit e78bd3bce9d13ce2bf69006013d295a41e56490f
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Fri Jun 8 02:46:28 2012 +0000
+
+    HIVE-2969. Log Time To Submit metric with PerfLogger. (kevinwilfong reviewed by ashutoshc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347870 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7212d3e8828033516780696adbb0cc54073f3ba0)
+
+commit 940e30d476aa79df89ea2c068ccea0e8270d9e79
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Jun 7 14:55:49 2012 +0000
+
+    HIVE-2736 : Hive UDFs cannot emit binary constants (Philip Tromans via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347654 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 01e16ef139b8fa55246c9aa83a9a43f8f2562121)
+
+commit 6ada9b4969641887fc49549119d376cbf741df8c
+Author: Carl Steinbach <cws@apache.org>
+Date:   Thu Jun 7 05:27:36 2012 +0000
+
+    Oracle Metastore schema script doesn't include DDL for DN internal tables (Carl Steinbach via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347396 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 53d2750def6b2ab98a34cbe8e439d982af803a44)
+
+commit 8b34125eebd4808db362dfa80dd5e302a4629cb9
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Jun 7 00:04:00 2012 +0000
+
+    HIVE-2941: Hive should expand nested structs when setting the table schema from thrift structs (Travis Crawford via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347212 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 15009eaec1d9c741911b9f94b21062438e943ddc)
+
+commit 882c22228cd36085b922d42d6cefa36f90d8640a
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Wed Jun 6 15:13:38 2012 +0000
+
+    HIVE-2418 Translate/Replace UDF (Mark Grover via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1346933 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 72e4e604dfdb3f9683fbc198fda0c971ba132bb3)
+
+commit c6962fd290b394a7413c126a9015d4070d4fe6a8
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Sat Jun 2 02:14:04 2012 +0000
+
+    HIVE-895 Add SerDe for Avro serialized data (Jakob Homan via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345420 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit e42ec89b31ae056e51d8db25d4ecc1a8a51212e0)
+
+commit 6547ce333a2a5566d8fc10eb55345c86e23e80d1
+Author: Namit Jain <namit@apache.org>
+Date:   Fri Jun 1 18:08:24 2012 +0000
+
+    HIVE-3066
+    Add the option -database DATABASE in hive cli to specify a default database to use for the cli session. (herman via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345293 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 2014a92e24bed6d504731b2a64c9a71dd5cc74a0)
+
+commit 2036db352c9f3ec21a94db468914cfd76de42d27
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Fri Jun 1 16:52:02 2012 +0000
+
+    HIVE-3076. drop partition does not work for non-partition columns (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345274 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit a412315fd41d0bce82a6b09ba1315f0b012aab14)
+
+commit 87acceaecf8e72097e6fc514be7b0f741c0ddc61
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Thu May 31 16:31:53 2012 +0000
+
+    HIVE-3063. drop partition for non-string columns is failing (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344801 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 4ce656933d6d8ff7bd99348dfefc77fb8e85f44f)
+
+commit 1241a5a1768835ccccbcad997b773141ca9b9792
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu May 31 16:14:26 2012 +0000
+
+    HIVE-3052 : TestHadoop20SAuthBridge always uses the same port (Navis via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344797 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 1ba8d2e6ac807bf988c46a21f5c573b49ff0a96a)
+
+commit 382f27f2a3e9523d702b4e9c9f517dc62f38d2af
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu May 31 16:11:19 2012 +0000
+
+    HIVE-3057: metastore.HiveMetaStore should set the thread local raw store to null in shutdown() (Travis Crawford via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344795 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 67cdfb523de3b7a6bf6246148ac899d2b0b6f6b7)
+
+commit bd06720a3df8b71d7d8da16c5be1486ce68efb1e
+Author: Namit Jain <namit@apache.org>
+Date:   Mon May 28 17:35:46 2012 +0000
+
+    HIVE-3059. Revert HIVE-2703, add testcase for non-string partition columns
+               passed to transform operator, updated TestJdbcDriver.
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1343331 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 1004b3bbeb868492e44865c695e74717218e9dfd)
+
+commit a31968c22a3be393844b897f40c0008a9bbecba9
+Author: Namit Jain <namit@apache.org>
+Date:   Sun May 27 12:07:50 2012 +0000
+
+    HIVE-2540 LATERAL VIEW with EXPLODE produces ConcurrentModificationException
+    (Navis via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1343036 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 6e46d51efe0b83a4b4109b8545099bf0ec6174de)
+
+commit 3439739087b19f1a5ad84cd0c8861b41cedb085c
+Author: Namit Jain <namit@apache.org>
+Date:   Sun May 27 11:41:31 2012 +0000
+
+    HIVE-3058 hive.transform.escape.input breaks tab delimited data
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1343033 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 33c8f01870981d1be2c9920cb1fdb2d1bd01bedc)
+
+commit 0b964b61c946044dfb7bbf80254d56a2d6cd2e4c
+Author: Edward Capriolo <ecapriolo@apache.org>
+Date:   Fri May 25 23:51:13 2012 +0000
+
+    HIVE-2372 Argument list too long when streaming (Sergey Tryuber via egc)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342841 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 1d17a911ff8ee1dcb490409f4bb995df2eb1a8e8)
+
+commit 36cbf8a11d43fecb7d15eae52600b26ce6db62d5
+Author: Namit Jain <namit@apache.org>
+Date:   Thu May 24 20:36:54 2012 +0000
+
+    HIVE-3051 JDBC cannot find metadata for tables/columns containing uppercase
+    character (Navis via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342428 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 2ea3bb8fd837de048c0ccfefedf1ade7e5501a9f)
+
+commit 539c068df5e71b280557198d8fc71be7b3fdefe8
+Author: Siying Dong <sdong@apache.org>
+Date:   Tue May 22 18:37:37 2012 +0000
+
+    HIVE-3030 escape more chars for script operator (Namit Jain via Siying Dong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1341589 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 54abc308164314a6fae0ef0b2f2241a6d4d9f058)
+
+commit 13805c4cfb9543d52c98b65b01e8aebf8896bdeb
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri May 18 21:31:33 2012 +0000
+
+    HIVE-2975 : Filter parsing does not recognize '!=' as operator and silently ignores invalid tokens (Thomas Weise via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340264 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit a59e328cab2aec7f92cd6f9fd290ca1cdfe5e743)
+
+commit e4bfe05ba5294879268bc946bb7e1a5690a6a00d
+Author: Carl Steinbach <cws@apache.org>
+Date:   Fri May 18 21:19:50 2012 +0000
+
+    HIVE-1719 [jira] Move RegexSerDe out of hive-contrib and over to hive-serde
+    (Shreepadma Venugopalan via Carl Steinbach)
+    
+    Summary:
+    Regex Serde Changes
+    
+    RegexSerDe is as much a part of the standard Hive distribution as the other SerDes
+    currently in hive-serde. I think we should move it over to the hive-serde module so that
+    users don't have to go to the added effort of manually registering the contrib jar before
+    using it.
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA, cwsteinbach
+    
+    Reviewed By: cwsteinbach
+    
+    Differential Revision: https://reviews.facebook.net/D3249
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340256 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit e30d2847a828412812e4b8ababfcaf8ce739ed46)
+
+commit 49e559bc688b5f32e387ddf06a7493119ff303cc
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri May 18 16:25:12 2012 +0000
+
+    HIVE-2542 : Forgot to do svn add for new  files in previous patch.
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340158 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 3b7e33b04eff0670bdd3b26b4dddb162f3b9e8fc)
+
+commit dba72bab06da619574593d72ec9780e031c2b539
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri May 18 15:32:52 2012 +0000
+
+    HIVE-2542 : DROP DATABASE CASCADE does not drop non-native tables ( Vandana Ayyalasomayajula via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340130 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 4d8e438afac4292020e370543c4f951df89dae37)
+
+commit eaaf4ece6c71778d1c12b3d3c9710f3ac43dadc9
+Author: Namit Jain <namit@apache.org>
+Date:   Tue May 15 20:06:36 2012 +0000
+
+    HIVE-2732 Reduce Sink deduplication fails if the child reduce sink is followed by a join
+    (Navis via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1338871 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 3bb63e215d64e19c53296490ff953fba9a37de18)
+
+commit f2889262b79df897ba406b6816b0adac748ffc4f
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jul 9 21:44:17 2012 -0700
+
+    HIVE-3001. Returning Meaningful Error Codes & Messages
+    
+    Reason: New Feature
+    Author: Bhushan Mandhani
+    Ref: CDH-6661
+
+commit a7b9a77443147b6455f1a3176e954c360fe3fcf2
+Author: Namit Jain <namit@apache.org>
+Date:   Mon May 14 17:44:58 2012 +0000
+
+    HIVE-3022 Add hive.exec.rcfile.use.explicit.header to hive-default.xml.template
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1338311 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ca9feed6dbed3dfb04797599accd3a6cb8166335)
+
+commit f08dcd33b9c4a6d5f6cf15b9bd3a071e641e73ea
+Author: Namit Jain <namit@apache.org>
+Date:   Sun May 13 17:07:52 2012 +0000
+
+    HIVE-3018 Make the new header for RC Files introduced in HIVE-2711 optional
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1337937 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 14aef132c3c8fe097f730a9793c38a4db7bed21a)
+
+commit 52c578c6bac1e25f18e0fda9dce724f6016f3357
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Fri May 11 00:42:04 2012 +0000
+
+    HIVE-3012 hive custom scripts do not work well if the data contains new lines (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1336986 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 88582ee15ea899fa6c800c81e2af4cd95738ec9e)
+
+commit ec033f62ea6630d45f4e1b93108fb2a43056ce02
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Wed May 9 16:31:39 2012 +0000
+
+    HIVE-2956 Provide error message when using UDAF in the place of UDF instead of throwing NPE (navis via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1336284 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 50f7f66f8665b3480a2da3365b4c1c8c85d6c4b8)
+
+commit f3f51c8f106c767ae1a30bf12032c0d3965f379a
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Tue May 8 16:45:35 2012 +0000
+
+    HIVE-2971 GET_JSON_OBJECT fails on some valid JSON keys (gangtimliu via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1335630 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7ad797c64a823f9ac36f90c003073893160c00a0)
+
+commit 51b6783b6216fbcdaae6c446da18d24fe1ca20e1
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Mon May 7 16:36:12 2012 +0000
+
+    HIVE-3000 Potential infinite loop / log spew in ZookeeperHiveLockManager (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1335106 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ed4f45aa96ed66de0b1f36a564d0df2018e5b1ca)
+
+commit e0447230b763ac4b8bd318fad801dc93d7926768
+Author: Namit Jain <namit@apache.org>
+Date:   Fri May 4 16:59:58 2012 +0000
+
+    HIVE-3002 Revert HIVE-2986
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1334060 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 5efcba32531ab38f6e4ae3b10ce2a7e2da68b34e)
+
+commit 247a2a6647ac915f935bb2f4184c9f778b8ec4b5
+Author: Namit Jain <namit@apache.org>
+Date:   Fri May 4 16:40:25 2012 +0000
+
+    HIVE-2994 Pass a environment context to metastore thrift APIs
+    (Delia David via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1334053 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ad39f1cde84d6671fc0f8f548f32bca8be9da326)
+
+commit 61a2cec83074360509495d59fa3f7a692820c5fc
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Tue May 1 22:52:38 2012 +0000
+
+    HIVE-2986 Create the hooks (njain via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1332873 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 254a257350360cc7b1798a2be3eb9e18428943e5)
+
+commit 91e118d563ae2236f8e304f03ad4f4eaa376b6d2
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jul 3 16:44:23 2012 -0700
+
+    CLOUDERA-BUILD. Remove hadoop0.20S shims
+
+commit 46c0d5460b742dda064a7e2d7e3247559cd93e3e
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jul 3 12:34:04 2012 -0700
+
+    CLOUDERA-BUILD. Restricting the included shims to 0.23 only
+
+commit 1d4cc3813f8263bf089abdacacf65a5fcdb67650
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Jun 27 15:12:53 2012 -0700
+
+    HIVE-2804. Task log retrieval fails on secure cluster, null check added
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4488
+
+commit 922e0998ec76b0a87b3daebd0f8bebffbe32b75d
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Jun 27 14:31:14 2012 -0700
+
+    HIVE-2878. TestHBaseMinimrCliDriver hbase_bulk.m fails on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4782
+
+commit bdb92e38126973fb945f7ff6ae0fecf0b59dd12c
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 26 12:12:51 2012 -0700
+
+    CLOUDERA-BUILD. Fix testNegativeCliDriver_local_mapred_error_cache in Hive0.9.0 on MR1
+
+commit 46c733f8a60345ea7a04d40f45430cdf9f60e93c
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 26 12:10:17 2012 -0700
+
+    CLOUDERA-BUILD. Fix fs_default_name1.q and fs_default_name2.q on cdh4-0.9.0 for both MR1 and MR2
+
+commit 917cd2cb15179806b773e5135868d1b4488f3ec2
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 26 11:46:53 2012 -0700
+
+    CLOUDERA-BUILD. Fix udfnull.q TestNegativeCliDriver in Hive0.9.0 on MR1
+
+commit ad0a9b02547385170c1d43e20e7145a02725146f
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 26 11:39:47 2012 -0700
+
+    CLOUDERA-BUILD. Updated MR1 build tags for cdh4-0.9.0
+
+commit b8417183f832b8ca0839f25577ca5b6b2f8253ac
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Fri Jun 22 14:27:16 2012 -0700
+
+    Bumping up Hive CDH version
+
+commit 75fece86b79630592bac53f4b0a104feed909a00
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Thu Jun 21 10:06:31 2012 -0700
+
+    CLOUDERA-BUILD. Fixes for local mode tests
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-6332
+
+commit 70a7889a28dfc5792389616d4e5c1fc17d983b90
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Thu Jun 21 10:04:55 2012 -0700
+
+    HIVE-3164. Fix and Backport HIVE-3164: Fix non-deterministic testcases failures when running Hive0.9.0 on MapReduce2
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-6377
+
+commit e3ee8f69bb47e5fe44d86e658ab92ac4ddab6008
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Jun 20 15:11:16 2012 -0700
+
+    CLOUDERA-BUILD. Make cdh4-0.9.0 build/test for both MR1 and MR2
+    
+    Reason: CLOUDERA-BUILD
+    Author: Zhenxiao Luo
+    Ref: CDH-5265
+    
+    The build command has been simplified to:
+    
+    Build Cmd:
+    $ant very-clean tar
+    
+    Run Test in MR1 Mode:
+    $ant test -Dhadoop.mr.test.rev=20
+    
+    Run Test in MR2 Mode:
+    $ant test
+
+commit 10b254e7669012c52783dc024bc8cec0137be8f5
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Jun 20 11:48:33 2012 -0700
+
+    HIVE-2860. TestNegativeCliDriver autolocal1.q fails on 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4783
+
+commit c547a09409749969a44b20ca93c9b97c2e8fca77
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Wed Jun 20 10:12:40 2012 -0700
+
+    HIVE-2789. query_properties.q test contains nondeterministic queries
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4245
+
+commit 84c8fe2dae550ea974cb7add658428de98273d7a
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 19 18:53:46 2012 -0700
+
+    CLOUDERA-BUILD. Fix archive_mr_1806.q and archive_multi_mr_1806.q testcases failures on cdh4-0.9.0 MR2
+    
+    Reason: CLOUDERA-BUILD
+    Author: Zhenxiao Luo
+    Ref: CDH-6370
+
+commit 096f8a5f747e4223820ad339e37ff4dbd6e429f4
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 19 11:12:17 2012 -0700
+
+    CDH-5265. Prepare Hive 0.9.0 branch for CDH4
+    
+    Reason: CLOUDERA-BUILD
+    Author: Zhenxiao Luo
+    Ref: CDH-5265
+    
+    CLOUDERA-BUILD. Make cdh4-0.9.0 build/test for both MR1 and MR2
+    
+    Build Cmd:
+    $ant very-clean tar
+    
+    Run Test in MR1 Mode:
+    $ant test -Dhadoop.mr.test.rev=20 -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT
+    
+    Run Test in MR2 Mode:
+    $ant test -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT
+    
+    Problem:
+    1. Since we are building MR1 and MR2 on the same branch, when running MR1 test, a tag, 0.23.1-mr1-cdh4.0.0-SNAPSHOT, is needed for package downloading. Did not find a way to smoothly generate this tag in our build system.
+    2. The current build/test api is using -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT for both MR1 and MR2, which is misleading. The reason is we are building both MR1 test and MR2 test, and until run time decide which test suite to run. I will work on a fix for it, so that when running in MR2 mode, no such tag needed.
+
+commit a6f75878fbc3eed82e71b0c657e94c6010935746
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jun 18 18:40:37 2012 -0700
+
+    CLOUDERA-BUILD. Set hive.archive.har.parentdir.settable=true in HiveConf
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4765
+
+commit 2286135320f3d4a9788a2bd677d295a393fc78e2
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 5 14:51:53 2012 -0700
+
+    CLOUDERA-BUILD. Fix HadoopShims build errors
+
+commit 00e7b6cfe4e47f1e7f337c3829668867f368e950
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 5 14:11:43 2012 -0700
+
+    HIVE-2804. Task log retrieval fails on secure cluster
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4488
+
+commit 6da71e0ea20ac2b682e8f6db3a45d4338820f92e
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Mon May 14 15:09:49 2012 -0700
+
+    HIVE-3025. Fix Hive ARCHIVE command on 0.22 and 0.23
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-4608
+
+commit bd04523546db203437b5f5b986441a4bea82e7dc
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon May 14 16:25:31 2012 -0700
+
+    HIVE-3014. Fix metastore test failures caused by HIVE-2757
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-5790
+
+commit 75f805cdee293485c4606fee62ec9a3b20657eab
+Author: Carl Steinbach <carl@cloudera.com>
+Date:   Wed May 9 22:33:55 2012 -0700
+
+    HIVE-2757.  hive can't find hadoop executor scripts without HADOOP_HOME set
+    
+    Reason: Bug
+    Author: Roman Shaposhnik
+    Ref: CDH-5694
+
+commit 8058533a4ac675de77c198fc832f7ceb3f7fe550
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Tue Jun 5 14:02:38 2012 -0700
+
+    HIVE-2979. Implement INCLUDE_HADOOP_MAJOR_VERSION test macro
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-5678
+
+commit c88dfc503d95319e057f9686196b021eed3b0ea8
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Sun May 6 22:46:28 2012 -0700
+
+    HIVE-2928- Support for Oracle-backed Hive-Metastore
+    
+    Reason: Bug
+    Author: Prasad Mujumdar
+    Ref: CDH-5650
+
+commit f85aac6a8f2ee26d5ce74c7112167d9ee288e05f
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Sun May 6 21:46:25 2012 -0700
+
+    HIVE-2529. Fix and backport HIVE-2529. metastore 0.8 upgrade script for PostgreSQL
+    
+    Reason: Bug
+    Author: Zhenxiao Luo
+    Ref: CDH-4157
+
+commit 2ec0b3cc1c11482f10508e614fd9a0dac31664ae
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jun 4 13:05:13 2012 -0700
+
+    HIVE-3029. Update ShimLoader to work with Hadoop 2.x
+    
+    Reason: Bug
+    Author: Carl Steinbach
+    Ref: CDH-6161
+
+commit cad685e58c034c0a95227a1605f960191229e990
+Author: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date:   Mon Jun 4 13:02:44 2012 -0700
+
+    CLOUDERA-BUILD. Fix All testcase failures of TestContribCliDriver on MR1.
+
+commit fb590270a4532363f632621154dc5f7887db9257
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Apr 30 17:32:20 2012 -0700
+
+    Trying to get MR1 tests running.
+
+commit 31c2c8f820499da3df762a9d62609fcf430711f6
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Mon Apr 30 16:03:59 2012 -0700
+
+    CLOUDERA-BUILD. Updating with CDH build changes.
+
+commit d72f9abe381c840793661795228e8a13e7561bf8
+Author: Namit Jain <namit@apache.org>
+Date:   Fri Apr 27 00:52:50 2012 +0000
+
+    HIVE-2904 ant gen-test failed
+    (Carl Stienbach via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1331162 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 094d48e3c55560893bae3ebed70fab7a64993fe3
+Author: Namit Jain <namit@apache.org>
+Date:   Thu Apr 26 17:47:45 2012 +0000
+
+    HIVE-2721 ability to select a view qualified by the database / schema name
+    (Martin Traverso via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330991 13f79535-47bb-0310-9956-ffa450edef68
+
+commit dca45a0174770c82258f7235858f94a90961b068
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Wed Apr 25 16:58:54 2012 +0000
+
+    HIVE-2918. Hive Dynamic Partition Insert - move task not considering 'hive.exec.max.dynamic.partitions' from CLI. (cwsteinbach via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330417 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 258e7887e6224bc5c5ed8aa07e431eedc07c4471
+Author: Namit Jain <namit@apache.org>
+Date:   Tue Apr 24 23:21:09 2012 +0000
+
+    HIVE-2960 Stop testing concat of partitions containing control characters.
+    (Kevin Wilfong via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330057 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 7319bfd29b3c648b47a2bdb8c46c4fc2f47b407a
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Apr 24 20:35:23 2012 +0000
+
+    HIVE-2976. Fix maven-build Ant target (Thomas Weise and Andrew Bayer via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329997 13f79535-47bb-0310-9956-ffa450edef68
+
+commit a5706219a00e9d30170369080d8d134aa19aed00
+Author: Carl Steinbach <cws@apache.org>
+Date:   Mon Apr 23 23:21:48 2012 +0000
+
+    HIVE-2803 [jira] utc_from_timestamp and utc_to_timestamp returns incorrect
+    results.
+    (Kiyotaka Suzuki via Carl Steinbach)
+    
+    Summary:
+    https://issues.apache.org/jira/browse/HIVE-2803
+    
+    HIVE-2803 utc_from_timestamp and utc_to_timestamp returns incorrect results.
+    
+    It changed so that applyOffset() return a new instance.
+    
+    How to reproduce:
+    
+    $ echo "2011-12-25 09:00:00.123456" > /tmp/data5.txt
+    hive> create table ts1(t1 timestamp);
+    hive> load data local inpath '/tmp/data5.txt' overwrite into table ts1;
+    hive> select t1, from_utc_timestamp(t1, 'JST'), from_utc_timestamp(t1, 'JST')
+    from ts1 limit 1;
+    
+    The following result is expected:
+    
+     2011-12-25 09:00:00.123456      2011-12-25 18:00:00.123456      2011-12-25
+    18:00:00.123456
+    
+    However, the above query return incorrect result like this:
+    
+     2011-12-26 03:00:00.492456      2011-12-26 03:00:00.492456      2011-12-26
+    03:00:00.492456
+    
+    This is because GenericUDFFromUtcTimestamp.applyOffset() does setTime()
+    improperly.
+    On evaluating query, timestamp argument always returns the same instance.
+    GenericUDFFromUtcTimestamp.applyOffset() does setTime() on the instance.
+    That means it adds all offsets in the query.
+    
+    Test Plan: EMPTY
+    
+    Reviewers: JIRA
+    
+    Differential Revision: https://reviews.facebook.net/D1959
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329507 13f79535-47bb-0310-9956-ffa450edef68
+
+commit ce51ccef5a7abe4d98da429633ad3ee387b74431
+Author: Namit Jain <namit@apache.org>
+Date:   Mon Apr 23 22:31:14 2012 +0000
+
+    HIVE-2703 ResultSetMetaData.getColumnType() always returns VARCHAR(string) for partition columns
+    irrespective of partition column type (tamtam180 via namit)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329492 13f79535-47bb-0310-9956-ffa450edef68
+
+commit f9225226e4914095a54c4ac8914b457f646ce234
+Author: Carl Steinbach <cws@apache.org>
+Date:   Mon Apr 23 20:13:03 2012 +0000
+
+    HIVE-2928. Support for Oracle-backed Hive-Metastore (longvarchar to clob in package.jdo) (Mithun Radhakrishnan and Andrew Bayer via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329416 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b1fb6705c0c58e3891352dcadfad337ccb064e5c
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri Apr 20 18:07:41 2012 +0000
+
+    HIVE-2965 : Revert HIVE-2612 (hashutosh)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1328469 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 5f26805dc363deda6ac71baf3f6c50821d3e79b8
+Author: Carl Steinbach <cws@apache.org>
+Date:   Mon Apr 23 19:19:55 2012 +0000
+
+    HIVE-2646. Hive Ivy dependencies on Hadoop should depend on jars directly, not tarballs (Andrew Bayer and Thomas Weise)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329381 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 0e4c21e266a0c0da9c15cc4a2eb0129c4a0606d5
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Wed Apr 18 17:33:41 2012 +0000
+
+    HIVE-2959 [jira] TestRemoteHiveMetaStoreIpAddress always uses the same port
+    (Kevin Wilfong via Ashutosh Chauhan)
+    
+    Summary:
+    https://issues.apache.org/jira/browse/HIVE-2959
+    
+    TestRemoteHiveMetaStoreIpAddress now uses the standard way of finding a free
+    port using Java's ServerSocket class.
+    
+    TestRemoteHiveMetaStoreIpAddress always uses the same port, meaning that if
+    another process happens to be using that port, the tests cannot succeed.
+    
+    There seems to be a standard way of finding a free port using Java's
+    ServerSocket class, this should be used instead.
+    
+    Test Plan: Ran TestRemoteHiveMetaStoreIpAddress and
+    TestRemoteUGIHiveMetaStoreIpAddress, the two tests which would be affected by
+    this change.  I verified they passed and did not use port 39083.
+    
+    Reviewers: JIRA, njain, ashutoshc
+    
+    Reviewed By: ashutoshc
+    
+    Differential Revision: https://reviews.facebook.net/D2841
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1327591 13f79535-47bb-0310-9956-ffa450edef68
+
+commit fa66dac9b2b735c82cb059cec03496951bb13db1
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Tue Apr 17 17:23:04 2012 +0000
+
+    HIVE-2530. Implement SHOW TBLPROPERTIES. (leizhao via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1327189 13f79535-47bb-0310-9956-ffa450edef68
+
+commit ffdef0d3a164ce796f3896bbf86bf04f6e5ce1b6
+Author: Paul Yang <pauly@apache.org>
+Date:   Sun Apr 15 23:34:09 2012 +0000
+
+    HIVE-2942. substr on string containing UTF-8 characters produces StringIndexOutOfBoundsException (Kevin Wilfong via pauly)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1326444 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 91446c993f2a4106cf5a70e260d708d85105d643
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Fri Apr 13 16:29:03 2012 +0000
+
+    HIVE-2937. TestHiveServerSessions hangs when executed directly. (navis via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325830 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2ddab60e4abd660ca5b5151d24cb98271aed55dd
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Fri Apr 13 14:51:12 2012 +0000
+
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325793 13f79535-47bb-0310-9956-ffa450edef68
+
+commit f63a72fd25f7dbb416fb8597674ae4ce301aafa9
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Apr 12 18:57:52 2012 +0000
+
+    HIVE-2767 [jira] Optionally use framed transport with metastore
+    (Travis Crawford via Ashutosh Chauhan)
+    
+    Summary:
+    Add support for optionally using the thrift framed transport, enabling
+    integration with environments where that is necessary.
+    
+    Users may want/need to use thrift's framed transport when communicating with the
+    Hive MetaStore. This patch adds a new property
+    hive.metastore.thrift.framed.transport.enabled that enables the framed transport
+    (defaults to off, aka no change from before the patch). This property must be
+    set for both clients and the HMS server.
+    
+    It wasn't immediately clear how to use the framed transport with SASL, so as
+    written an exception is thrown if you try starting the server with both options.
+    If SASL and the framed transport will indeed work together I can update the
+    patch (although I don't have a secured environment to test in).
+    
+    Test Plan:
+    Tested locally that client and server can connect, both with and
+    without the flag. Tests pass.
+    
+    Reviewers: JIRA, ashutoshc
+    
+    Reviewed By: ashutoshc
+    
+    Differential Revision: https://reviews.facebook.net/D2661
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325446 13f79535-47bb-0310-9956-ffa450edef68
+
+commit e8f8eb948ce9d7c7bbb6f70900d0720e5518e13e
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Thu Apr 12 18:46:48 2012 +0000
+
+    HIVE-2711 : Make the header of RCFile unique (Owen Omalley via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325442 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 498a319a31dd82db858a0b0dc95dcded58ea5c9b
+Author: Kevin Wilfong <kevinwilfong@apache.org>
+Date:   Tue Apr 10 16:37:33 2012 +0000
+
+    HIVE-2907. Hive error when dropping a table with large number of partitions. (mousom via kevinwilfong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1311850 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 08359cde992bc85ba983395c11ab2c8528eb0e7f
+Author: Siying Dong <sdong@apache.org>
+Date:   Fri Apr 6 22:27:22 2012 +0000
+
+    HIVE-2929 race condition in DAG execute tasks for hive (Namit Jain via Siying Dong)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1310619 13f79535-47bb-0310-9956-ffa450edef68

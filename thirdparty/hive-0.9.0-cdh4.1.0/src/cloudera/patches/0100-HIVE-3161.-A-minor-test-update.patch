@@ -1,0 +1,47 @@
+From ad467db43c51c153bf0b99096991c5146b4b49b4 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Thu, 21 Jun 2012 22:39:30 +0000
+Subject: [PATCH 100/144] HIVE-3161. A minor test update
+ (Namit Jain via Carl Steinbach)
+
+Summary: The correct long term fix is HIVE-3160
+
+Test Plan: manual
+
+Differential Revision: https://reviews.facebook.net/D3723
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352719 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 41b8753d7595539a44ed9295b23368c9a820ee11)
+---
+ .../test/queries/clientpositive/autogen_colalias.q |    3 +++
+ .../results/clientpositive/autogen_colalias.q.out  |    6 ++++++
+ 2 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/src/ql/src/test/queries/clientpositive/autogen_colalias.q b/src/ql/src/test/queries/clientpositive/autogen_colalias.q
+index d86321d..e247a73 100644
+--- a/src/ql/src/test/queries/clientpositive/autogen_colalias.q
++++ b/src/ql/src/test/queries/clientpositive/autogen_colalias.q
+@@ -20,3 +20,6 @@ describe dest_grouped_new1;
+ 
+ create table dest_grouped_new2 as select distinct src.key from src;
+ describe dest_grouped_new2;
++
++-- Drop the temporary function at the end till HIVE-3160 gets fixed
++DROP TEMPORARY FUNCTION test_max;
+diff --git a/src/ql/src/test/results/clientpositive/autogen_colalias.q.out b/src/ql/src/test/results/clientpositive/autogen_colalias.q.out
+index c661287..3964079 100644
+--- a/src/ql/src/test/results/clientpositive/autogen_colalias.q.out
++++ b/src/ql/src/test/results/clientpositive/autogen_colalias.q.out
+@@ -80,3 +80,9 @@ PREHOOK: type: DESCTABLE
+ POSTHOOK: query: describe dest_grouped_new2
+ POSTHOOK: type: DESCTABLE
+ key	string	
++PREHOOK: query: -- Drop the temporary function at the end till HIVE-3160 gets fixed
++DROP TEMPORARY FUNCTION test_max
++PREHOOK: type: DROPFUNCTION
++POSTHOOK: query: -- Drop the temporary function at the end till HIVE-3160 gets fixed
++DROP TEMPORARY FUNCTION test_max
++POSTHOOK: type: DROPFUNCTION
+-- 
+1.7.0.4
+

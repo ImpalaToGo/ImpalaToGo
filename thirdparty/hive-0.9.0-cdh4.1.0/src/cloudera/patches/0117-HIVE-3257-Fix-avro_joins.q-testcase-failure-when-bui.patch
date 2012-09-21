@@ -1,0 +1,42 @@
+From 2eea83f01ef06d80cdc27a469e44c7f031861117 Mon Sep 17 00:00:00 2001
+From: Edward Capriolo <ecapriolo@apache.org>
+Date: Sat, 14 Jul 2012 12:53:10 +0000
+Subject: [PATCH 117/144] HIVE-3257 Fix avro_joins.q testcase failure when building hive on hadoop0.23. Zhenxiao Luo (via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1361537 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit aaabd8836c14d8cd769b1cf550ef0e8ac68f8d0c)
+---
+ .../hive/ql/io/avro/AvroGenericRecordReader.java   |   10 ++++++++--
+ 1 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/io/avro/AvroGenericRecordReader.java b/src/ql/src/java/org/apache/hadoop/hive/ql/io/avro/AvroGenericRecordReader.java
+index 94f2e1c..dbc999f 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/io/avro/AvroGenericRecordReader.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/io/avro/AvroGenericRecordReader.java
+@@ -92,7 +92,7 @@ public class AvroGenericRecordReader implements
+       // that matches our input split.
+       for (Map.Entry<String,PartitionDesc> pathsAndParts: mapRedWork.getPathToPartitionInfo().entrySet()){
+         String partitionPath = pathsAndParts.getKey();
+-        if(pathIsInPartition(split.getPath().makeQualified(fs), partitionPath)) {
++        if(pathIsInPartition(split.getPath(), partitionPath)) {
+           if(LOG.isInfoEnabled()) {
+               LOG.info("Matching partition " + partitionPath +
+                       " with input split " + split);
+@@ -121,7 +121,13 @@ public class AvroGenericRecordReader implements
+   }
+ 
+   private boolean pathIsInPartition(Path split, String partitionPath) {
+-    return split.toString().startsWith(partitionPath);
++    boolean schemeless = split.toUri().getScheme() == null;
++    if (schemeless) {
++      String schemelessPartitionPath = new Path(partitionPath).toUri().getPath();
++      return split.toString().startsWith(schemelessPartitionPath);
++    } else {
++      return split.toString().startsWith(partitionPath);
++    }
+   }
+ 
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,133 @@
+From 2b2b21c47cd6fab48f03cbb319f1dc624cccaaf0 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Thu, 16 Aug 2012 13:44:43 +0000
+Subject: [PATCH 117/151] HBASE-6576 HBaseAdmin.createTable should wait until the table is enabled (Gregory)
+
+Reason: Bug
+Author: Gregory Chanan
+Ref: CDH-7573
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   88 +++++++++++---------
+ 1 files changed, 49 insertions(+), 39 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index a675a87..94d3acd 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -47,6 +47,7 @@ import org.apache.hadoop.hbase.RegionException;
+ import org.apache.hadoop.hbase.RemoteExceptionHandler;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.TableExistsException;
++import org.apache.hadoop.hbase.TableNotEnabledException;
+ import org.apache.hadoop.hbase.TableNotFoundException;
+ import org.apache.hadoop.hbase.UnknownRegionException;
+ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
+@@ -386,57 +387,66 @@ public class HBaseAdmin implements Abortable, Closeable {
+     }
+     int numRegs = splitKeys == null ? 1 : splitKeys.length + 1;
+     int prevRegCount = 0;
++    boolean doneWithMetaScan = false;
+     for (int tries = 0; tries < this.numRetries * this.retryLongerMultiplier;
+       ++tries) {
+-      // Wait for new table to come on-line
+-      final AtomicInteger actualRegCount = new AtomicInteger(0);
+-      MetaScannerVisitor visitor = new MetaScannerVisitor() {
+-        @Override
+-        public boolean processRow(Result rowResult) throws IOException {
+-          HRegionInfo info = Writables.getHRegionInfoOrNull(
++      if (!doneWithMetaScan) {
++        // Wait for new table to come on-line
++        final AtomicInteger actualRegCount = new AtomicInteger(0);
++        MetaScannerVisitor visitor = new MetaScannerVisitor() {
++          @Override
++          public boolean processRow(Result rowResult) throws IOException {
++            HRegionInfo info = Writables.getHRegionInfoOrNull(
+               rowResult.getValue(HConstants.CATALOG_FAMILY,
+-                  HConstants.REGIONINFO_QUALIFIER));
+-          //If regioninfo is null, skip this row
+-          if (null == info) {
++              HConstants.REGIONINFO_QUALIFIER));
++            //If regioninfo is null, skip this row
++            if (null == info) {
++              return true;
++            }
++            if (!(Bytes.equals(info.getTableName(), desc.getName()))) {
++              return false;
++            }
++            String hostAndPort = null;
++            byte [] value = rowResult.getValue(HConstants.CATALOG_FAMILY,
++              HConstants.SERVER_QUALIFIER);
++            // Make sure that regions are assigned to server
++            if (value != null && value.length > 0) {
++              hostAndPort = Bytes.toString(value);
++            }
++            if (!(info.isOffline() || info.isSplit()) && hostAndPort != null) {
++              actualRegCount.incrementAndGet();
++            }
+             return true;
+           }
+-          if (!(Bytes.equals(info.getTableName(), desc.getName()))) {
+-            return false;
++        };
++        MetaScanner.metaScan(conf, visitor, desc.getName());
++        if (actualRegCount.get() != numRegs) {
++          if (tries == this.numRetries * this.retryLongerMultiplier - 1) {
++            throw new RegionOfflineException("Only " + actualRegCount.get() +
++              " of " + numRegs + " regions are online; retries exhausted.");
+           }
+-          String hostAndPort = null;
+-          byte [] value = rowResult.getValue(HConstants.CATALOG_FAMILY,
+-              HConstants.SERVER_QUALIFIER);
+-          // Make sure that regions are assigned to server
+-          if (value != null && value.length > 0) {
+-            hostAndPort = Bytes.toString(value);
++          try { // Sleep
++            Thread.sleep(getPauseTime(tries));
++          } catch (InterruptedException e) {
++            throw new InterruptedIOException("Interrupted when opening" +
++              " regions; " + actualRegCount.get() + " of " + numRegs +
++              " regions processed so far");
+           }
+-          if (!(info.isOffline() || info.isSplit()) && hostAndPort != null) {
+-            actualRegCount.incrementAndGet();
++          if (actualRegCount.get() > prevRegCount) { // Making progress
++            prevRegCount = actualRegCount.get();
++            tries = -1;
+           }
+-          return true;
+-        }
+-      };
+-      MetaScanner.metaScan(conf, visitor, desc.getName());
+-      if (actualRegCount.get() != numRegs) {
+-        if (tries == this.numRetries * this.retryLongerMultiplier - 1) {
+-          throw new RegionOfflineException("Only " + actualRegCount.get() +
+-            " of " + numRegs + " regions are online; retries exhausted.");
+-        }
+-        try { // Sleep
+-          Thread.sleep(getPauseTime(tries));
+-        } catch (InterruptedException e) {
+-          throw new InterruptedIOException("Interrupted when opening" +
+-              " regions; " + actualRegCount.get() + " of " + numRegs + 
+-              " regions processed so far");
+-        }
+-        if (actualRegCount.get() > prevRegCount) { // Making progress
+-          prevRegCount = actualRegCount.get();
+-          tries = -1;
++        } else {
++          doneWithMetaScan = true;
+         }
+-      } else {
++      }
++      if (doneWithMetaScan && isTableEnabled(desc.getName())) {
+         return;
+       }
+     }
++    throw new TableNotEnabledException(
++      "Retries exhausted while still waiting for table: "
++      + desc.getNameAsString() + " to be enabled");
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

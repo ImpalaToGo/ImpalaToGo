@@ -1,0 +1,176 @@
+From c8b707662898ee6e6041650dd0c9bde07f98e8ea Mon Sep 17 00:00:00 2001
+From: Edward Capriolo <ecapriolo@apache.org>
+Date: Sat, 23 Jun 2012 21:28:41 +0000
+Subject: [PATCH 105/144] HIVE-3125 sort_array does not work with LazyPrimitive Philip Tromans (via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353203 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 7fdc0e0451e99a7b647724c7c1c162f5f03270e6)
+---
+ data/files/primitive_type_arrays.txt               |    1 +
+ .../hive/ql/udf/generic/GenericUDFSortArray.java   |   26 +++++++----
+ .../test/queries/clientpositive/udf_sort_array.q   |   19 ++++++++
+ .../results/clientpositive/udf_sort_array.q.out    |   48 ++++++++++++++++++++
+ 4 files changed, 85 insertions(+), 9 deletions(-)
+ create mode 100644 data/files/primitive_type_arrays.txt
+
+diff --git a/src/data/files/primitive_type_arrays.txt b/src/data/files/primitive_type_arrays.txt
+new file mode 100644
+index 0000000..2ab5f42
+--- /dev/null
++++ b/src/data/files/primitive_type_arrays.txt
+@@ -0,0 +1 @@
++54321987216432168410001003572461truefalse3.1411.6182.7181.4143.141591.618032.718281.41421portosathosaramis1970-01-16 12:50:35.2421970-01-07 00:54:54.4421970-01-05 13:51:04.042
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFSortArray.java b/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFSortArray.java
+index 3010bfd..fa574f7 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFSortArray.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDFSortArray.java
+@@ -20,6 +20,8 @@ package org.apache.hadoop.hive.ql.udf.generic;
+ 
+ import java.util.ArrayList;
+ import java.util.Collections;
++import java.util.Comparator;
++import java.util.List;
+ 
+ import org.apache.hadoop.hive.ql.exec.Description;
+ import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
+@@ -29,13 +31,11 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
+ import org.apache.hadoop.hive.serde.Constants;
+ import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
+ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
+-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorConverters;
+ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
+-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
+-import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorConverters;
+ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorConverters.Converter;
+-import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory;
+-import org.apache.hadoop.hive.serde2.objectinspector.primitive.StringObjectInspector;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorUtils;
+ 
+ /**
+  * Generic UDF for array sort
+@@ -52,7 +52,7 @@ import org.apache.hadoop.hive.serde2.objectinspector.primitive.StringObjectInspe
+     + "  'a', 'b', 'c', 'd'")
+ public class GenericUDFSortArray extends GenericUDF {
+   private Converter[] converters;
+-  private ArrayList<Object> ret = new ArrayList<Object>();
++  private final List<Object> ret = new ArrayList<Object>();
+   private ObjectInspector[] argumentOIs;
+ 
+   @Override
+@@ -68,8 +68,9 @@ public class GenericUDFSortArray extends GenericUDF {
+     switch(arguments[0].getCategory()) {
+       case LIST:
+         if(((ListObjectInspector)(arguments[0])).getListElementObjectInspector()
+-          .getCategory().equals(Category.PRIMITIVE))
++          .getCategory().equals(Category.PRIMITIVE)) {
+           break;
++        }
+       default:
+         throw new UDFArgumentTypeException(0, "Argument 1"
+           + " of function SORT_ARRAY must be " + Constants.LIST_TYPE_NAME
+@@ -98,8 +99,15 @@ public class GenericUDFSortArray extends GenericUDF {
+ 
+     Object array = arguments[0].get();
+     ListObjectInspector arrayOI = (ListObjectInspector) argumentOIs[0];
+-    ArrayList retArray = (ArrayList) arrayOI.getList(array);
+-    Collections.sort(retArray);
++    List retArray = (List) arrayOI.getList(array);
++    final ObjectInspector valInspector = arrayOI.getListElementObjectInspector();
++    Collections.sort(retArray, new Comparator() {
++
++      @Override
++      public int compare(Object o1, Object o2) {
++        return ObjectInspectorUtils.compare(o1, valInspector, o2, valInspector);
++      }
++    });
+ 
+     ret.clear();
+     for (int i = 0; i < retArray.size(); i++) {
+diff --git a/src/ql/src/test/queries/clientpositive/udf_sort_array.q b/src/ql/src/test/queries/clientpositive/udf_sort_array.q
+index 8da4b59..ef09732 100644
+--- a/src/ql/src/test/queries/clientpositive/udf_sort_array.q
++++ b/src/ql/src/test/queries/clientpositive/udf_sort_array.q
+@@ -17,3 +17,22 @@ SELECT sort_array(array(2, 9, 7, 3, 5, 4, 1, 6, 8)) FROM src LIMIT 1;
+ -- Evaluate function against FLOAT valued keys
+ SELECT sort_array(sort_array(array(2.333, 9, 1.325, 2.003, 0.777, -3.445, 1))) FROM src LIMIT 1;
+ 
++-- Test it against data in a table.
++CREATE TABLE dest1 (
++	tinyints ARRAY<TINYINT>,
++	smallints ARRAY<SMALLINT>,
++	ints ARRAY<INT>,
++	bigints ARRAY<BIGINT>,
++	booleans ARRAY<BOOLEAN>,
++	floats ARRAY<FLOAT>,
++	doubles ARRAY<DOUBLE>,
++	strings ARRAY<STRING>,
++	timestamps ARRAY<TIMESTAMP>
++) STORED AS TEXTFILE;
++
++LOAD DATA LOCAL INPATH '../data/files/primitive_type_arrays.txt' OVERWRITE INTO TABLE dest1;
++
++SELECT	sort_array(tinyints), sort_array(smallints), sort_array(ints),
++	sort_array(bigints), sort_array(booleans), sort_array(floats),
++	sort_array(doubles), sort_array(strings), sort_array(timestamps)
++	FROM dest1;
+diff --git a/src/ql/src/test/results/clientpositive/udf_sort_array.q.out b/src/ql/src/test/results/clientpositive/udf_sort_array.q.out
+index 2977ce3..9e712db 100644
+--- a/src/ql/src/test/results/clientpositive/udf_sort_array.q.out
++++ b/src/ql/src/test/results/clientpositive/udf_sort_array.q.out
+@@ -99,3 +99,51 @@ POSTHOOK: type: QUERY
+ POSTHOOK: Input: default@src
+ #### A masked pattern was here ####
+ [-3.445,0.777,1.0,1.325,2.003,2.333,9.0]
++PREHOOK: query: -- Test it against data in a table.
++CREATE TABLE dest1 (
++	tinyints ARRAY<TINYINT>,
++	smallints ARRAY<SMALLINT>,
++	ints ARRAY<INT>,
++	bigints ARRAY<BIGINT>,
++	booleans ARRAY<BOOLEAN>,
++	floats ARRAY<FLOAT>,
++	doubles ARRAY<DOUBLE>,
++	strings ARRAY<STRING>,
++	timestamps ARRAY<TIMESTAMP>
++) STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: -- Test it against data in a table.
++CREATE TABLE dest1 (
++	tinyints ARRAY<TINYINT>,
++	smallints ARRAY<SMALLINT>,
++	ints ARRAY<INT>,
++	bigints ARRAY<BIGINT>,
++	booleans ARRAY<BOOLEAN>,
++	floats ARRAY<FLOAT>,
++	doubles ARRAY<DOUBLE>,
++	strings ARRAY<STRING>,
++	timestamps ARRAY<TIMESTAMP>
++) STORED AS TEXTFILE
++POSTHOOK: type: CREATETABLE
++POSTHOOK: Output: default@dest1
++PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/primitive_type_arrays.txt' OVERWRITE INTO TABLE dest1
++PREHOOK: type: LOAD
++PREHOOK: Output: default@dest1
++POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/primitive_type_arrays.txt' OVERWRITE INTO TABLE dest1
++POSTHOOK: type: LOAD
++POSTHOOK: Output: default@dest1
++PREHOOK: query: SELECT	sort_array(tinyints), sort_array(smallints), sort_array(ints),
++	sort_array(bigints), sort_array(booleans), sort_array(floats),
++	sort_array(doubles), sort_array(strings), sort_array(timestamps)
++	FROM dest1
++PREHOOK: type: QUERY
++PREHOOK: Input: default@dest1
++#### A masked pattern was here ####
++POSTHOOK: query: SELECT	sort_array(tinyints), sort_array(smallints), sort_array(ints),
++	sort_array(bigints), sort_array(booleans), sort_array(floats),
++	sort_array(doubles), sort_array(strings), sort_array(timestamps)
++	FROM dest1
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@dest1
++#### A masked pattern was here ####
++[1,2,3,4,5]	[1,2,7,8,9]	[4,8,16,32,64]	[1,100,246,357,1000]	[false,true]	[1.414,1.618,2.718,3.141]	[1.41421,1.61803,2.71828,3.14159]	["","aramis","athos","portos"]	["1970-01-05 13:51:04.042","1970-01-07 00:54:54.442","1970-01-16 12:50:35.242"]
+-- 
+1.7.0.4
+

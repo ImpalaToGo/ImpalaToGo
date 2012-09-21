@@ -1,0 +1,41 @@
+From 31a89660cf2cb9fe5573b4168f1be8991f3384ce Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Wed, 25 Jul 2012 00:50:22 +0000
+Subject: [PATCH 124/144] HIVE-3249 [jira] Upgrade guava to 11.0.2
+ (Zhenxiao Luo via Carl Steinbach)
+
+Summary:
+HIVE-3249: Upgrade guava to 11.0.2
+
+Hadoop has upgraded to this new version of Guava. We should, too, so we don't have compatibility issues running on Hadoop 2.0+
+
+currently, hive is using guava-r09.jar
+we should update it to guava-11.0.2.jar
+
+Test Plan: EMPTY
+
+Reviewers: JIRA
+
+Differential Revision: https://reviews.facebook.net/D4083
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365371 13f79535-47bb-0310-9956-ffa450edef68
+---
+ ivy/libraries.properties |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/ivy/libraries.properties b/src/ivy/libraries.properties
+index 3e2df92..2a3c355 100644
+--- a/src/ivy/libraries.properties
++++ b/src/ivy/libraries.properties
+@@ -41,7 +41,7 @@ commons-logging.version=1.0.4
+ commons-logging-api.version=1.0.4
+ commons-pool.version=1.5.4
+ derby.version=10.4.2.0
+-guava.version=r09
++guava.version=11.0.2
+ hbase.version=0.92.0
+ jackson.version=1.8.8
+ javaewah.version=0.3.2
+-- 
+1.7.0.4
+

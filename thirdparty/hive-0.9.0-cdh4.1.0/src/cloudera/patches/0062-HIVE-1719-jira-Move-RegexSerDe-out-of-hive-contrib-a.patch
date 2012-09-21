@@ -1,0 +1,779 @@
+From e4bfe05ba5294879268bc946bb7e1a5690a6a00d Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Fri, 18 May 2012 21:19:50 +0000
+Subject: [PATCH 062/144] HIVE-1719 [jira] Move RegexSerDe out of hive-contrib and over to hive-serde
+ (Shreepadma Venugopalan via Carl Steinbach)
+
+Summary:
+Regex Serde Changes
+
+RegexSerDe is as much a part of the standard Hive distribution as the other SerDes
+currently in hive-serde. I think we should move it over to the hive-serde module so that
+users don't have to go to the added effort of manually registering the contrib jar before
+using it.
+
+Test Plan: EMPTY
+
+Reviewers: JIRA, cwsteinbach
+
+Reviewed By: cwsteinbach
+
+Differential Revision: https://reviews.facebook.net/D3249
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340256 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit e30d2847a828412812e4b8ababfcaf8ce739ed46)
+---
+ .../src/test/queries/clientnegative/serde_regex.q  |   12 +-
+ .../src/test/queries/clientpositive/serde_regex.q  |    8 +-
+ .../test/results/clientnegative/serde_regex.q.out  |   14 +-
+ .../test/results/clientpositive/serde_regex.q.out  |   16 +--
+ ql/src/test/queries/clientnegative/serde_regex.q   |   16 ++
+ ql/src/test/queries/clientnegative/serde_regex2.q  |   23 ++
+ ql/src/test/queries/clientnegative/serde_regex3.q  |   14 ++
+ ql/src/test/queries/clientpositive/serde_regex.q   |   41 ++++
+ .../test/results/clientnegative/serde_regex.q.out  |   22 ++
+ .../test/results/clientnegative/serde_regex2.q.out |   67 ++++++
+ .../test/results/clientnegative/serde_regex3.q.out |   20 ++
+ .../test/results/clientpositive/serde_regex.q.out  |  129 ++++++++++++
+ .../org/apache/hadoop/hive/serde2/RegexSerDe.java  |  211 ++++++++++++++++++++
+ 13 files changed, 558 insertions(+), 35 deletions(-)
+ create mode 100644 ql/src/test/queries/clientnegative/serde_regex.q
+ create mode 100644 ql/src/test/queries/clientnegative/serde_regex2.q
+ create mode 100644 ql/src/test/queries/clientnegative/serde_regex3.q
+ create mode 100644 ql/src/test/queries/clientpositive/serde_regex.q
+ create mode 100644 ql/src/test/results/clientnegative/serde_regex.q.out
+ create mode 100644 ql/src/test/results/clientnegative/serde_regex2.q.out
+ create mode 100644 ql/src/test/results/clientnegative/serde_regex3.q.out
+ create mode 100644 ql/src/test/results/clientpositive/serde_regex.q.out
+ create mode 100644 serde/src/java/org/apache/hadoop/hive/serde2/RegexSerDe.java
+
+diff --git a/src/contrib/src/test/queries/clientnegative/serde_regex.q b/src/contrib/src/test/queries/clientnegative/serde_regex.q
+index 944645a..0995710 100644
+--- a/src/contrib/src/test/queries/clientnegative/serde_regex.q
++++ b/src/contrib/src/test/queries/clientnegative/serde_regex.q
+@@ -1,7 +1,8 @@
+ add jar ${system:build.dir}/hive-contrib-${system:hive.version}.jar;
+ 
+-DROP TABLE serde_regex;
++USE default;
+ 
++--  This should fail because Regex SerDe supports only columns of type string
+ EXPLAIN
+ CREATE TABLE serde_regex(
+   host STRING,
+@@ -35,11 +36,4 @@ WITH SERDEPROPERTIES (
+   "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?",
+   "output.format.string" = "%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s"
+ )
+-STORED AS TEXTFILE;
+-
+-LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex;
+-LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex;
+-
+-SELECT * FROM serde_regex ORDER BY time;
+-
+-DROP TABLE serde_regex;
++STORED AS TEXTFILE;
+\ No newline at end of file
+diff --git a/src/contrib/src/test/queries/clientpositive/serde_regex.q b/src/contrib/src/test/queries/clientpositive/serde_regex.q
+index 702e356..78567c1 100644
+--- a/src/contrib/src/test/queries/clientpositive/serde_regex.q
++++ b/src/contrib/src/test/queries/clientpositive/serde_regex.q
+@@ -1,7 +1,5 @@
+ add jar ${system:build.dir}/hive-contrib-${system:hive.version}.jar;
+ 
+-DROP TABLE serde_regex;
+-
+ EXPLAIN
+ CREATE TABLE serde_regex(
+   host STRING,
+@@ -15,7 +13,7 @@ CREATE TABLE serde_regex(
+   agent STRING)
+ ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe'
+ WITH SERDEPROPERTIES (
+-  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?",
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?", 
+   "output.format.string" = "%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s"
+ )
+ STORED AS TEXTFILE;
+@@ -40,6 +38,4 @@ STORED AS TEXTFILE;
+ LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex;
+ LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex;
+ 
+-SELECT * FROM serde_regex ORDER BY time;
+-
+-DROP TABLE serde_regex;
++SELECT * FROM serde_regex ORDER BY time;
+\ No newline at end of file
+diff --git a/src/contrib/src/test/results/clientnegative/serde_regex.q.out b/src/contrib/src/test/results/clientnegative/serde_regex.q.out
+index b489b88..c51567f 100644
+--- a/src/contrib/src/test/results/clientnegative/serde_regex.q.out
++++ b/src/contrib/src/test/results/clientnegative/serde_regex.q.out
+@@ -1,8 +1,9 @@
+-PREHOOK: query: DROP TABLE serde_regex
+-PREHOOK: type: DROPTABLE
+-POSTHOOK: query: DROP TABLE serde_regex
+-POSTHOOK: type: DROPTABLE
+-PREHOOK: query: EXPLAIN
++PREHOOK: query: USE default
++PREHOOK: type: SWITCHDATABASE
++POSTHOOK: query: USE default
++POSTHOOK: type: SWITCHDATABASE
++PREHOOK: query: --  This should fail because Regex SerDe supports only columns of type string
++EXPLAIN
+ CREATE TABLE serde_regex(
+   host STRING,
+   identity STRING,
+@@ -20,7 +21,8 @@ WITH SERDEPROPERTIES (
+ )
+ STORED AS TEXTFILE
+ PREHOOK: type: CREATETABLE
+-POSTHOOK: query: EXPLAIN
++POSTHOOK: query: --  This should fail because Regex SerDe supports only columns of type string
++EXPLAIN
+ CREATE TABLE serde_regex(
+   host STRING,
+   identity STRING,
+diff --git a/src/contrib/src/test/results/clientpositive/serde_regex.q.out b/src/contrib/src/test/results/clientpositive/serde_regex.q.out
+index abc5166..3edf340 100644
+--- a/src/contrib/src/test/results/clientpositive/serde_regex.q.out
++++ b/src/contrib/src/test/results/clientpositive/serde_regex.q.out
+@@ -1,7 +1,3 @@
+-PREHOOK: query: DROP TABLE serde_regex
+-PREHOOK: type: DROPTABLE
+-POSTHOOK: query: DROP TABLE serde_regex
+-POSTHOOK: type: DROPTABLE
+ PREHOOK: query: EXPLAIN
+ CREATE TABLE serde_regex(
+   host STRING,
+@@ -15,7 +11,7 @@ CREATE TABLE serde_regex(
+   agent STRING)
+ ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe'
+ WITH SERDEPROPERTIES (
+-  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?",
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?", 
+   "output.format.string" = "%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s"
+ )
+ STORED AS TEXTFILE
+@@ -33,7 +29,7 @@ CREATE TABLE serde_regex(
+   agent STRING)
+ ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe'
+ WITH SERDEPROPERTIES (
+-  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?",
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?", 
+   "output.format.string" = "%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s"
+ )
+ STORED AS TEXTFILE
+@@ -118,11 +114,3 @@ POSTHOOK: Input: default@serde_regex
+ #### A masked pattern was here ####
+ 127.0.0.1	-	frank	[10/Oct/2000:13:55:36 -0700]	"GET /apache_pb.gif HTTP/1.0"	200	2326	NULL	NULL
+ 127.0.0.1	-	-	[26/May/2009:00:00:00 +0000]	"GET /someurl/?track=Blabla(Main) HTTP/1.1"	200	5864	-	"Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.65 Safari/525.19"
+-PREHOOK: query: DROP TABLE serde_regex
+-PREHOOK: type: DROPTABLE
+-PREHOOK: Input: default@serde_regex
+-PREHOOK: Output: default@serde_regex
+-POSTHOOK: query: DROP TABLE serde_regex
+-POSTHOOK: type: DROPTABLE
+-POSTHOOK: Input: default@serde_regex
+-POSTHOOK: Output: default@serde_regex
+diff --git a/src/ql/src/test/queries/clientnegative/serde_regex.q b/src/ql/src/test/queries/clientnegative/serde_regex.q
+new file mode 100644
+index 0000000..6603b91
+--- /dev/null
++++ b/src/ql/src/test/queries/clientnegative/serde_regex.q
+@@ -0,0 +1,16 @@
++USE default;
++--  This should fail because Regex SerDe supports only columns of type string
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status INT,
++  size INT,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?")
++STORED AS TEXTFILE;
+diff --git a/src/ql/src/test/queries/clientnegative/serde_regex2.q b/src/ql/src/test/queries/clientnegative/serde_regex2.q
+new file mode 100644
+index 0000000..a395574
+--- /dev/null
++++ b/src/ql/src/test/queries/clientnegative/serde_regex2.q
+@@ -0,0 +1,23 @@
++USE default;
++-- Mismatch between the number of matching groups and columns, throw run time exception. Ideally this should throw a compile time exception. See JIRA-3023 for more details.
++ CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)"  
++)
++STORED AS TEXTFILE;
++
++LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex;
++LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex;
++
++-- raise an exception 
++SELECT * FROM serde_regex ORDER BY time;
+\ No newline at end of file
+diff --git a/src/ql/src/test/queries/clientnegative/serde_regex3.q b/src/ql/src/test/queries/clientnegative/serde_regex3.q
+new file mode 100644
+index 0000000..5a0295c
+--- /dev/null
++++ b/src/ql/src/test/queries/clientnegative/serde_regex3.q
+@@ -0,0 +1,14 @@
++USE default;
++-- null input.regex, raise an exception
++ CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++STORED AS TEXTFILE;
+diff --git a/src/ql/src/test/queries/clientpositive/serde_regex.q b/src/ql/src/test/queries/clientpositive/serde_regex.q
+new file mode 100644
+index 0000000..c6809cb
+--- /dev/null
++++ b/src/ql/src/test/queries/clientpositive/serde_regex.q
+@@ -0,0 +1,41 @@
++EXPLAIN
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE;
++
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE;
++
++LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex;
++LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex;
++
++SELECT * FROM serde_regex ORDER BY time;
++
++SELECT host, size, status, time from serde_regex ORDER BY time;
++
++DROP TABLE serde_regex;
+diff --git a/src/ql/src/test/results/clientnegative/serde_regex.q.out b/src/ql/src/test/results/clientnegative/serde_regex.q.out
+new file mode 100644
+index 0000000..03fe907
+--- /dev/null
++++ b/src/ql/src/test/results/clientnegative/serde_regex.q.out
+@@ -0,0 +1,22 @@
++PREHOOK: query: USE default
++PREHOOK: type: SWITCHDATABASE
++POSTHOOK: query: USE default
++POSTHOOK: type: SWITCHDATABASE
++PREHOOK: query: --  This should fail because Regex SerDe supports only columns of type string
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status INT,
++  size INT,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?")
++STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++#### A masked pattern was here ####
++FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask
+diff --git a/src/ql/src/test/results/clientnegative/serde_regex2.q.out b/src/ql/src/test/results/clientnegative/serde_regex2.q.out
+new file mode 100644
+index 0000000..5db75aa
+--- /dev/null
++++ b/src/ql/src/test/results/clientnegative/serde_regex2.q.out
+@@ -0,0 +1,67 @@
++PREHOOK: query: USE default
++PREHOOK: type: SWITCHDATABASE
++POSTHOOK: query: USE default
++POSTHOOK: type: SWITCHDATABASE
++PREHOOK: query: -- Mismatch between the number of matching groups and columns, throw run time exception. Ideally this should throw a compile time exception. See JIRA-3023 for more details.
++ CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)"  
++)
++STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: -- Mismatch between the number of matching groups and columns, throw run time exception. Ideally this should throw a compile time exception. See JIRA-3023 for more details.
++ CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)"  
++)
++STORED AS TEXTFILE
++POSTHOOK: type: CREATETABLE
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex
++PREHOOK: type: LOAD
++PREHOOK: Output: default@serde_regex
++POSTHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex
++POSTHOOK: type: LOAD
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex
++PREHOOK: type: LOAD
++PREHOOK: Output: default@serde_regex
++POSTHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex
++POSTHOOK: type: LOAD
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: -- raise an exception 
++SELECT * FROM serde_regex ORDER BY time
++PREHOOK: type: QUERY
++PREHOOK: Input: default@serde_regex
++#### A masked pattern was here ####
++Execution failed with exit status: 2
++Obtaining error information
++
++Task failed!
++Task ID:
++  Stage-1
++
++Logs:
++
++#### A masked pattern was here ####
++FAILED: Execution Error, return code 2 from org.apache.hadoop.hive.ql.exec.MapRedTask
+diff --git a/src/ql/src/test/results/clientnegative/serde_regex3.q.out b/src/ql/src/test/results/clientnegative/serde_regex3.q.out
+new file mode 100644
+index 0000000..88ae604
+--- /dev/null
++++ b/src/ql/src/test/results/clientnegative/serde_regex3.q.out
+@@ -0,0 +1,20 @@
++PREHOOK: query: USE default
++PREHOOK: type: SWITCHDATABASE
++POSTHOOK: query: USE default
++POSTHOOK: type: SWITCHDATABASE
++PREHOOK: query: -- null input.regex, raise an exception
++ CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++#### A masked pattern was here ####
++FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask
+diff --git a/src/ql/src/test/results/clientpositive/serde_regex.q.out b/src/ql/src/test/results/clientpositive/serde_regex.q.out
+new file mode 100644
+index 0000000..a8ce604
+--- /dev/null
++++ b/src/ql/src/test/results/clientpositive/serde_regex.q.out
+@@ -0,0 +1,129 @@
++PREHOOK: query: EXPLAIN
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: EXPLAIN
++CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE
++POSTHOOK: type: CREATETABLE
++ABSTRACT SYNTAX TREE:
++  (TOK_CREATETABLE (TOK_TABNAME serde_regex) TOK_LIKETABLE (TOK_TABCOLLIST (TOK_TABCOL host TOK_STRING) (TOK_TABCOL identity TOK_STRING) (TOK_TABCOL user TOK_STRING) (TOK_TABCOL time TOK_STRING) (TOK_TABCOL request TOK_STRING) (TOK_TABCOL status TOK_STRING) (TOK_TABCOL size TOK_STRING) (TOK_TABCOL referer TOK_STRING) (TOK_TABCOL agent TOK_STRING)) (TOK_TABLESERIALIZER (TOK_SERDENAME 'org.apache.hadoop.hive.serde2.RegexSerDe' (TOK_TABLEPROPERTIES (TOK_TABLEPROPLIST (TOK_TABLEPROPERTY "input.regex" "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"))))) TOK_TBLTEXTFILE)
++
++STAGE DEPENDENCIES:
++  Stage-0 is a root stage
++
++STAGE PLANS:
++  Stage: Stage-0
++      Create Table Operator:
++        Create Table
++          columns: host string, identity string, user string, time string, request string, status string, size string, referer string, agent string
++          if not exists: false
++          input format: org.apache.hadoop.mapred.TextInputFormat
++          # buckets: -1
++          output format: org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat
++          serde name: org.apache.hadoop.hive.serde2.RegexSerDe
++          serde properties:
++            input.regex ([^ ]*) ([^ ]*) ([^ ]*) (-|\[[^\]]*\]) ([^ "]*|"[^"]*") (-|[0-9]*) (-|[0-9]*)(?: ([^ "]*|"[^"]*") ([^ "]*|"[^"]*"))?
++          name: serde_regex
++          isExternal: false
++
++
++PREHOOK: query: CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: CREATE TABLE serde_regex(
++  host STRING,
++  identity STRING,
++  user STRING,
++  time STRING,
++  request STRING,
++  status STRING,
++  size STRING,
++  referer STRING,
++  agent STRING)
++ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
++WITH SERDEPROPERTIES (
++  "input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) (-|\\[[^\\]]*\\]) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\"[^\"]*\") ([^ \"]*|\"[^\"]*\"))?"
++)
++STORED AS TEXTFILE
++POSTHOOK: type: CREATETABLE
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex
++PREHOOK: type: LOAD
++PREHOOK: Output: default@serde_regex
++POSTHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.log" INTO TABLE serde_regex
++POSTHOOK: type: LOAD
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex
++PREHOOK: type: LOAD
++PREHOOK: Output: default@serde_regex
++POSTHOOK: query: LOAD DATA LOCAL INPATH "../data/files/apache.access.2.log" INTO TABLE serde_regex
++POSTHOOK: type: LOAD
++POSTHOOK: Output: default@serde_regex
++PREHOOK: query: SELECT * FROM serde_regex ORDER BY time
++PREHOOK: type: QUERY
++PREHOOK: Input: default@serde_regex
++#### A masked pattern was here ####
++POSTHOOK: query: SELECT * FROM serde_regex ORDER BY time
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@serde_regex
++#### A masked pattern was here ####
++127.0.0.1	-	frank	[10/Oct/2000:13:55:36 -0700]	"GET /apache_pb.gif HTTP/1.0"	200	2326	NULL	NULL
++127.0.0.1	-	-	[26/May/2009:00:00:00 +0000]	"GET /someurl/?track=Blabla(Main) HTTP/1.1"	200	5864	-	"Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.65 Safari/525.19"
++PREHOOK: query: SELECT host, size, status, time from serde_regex ORDER BY time
++PREHOOK: type: QUERY
++PREHOOK: Input: default@serde_regex
++#### A masked pattern was here ####
++POSTHOOK: query: SELECT host, size, status, time from serde_regex ORDER BY time
++POSTHOOK: type: QUERY
++POSTHOOK: Input: default@serde_regex
++#### A masked pattern was here ####
++127.0.0.1	2326	200	[10/Oct/2000:13:55:36 -0700]
++127.0.0.1	5864	200	[26/May/2009:00:00:00 +0000]
++PREHOOK: query: DROP TABLE serde_regex
++PREHOOK: type: DROPTABLE
++PREHOOK: Input: default@serde_regex
++PREHOOK: Output: default@serde_regex
++POSTHOOK: query: DROP TABLE serde_regex
++POSTHOOK: type: DROPTABLE
++POSTHOOK: Input: default@serde_regex
++POSTHOOK: Output: default@serde_regex
+diff --git a/src/serde/src/java/org/apache/hadoop/hive/serde2/RegexSerDe.java b/src/serde/src/java/org/apache/hadoop/hive/serde2/RegexSerDe.java
+new file mode 100644
+index 0000000..a49bb2d
+--- /dev/null
++++ b/src/serde/src/java/org/apache/hadoop/hive/serde2/RegexSerDe.java
+@@ -0,0 +1,211 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hive.serde2;
++
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++import java.util.Properties;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hive.serde.Constants;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
++import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
++import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
++import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory;
++import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
++import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
++import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
++import org.apache.hadoop.io.Text;
++import org.apache.hadoop.io.Writable;
++
++/**
++ * RegexSerDe uses regular expression (regex) to deserialize data. It doesn't
++ * support data serialization.
++ *
++ * It can deserialize the data using regex and extracts groups as columns.
++ *
++ * In deserialization stage, if a row does not match the regex, then all columns
++ * in the row will be NULL. If a row matches the regex but has less than
++ * expected groups, the missing groups will be NULL. If a row matches the regex
++ * but has more than expected groups, the additional groups are just ignored.
++ *
++ * NOTE: Obviously, all columns have to be strings. Users can use
++ * "CAST(a AS INT)" to convert columns to other types.
++ *
++ * NOTE: This implementation is using String, and javaStringObjectInspector. A
++ * more efficient implementation should use UTF-8 encoded Text and
++ * writableStringObjectInspector. We should switch to that when we have a UTF-8
++ * based Regex library.
++ */
++public class RegexSerDe implements SerDe {
++
++  public static final Log LOG = LogFactory.getLog(RegexSerDe.class.getName());
++
++  int numColumns;
++  String inputRegex;
++
++  Pattern inputPattern;
++
++  StructObjectInspector rowOI;
++  ArrayList<String> row;
++  Object[] outputFields;
++  Text outputRowText;
++
++  boolean alreadyLoggedNoMatch = false;
++  boolean alreadyLoggedPartialMatch = false;
++
++  @Override
++  public void initialize(Configuration conf, Properties tbl)
++      throws SerDeException {
++
++    // We can get the table definition from tbl.
++
++    // Read the configuration parameters
++    inputRegex = tbl.getProperty("input.regex");
++    String columnNameProperty = tbl.getProperty(Constants.LIST_COLUMNS);
++    String columnTypeProperty = tbl.getProperty(Constants.LIST_COLUMN_TYPES);
++    boolean inputRegexIgnoreCase = "true".equalsIgnoreCase(tbl
++        .getProperty("input.regex.case.insensitive"));
++
++    // output format string is not supported anymore, warn user of deprecation
++    if (null != tbl.getProperty("output.format.string")) {
++      LOG.warn("output.format.string has been deprecated");
++    }
++
++    // Parse the configuration parameters
++    if (inputRegex != null) {
++      inputPattern = Pattern.compile(inputRegex, Pattern.DOTALL
++          + (inputRegexIgnoreCase ? Pattern.CASE_INSENSITIVE : 0));
++    } else {
++      inputPattern = null;
++      throw new SerDeException(
++          "This table does not have serde property \"input.regex\"!");
++    }
++
++
++    List<String> columnNames = Arrays.asList(columnNameProperty.split(","));
++    List<TypeInfo> columnTypes = TypeInfoUtils
++        .getTypeInfosFromTypeString(columnTypeProperty);
++    assert columnNames.size() == columnTypes.size();
++    numColumns = columnNames.size();
++
++    // All columns have to be of type STRING.
++    for (int c = 0; c < numColumns; c++) {
++      if (!columnTypes.get(c).equals(TypeInfoFactory.stringTypeInfo)) {
++        throw new SerDeException(getClass().getName()
++            + " only accepts string columns, but column[" + c + "] named "
++            + columnNames.get(c) + " has type " + columnTypes.get(c));
++      }
++    }
++
++    // Constructing the row ObjectInspector:
++    // The row consists of some string columns, each column will be a java
++    // String object.
++    List<ObjectInspector> columnOIs = new ArrayList<ObjectInspector>(
++        columnNames.size());
++    for (int c = 0; c < numColumns; c++) {
++      columnOIs.add(PrimitiveObjectInspectorFactory.javaStringObjectInspector);
++    }
++    // StandardStruct uses ArrayList to store the row.
++    rowOI = ObjectInspectorFactory.getStandardStructObjectInspector(
++        columnNames, columnOIs);
++
++    // Constructing the row object, etc, which will be reused for all rows.
++    row = new ArrayList<String>(numColumns);
++    for (int c = 0; c < numColumns; c++) {
++      row.add(null);
++    }
++    outputFields = new Object[numColumns];
++    outputRowText = new Text();
++  }
++
++  @Override
++  public ObjectInspector getObjectInspector() throws SerDeException {
++    return rowOI;
++  }
++
++  @Override
++  public Class<? extends Writable> getSerializedClass() {
++    return Text.class;
++  }
++
++  // Number of rows not matching the regex
++  long unmatchedRowsCount = 0;
++  // Number of rows that match the regex but have missing groups.
++  long partialMatchedRowsCount = 0;
++
++  @Override
++  public Object deserialize(Writable blob) throws SerDeException {
++
++
++    Text rowText = (Text) blob;
++
++    Matcher m = inputPattern.matcher(rowText.toString());
++
++    if (m.groupCount() != numColumns) {
++      throw new SerDeException("Number of matching groups doesn't match the number of columns");
++    }
++
++    // If do not match, ignore the line, return a row with all nulls.
++    if (!m.matches()) {
++      unmatchedRowsCount++;
++        if (!alreadyLoggedNoMatch) {
++         // Report the row if its the first time
++         LOG.warn("" + unmatchedRowsCount + " unmatched rows are found: " + rowText);
++         alreadyLoggedNoMatch = true;
++      }
++      return null;
++    }
++
++    // Otherwise, return the row.
++    for (int c = 0; c < numColumns; c++) {
++      try {
++        row.set(c, m.group(c + 1));
++      } catch (RuntimeException e) {
++        partialMatchedRowsCount++;
++          if (!alreadyLoggedPartialMatch) {
++          // Report the row if its the first time
++          LOG.warn("" + partialMatchedRowsCount
++              + " partially unmatched rows are found, " + " cannot find group "
++              + c + ": " + rowText);
++          alreadyLoggedPartialMatch = true;
++        }
++        row.set(c, null);
++       }
++     }
++    return row;
++  }
++
++  @Override
++  public Writable serialize(Object obj, ObjectInspector objInspector)
++      throws SerDeException {
++        throw new UnsupportedOperationException(
++          "Regex SerDe doesn't support the serialize() method");
++  }
++
++  public SerDeStats getSerDeStats() {
++    // no support for statistics
++    return null;
++  }
++
++}
+-- 
+1.7.0.4
+

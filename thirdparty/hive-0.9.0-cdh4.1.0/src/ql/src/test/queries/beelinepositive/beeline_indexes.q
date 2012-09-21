@@ -1,0 +1,2 @@
+!help indexes
+!indexes src

@@ -1,0 +1,39 @@
+From 4d72c4098adf712067025ac203e163ac5d24e302 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Thu, 23 Aug 2012 20:31:21 +0000
+Subject: [PATCH 118/151] HBASE-6644 HBaseAdmin.createTable should wait more till table is enabled.
+
+Reason: Improvement
+Author: Jimmy Xiang
+Ref: CDH-7573
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   11 +++++++++--
+ 1 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index 94d3acd..ab85070 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -438,10 +438,17 @@ public class HBaseAdmin implements Abortable, Closeable {
+           }
+         } else {
+           doneWithMetaScan = true;
++          tries = -1;
+         }
+-      }
+-      if (doneWithMetaScan && isTableEnabled(desc.getName())) {
++      } else if (isTableEnabled(desc.getName())) {
+         return;
++      } else {
++        try { // Sleep
++          Thread.sleep(getPauseTime(tries));
++        } catch (InterruptedException e) {
++          throw new InterruptedIOException("Interrupted when waiting" +
++            " for table to be enabled; meta scan was done");
++        }
+       }
+     }
+     throw new TableNotEnabledException(
+-- 
+1.7.0.4
+

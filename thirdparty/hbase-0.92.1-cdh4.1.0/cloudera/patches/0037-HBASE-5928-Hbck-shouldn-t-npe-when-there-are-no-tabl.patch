@@ -1,0 +1,44 @@
+From 6f38c4de77773308e4f06fb7d93e6af3dc9948b2 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Fri, 4 May 2012 00:11:29 +0000
+Subject: [PATCH 037/151] HBASE-5928 Hbck shouldn't npe when there are no tables (Elliott Clark)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1333693 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Bug
+Author: Elliott Clark
+Ref: CDH-5883
+---
+ .../hadoop/hbase/client/HConnectionManager.java    |    2 +-
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |    2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java b/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+index 4420ceb..7d8f1d5 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+@@ -1848,7 +1848,7 @@ public class HConnectionManager {
+     }
+ 
+     public HTableDescriptor[] getHTableDescriptors(List<String> tableNames) throws IOException {
+-      if (tableNames == null || tableNames.size() == 0) return null;
++      if (tableNames == null || tableNames.isEmpty()) return new HTableDescriptor[0];
+       if (this.master == null) {
+         this.master = getMaster();
+       }
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index af79496..6f3f867 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -1967,7 +1967,7 @@ public class HBaseFsck {
+   }
+ 
+    HTableDescriptor[] getHTableDescriptors(List<String> tableNames) {
+-    HTableDescriptor[] htd = null;
++    HTableDescriptor[] htd = new HTableDescriptor[0];
+      try {
+        LOG.info("getHTableDescriptors == tableNames => " + tableNames);
+        htd = new HBaseAdmin(conf).getTableDescriptors(tableNames);
+-- 
+1.7.0.4
+

@@ -1,0 +1,12 @@
+PREHOOK: query: create table test (a int) stored as inputformat 'org.apache.hadoop.hive.ql.io.RCFileInputFormat' outputformat 'org.apache.hadoop.hive.ql.io.RCFileOutputFormat' inputdriver 'RCFileInDriver' outputdriver 'RCFileOutDriver'
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: create table test (a int) stored as inputformat 'org.apache.hadoop.hive.ql.io.RCFileInputFormat' outputformat 'org.apache.hadoop.hive.ql.io.RCFileOutputFormat' inputdriver 'RCFileInDriver' outputdriver 'RCFileOutDriver'
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@test
+PREHOOK: query: desc extended test
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: desc extended test
+POSTHOOK: type: DESCTABLE
+a	int	
+	 	 
+#### A masked pattern was here ####

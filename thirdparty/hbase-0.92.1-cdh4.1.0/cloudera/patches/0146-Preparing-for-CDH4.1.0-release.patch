@@ -1,0 +1,32 @@
+From d5697c1a97f3dc0b0d19b825e54864738c153ead Mon Sep 17 00:00:00 2001
+From: Jenkins slave <kitchen-build@cloudera.com>
+Date: Tue, 4 Sep 2012 09:17:37 -0700
+Subject: [PATCH 146/151] Preparing for CDH4.1.0 release
+
+---
+ pom.xml |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 14ff626..2eaa526 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -29,13 +29,13 @@
+   <parent>
+     <groupId>com.cloudera.cdh</groupId>
+     <artifactId>cdh-root</artifactId>
+-    <version>4.1.0-SNAPSHOT</version>
++    <version>4.1.0</version>
+   </parent>
+ 
+   <groupId>org.apache.hbase</groupId>
+   <artifactId>hbase</artifactId>
+   <packaging>jar</packaging>
+-  <version>0.92.1-cdh4.1.0-SNAPSHOT</version>
++  <version>0.92.1-cdh4.1.0</version>
+   <name>HBase</name>
+   <description>
+     HBase is the &amp;lt;a href="http://hadoop.apache.org"&amp;rt;Hadoop&lt;/a&amp;rt; database. Use it when you need
+-- 
+1.7.0.4
+

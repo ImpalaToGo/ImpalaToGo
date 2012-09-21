@@ -1,0 +1,38 @@
+From 3ef1ee99ad5f2d7a123c4e7dc49a3ac0035bad91 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Sat, 4 Aug 2012 16:48:08 +0000
+Subject: [PATCH 102/151] HBASE-6507 [hbck] TestHBaseFsck ran into TableNotEnabledException
+
+Reason: Test
+Author: Jimmy Xiang
+Ref: CDH-6825
+---
+ .../apache/hadoop/hbase/util/TestHBaseFsck.java    |   12 ++++++++++++
+ 1 files changed, 12 insertions(+), 0 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+index a023507..b3b24c1 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+@@ -295,6 +295,18 @@ public class TestHBaseFsck {
+     }
+     tbl.put(puts);
+     tbl.flushCommits();
++    long endTime = System.currentTimeMillis() + 60000;
++    while (!TEST_UTIL.getHBaseAdmin().isTableEnabled(tablename)) {
++      try {
++        if (System.currentTimeMillis() > endTime) {
++          fail("Failed to enable table " + tablename + " after waiting for 60 sec");
++        }
++        Thread.sleep(100);
++      } catch (InterruptedException e) {
++        e.printStackTrace();
++        fail("Interrupted when waiting table " + tablename + " to be enabled");
++      }
++    }
+     return tbl;
+   }
+ 
+-- 
+1.7.0.4
+

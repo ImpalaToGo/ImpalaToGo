@@ -1,0 +1,66 @@
+From 98681581b6c3400e88af9fb9634e33729507a238 Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Mon, 27 Aug 2012 17:02:23 -0700
+Subject: [PATCH 121/151] HBASE-5606  SplitLogManger async delete node hangs log splitting when ZK connection is lost
+                (Prakash)
+
+Reason: Bug
+Author: Prakash Khemani
+Ref: CDH-5549
+---
+ .../hadoop/hbase/master/SplitLogManager.java       |   24 ++++++++++++++++---
+ 1 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java b/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+index bf5c2cf..a6968f3 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+@@ -450,6 +450,14 @@ public class SplitLogManager extends ZooKeeperListener {
+     tot_mgr_get_data_queued.incrementAndGet();
+   }
+ 
++  private void tryGetDataSetWatch(String path) {
++    // A negative retry count will lead to ignoring all error processing.
++    this.watcher.getRecoverableZooKeeper().getZooKeeper().
++        getData(path, this.watcher,
++        new GetDataAsyncCallback(), new Long(-1) /* retry count */);
++    tot_mgr_get_data_queued.incrementAndGet();
++  }
++
+   private void getDataSetWatchSuccess(String path, byte[] data, int version) {
+     if (data == null) {
+       if (version == Integer.MIN_VALUE) {
+@@ -977,11 +985,13 @@ public class SplitLogManager extends ZooKeeperListener {
+         for (Map.Entry<String, Task> e : tasks.entrySet()) {
+           String path = e.getKey();
+           Task task = e.getValue();
+-          // we have to do this check again because tasks might have
+-          // been asynchronously assigned.
+-          if (task.isUnassigned()) {
++          // we have to do task.isUnassigned() check again because tasks might
++          // have been asynchronously assigned. There is no locking required
++          // for these checks ... it is OK even if tryGetDataSetWatch() is
++          // called unnecessarily for a task
++          if (task.isUnassigned() && (task.status != FAILURE)) {
+             // We just touch the znode to make sure its still there
+-            getDataSetWatch(path, zkretries);
++            tryGetDataSetWatch(path);
+           }
+         }
+         createRescanNode(Long.MAX_VALUE);
+@@ -1051,6 +1061,12 @@ public class SplitLogManager extends ZooKeeperListener {
+           return;
+         }
+         Long retry_count = (Long) ctx;
++
++        if (retry_count < 0) {
++          LOG.warn("getdata rc = " + KeeperException.Code.get(rc) + " " +
++              path + ". Ignoring error. No error handling. No retrying.");
++          return;
++        }
+         LOG.warn("getdata rc = " + KeeperException.Code.get(rc) + " " +
+             path + " remaining retries=" + retry_count);
+         if (retry_count == 0) {
+-- 
+1.7.0.4
+

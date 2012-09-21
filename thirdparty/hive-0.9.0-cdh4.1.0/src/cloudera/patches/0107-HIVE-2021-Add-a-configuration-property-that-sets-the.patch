@@ -1,0 +1,73 @@
+From 0ab18ae1ec1d0e4435db068c7b7aaaf0b077dd31 Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Tue, 26 Jun 2012 03:30:54 +0000
+Subject: [PATCH 107/144] HIVE-2021 : Add a configuration property that sets the variable substitution max depth (Edward Capriolo via Ashutosh Chauhan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353808 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 32c9345893f2ffde685c2c8fe4fe466be9917a7e)
+---
+ .../java/org/apache/hadoop/hive/conf/HiveConf.java |    1 +
+ conf/hive-default.xml.template                     |    5 +++++
+ .../hadoop/hive/ql/parse/VariableSubstitution.java |    5 ++---
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+index 57f4f74..e87075e 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
++++ b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+@@ -534,6 +534,7 @@ public class HiveConf extends Configuration {
+ 
+     // Hive Variables
+     HIVEVARIABLESUBSTITUTE("hive.variable.substitute", true),
++    HIVEVARIABLESUBSTITUTEDEPTH("hive.variable.substitute.depth", 40),
+ 
+     SEMANTIC_ANALYZER_HOOK("hive.semantic.analyzer.hook", ""),
+ 
+diff --git a/src/conf/hive-default.xml.template b/src/conf/hive-default.xml.template
+index b64d830..8154cae 100644
+--- a/src/conf/hive-default.xml.template
++++ b/src/conf/hive-default.xml.template
+@@ -1037,6 +1037,11 @@
+   <description>This enables substitution using syntax like ${var} ${system:var} and ${env:var}.</description>
+ </property>
+ 
++<property>
++  <name>hive.variable.substitute.depth</name>
++  <value>40</value>
++  <description>The maximum replacements the substitution engine will do.</description>
++</property>
+ 
+ <property>
+   <name>hive.security.authorization.enabled</name>
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/VariableSubstitution.java b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/VariableSubstitution.java
+index 65c5e7d..f292944 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/VariableSubstitution.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/VariableSubstitution.java
+@@ -31,7 +31,6 @@ public class VariableSubstitution {
+ 
+   private static final Log l4j = LogFactory.getLog(VariableSubstitution.class);
+   protected static Pattern varPat = Pattern.compile("\\$\\{[^\\}\\$\u0020]+\\}");
+-  protected static int MAX_SUBST = 40;
+ 
+   private String getSubstitute(HiveConf conf, String var) {
+     String val = null;
+@@ -74,7 +73,7 @@ public class VariableSubstitution {
+     }
+     Matcher match = varPat.matcher("");
+     String eval = expr;
+-    for(int s=0; s<MAX_SUBST; s++) {
++    for(int s=0;s<conf.getIntVar(ConfVars.HIVEVARIABLESUBSTITUTEDEPTH); s++) {
+       match.reset(eval);
+       if (!match.find()) {
+         return eval;
+@@ -91,6 +90,6 @@ public class VariableSubstitution {
+       eval = eval.substring(0, match.start())+val+eval.substring(match.end());
+     }
+     throw new IllegalStateException("Variable substitution depth too large: "
+-                                    + MAX_SUBST + " " + expr);
++                                    + conf.getIntVar(ConfVars.HIVEVARIABLESUBSTITUTEDEPTH) + " " + expr);
+   }
+ }
+-- 
+1.7.0.4
+

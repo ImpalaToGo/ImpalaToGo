@@ -1,0 +1,27 @@
+From 6665e9c497297bc5003feac4204c92aeb99637e6 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Tue, 18 Sep 2012 10:36:07 -0700
+Subject: [PATCH 150/151] HBASE-6803 script hbase should add JAVA_LIBRARY_PATH to LD_LIBRARY_PATH
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-8010
+---
+ bin/hbase |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/bin/hbase b/bin/hbase
+index c6be034..a79c2c2 100755
+--- a/bin/hbase
++++ b/bin/hbase
+@@ -295,6 +295,7 @@ HBASE_OPTS="$HBASE_OPTS -Dhbase.id.str=$HBASE_IDENT_STRING"
+ HBASE_OPTS="$HBASE_OPTS -Dhbase.root.logger=${HBASE_ROOT_LOGGER:-INFO,console}"
+ if [ "x$JAVA_LIBRARY_PATH" != "x" ]; then
+   HBASE_OPTS="$HBASE_OPTS -Djava.library.path=$JAVA_LIBRARY_PATH"
++  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$JAVA_LIBRARY_PATH"
+ fi
+ 
+ # Exec unless HBASE_NOEXEC is set.
+-- 
+1.7.0.4
+

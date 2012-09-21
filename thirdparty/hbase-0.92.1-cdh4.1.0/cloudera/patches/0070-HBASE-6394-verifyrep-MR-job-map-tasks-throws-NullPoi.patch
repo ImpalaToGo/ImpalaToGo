@@ -1,0 +1,39 @@
+From 6bd6816f8d633a32f61561dbe7a4f77834fa2244 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Sat, 14 Jul 2012 02:27:01 +0000
+Subject: [PATCH 070/151] HBASE-6394 verifyrep MR job map tasks throws NullPointerException
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-6642
+---
+ .../mapreduce/replication/VerifyReplication.java   |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/replication/VerifyReplication.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/replication/VerifyReplication.java
+index c37a4fb..b7d540b 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/replication/VerifyReplication.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/replication/VerifyReplication.java
+@@ -35,7 +35,6 @@ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+-import org.apache.hadoop.hbase.client.replication.ReplicationAdmin;
+ import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+ import org.apache.hadoop.hbase.mapreduce.TableInputFormat;
+ import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+@@ -137,7 +136,10 @@ public class VerifyReplication {
+     }
+ 
+     protected void cleanup(Context context) {
+-      replicatedScanner.close();
++      if (replicatedScanner != null) {
++        replicatedScanner.close();
++        replicatedScanner = null;
++      }
+     }
+   }
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,196 @@
+From 9a1af94990ef0d2fe6239b8cc268b8f0d9ad9c0a Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Fri, 27 Jul 2012 14:55:54 -0700
+Subject: [PATCH 098/151] HBASE-5757 TableInputFormat should handle as many errors as possible (Jan Lukavsky)
+
+Reason: Backport
+Author: Jan Lukavsky
+Ref: CDH-6903
+---
+ .../hadoop/hbase/mapred/TableRecordReaderImpl.java |    4 +-
+ .../hbase/mapreduce/TableRecordReaderImpl.java     |    5 +-
+ .../hadoop/hbase/mapred/TestTableInputFormat.java  |   78 ++++++++++++++++----
+ 3 files changed, 68 insertions(+), 19 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java b/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
+index 3bf6109..8185b5c 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
+@@ -206,9 +206,9 @@ public class TableRecordReaderImpl {
+             rowcount = 0;
+           }
+         }
+-      } catch (DoNotRetryIOException e) {
+-        throw e;
+       } catch (IOException e) {
++        // try to handle all IOExceptions by restarting
++        // the scanner, if the second call fails, it will be rethrown
+         LOG.debug("recovered from " + StringUtils.stringifyException(e));
+         if (lastSuccessfulRow == null) {
+           LOG.warn("We are restarting the first next() invocation," +
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
+index 94c5197..3236766 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
+@@ -24,7 +24,6 @@ import java.io.IOException;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+-import org.apache.hadoop.hbase.DoNotRetryIOException;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+@@ -159,9 +158,9 @@ public class TableRecordReaderImpl {
+             rowcount = 0;
+           }
+         }
+-      } catch (DoNotRetryIOException e) {
+-        throw e;
+       } catch (IOException e) {
++        // try to handle all IOExceptions by restarting
++        // the scanner, if the second call fails, it will be rethrown
+         LOG.debug("recovered from " + StringUtils.stringifyException(e));
+         if (lastSuccessfulRow == null) {
+           LOG.warn("We are restarting the first next() invocation," +
+diff --git a/src/test/java/org/apache/hadoop/hbase/mapred/TestTableInputFormat.java b/src/test/java/org/apache/hadoop/hbase/mapred/TestTableInputFormat.java
+index 6e9991e..6a44d64 100644
+--- a/src/test/java/org/apache/hadoop/hbase/mapred/TestTableInputFormat.java
++++ b/src/test/java/org/apache/hadoop/hbase/mapred/TestTableInputFormat.java
+@@ -195,16 +195,16 @@ public class TestTableInputFormat {
+    * 
+    * @throws IOException
+    */
+-  static HTable createIOEScannerTable(byte[] name) throws IOException {
++  static HTable createIOEScannerTable(byte[] name, final int failCnt)
++      throws IOException {
+     // build up a mock scanner stuff to fail the first time
+     Answer<ResultScanner> a = new Answer<ResultScanner>() {
+-      boolean first = true;
++      int cnt = 0;
+ 
+       @Override
+       public ResultScanner answer(InvocationOnMock invocation) throws Throwable {
+         // first invocation return the busted mock scanner
+-        if (first) {
+-          first = false;
++        if (cnt++ < failCnt) {
+           // create mock ResultScanner that always fails.
+           Scan scan = mock(Scan.class);
+           doReturn("bogus".getBytes()).when(scan).getStartRow(); // avoid npe
+@@ -230,16 +230,16 @@ public class TestTableInputFormat {
+    * 
+    * @throws IOException
+    */
+-  static HTable createDNRIOEScannerTable(byte[] name) throws IOException {
++  static HTable createDNRIOEScannerTable(byte[] name, final int failCnt)
++      throws IOException {
+     // build up a mock scanner stuff to fail the first time
+     Answer<ResultScanner> a = new Answer<ResultScanner>() {
+-      boolean first = true;
++      int cnt = 0;
+ 
+       @Override
+       public ResultScanner answer(InvocationOnMock invocation) throws Throwable {
+         // first invocation return the busted mock scanner
+-        if (first) {
+-          first = false;
++        if (cnt++ < failCnt) {
+           // create mock ResultScanner that always fails.
+           Scan scan = mock(Scan.class);
+           doReturn("bogus".getBytes()).when(scan).getStartRow(); // avoid npe
+@@ -280,7 +280,18 @@ public class TestTableInputFormat {
+    */
+   @Test
+   public void testTableRecordReaderScannerFail() throws IOException {
+-    HTable htable = createIOEScannerTable("table2".getBytes());
++    HTable htable = createIOEScannerTable("table2".getBytes(), 1);
++    runTestMapred(htable);
++  }
++
++  /**
++   * Run test assuming Scanner IOException failure using mapred api,
++   * 
++   * @throws IOException
++   */
++  @Test(expected = IOException.class)
++  public void testTableRecordReaderScannerFailTwice() throws IOException {
++    HTable htable = createIOEScannerTable("table3".getBytes(), 2);
+     runTestMapred(htable);
+   }
+ 
+@@ -290,9 +301,21 @@ public class TestTableInputFormat {
+    * 
+    * @throws DoNotRetryIOException
+    */
+-  @Test(expected = DoNotRetryIOException.class)
++  @Test
+   public void testTableRecordReaderScannerTimeout() throws IOException {
+-    HTable htable = createDNRIOEScannerTable("table3".getBytes());
++    HTable htable = createDNRIOEScannerTable("table4".getBytes(), 1);
++    runTestMapred(htable);
++  }
++
++  /**
++   * Run test assuming UnknownScannerException (which is a type of
++   * DoNotRetryIOException) using mapred api.
++   * 
++   * @throws DoNotRetryIOException
++   */
++  @Test(expected = DoNotRetryIOException.class)
++  public void testTableRecordReaderScannerTimeoutTwice() throws IOException {
++    HTable htable = createDNRIOEScannerTable("table5".getBytes(), 2);
+     runTestMapred(htable);
+   }
+ 
+@@ -318,7 +341,20 @@ public class TestTableInputFormat {
+   @Test
+   public void testTableRecordReaderScannerFailMapreduce() throws IOException,
+       InterruptedException {
+-    HTable htable = createIOEScannerTable("table2-mr".getBytes());
++    HTable htable = createIOEScannerTable("table2-mr".getBytes(), 1);
++    runTestMapreduce(htable);
++  }
++
++  /**
++   * Run test assuming Scanner IOException failure using newer mapreduce api
++   * 
++   * @throws IOException
++   * @throws InterruptedException
++   */
++  @Test(expected = IOException.class)
++  public void testTableRecordReaderScannerFailMapreduceTwice() throws IOException,
++      InterruptedException {
++    HTable htable = createIOEScannerTable("table3-mr".getBytes(), 2);
+     runTestMapreduce(htable);
+   }
+ 
+@@ -329,10 +365,24 @@ public class TestTableInputFormat {
+    * @throws InterruptedException
+    * @throws DoNotRetryIOException
+    */
+-  @Test(expected = DoNotRetryIOException.class)
++  @Test
+   public void testTableRecordReaderScannerTimeoutMapreduce()
+       throws IOException, InterruptedException {
+-    HTable htable = createDNRIOEScannerTable("table3-mr".getBytes());
++    HTable htable = createDNRIOEScannerTable("table4-mr".getBytes(), 1);
++    runTestMapreduce(htable);
++  }
++
++  /**
++   * Run test assuming UnknownScannerException (which is a type of
++   * DoNotRetryIOException) using newer mapreduce api
++   * 
++   * @throws InterruptedException
++   * @throws DoNotRetryIOException
++   */
++  @Test(expected = DoNotRetryIOException.class)
++  public void testTableRecordReaderScannerTimeoutMapreduceTwice()
++      throws IOException, InterruptedException {
++    HTable htable = createDNRIOEScannerTable("table5-mr".getBytes(), 2);
+     runTestMapreduce(htable);
+   }
+ }
+-- 
+1.7.0.4
+

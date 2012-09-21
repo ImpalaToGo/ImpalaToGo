@@ -1,0 +1,53 @@
+From bd04523546db203437b5f5b986441a4bea82e7dc Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Mon, 14 May 2012 16:25:31 -0700
+Subject: [PATCH 028/144] HIVE-3014. Fix metastore test failures caused by HIVE-2757
+
+Reason: Bug
+Author: Zhenxiao Luo
+Ref: CDH-5790
+---
+ .../java/org/apache/hadoop/hive/conf/HiveConf.java |   20 ++++++++++----------
+ 1 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+index 5d41a24..19fee64 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
++++ b/src/common/src/java/org/apache/hadoop/hive/conf/HiveConf.java
+@@ -645,6 +645,16 @@ public class HiveConf extends Configuration {
+     public String toString() {
+       return varname;
+     }
++
++    private static String findHadoopBinary() {
++      String val = System.getenv("HADOOP_HOME");
++      // In Hadoop 1.X and Hadoop 2.X HADOOP_HOME is gone and replaced with HADOOP_PREFIX
++      if (val == null) {
++        val = System.getenv("HADOOP_PREFIX");
++      }
++      // and if all else fails we can at least try /usr/bin/hadoop
++      return (val == null ? File.separator + "usr" : val) + File.separator + "bin" + File.separator + "hadoop";
++    }
+   }
+ 
+   /**
+@@ -904,16 +914,6 @@ public class HiveConf extends Configuration {
+     }
+   }
+ 
+-  private static String findHadoopBinary() {
+-    String val = System.getenv("HADOOP_HOME");
+-    // In Hadoop 1.X and Hadoop 2.X HADOOP_HOME is gone and replaced with HADOOP_PREFIX
+-    if (val == null) {
+-      val = System.getenv("HADOOP_PREFIX");
+-    }
+-    // and if all else fails we can at least try /usr/bin/hadoop
+-    return (val == null ? File.separator + "usr" : val) + File.separator + "bin" + File.separator + "hadoop";
+-  }
+-
+   public Properties getChangedProperties() {
+     Properties ret = new Properties();
+     Properties newProp = getAllProperties();
+-- 
+1.7.0.4
+

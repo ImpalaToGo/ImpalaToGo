@@ -1,0 +1,27 @@
+From 75fece86b79630592bac53f4b0a104feed909a00 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Thu, 21 Jun 2012 10:06:31 -0700
+Subject: [PATCH 039/144] CLOUDERA-BUILD. Fixes for local mode tests
+
+Reason: Bug
+Author: Zhenxiao Luo
+Ref: CDH-6332
+---
+ ql/src/test/queries/clientpositive/join14.q |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/src/ql/src/test/queries/clientpositive/join14.q b/src/ql/src/test/queries/clientpositive/join14.q
+index b4e3d81..001db61 100644
+--- a/src/ql/src/test/queries/clientpositive/join14.q
++++ b/src/ql/src/test/queries/clientpositive/join14.q
+@@ -2,6 +2,7 @@ CREATE TABLE dest1(c1 INT, c2 STRING) STORED AS TEXTFILE;
+ 
+ set mapred.job.tracker=does.notexist.com:666;
+ set hive.exec.mode.local.auto=true;
++set hive.exec.mode.local.auto.input.files.max=10;
+ 
+ EXPLAIN
+ FROM src JOIN srcpart ON src.key = srcpart.key AND srcpart.ds = '2008-04-08' and src.key > 100
+-- 
+1.7.0.4
+

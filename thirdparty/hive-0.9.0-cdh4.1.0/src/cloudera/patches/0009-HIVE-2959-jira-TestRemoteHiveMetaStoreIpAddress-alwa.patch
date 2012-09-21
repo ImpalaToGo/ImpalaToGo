@@ -1,0 +1,112 @@
+From 0e4c21e266a0c0da9c15cc4a2eb0129c4a0606d5 Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Wed, 18 Apr 2012 17:33:41 +0000
+Subject: [PATCH 009/144] HIVE-2959 [jira] TestRemoteHiveMetaStoreIpAddress always uses the same port
+ (Kevin Wilfong via Ashutosh Chauhan)
+
+Summary:
+https://issues.apache.org/jira/browse/HIVE-2959
+
+TestRemoteHiveMetaStoreIpAddress now uses the standard way of finding a free
+port using Java's ServerSocket class.
+
+TestRemoteHiveMetaStoreIpAddress always uses the same port, meaning that if
+another process happens to be using that port, the tests cannot succeed.
+
+There seems to be a standard way of finding a free port using Java's
+ServerSocket class, this should be used instead.
+
+Test Plan: Ran TestRemoteHiveMetaStoreIpAddress and
+TestRemoteUGIHiveMetaStoreIpAddress, the two tests which would be affected by
+this change.  I verified they passed and did not use port 39083.
+
+Reviewers: JIRA, njain, ashutoshc
+
+Reviewed By: ashutoshc
+
+Differential Revision: https://reviews.facebook.net/D2841
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1327591 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../TestRemoteHiveMetaStoreIpAddress.java          |   27 ++++++++++++++++---
+ 1 files changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/src/metastore/src/test/org/apache/hadoop/hive/metastore/TestRemoteHiveMetaStoreIpAddress.java b/src/metastore/src/test/org/apache/hadoop/hive/metastore/TestRemoteHiveMetaStoreIpAddress.java
+index 3c0c54b..be656f7 100644
+--- a/src/metastore/src/test/org/apache/hadoop/hive/metastore/TestRemoteHiveMetaStoreIpAddress.java
++++ b/src/metastore/src/test/org/apache/hadoop/hive/metastore/TestRemoteHiveMetaStoreIpAddress.java
+@@ -18,6 +18,9 @@
+ 
+ package org.apache.hadoop.hive.metastore;
+ 
++import java.io.IOException;
++import java.net.ServerSocket;
++
+ import junit.framework.TestCase;
+ 
+ import org.apache.hadoop.hive.conf.HiveConf;
+@@ -33,19 +36,25 @@ import org.apache.hadoop.util.StringUtils;
+  * IpAddressListener
+  */
+ public class TestRemoteHiveMetaStoreIpAddress extends TestCase {
+-  protected static final String METASTORE_PORT = "39083";
+   private static boolean isServerStarted = false;
+   private static HiveConf hiveConf;
+   private static HiveMetaStoreClient msc;
+ 
++  private String port;
++
+   private static class RunMS implements Runnable {
++      String port;
++
++      public RunMS(String port) {
++        this.port = port;
++      }
+ 
+       @Override
+       public void run() {
+         try {
+           System.setProperty(ConfVars.METASTORE_EVENT_LISTENERS.varname,
+               IpAddressListener.class.getName());
+-          HiveMetaStore.main(new String[] { METASTORE_PORT });
++          HiveMetaStore.main(new String[] { port });
+         } catch (Throwable e) {
+           e.printStackTrace(System.err);
+           assert false;
+@@ -58,14 +67,15 @@ public class TestRemoteHiveMetaStoreIpAddress extends TestCase {
+   protected void setUp() throws Exception {
+     super.setUp();
+     hiveConf = new HiveConf(this.getClass());
++    port = findFreePort();
+ 
+     if (isServerStarted) {
+       assertNotNull("Unable to connect to the MetaStore server", msc);
+       return;
+     }
+ 
+-    System.out.println("Starting MetaStore Server on port " + METASTORE_PORT);
+-    Thread t = new Thread(new RunMS());
++    System.out.println("Starting MetaStore Server on port " + port);
++    Thread t = new Thread(new RunMS(port));
+     t.start();
+     isServerStarted = true;
+ 
+@@ -92,7 +102,14 @@ public class TestRemoteHiveMetaStoreIpAddress extends TestCase {
+ 
+   protected void createClient() throws Exception {
+     hiveConf.setBoolVar(ConfVars.METASTORE_MODE, false);
+-    hiveConf.setVar(HiveConf.ConfVars.METASTOREURIS, "thrift://localhost:" + METASTORE_PORT);
++    hiveConf.setVar(HiveConf.ConfVars.METASTOREURIS, "thrift://localhost:" + port);
+     msc = new HiveMetaStoreClient(hiveConf);
+   }
++
++  private String findFreePort() throws IOException {
++    ServerSocket socket= new ServerSocket(0);
++    int port = socket.getLocalPort();
++    socket.close();
++    return String.valueOf(port);
++  }
+ }
+-- 
+1.7.0.4
+

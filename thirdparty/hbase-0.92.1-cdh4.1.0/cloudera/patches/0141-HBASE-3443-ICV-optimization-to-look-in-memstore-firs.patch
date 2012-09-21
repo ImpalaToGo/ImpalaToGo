@@ -1,0 +1,160 @@
+From 8cc2039c0d983994a9ccfbe95b820f138f44b799 Mon Sep 17 00:00:00 2001
+From: Lars Hofhansl <larsh@apache.org>
+Date: Thu, 12 Apr 2012 19:18:16 +0000
+Subject: [PATCH 141/151] HBASE-3443 ICV optimization to look in memstore first and then store files (HBASE-3082) does not work when deletes are in the mix
+
+Reason: Bug
+Author: Lars Hofhansl
+Ref: CDH-5549
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   87 +-------------------
+ .../hadoop/hbase/client/TestFromClientSide.java    |   21 +++++
+ 2 files changed, 23 insertions(+), 85 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index da692aa..f478adc 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -3666,89 +3666,6 @@ public class HRegion implements HeapSize { // , Writable{
+     return new Result(results);
+   }
+ 
+-  /**
+-   * An optimized version of {@link #get(Get)} that checks MemStore first for
+-   * the specified query.
+-   * <p>
+-   * This is intended for use by increment operations where we have the
+-   * guarantee that versions are never inserted out-of-order so if a value
+-   * exists in MemStore it is the latest value.
+-   * <p>
+-   * It only makes sense to use this method without a TimeRange and maxVersions
+-   * equal to 1.
+-   * @param get
+-   * @return result
+-   * @throws IOException
+-   */
+-  private List<KeyValue> getLastIncrement(final Get get) throws IOException {
+-    InternalScan iscan = new InternalScan(get);
+-
+-    List<KeyValue> results = new ArrayList<KeyValue>();
+-
+-    // memstore scan
+-    iscan.checkOnlyMemStore();
+-    RegionScanner scanner = null;
+-    try {
+-      scanner = getScanner(iscan);
+-      scanner.next(results);
+-    } finally {
+-      if (scanner != null)
+-        scanner.close();
+-    }
+-
+-    // count how many columns we're looking for
+-    int expected = 0;
+-    Map<byte[], NavigableSet<byte[]>> familyMap = get.getFamilyMap();
+-    for (NavigableSet<byte[]> qfs : familyMap.values()) {
+-      expected += qfs.size();
+-    }
+-
+-    // found everything we were looking for, done
+-    if (results.size() == expected) {
+-      return results;
+-    }
+-
+-    // still have more columns to find
+-    if (results != null && !results.isEmpty()) {
+-      // subtract what was found in memstore
+-      for (KeyValue kv : results) {
+-        byte [] family = kv.getFamily();
+-        NavigableSet<byte[]> qfs = familyMap.get(family);
+-        qfs.remove(kv.getQualifier());
+-        if (qfs.isEmpty()) familyMap.remove(family);
+-        expected--;
+-      }
+-      // make a new get for just what is left
+-      Get newGet = new Get(get.getRow());
+-      for (Map.Entry<byte[], NavigableSet<byte[]>> f : familyMap.entrySet()) {
+-        byte [] family = f.getKey();
+-        for (byte [] qualifier : f.getValue()) {
+-          newGet.addColumn(family, qualifier);
+-        }
+-      }
+-      newGet.setTimeRange(get.getTimeRange().getMin(),
+-          get.getTimeRange().getMax());
+-      iscan = new InternalScan(newGet);
+-    }
+-
+-    // check store files for what is left
+-    List<KeyValue> fileResults = new ArrayList<KeyValue>();
+-    iscan.checkOnlyStoreFiles();
+-    scanner = null;
+-    try {
+-      scanner = getScanner(iscan);
+-      scanner.next(fileResults);
+-    } finally {
+-      if (scanner != null)
+-        scanner.close();
+-    }
+-
+-    // combine and return
+-    results.addAll(fileResults);
+-    Collections.sort(results, KeyValue.COMPARATOR);
+-    return results;
+-  }
+-
+   /*
+    * Do a get based on the get parameter.
+    * @param withCoprocessor invoke coprocessor or not. We don't want to
+@@ -3830,7 +3747,7 @@ public class HRegion implements HeapSize { // , Writable{
+             get.addColumn(family.getKey(), column.getKey());
+           }
+           get.setTimeRange(tr.getMin(), tr.getMax());
+-          List<KeyValue> results = getLastIncrement(get);
++          List<KeyValue> results = get(get, false);
+ 
+           // Iterate the input columns and update existing values if they were
+           // found, otherwise add new column initialized to the increment amount
+@@ -3926,7 +3843,7 @@ public class HRegion implements HeapSize { // , Writable{
+ 
+         // we don't want to invoke coprocessor in this case; ICV is wrapped
+         // in HRegionServer, so we leave getLastIncrement alone
+-        List<KeyValue> results = getLastIncrement(get);
++        List<KeyValue> results = get(get, false);
+ 
+         if (!results.isEmpty()) {
+           KeyValue kv = results.get(0);
+diff --git a/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java b/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
+index 1c9daec..6628949 100644
+--- a/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
++++ b/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
+@@ -3998,6 +3998,27 @@ public class TestFromClientSide {
+ 
+  
+   @Test
++  public void testIncrementWithDeletes() throws Exception {
++    LOG.info("Starting testIncrement");
++    final byte [] TABLENAME = Bytes.toBytes("testIncrementWithDeletes");
++    HTable ht = TEST_UTIL.createTable(TABLENAME, FAMILY);
++    final byte[] COLUMN = Bytes.toBytes("column");
++
++    ht.incrementColumnValue(ROW, FAMILY, COLUMN, 5);
++    TEST_UTIL.flush(TABLENAME);
++
++    Delete del = new Delete(ROW);
++    ht.delete(del);
++
++    ht.incrementColumnValue(ROW, FAMILY, COLUMN, 5);
++
++    Get get = new Get(ROW);
++    Result r = ht.get(get);
++    assertEquals(1, r.size());
++    assertEquals(5, Bytes.toLong(r.getValue(FAMILY, COLUMN)));
++  }
++
++  @Test
+   public void testIncrement() throws Exception {
+     LOG.info("Starting testIncrement");
+     final byte [] TABLENAME = Bytes.toBytes("testIncrement");
+-- 
+1.7.0.4
+

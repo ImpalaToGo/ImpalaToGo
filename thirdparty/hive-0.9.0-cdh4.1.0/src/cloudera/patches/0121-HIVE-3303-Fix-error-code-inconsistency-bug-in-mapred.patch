@@ -1,0 +1,163 @@
+From 8857093bc76c4e353ac0cc231334d91da5380e5b Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Tue, 31 Jul 2012 05:42:34 +0000
+Subject: [PATCH 121/144] HIVE-3303: Fix error code inconsistency bug in mapreduce_stack_trace.q and mapreduce_stack_trace_turnoff.q when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1367413 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 8ff1fd6df3734ce08a0db24d5ec5659768652bd9)
+
+Conflicts:
+
+	build-common.xml
+---
+ build-common.xml                                   |    2 +-
+ .../queries/clientnegative/mapreduce_stack_trace.q |    8 ++++++++
+ .../mapreduce_stack_trace_hadoop20.q               |   13 +++++++++++++
+ .../clientnegative/mapreduce_stack_trace_turnoff.q |    8 ++++++++
+ .../mapreduce_stack_trace_turnoff_hadoop20.q       |   13 +++++++++++++
+ .../clientnegative/mapreduce_stack_trace.q.out     |    2 +-
+ .../mapreduce_stack_trace_hadoop20.q.out           |   13 +++++++++++++
+ .../mapreduce_stack_trace_turnoff.q.out            |    2 +-
+ .../mapreduce_stack_trace_turnoff_hadoop20.q.out   |    5 +++++
+ 9 files changed, 63 insertions(+), 3 deletions(-)
+ create mode 100644 ql/src/test/queries/clientnegative/mapreduce_stack_trace_hadoop20.q
+ create mode 100644 ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q
+ create mode 100644 ql/src/test/results/clientnegative/mapreduce_stack_trace_hadoop20.q.out
+ create mode 100644 ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q.out
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index c734150..796f9a7 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -85,7 +85,7 @@
+   <property name="test.junit.output.format" value="xml"/>
+   <property name="test.junit.output.usefile" value="true"/>
+   <property name="minimr.query.files" value="input16_cc.q,scriptfile1.q,bucket4.q,bucketmapjoin6.q,disable_merge_for_bucketing.q,reduce_deduplicate.q,smb_mapjoin_8.q,join1.q,groupby2.q,bucketizedhiveinputformat.q"/>
+-  <property name="minimr.query.negative.files" value="minimr_broken_pipe.q,cluster_tasklog_retrieval.q,mapreduce_stack_trace.q,mapreduce_stack_trace_turnoff.q" />
++  <property name="minimr.query.negative.files" value="minimr_broken_pipe.q,cluster_tasklog_retrieval.q,mapreduce_stack_trace.q,mapreduce_stack_trace_turnoff.q,mapreduce_stack_trace_hadoop20.q,mapreduce_stack_trace_turnoff_hadoop20.q" />
+   <property name="test.silent" value="true"/>
+   <property name="hadoopVersion" value="${hadoop.version.ant-internal}"/>
+   <property name="test.serialize.qplan" value="false"/>
+diff --git a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace.q b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace.q
+index 37b86aa..0c5dcae 100644
+--- a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace.q
++++ b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace.q
+@@ -3,3 +3,11 @@ set hive.exec.job.debug.capture.stacktraces=true;
+ set hive.exec.failure.hooks=org.apache.hadoop.hive.ql.hooks.VerifySessionStateStackTracesHook;
+ 
+ FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value);
++
++-- EXCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- Hadoop 0.23 changes the getTaskDiagnostics behavior
++-- The Error Code of hive failure MapReduce job changes
++-- In Hadoop 0.20
++-- Hive failure MapReduce job gets 20000 as Error Code
++-- In Hadoop 0.23
++-- Hive failure MapReduce job gets 2 as Error Code
+diff --git a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_hadoop20.q b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_hadoop20.q
+new file mode 100644
+index 0000000..8f38b0a
+--- /dev/null
++++ b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_hadoop20.q
+@@ -0,0 +1,13 @@
++set hive.exec.mode.local.auto=false;
++set hive.exec.job.debug.capture.stacktraces=true;
++set hive.exec.failure.hooks=org.apache.hadoop.hive.ql.hooks.VerifySessionStateStackTracesHook;
++
++FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value);
++
++-- INCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- Hadoop 0.23 changes the getTaskDiagnostics behavior
++-- The Error Code of hive failure MapReduce job changes
++-- In Hadoop 0.20
++-- Hive failure MapReduce job gets 20000 as Error Code
++-- In Hadoop 0.23
++-- Hive failure MapReduce job gets 2 as Error Code
+diff --git a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff.q b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff.q
+index e86ca65..047fb83 100644
+--- a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff.q
++++ b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff.q
+@@ -3,3 +3,11 @@ set hive.exec.job.debug.capture.stacktraces=false;
+ set hive.exec.failure.hooks=org.apache.hadoop.hive.ql.hooks.VerifySessionStateStackTracesHook;
+ 
+ FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value);
++
++-- EXCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- Hadoop 0.23 changes the getTaskDiagnostics behavior
++-- The Error Code of hive failure MapReduce job changes
++-- In Hadoop 0.20
++-- Hive failure MapReduce job gets 20000 as Error Code
++-- In Hadoop 0.23
++-- Hive failure MapReduce job gets 2 as Error Code
+diff --git a/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q
+new file mode 100644
+index 0000000..a6c888d
+--- /dev/null
++++ b/src/ql/src/test/queries/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q
+@@ -0,0 +1,13 @@
++set hive.exec.mode.local.auto=false;
++set hive.exec.job.debug.capture.stacktraces=false;
++set hive.exec.failure.hooks=org.apache.hadoop.hive.ql.hooks.VerifySessionStateStackTracesHook;
++
++FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value);
++
++-- INCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- Hadoop 0.23 changes the getTaskDiagnostics behavior
++-- The Error Code of hive failure MapReduce job changes
++-- In Hadoop 0.20
++-- Hive failure MapReduce job gets 20000 as Error Code
++-- In Hadoop 0.23
++-- Hive failure MapReduce job gets 2 as Error Code
+diff --git a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace.q.out b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace.q.out
+index 592ecda..b199241 100644
+--- a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace.q.out
++++ b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace.q.out
+@@ -10,4 +10,4 @@ FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime
+ Hive Runtime Error while processing row {"key":"238","value":"val_238"}
+ FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime Error while processing row {"key":"238","value":"val_238"}
+ Hive Runtime Error while processing row {"key":"238","value":"val_238"}
+-FAILED: Execution Error, return code 20000 from org.apache.hadoop.hive.ql.exec.MapRedTask. Unable to initialize custom script.
++FAILED: Execution Error, return code 2 from org.apache.hadoop.hive.ql.exec.MapRedTask
+diff --git a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_hadoop20.q.out b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_hadoop20.q.out
+new file mode 100644
+index 0000000..592ecda
+--- /dev/null
++++ b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_hadoop20.q.out
+@@ -0,0 +1,13 @@
++PREHOOK: query: FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value)
++PREHOOK: type: QUERY
++PREHOOK: Input: default@src
++#### A masked pattern was here ####
++FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++FATAL ExecMapper: org.apache.hadoop.hive.ql.metadata.HiveException: Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++Hive Runtime Error while processing row {"key":"238","value":"val_238"}
++FAILED: Execution Error, return code 20000 from org.apache.hadoop.hive.ql.exec.MapRedTask. Unable to initialize custom script.
+diff --git a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff.q.out b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff.q.out
+index e1cd0c5..da9203d 100644
+--- a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff.q.out
++++ b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff.q.out
+@@ -2,4 +2,4 @@ PREHOOK: query: FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exi
+ PREHOOK: type: QUERY
+ PREHOOK: Input: default@src
+ #### A masked pattern was here ####
+-FAILED: Execution Error, return code 20000 from org.apache.hadoop.hive.ql.exec.MapRedTask. Unable to initialize custom script.
++FAILED: Execution Error, return code 2 from org.apache.hadoop.hive.ql.exec.MapRedTask
+diff --git a/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q.out b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q.out
+new file mode 100644
+index 0000000..e1cd0c5
+--- /dev/null
++++ b/src/ql/src/test/results/clientnegative/mapreduce_stack_trace_turnoff_hadoop20.q.out
+@@ -0,0 +1,5 @@
++PREHOOK: query: FROM src SELECT TRANSFORM(key, value) USING 'script_does_not_exist' AS (key, value)
++PREHOOK: type: QUERY
++PREHOOK: Input: default@src
++#### A masked pattern was here ####
++FAILED: Execution Error, return code 20000 from org.apache.hadoop.hive.ql.exec.MapRedTask. Unable to initialize custom script.
+-- 
+1.7.0.4
+

@@ -1,0 +1,189 @@
+From 2824573c0ff24760c08d6040ed273bddf16c09e4 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Thu, 16 Aug 2012 16:53:26 +0000
+Subject: [PATCH 110/151] HBASE-6471 Performance regression caused by HBASE-4054
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-7047
+---
+ .../org/apache/hadoop/hbase/client/HTablePool.java |   35 ++++++++++++++-----
+ .../apache/hadoop/hbase/rest/RegionsResource.java  |   30 ++++------------
+ .../apache/hadoop/hbase/client/TestHTablePool.java |   16 ---------
+ 3 files changed, 34 insertions(+), 47 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java b/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
+index 729be54..1c011f9 100755
+--- a/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HTablePool.java
+@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.client.coprocessor.Batch;
++import org.apache.hadoop.hbase.client.coprocessor.Batch.Callback;
+ import org.apache.hadoop.hbase.ipc.CoprocessorProtocol;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.PoolMap;
+@@ -173,11 +174,7 @@ public class HTablePool implements Closeable {
+     HTableInterface table = findOrCreateTable(tableName);
+     // return a proxy table so when user closes the proxy, the actual table
+     // will be returned to the pool
+-    try {
+-      return new PooledHTable(table);
+-    } catch (IOException ioe) {
+-      throw new RuntimeException(ioe);
+-    }
++    return new PooledHTable(table);
+   }
+ 
+   /**
+@@ -318,14 +315,13 @@ public class HTablePool implements Closeable {
+   /**
+    * A proxy class that implements HTableInterface.close method to return the
+    * wrapped table back to the table pool
+-   * 
++   *
+    */
+-  class PooledHTable extends HTable {
++  class PooledHTable implements HTableInterface {
+ 
+     private HTableInterface table; // actual table implementation
+ 
+-    public PooledHTable(HTableInterface table) throws IOException {
+-      super(table.getConfiguration(), table.getTableName());
++    public PooledHTable(HTableInterface table) {
+       this.table = table;
+     }
+ 
+@@ -372,6 +368,7 @@ public class HTablePool implements Closeable {
+     }
+ 
+     @Override
++    @SuppressWarnings("deprecation")
+     public Result getRowOrBefore(byte[] row, byte[] family) throws IOException {
+       return table.getRowOrBefore(row, family);
+     }
+@@ -505,5 +502,25 @@ public class HTablePool implements Closeable {
+     HTableInterface getWrappedTable() {
+       return table;
+     }
++
++    @Override
++    public void setAutoFlush(boolean autoFlush) {
++      table.setAutoFlush(autoFlush);
++    }
++
++    @Override
++    public void setAutoFlush(boolean autoFlush, boolean clearBufferOnFail) {
++      table.setAutoFlush(autoFlush, clearBufferOnFail);
++    }
++
++    @Override
++    public long getWriteBufferSize() {
++      return table.getWriteBufferSize();
++    }
++
++    @Override
++    public void setWriteBufferSize(long writeBufferSize) throws IOException {
++      table.setWriteBufferSize(writeBufferSize);
++    }
+   }
+ }
+diff --git a/src/main/java/org/apache/hadoop/hbase/rest/RegionsResource.java b/src/main/java/org/apache/hadoop/hbase/rest/RegionsResource.java
+index bf85bc1..927a194 100644
+--- a/src/main/java/org/apache/hadoop/hbase/rest/RegionsResource.java
++++ b/src/main/java/org/apache/hadoop/hbase/rest/RegionsResource.java
+@@ -21,7 +21,6 @@
+ package org.apache.hadoop.hbase.rest;
+ 
+ import java.io.IOException;
+-import java.net.InetSocketAddress;
+ import java.util.Map;
+ 
+ import javax.ws.rs.GET;
+@@ -37,13 +36,12 @@ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ 
+ import org.apache.hadoop.hbase.HRegionInfo;
+-import org.apache.hadoop.hbase.HServerAddress;
++import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.TableNotFoundException;
+-import org.apache.hadoop.hbase.client.HTable;
+-import org.apache.hadoop.hbase.client.HTableInterface;
+-import org.apache.hadoop.hbase.client.HTablePool;
++import org.apache.hadoop.hbase.client.MetaScanner;
+ import org.apache.hadoop.hbase.rest.model.TableInfoModel;
+ import org.apache.hadoop.hbase.rest.model.TableRegionModel;
++import org.apache.hadoop.hbase.util.Bytes;
+ 
+ public class RegionsResource extends ResourceBase {
+   private static final Log LOG = LogFactory.getLog(RegionsResource.class);
+@@ -67,17 +65,6 @@ public class RegionsResource extends ResourceBase {
+     this.tableResource = tableResource;
+   }
+ 
+-  private Map<HRegionInfo,HServerAddress> getTableRegions()
+-      throws IOException {
+-    HTablePool pool = servlet.getTablePool();
+-    HTableInterface table = pool.getTable(tableResource.getName());
+-    try {
+-      return ((HTable)table).getRegionsInfo();
+-    } finally {
+-      pool.putTable(table);
+-    }
+-  }
+-
+   @GET
+   @Produces({MIMETYPE_TEXT, MIMETYPE_XML, MIMETYPE_JSON, MIMETYPE_PROTOBUF})
+   public Response get(final @Context UriInfo uriInfo) {
+@@ -88,15 +75,14 @@ public class RegionsResource extends ResourceBase {
+     try {
+       String tableName = tableResource.getName();
+       TableInfoModel model = new TableInfoModel(tableName);
+-      Map<HRegionInfo,HServerAddress> regions = getTableRegions();
+-      for (Map.Entry<HRegionInfo,HServerAddress> e: regions.entrySet()) {
++      Map<HRegionInfo,ServerName> regions = MetaScanner.allTableRegions(
++        servlet.getConfiguration(), Bytes.toBytes(tableName), false);
++      for (Map.Entry<HRegionInfo,ServerName> e: regions.entrySet()) {
+         HRegionInfo hri = e.getKey();
+-        HServerAddress addr = e.getValue();
+-        InetSocketAddress sa = addr.getInetSocketAddress();
++        ServerName addr = e.getValue();
+         model.add(
+           new TableRegionModel(tableName, hri.getRegionId(),
+-            hri.getStartKey(), hri.getEndKey(),
+-            sa.getHostName() + ":" + Integer.valueOf(sa.getPort())));
++            hri.getStartKey(), hri.getEndKey(), addr.getHostAndPort()));
+       }
+       ResponseBuilder response = Response.ok(model);
+       response.cacheControl(cacheControl);
+diff --git a/src/test/java/org/apache/hadoop/hbase/client/TestHTablePool.java b/src/test/java/org/apache/hadoop/hbase/client/TestHTablePool.java
+index 79b3274..aa51bd2 100644
+--- a/src/test/java/org/apache/hadoop/hbase/client/TestHTablePool.java
++++ b/src/test/java/org/apache/hadoop/hbase/client/TestHTablePool.java
+@@ -185,22 +185,6 @@ public class TestHTablePool {
+         Assert.assertTrue("alien table rejected", true);
+       }
+     }
+-
+-    @Test
+-    public void testClassCastException() {
+-      //this test makes sure that client code that
+-      //casts the table it got from pool to HTable won't break
+-      HTablePool pool = new HTablePool(TEST_UTIL.getConfiguration(),
+-        Integer.MAX_VALUE);
+-      String tableName = Bytes.toString(TABLENAME);
+-      try {
+-        // get table and check if type is HTable
+-        HTable table = (HTable) pool.getTable(tableName);
+-        Assert.assertTrue("return type is HTable as expected", true);
+-      } catch (ClassCastException e) {
+-        Assert.fail("return type is not HTable");
+-      }
+-    }
+   }
+ 
+ 	public static class TestHTableReusablePool extends TestHTablePoolType {
+-- 
+1.7.0.4
+

@@ -1,0 +1,138 @@
+From 165493408f4335e0c2aef821c2ee8e981a4fa46c Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Sat, 4 Aug 2012 18:53:54 -0600
+Subject: [PATCH 099/151] HBASE-5586 [replication] NPE in ReplicationSource when creating a stream to an inexistent cluster
+
+---
+ .../hbase/replication/ReplicationZookeeper.java    |    6 +-
+ .../replication/TestReplicationZookeeper.java      |   91 ++++++++++++++++++++
+ 2 files changed, 94 insertions(+), 3 deletions(-)
+ create mode 100644 src/test/java/org/apache/hadoop/hbase/replication/TestReplicationZookeeper.java
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java b/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
+index 6b294f5..891e9dd 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
+@@ -215,11 +215,11 @@ public class ReplicationZookeeper {
+    */
+   public List<ServerName> getSlavesAddresses(String peerClusterId) {
+     if (this.peerClusters.size() == 0) {
+-      return new ArrayList<ServerName>(0);
++      return Collections.emptyList();
+     }
+     ReplicationPeer peer = this.peerClusters.get(peerClusterId);
+     if (peer == null) {
+-      return new ArrayList<ServerName>(0);
++      return Collections.emptyList();
+     }
+     
+     List<ServerName> addresses;
+@@ -278,7 +278,7 @@ public class ReplicationZookeeper {
+   throws KeeperException {
+     List<String> children = ZKUtil.listChildrenNoWatch(zkw, znode);
+     if(children == null) {
+-      return null;
++      return Collections.emptyList();
+     }
+     List<ServerName> addresses = new ArrayList<ServerName>(children.size());
+     for (String child : children) {
+diff --git a/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationZookeeper.java b/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationZookeeper.java
+new file mode 100644
+index 0000000..6dfe7b1
+--- /dev/null
++++ b/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationZookeeper.java
+@@ -0,0 +1,91 @@
++package org.apache.hadoop.hbase.replication;
++
++import java.io.IOException;
++import java.util.concurrent.atomic.AtomicBoolean;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.Server;
++import org.apache.hadoop.hbase.ServerName;
++import org.apache.hadoop.hbase.catalog.CatalogTracker;
++import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
++import org.apache.zookeeper.KeeperException;
++import org.junit.BeforeClass;
++import org.junit.Test;
++
++import static org.junit.Assert.assertEquals;
++
++public class TestReplicationZookeeper {
++
++  private static Configuration conf;
++
++  private static HBaseTestingUtility utility;
++
++  private static ZooKeeperWatcher zkw;
++
++  private static ReplicationZookeeper repZk;
++
++  private static String slaveClusterKey;
++
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    utility = new HBaseTestingUtility();
++    utility.startMiniZKCluster();
++    conf = utility.getConfiguration();
++    zkw = HBaseTestingUtility.getZooKeeperWatcher(utility);
++    DummyServer server = new DummyServer();
++    repZk = new ReplicationZookeeper(server, new AtomicBoolean());
++    slaveClusterKey = conf.get(HConstants.ZOOKEEPER_QUORUM) + ":" +
++      conf.get("hbase.zookeeper.property.clientPort") + ":/1";
++  }
++
++  @Test
++  public void testGetAddressesMissingSlave()
++    throws IOException, KeeperException {
++    repZk.addPeer("1", slaveClusterKey);
++    // HBASE-5586 used to get an NPE
++    assertEquals(0, repZk.getSlavesAddresses("1").size());
++  }
++
++  static class DummyServer implements Server {
++
++    @Override
++    public Configuration getConfiguration() {
++      return conf;
++    }
++
++    @Override
++    public ZooKeeperWatcher getZooKeeper() {
++      return zkw;
++    }
++
++    @Override
++    public CatalogTracker getCatalogTracker() {
++      return null;
++    }
++
++    @Override
++    public ServerName getServerName() {
++      return new ServerName("hostname.example.org", 1234, -1L);
++    }
++
++    @Override
++    public void abort(String why, Throwable e) {
++    }
++
++    @Override
++    public boolean isAborted() {
++      return false;
++    }
++
++    @Override
++    public void stop(String why) {
++    }
++
++    @Override
++    public boolean isStopped() {
++      return false;
++    }
++  }
++}
+-- 
+1.7.0.4
+

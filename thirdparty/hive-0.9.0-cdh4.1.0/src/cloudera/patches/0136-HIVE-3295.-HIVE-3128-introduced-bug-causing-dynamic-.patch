@@ -1,0 +1,183 @@
+From 1f856d7b67ba8bf04d27db477acf62cf6c867633 Mon Sep 17 00:00:00 2001
+From: Kevin Wilfong <kevinwilfong@apache.org>
+Date: Wed, 25 Jul 2012 06:19:21 +0000
+Subject: [PATCH 136/144] HIVE-3295. HIVE-3128 introduced bug causing dynamic partitioning to fail. (kevinwilfong reviewed by njain, ashutoshc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365460 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit d0c18c7c678bd8ce5bd9401b458fe106a2b9bf54)
+---
+ .../hadoop/hive/common/CompressionUtils.java       |   73 ++++++++++++++++++++
+ .../org/apache/hadoop/hive/common/FileUtils.java   |   44 ------------
+ .../org/apache/hadoop/hive/ql/exec/ExecDriver.java |    4 +-
+ 3 files changed, 75 insertions(+), 46 deletions(-)
+ create mode 100644 common/src/java/org/apache/hadoop/hive/common/CompressionUtils.java
+
+diff --git a/src/common/src/java/org/apache/hadoop/hive/common/CompressionUtils.java b/src/common/src/java/org/apache/hadoop/hive/common/CompressionUtils.java
+new file mode 100644
+index 0000000..0e0d538
+--- /dev/null
++++ b/src/common/src/java/org/apache/hadoop/hive/common/CompressionUtils.java
+@@ -0,0 +1,73 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hive.common;
++
++import java.io.BufferedOutputStream;
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
++import java.io.IOException;
++
++import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
++import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
++import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
++import org.apache.commons.compress.utils.IOUtils;
++
++/**
++ * This class contains methods used for the purposes of compression, this class
++ * should not be accessed from code run in Hadoop.
++ */
++public class CompressionUtils {
++
++  /**
++   * Archive all the files in the inputFiles into outputFile
++   *
++   * @param inputFiles
++   * @param outputFile
++   * @throws IOException
++   */
++  public static void tar(String parentDir, String[] inputFiles, String outputFile)
++      throws IOException {
++
++    FileOutputStream out = null;
++    try {
++      out = new FileOutputStream(new File(parentDir, outputFile));
++      TarArchiveOutputStream tOut = new TarArchiveOutputStream(
++          new GzipCompressorOutputStream(new BufferedOutputStream(out)));
++
++      for (int i = 0; i < inputFiles.length; i++) {
++        File f = new File(parentDir, inputFiles[i]);
++        TarArchiveEntry tarEntry = new TarArchiveEntry(f, f.getName());
++        tOut.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
++        tOut.putArchiveEntry(tarEntry);
++        FileInputStream input = new FileInputStream(f);
++        try {
++          IOUtils.copy(input, tOut); // copy with 8K buffer, not close
++        } finally {
++          input.close();
++        }
++        tOut.closeArchiveEntry();
++      }
++      tOut.close(); // finishes inside
++    } finally {
++      // TarArchiveOutputStream seemed not to close files properly in error situation
++      org.apache.hadoop.io.IOUtils.closeStream(out);
++    }
++  }
++}
+diff --git a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+index 096c4ad..06ce614 100644
+--- a/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
++++ b/src/common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+@@ -18,19 +18,11 @@
+ 
+ package org.apache.hadoop.hive.common;
+ 
+-import java.io.BufferedOutputStream;
+-import java.io.File;
+-import java.io.FileInputStream;
+-import java.io.FileOutputStream;
+ import java.io.IOException;
+ import java.net.URI;
+ import java.util.BitSet;
+ import java.util.List;
+ 
+-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+-import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
+-import org.apache.commons.compress.utils.IOUtils;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+@@ -245,40 +237,4 @@ public final class FileUtils {
+       results.add(fileStatus);
+     }
+   }
+-
+-  /**
+-   * Archive all the files in the inputFiles into outputFile
+-   *
+-   * @param inputFiles
+-   * @param outputFile
+-   * @throws IOException
+-   */
+-  public static void tar(String parentDir, String[] inputFiles, String outputFile)
+-      throws IOException {
+-
+-    FileOutputStream out = null;
+-    try {
+-      out = new FileOutputStream(new File(parentDir, outputFile));
+-      TarArchiveOutputStream tOut = new TarArchiveOutputStream(
+-          new GzipCompressorOutputStream(new BufferedOutputStream(out)));
+-
+-      for (int i = 0; i < inputFiles.length; i++) {
+-        File f = new File(parentDir, inputFiles[i]);
+-        TarArchiveEntry tarEntry = new TarArchiveEntry(f, f.getName());
+-        tOut.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
+-        tOut.putArchiveEntry(tarEntry);
+-        FileInputStream input = new FileInputStream(f);
+-        try {
+-          IOUtils.copy(input, tOut); // copy with 8K buffer, not close
+-        } finally {
+-          input.close();
+-        }
+-        tOut.closeArchiveEntry();
+-      }
+-      tOut.close(); // finishes inside
+-    } finally {
+-      // TarArchiveOutputStream seemed not to close files properly in error situation
+-      org.apache.hadoop.io.IOUtils.closeStream(out);
+-    }
+-  }
+ }
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/ExecDriver.java b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/ExecDriver.java
+index b731a9f..3d22976 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/ExecDriver.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/ExecDriver.java
+@@ -46,7 +46,7 @@ import org.apache.hadoop.filecache.DistributedCache;
+ import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+-import org.apache.hadoop.hive.common.FileUtils;
++import org.apache.hadoop.hive.common.CompressionUtils;
+ import org.apache.hadoop.hive.common.LogUtils;
+ import org.apache.hadoop.hive.conf.HiveConf;
+ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+@@ -387,7 +387,7 @@ public class ExecDriver extends Task<MapredWork> implements Serializable, Hadoop
+           String archiveFileName = Utilities.generateTarFileName(stageId);
+           localwork.setStageID(stageId);
+ 
+-          FileUtils.tar(parentDir, fileNames,archiveFileName);
++          CompressionUtils.tar(parentDir, fileNames,archiveFileName);
+           Path archivePath = new Path(archiveFileURI);
+           LOG.info("Archive "+ hashtableFiles.length+" hash table files to " + archiveFileURI);
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,66 @@
+From eceb21b2bbe7a705ad2465ee97a35f4eba27ed13 Mon Sep 17 00:00:00 2001
+From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
+Date: Mon, 23 Apr 2012 16:47:04 +0000
+Subject: [PATCH 020/151] HBASE-5635 If getTaskList() returns null, splitlogWorker would go down and it won't serve any requests (Ram)
+
+Reason: Bug
+Author: Chinna Rao Lalam
+Ref: CDH-5196
+---
+ .../hadoop/hbase/regionserver/SplitLogWorker.java  |   36 +++++++++++--------
+ 1 files changed, 21 insertions(+), 15 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/SplitLogWorker.java b/src/main/java/org/apache/hadoop/hbase/regionserver/SplitLogWorker.java
+index 1d329b0..5a7e75b 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/SplitLogWorker.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/SplitLogWorker.java
+@@ -461,25 +461,31 @@ public class SplitLogWorker extends ZooKeeperListener implements Runnable {
+ 
+ 
+   private List<String> getTaskList() {
+-    for (int i = 0; i < zkretries; i++) {
++    List<String> childrenPaths = null;
++    long sleepTime = 1000;
++    // It will be in loop till it gets the list of children or
++    // it will come out if worker thread exited.
++    while (!exitWorker) {
+       try {
+-        return (ZKUtil.listChildrenAndWatchForNewChildren(this.watcher,
+-            this.watcher.splitLogZNode));
+-      } catch (KeeperException e) {
+-        LOG.warn("Could not get children of znode " +
+-            this.watcher.splitLogZNode, e);
+-        try {
+-          Thread.sleep(1000);
+-        } catch (InterruptedException e1) {
+-          LOG.warn("Interrupted while trying to get task list ...", e1);
+-          Thread.currentThread().interrupt();
+-          return null;
++        childrenPaths = ZKUtil.listChildrenAndWatchForNewChildren(this.watcher,
++            this.watcher.splitLogZNode);
++        if (childrenPaths != null) {
++          return childrenPaths;
+         }
++      } catch (KeeperException e) {
++        LOG.warn("Could not get children of znode "
++            + this.watcher.splitLogZNode, e);
++      }
++      try {
++        LOG.debug("Retry listChildren of znode " + this.watcher.splitLogZNode
++            + " after sleep for " + sleepTime + "ms!");
++        Thread.sleep(sleepTime);
++      } catch (InterruptedException e1) {
++        LOG.warn("Interrupted while trying to get task list ...", e1);
++        Thread.currentThread().interrupt();
+       }
+     }
+-    LOG.warn("Tried " + zkretries + " times, still couldn't fetch " +
+-        "children of " + watcher.splitLogZNode + " giving up");
+-    return null;
++    return childrenPaths;
+   }
+ 
+ 
+-- 
+1.7.0.4
+

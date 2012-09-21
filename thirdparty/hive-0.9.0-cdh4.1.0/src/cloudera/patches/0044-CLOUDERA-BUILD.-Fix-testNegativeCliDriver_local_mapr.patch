@@ -1,0 +1,92 @@
+From bdb92e38126973fb945f7ff6ae0fecf0b59dd12c Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Tue, 26 Jun 2012 12:12:51 -0700
+Subject: [PATCH 044/144] CLOUDERA-BUILD. Fix testNegativeCliDriver_local_mapred_error_cache in Hive0.9.0 on MR1
+
+---
+ build-common.xml                            |   16 ++++++++--------
+ common/src/java/conf/hive-log4j.properties  |    3 +++
+ data/conf/hive-log4j.properties             |    3 +++
+ ql/src/java/conf/hive-exec-log4j.properties |    3 +++
+ 4 files changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 0a28ee8..43efcef 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -101,10 +101,10 @@
+       </path>
+       <path id="test.hadoop.classpath">
+         <path refid="test.hive.jar.classpath"/>
+-        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
+-        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
+-        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" erroronmissingdir="false" />
+-        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr1.test" includes="*.jar" />
++        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar" erroronmissingdir="false" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr1.test" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar,**/hive_contrib*.jar,**/hive-contrib*.jar" />
+       </path>
+     </then>
+     <else>
+@@ -114,11 +114,11 @@
+       </path>
+       <path id="test.hadoop.classpath">
+         <path refid="test.hive.jar.classpath"/>
+-        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar"/>
+-        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar" />
++        <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar"/>
++        <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar" />
+         <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
+-        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" />
+-        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr2.test" includes="*.jar" />
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/slf4j*.jar"/>
++        <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr2.test" includes="*.jar" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar"/>
+       </path>
+     </else>
+   </if>
+diff --git a/src/common/src/java/conf/hive-log4j.properties b/src/common/src/java/conf/hive-log4j.properties
+index 8ae728b..ddd52cb 100644
+--- a/src/common/src/java/conf/hive-log4j.properties
++++ b/src/common/src/java/conf/hive-log4j.properties
+@@ -25,6 +25,9 @@ log4j.rootLogger=${hive.root.logger}, EventCounter
+ # Logging Threshold
+ log4j.threshhold=WARN
+ 
++# Null Appender
++log4j.appender.NullAppender=org.apache.log4j.varia.NullAppender
++
+ #
+ # Daily Rolling File Appender
+ #
+diff --git a/src/data/conf/hive-log4j.properties b/src/data/conf/hive-log4j.properties
+index 0b5c164..e3ae279 100644
+--- a/src/data/conf/hive-log4j.properties
++++ b/src/data/conf/hive-log4j.properties
+@@ -25,6 +25,9 @@ log4j.rootLogger=${hive.root.logger}, EventCounter
+ # Logging Threshold
+ log4j.threshhold=WARN
+ 
++# Null Appender
++log4j.appender.NullAppender=org.apache.log4j.varia.NullAppender
++
+ #
+ # Daily Rolling File Appender
+ #
+diff --git a/src/ql/src/java/conf/hive-exec-log4j.properties b/src/ql/src/java/conf/hive-exec-log4j.properties
+index 104e372..769c400 100644
+--- a/src/ql/src/java/conf/hive-exec-log4j.properties
++++ b/src/ql/src/java/conf/hive-exec-log4j.properties
+@@ -25,6 +25,9 @@ log4j.rootLogger=${hive.root.logger}, EventCounter
+ # Logging Threshold
+ log4j.threshhold=WARN
+ 
++# Null Appender
++log4j.appender.NullAppender=org.apache.log4j.varia.NullAppender
++
+ #
+ # File Appender
+ #
+-- 
+1.7.0.4
+

@@ -1,0 +1,78 @@
+Saving all output to "!!{outputDirectory}!!/stats3.q.raw". Enter "record" with no arguments to stop it.
+>>>  !run !!{qFileDirectory}!!/stats3.q
+>>>  set datanucleus.cache.collections=false;
+No rows affected 
+>>>  set hive.stats.autogather=true;
+No rows affected 
+>>>  drop table hive_test_src;
+No rows affected 
+>>>  drop table hive_test_dst;
+No rows affected 
+>>>  
+>>>  create table hive_test_src ( col1 string ) stored as textfile ;
+No rows affected 
+>>>  load data local inpath '../data/files/test.dat' overwrite into table hive_test_src ;
+No rows affected 
+>>>  
+>>>  create table hive_test_dst ( col1 string ) partitioned by ( pcol1 string , pcol2 string) stored as sequencefile;
+No rows affected 
+>>>  insert overwrite table hive_test_dst partition ( pcol1='test_part', pCol2='test_Part') select col1 from hive_test_src ;
+'col1'
+No rows selected 
+>>>  select * from hive_test_dst where pcol1='test_part' and pcol2='test_Part';
+'col1','pcol1','pcol2'
+'1','test_part','test_Part'
+'2','test_part','test_Part'
+'3','test_part','test_Part'
+'4','test_part','test_Part'
+'5','test_part','test_Part'
+'6','test_part','test_Part'
+6 rows selected 
+>>>  
+>>>  select count(1) from hive_test_dst;
+'_c0'
+'6'
+1 row selected 
+>>>  
+>>>  insert overwrite table hive_test_dst partition ( pCol1='test_part', pcol2='test_Part') select col1 from hive_test_src ;
+'col1'
+No rows selected 
+>>>  select * from hive_test_dst where pcol1='test_part' and pcol2='test_part';
+'col1','pcol1','pcol2'
+No rows selected 
+>>>  
+>>>  select count(1) from hive_test_dst;
+'_c0'
+'6'
+1 row selected 
+>>>  
+>>>  select * from hive_test_dst where pcol1='test_part';
+'col1','pcol1','pcol2'
+'1','test_part','test_Part'
+'2','test_part','test_Part'
+'3','test_part','test_Part'
+'4','test_part','test_Part'
+'5','test_part','test_Part'
+'6','test_part','test_Part'
+6 rows selected 
+>>>  select * from hive_test_dst where pcol1='test_part' and pcol2='test_part';
+'col1','pcol1','pcol2'
+No rows selected 
+>>>  select * from hive_test_dst where pcol1='test_Part';
+'col1','pcol1','pcol2'
+No rows selected 
+>>>  
+>>>  describe extended hive_test_dst;
+'col_name','data_type','comment'
+'col1','string',''
+'pcol1','string',''
+'pcol2','string',''
+'','',''
+'Detailed Table Information','Table(tableName:hive_test_dst, dbName:stats3, owner:!!{user.name}!!, createTime:!!UNIXTIME!!, lastAccessTime:0, retention:0, sd:StorageDescriptor(cols:[FieldSchema(name:col1, type:string, comment:null), FieldSchema(name:pcol1, type:string, comment:null), FieldSchema(name:pcol2, type:string, comment:null)], location:!!{hive.metastore.warehouse.dir}!!/stats3.db/hive_test_dst, inputFormat:org.apache.hadoop.mapred.SequenceFileInputFormat, outputFormat:org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat, compressed:false, numBuckets:-1, serdeInfo:SerDeInfo(name:null, serializationLib:org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe, parameters:{serialization.format=1}), bucketCols:[], sortCols:[], parameters:{}), partitionKeys:[FieldSchema(name:pcol1, type:string, comment:null), FieldSchema(name:pcol2, type:string, comment:null)], parameters:{numPartitions=1, numFiles=1, transient_lastDdlTime=!!UNIXTIME!!, numRows=6, totalSize=171, rawDataSize=6}, viewOriginalText:null, viewExpandedText:null, tableType:MANAGED_TABLE)',''
+5 rows selected 
+>>>  
+>>>  drop table hive_test_src;
+No rows affected 
+>>>  drop table hive_test_dst;
+No rows affected 
+>>>  !record

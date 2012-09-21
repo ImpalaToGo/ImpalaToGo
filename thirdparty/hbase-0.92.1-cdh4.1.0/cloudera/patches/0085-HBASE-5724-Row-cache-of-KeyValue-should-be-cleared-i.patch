@@ -1,0 +1,90 @@
+From c0e2295a359a784b375a661866b5acc638c9608d Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Thu, 26 Jul 2012 18:05:46 -0700
+Subject: [PATCH 085/151] HBASE-5724 Row cache of KeyValue should be cleared in readFields()
+
+Reason: Bug
+Author: Teruyoshi Zenmyo
+Ref: CDH-6929
+---
+ .../java/org/apache/hadoop/hbase/KeyValue.java     |    4 ++-
+ .../java/org/apache/hadoop/hbase/TestKeyValue.java |   22 ++++++++++++++++++++
+ 2 files changed, 25 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/KeyValue.java b/src/main/java/org/apache/hadoop/hbase/KeyValue.java
+index b8c108a..eb49834 100644
+--- a/src/main/java/org/apache/hadoop/hbase/KeyValue.java
++++ b/src/main/java/org/apache/hadoop/hbase/KeyValue.java
+@@ -27,7 +27,6 @@ import java.util.Comparator;
+ import java.util.HashMap;
+ import java.util.Map;
+ 
+-import com.google.common.primitives.Longs;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.hbase.io.HeapSize;
+@@ -37,6 +36,8 @@ import org.apache.hadoop.hbase.util.ClassSize;
+ import org.apache.hadoop.io.RawComparator;
+ import org.apache.hadoop.io.Writable;
+ 
++import com.google.common.primitives.Longs;
++
+ /**
+  * An HBase Key/Value.  This is the fundamental HBase Type.
+  *
+@@ -2005,6 +2006,7 @@ public class KeyValue implements Writable, HeapSize {
+   // and it expects the length of the KeyValue to be explicitly passed
+   // to it.
+   public void readFields(int length, final DataInput in) throws IOException {
++    this.rowCache = null;
+     this.length = length;
+     this.offset = 0;
+     this.bytes = new byte[this.length];
+diff --git a/src/test/java/org/apache/hadoop/hbase/TestKeyValue.java b/src/test/java/org/apache/hadoop/hbase/TestKeyValue.java
+index 8d744a0..465e57f 100644
+--- a/src/test/java/org/apache/hadoop/hbase/TestKeyValue.java
++++ b/src/test/java/org/apache/hadoop/hbase/TestKeyValue.java
+@@ -19,6 +19,8 @@
+  */
+ package org.apache.hadoop.hbase;
+ 
++import java.io.ByteArrayInputStream;
++import java.io.DataInputStream;
+ import java.io.IOException;
+ import java.util.Set;
+ import java.util.TreeSet;
+@@ -31,6 +33,7 @@ import org.apache.hadoop.hbase.KeyValue.KVComparator;
+ import org.apache.hadoop.hbase.KeyValue.MetaComparator;
+ import org.apache.hadoop.hbase.KeyValue.Type;
+ import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.io.WritableUtils;
+ 
+ public class TestKeyValue extends TestCase {
+   private final Log LOG = LogFactory.getLog(this.getClass().getName());
+@@ -385,4 +388,23 @@ public class TestKeyValue extends TestCase {
+       }
+     }
+   }
++
++  /**
++   * The row cache is cleared and re-read for the new value
++   *
++   * @throws IOException
++   */
++  public void testReadFields() throws IOException {
++    KeyValue kv1 = new KeyValue(Bytes.toBytes("row1"), Bytes.toBytes("cf1"),
++        Bytes.toBytes("qualifier1"), 12345L, Bytes.toBytes("value1"));
++    kv1.getRow(); // set row cache of kv1
++    KeyValue kv2 = new KeyValue(Bytes.toBytes("row2"), Bytes.toBytes("cf2"),
++        Bytes.toBytes("qualifier2"), 12345L, Bytes.toBytes("value2"));
++    kv1.readFields(new DataInputStream(new ByteArrayInputStream(WritableUtils
++        .toByteArray(kv2))));
++    // check equality
++    assertEquals(kv1, kv2);
++    // check cache state (getRow() return the cached value if the cache is set)
++    assertTrue(Bytes.equals(kv1.getRow(), kv2.getRow()));
++  }
+ }
+-- 
+1.7.0.4
+

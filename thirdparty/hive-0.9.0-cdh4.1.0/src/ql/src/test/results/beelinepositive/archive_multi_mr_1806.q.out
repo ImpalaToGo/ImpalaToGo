@@ -1,0 +1,94 @@
+Saving all output to "!!{outputDirectory}!!/archive_multi_mr_1806.q.raw". Enter "record" with no arguments to stop it.
+>>>  !run !!{qFileDirectory}!!/archive_multi_mr_1806.q
+>>>  set hive.archive.enabled = true;
+No rows affected 
+>>>  set hive.enforce.bucketing = true;
+No rows affected 
+>>>  set hive.input.format = org.apache.hadoop.hive.ql.io.HiveInputFormat;
+No rows affected 
+>>>  
+>>>  -- EXCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
+>>>  -- A bug which is present in Hadoop 0.22 and 0.23 (MAPREDUCE-1806) causes
+>>>  -- CombineFileInputFormat to strip out the scheme and authority when generating
+>>>  -- splits. This causes severe problems for HAR files since they won't be
+>>>  -- accessed through the HarFileSystem without the "har:/" prefix. It is possible
+>>>  -- to work around this problem on affected versions of Hadoop by using
+>>>  -- HiveInputFormat in place of CombineHiveInputFormat.
+>>>  
+>>>  drop table tstsrc;
+No rows affected 
+>>>  drop table tstsrcpart;
+No rows affected 
+>>>  
+>>>  create table tstsrc like src;
+No rows affected 
+>>>  insert overwrite table tstsrc select key, value from src;
+'key','value'
+No rows selected 
+>>>  
+>>>  create table tstsrcpart like srcpart;
+No rows affected 
+>>>  
+>>>  insert overwrite table tstsrcpart partition (ds='2008-04-08', hr='11') 
+select key, value from srcpart where ds='2008-04-08' and hr='11';
+'key','value'
+No rows selected 
+>>>  
+>>>  insert overwrite table tstsrcpart partition (ds='2008-04-08', hr='12') 
+select key, value from srcpart where ds='2008-04-08' and hr='12';
+'key','value'
+No rows selected 
+>>>  
+>>>  insert overwrite table tstsrcpart partition (ds='2008-04-09', hr='11') 
+select key, value from srcpart where ds='2008-04-09' and hr='11';
+'key','value'
+No rows selected 
+>>>  
+>>>  insert overwrite table tstsrcpart partition (ds='2008-04-09', hr='12') 
+select key, value from srcpart where ds='2008-04-09' and hr='12';
+'key','value'
+No rows selected 
+>>>  
+>>>  SELECT SUM(hash(col)) FROM (SELECT transform(*) using 'tr "\t" "_"' AS col 
+FROM (SELECT * FROM tstsrcpart WHERE ds='2008-04-08') subq1) subq2;
+'_c0'
+'48479881068'
+1 row selected 
+>>>  
+>>>  ALTER TABLE tstsrcpart ARCHIVE PARTITION (ds='2008-04-08');
+No rows affected 
+>>>  
+>>>  SELECT SUM(hash(col)) FROM (SELECT transform(*) using 'tr "\t" "_"' AS col 
+FROM (SELECT * FROM tstsrcpart WHERE ds='2008-04-08') subq1) subq2;
+'_c0'
+'48479881068'
+1 row selected 
+>>>  
+>>>  SELECT key, count(1) FROM tstsrcpart WHERE ds='2008-04-08' AND hr='12' AND key='0' GROUP BY key;
+'key','_c1'
+'0','3'
+1 row selected 
+>>>  
+>>>  SELECT * FROM tstsrcpart a JOIN tstsrc b ON a.key=b.key 
+WHERE a.ds='2008-04-08' AND a.hr='12' AND a.key='0';
+'key','value','ds','hr','key','value'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+'0','val_0','2008-04-08','12','0','val_0'
+9 rows selected 
+>>>  
+>>>  ALTER TABLE tstsrcpart UNARCHIVE PARTITION (ds='2008-04-08');
+No rows affected 
+>>>  
+>>>  SELECT SUM(hash(col)) FROM (SELECT transform(*) using 'tr "\t" "_"' AS col 
+FROM (SELECT * FROM tstsrcpart WHERE ds='2008-04-08') subq1) subq2;
+'_c0'
+'48479881068'
+1 row selected 
+>>>  !record

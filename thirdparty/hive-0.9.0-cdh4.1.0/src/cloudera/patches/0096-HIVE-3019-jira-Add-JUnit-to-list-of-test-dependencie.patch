@@ -1,0 +1,193 @@
+From 9df69ea747acb64195354db039f024a25f1a3ef2 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Mon, 9 Jul 2012 22:05:06 -0700
+Subject: [PATCH 096/144] HIVE-3019 [jira] Add JUnit to list of test dependencies managed by Ivy
+
+Summary: HIVE-3019. Add JUnit to list of test dependencies managed by Ivy
+
+Test Plan: EMPTY
+
+Reviewers: JIRA, ashutoshc
+
+Reviewed By: ashutoshc
+
+Differential Revision: https://reviews.facebook.net/D3171
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1351467 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 06dcb1120510d4360fc8008a06768308087f2a20)
+---
+ cli/ivy.xml           |    5 ++++-
+ contrib/ivy.xml       |    4 ++++
+ hbase-handler/ivy.xml |    4 ++++
+ hwi/ivy.xml           |    3 +++
+ jdbc/ivy.xml          |    4 ++++
+ metastore/ivy.xml     |    4 ++++
+ pdk/ivy.xml           |    2 ++
+ ql/ivy.xml            |    5 ++++-
+ serde/ivy.xml         |    3 +++
+ service/ivy.xml       |    3 +++
+ shims/ivy.xml         |    3 +++
+ 11 files changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/src/cli/ivy.xml b/src/cli/ivy.xml
+index ab949b1..0d1c64a 100644
+--- a/src/cli/ivy.xml
++++ b/src/cli/ivy.xml
+@@ -48,6 +48,9 @@
+                 conf="runtime" transitive="false"/>
+     
+     <!-- Test Dependencies -->
+-    <dependency org="org.mockito" name="mockito-all" rev="${mockito-all.version}" />
++    <dependency org="junit" name="junit"
++                rev="${junit.version}" conf="test->default" />
++    <dependency org="org.mockito" name="mockito-all"
++                rev="${mockito-all.version}" conf="test->default" />
+   </dependencies>
+ </ivy-module>
+diff --git a/src/contrib/ivy.xml b/src/contrib/ivy.xml
+index 7399674..161943c 100644
+--- a/src/contrib/ivy.xml
++++ b/src/contrib/ivy.xml
+@@ -36,5 +36,9 @@
+                 transitive="false"/>
+     <dependency org="commons-codec" name="commons-codec" rev="${commons-codec.version}"
+                 transitive="false"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++
+   </dependencies>
+ </ivy-module>
+diff --git a/src/hbase-handler/ivy.xml b/src/hbase-handler/ivy.xml
+index 51f7c90..552f637 100644
+--- a/src/hbase-handler/ivy.xml
++++ b/src/hbase-handler/ivy.xml
+@@ -61,5 +61,9 @@
+       <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
+       <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
+     </dependency>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++
+   </dependencies>
+ </ivy-module>
+diff --git a/src/hwi/ivy.xml b/src/hwi/ivy.xml
+index dd3c8be..92e4c1e 100644
+--- a/src/hwi/ivy.xml
++++ b/src/hwi/ivy.xml
+@@ -33,6 +33,9 @@
+                 transitive="false"/>
+     <dependency org="commons-logging" name="commons-logging-api" rev="${commons-logging-api.version}"
+                 transitive="false"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
+     <dependency org="org.apache.hive" name="hive-builtins" rev="${version}"
+                 conf="test->default" transitive="false"/>
+     <dependency org="commons-httpclient" name="commons-httpclient" rev="${commons-httpclient.version}"
+diff --git a/src/jdbc/ivy.xml b/src/jdbc/ivy.xml
+index d8e3a5f..9269bd1 100644
+--- a/src/jdbc/ivy.xml
++++ b/src/jdbc/ivy.xml
+@@ -33,5 +33,9 @@
+                 transitive="false"/>
+     <dependency org="commons-logging" name="commons-logging" rev="${commons-logging.version}"
+                 transitive="false"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++
+   </dependencies>
+ </ivy-module>
+diff --git a/src/metastore/ivy.xml b/src/metastore/ivy.xml
+index f111922..3011d2f 100644
+--- a/src/metastore/ivy.xml
++++ b/src/metastore/ivy.xml
+@@ -62,5 +62,9 @@
+     <dependency org="org.apache.thrift" name="libfb303" rev="${libfb303.version}" transitive="false" />
+ 
+     <dependency org="asm" name="asm" rev="${asm.version}"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++
+   </dependencies>
+ </ivy-module>
+diff --git a/src/pdk/ivy.xml b/src/pdk/ivy.xml
+index 0947353..13c2d84 100644
+--- a/src/pdk/ivy.xml
++++ b/src/pdk/ivy.xml
+@@ -29,5 +29,7 @@
+   <dependencies>
+     <dependency org="org.apache.hive" name="hive-cli" rev="${version}"
+                 conf="compile->default" transitive="false" />
++    <dependency org="junit" name="junit" rev="${junit.version}"
++                conf="compile->default" />
+   </dependencies>
+ </ivy-module>
+diff --git a/src/ql/ivy.xml b/src/ql/ivy.xml
+index 1bf04fd..ada4810 100644
+--- a/src/ql/ivy.xml
++++ b/src/ql/ivy.xml
+@@ -63,7 +63,6 @@
+                 transitive="false"/>
+     <dependency org="org.apache.derby" name="derby" rev="${derby.version}"/>
+     <dependency org="com.googlecode.javaewah" name="JavaEWAH" rev="${javaewah.version}"/>
+-    <dependency org="junit" name="junit" rev="${junit.version}"/>
+ 
+     <dependency org="org.datanucleus" name="datanucleus-connectionpool" rev="${datanucleus-connectionpool.version}"
+                 transitive="false"/>
+@@ -116,5 +115,9 @@
+       <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
+       <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
+     </dependency>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++    
+   </dependencies>
+ </ivy-module>
+diff --git a/src/serde/ivy.xml b/src/serde/ivy.xml
+index 328baa4..ab4ac30 100644
+--- a/src/serde/ivy.xml
++++ b/src/serde/ivy.xml
+@@ -49,5 +49,8 @@
+                 transitive="false"/>
+     <dependency org="org.apache.avro" name="avro-mapred" rev="${avro.version}"
+                 transitive="false"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
+   </dependencies>
+ </ivy-module>
+diff --git a/src/service/ivy.xml b/src/service/ivy.xml
+index 7966aea..dc7d534 100644
+--- a/src/service/ivy.xml
++++ b/src/service/ivy.xml
+@@ -37,5 +37,8 @@
+                 transitive="false"/>
+     <dependency org="commons-logging" name="commons-logging-api" rev="${commons-logging-api.version}"
+                 transitive="false"/>
++
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
+   </dependencies>
+ </ivy-module>
+diff --git a/src/shims/ivy.xml b/src/shims/ivy.xml
+index 15bbf45..0983dec 100644
+--- a/src/shims/ivy.xml
++++ b/src/shims/ivy.xml
+@@ -120,6 +120,9 @@
+       <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
+     </dependency>
+ 
++    <!-- Test Dependencies -->
++    <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
++
+     <conflict manager="all" />
+   </dependencies>
+ </ivy-module>
+-- 
+1.7.0.4
+

@@ -1,0 +1,489 @@
+From cc3b4737a2c4745b656039d1849fcd0449c0ffae Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Thu, 12 Apr 2012 17:46:05 +0000
+Subject: [PATCH 040/151] HBASE-5719 Enhance hbck to sideline overlapped mega regions (Jimmy Xiang)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1325405 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Supportability
+Author: Jimmy Xiang
+Ref: CDH-5883
+---
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |  145 +++++++++++++++++---
+ .../hadoop/hbase/util/RegionSplitCalculator.java   |   76 ++++++++++-
+ .../hbase/util/TestRegionSplitCalculator.java      |   39 ++++++
+ 3 files changed, 242 insertions(+), 18 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index 5dde9ff..c6958bd 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -22,8 +22,10 @@ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.Comparator;
++import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Map.Entry;
+ import java.util.Set;
+ import java.util.SortedSet;
+@@ -135,6 +137,7 @@ public class HBaseFsck {
+   private static final int MAX_NUM_THREADS = 50; // #threads to contact regions
+   private static final long THREADS_KEEP_ALIVE_SECONDS = 60;
+   private static boolean rsSupportsOffline = true;
++  private static final int DEFAULT_OVERLAPS_TO_SIDELINE = 2;
+   private static final int DEFAULT_MAX_MERGE = 5;
+ 
+   /**********************
+@@ -147,7 +150,6 @@ public class HBaseFsck {
+   private HBaseAdmin admin;
+   private HTable meta;
+   private ThreadPoolExecutor executor; // threads to retrieve data from regionservers
+-  private int numThreads = MAX_NUM_THREADS;
+   private long startMillis = System.currentTimeMillis();
+ 
+   /***********
+@@ -165,6 +167,8 @@ public class HBaseFsck {
+   // limit fixes to listed tables, if empty atttempt to fix all
+   private List<byte[]> tablesToFix = new ArrayList<byte[]>();
+   private int maxMerge = DEFAULT_MAX_MERGE; // maximum number of overlapping regions to merge
++  private int maxOverlapsToSideline = DEFAULT_OVERLAPS_TO_SIDELINE; // maximum number of overlapping regions to sideline
++  private boolean sidelineBigOverlaps = false; // sideline overlaps with >maxMerge regions
+ 
+   private boolean rerun = false; // if we tried to fix something, rerun hbck
+   private static boolean summary = false; // if we want to print less output
+@@ -210,7 +214,7 @@ public class HBaseFsck {
+       ZooKeeperConnectionException, IOException {
+     this.conf = conf;
+ 
+-    int numThreads = conf.getInt("hbasefsck.numthreads", Integer.MAX_VALUE);
++    int numThreads = conf.getInt("hbasefsck.numthreads", MAX_NUM_THREADS);
+     executor = new ThreadPoolExecutor(1, numThreads,
+         THREADS_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+         new SynchronousQueue<Runnable>());
+@@ -831,14 +835,14 @@ public class HBaseFsck {
+   /**
+    * Sideline a region dir (instead of deleting it)
+    */
+-  void sidelineRegionDir(FileSystem fs, HbckInfo hi)
++  Path sidelineRegionDir(FileSystem fs, HbckInfo hi)
+     throws IOException {
+     String tableName = Bytes.toString(hi.getTableName());
+     Path regionDir = hi.getHdfsRegionDir();
+ 
+     if (!fs.exists(regionDir)) {
+       LOG.warn("No previous " + regionDir + " exists.  Continuing.");
+-      return;
++      return null;
+     }
+ 
+     Path sidelineTableDir= new Path(getSidelineDir(), tableName);
+@@ -871,12 +875,15 @@ public class HBaseFsck {
+         // dst (foo/a) exists and is a dir, and the src (foo/b) is a dir,
+         // it moves the src into the dst dir resulting in (foo/a/b).  If
+         // the dst does not exist, and the src a dir, src becomes dst. (foo/b)
+-        for (FileStatus hfile : fs.listStatus(src)) {
+-          success = fs.rename(hfile.getPath(), dst);
+-          if (!success) {
+-            String msg = "Unable to rename file " + src +  " to " + dst;
+-            LOG.error(msg);
+-            throw new IOException(msg);
++        FileStatus[] hfiles = fs.listStatus(src);
++        if (hfiles != null && hfiles.length > 0) {
++          for (FileStatus hfile : hfiles) {
++            success = fs.rename(hfile.getPath(), dst);
++            if (!success) {
++              String msg = "Unable to rename file " + src +  " to " + dst;
++              LOG.error(msg);
++              throw new IOException(msg);
++            }
+           }
+         }
+         LOG.debug("Sideline directory contents:");
+@@ -891,6 +898,7 @@ public class HBaseFsck {
+       LOG.error(msg);
+       throw new IOException(msg);
+     }
++    return sidelineRegionDir;
+   }
+ 
+   /**
+@@ -1544,6 +1552,9 @@ public class HBaseFsck {
+     // backwards regions
+     final List<HbckInfo> backwards = new ArrayList<HbckInfo>();
+ 
++    // sidelined big overlapped regions
++    final Map<Path, HbckInfo> sidelinedRegions = new HashMap<Path, HbckInfo>();
++
+     // region split calculator
+     final RegionSplitCalculator<HbckInfo> sc = new RegionSplitCalculator<HbckInfo>(cmp);
+ 
+@@ -1565,6 +1576,9 @@ public class HBaseFsck {
+     private HTableDescriptor getHTD() {
+       if (htds.size() == 1) {
+         return (HTableDescriptor)htds.toArray()[0];
++      } else {
++        LOG.error("None/Multiple table descriptors found for table '"
++          + tableName + "' regions: " + htds);
+       }
+       return null;
+     }
+@@ -1745,13 +1759,21 @@ public class HBaseFsck {
+ 
+         if (overlap.size() > maxMerge) {
+           LOG.warn("Overlap group has " + overlap.size() + " overlapping " +
+-              "regions which is greater than " + maxMerge + ", the max " +
+-              "number of regions to merge.");
++            "regions which is greater than " + maxMerge + ", the max number of regions to merge");
++          if (sidelineBigOverlaps) {
++            // we only sideline big overlapped groups that exceeds the max number of regions to merge
++            sidelineBigOverlaps(overlap);
++          }
+           return;
+         }
+ 
++        mergeOverlaps(overlap);
++      }
++
++      void mergeOverlaps(Collection<HbckInfo> overlap)
++          throws IOException {
+         LOG.info("== Merging regions into one region: "
+-            + Joiner.on(",").join(overlap));
++          + Joiner.on(",").join(overlap));
+         // get the min / max range and close all concerned regions
+         Pair<byte[], byte[]> range = null;
+         for (HbckInfo hi : overlap) {
+@@ -1815,7 +1837,48 @@ public class HBaseFsck {
+           fixes++;
+         }
+       }
+-    };
++
++      /**
++       * Sideline some regions in a big overlap group so that it
++       * will have fewer regions, and it is easier to merge them later on.
++       *
++       * @param bigOverlap the overlapped group with regions more than maxMerge
++       * @throws IOException
++       */
++      void sidelineBigOverlaps(
++          Collection<HbckInfo> bigOverlap) throws IOException {
++        int overlapsToSideline = bigOverlap.size() - maxMerge;
++        if (overlapsToSideline > maxOverlapsToSideline) {
++          overlapsToSideline = maxOverlapsToSideline;
++        }
++        List<HbckInfo> regionsToSideline =
++          RegionSplitCalculator.findBigRanges(bigOverlap, overlapsToSideline);
++        FileSystem fs = FileSystem.get(conf);
++        for (HbckInfo regionToSideline: regionsToSideline) {
++          try {
++            LOG.info("Closing region: " + regionToSideline);
++            closeRegion(regionToSideline);
++          } catch (InterruptedException ie) {
++            LOG.warn("Was unable to close region " + regionToSideline.getRegionNameAsString()
++              + ".  Interrupted.");
++            throw new IOException(ie);
++          }
++
++          LOG.info("Offlining region: " + regionToSideline);
++          offline(regionToSideline.getRegionName());
++
++          LOG.info("Before sideline big overlapped region: " + regionToSideline.toString());
++          Path sidelineRegionDir = sidelineRegionDir(fs, regionToSideline);
++          if (sidelineRegionDir != null) {
++            sidelinedRegions.put(sidelineRegionDir, regionToSideline);
++            LOG.info("After sidelined big overlapped region: "
++              + regionToSideline.getRegionNameAsString()
++              + " to " + sidelineRegionDir.toString());
++            fixes++;
++          }
++        }
++      }
++    }
+ 
+     /**
+      * Check the region chain (from META) of this table.  We are looking for
+@@ -1901,16 +1964,22 @@ public class HBaseFsck {
+ 
+       if (details) {
+         // do full region split map dump
+-        System.out.println("---- Table '"  +  this.tableName 
++        System.out.println("---- Table '"  +  this.tableName
+             + "': region split map");
+         dump(splits, regions);
+-        System.out.println("---- Table '"  +  this.tableName 
++        System.out.println("---- Table '"  +  this.tableName
+             + "': overlap groups");
+         dumpOverlapProblems(overlapGroups);
+         System.out.println("There are " + overlapGroups.keySet().size()
+             + " overlap groups with " + overlapGroups.size()
+             + " overlapping regions");
+       }
++      if (!sidelinedRegions.isEmpty()) {
++        LOG.warn("Sidelined big overlapped regions, please bulk load them!");
++        System.out.println("---- Table '"  +  this.tableName
++            + "': sidelined big overlapped regions");
++        dumpSidelinedRegions(sidelinedRegions);
++      }
+       return errors.getErrorList().size() == originalErrorsCount;
+     }
+ 
+@@ -1946,6 +2015,13 @@ public class HBaseFsck {
+     }
+   }
+ 
++  public void dumpSidelinedRegions(Map<Path, HbckInfo> regions) {
++    for (Path k : regions.keySet()) {
++      System.out.println("To be bulk loaded sidelined region dir: "
++        + k.toString());
++    }
++  }
++
+   public Multimap<byte[], HbckInfo> getOverlapGroups(
+       String table) {
+     TableInfo ti = tablesInfo.get(table);
+@@ -2753,6 +2829,14 @@ public class HBaseFsck {
+     return fixVersionFile;
+   }
+ 
++  public void setSidelineBigOverlaps(boolean sbo) {
++    this.sidelineBigOverlaps = sbo;
++  }
++
++  public boolean shouldSidelineBigOverlaps() {
++    return sidelineBigOverlaps;
++  }
++
+   /**
+    * @param mm maximum number of regions to merge into a single region.
+    */
+@@ -2764,6 +2848,14 @@ public class HBaseFsck {
+     return maxMerge;
+   }
+ 
++  public void setMaxOverlapsToSideline(int mo) {
++    this.maxOverlapsToSideline = mo;
++  }
++
++  public int getMaxOverlapsToSideline() {
++    return maxOverlapsToSideline;
++  }
++
+   /**
+    * Only fix tables specified by the list
+    */
+@@ -2813,8 +2905,10 @@ public class HBaseFsck {
+     System.err.println("   -fixHdfsOverlaps  Try to fix region overlaps in hdfs.");
+     System.err.println("   -fixVersionFile   Try to fix missing hbase.version file in hdfs.");
+     System.err.println("   -maxMerge <n>     When fixing region overlaps, allow at most <n> regions to merge. (n=" + DEFAULT_MAX_MERGE +" by default)");
++    System.err.println("   -sidelineBigOverlaps  When fixing region overlaps, allow to sideline big overlaps");
++    System.err.println("   -maxOverlapsToSideline <n>  When fixing region overlaps, allow at most <n> regions to sideline per group. (n=" + DEFAULT_OVERLAPS_TO_SIDELINE +" by default)");
+     System.err.println("");
+-    System.err.println("   -repair           Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans -fixHdfsOverlaps -fixVersionFile");
++    System.err.println("   -repair           Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans -fixHdfsOverlaps -fixVersionFile -sidelineBigOverlaps");
+     System.err.println("   -repairHoles      Shortcut for -fixAssignments -fixMeta -fixHdfsHoles -fixHdfsOrphans");
+ 
+     Runtime.getRuntime().exit(-2);
+@@ -2879,6 +2973,8 @@ public class HBaseFsck {
+         fsck.setFixHdfsOverlaps(true);
+       } else if (cmd.equals("-fixVersionFile")) {
+         fsck.setFixVersionFile(true);
++      } else if (cmd.equals("-sidelineBigOverlaps")) {
++        fsck.setSidelineBigOverlaps(true);
+       } else if (cmd.equals("-repair")) {
+         // this attempts to merge overlapping hdfs regions, needs testing
+         // under load
+@@ -2888,6 +2984,7 @@ public class HBaseFsck {
+         fsck.setFixAssignments(true);
+         fsck.setFixHdfsOverlaps(true);
+         fsck.setFixVersionFile(true);
++        fsck.setSidelineBigOverlaps(true);
+       } else if (cmd.equals("-repairHoles")) {
+         // this will make all missing hdfs regions available but may lose data
+         fsck.setFixHdfsHoles(true);
+@@ -2895,6 +2992,20 @@ public class HBaseFsck {
+         fsck.setFixMeta(true);
+         fsck.setFixAssignments(true);
+         fsck.setFixHdfsOverlaps(false);
++        fsck.setSidelineBigOverlaps(false);
++      } else if (cmd.equals("-maxOverlapsToSideline")) {
++        if (i == args.length - 1) {
++          System.err.println("-maxOverlapsToSideline needs a numeric value argument.");
++          printUsageAndExit();
++        }
++        try {
++          int maxOverlapsToSideline = Integer.parseInt(args[i+1]);
++          fsck.setMaxOverlapsToSideline(maxOverlapsToSideline);
++        } catch (NumberFormatException e) {
++          System.err.println("-maxOverlapsToSideline needs a numeric value argument.");
++          printUsageAndExit();
++        }
++        i++;
+       } else if (cmd.equals("-maxMerge")) {
+         if (i == args.length - 1) {
+           System.err.println("-maxMerge needs a numeric value argument.");
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/RegionSplitCalculator.java b/src/main/java/org/apache/hadoop/hbase/util/RegionSplitCalculator.java
+index 69a87ab..449e2b0 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/RegionSplitCalculator.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/RegionSplitCalculator.java
+@@ -19,9 +19,12 @@
+  */
+ package org.apache.hadoop.hbase.util;
+ 
++import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Comparator;
++import java.util.List;
+ import java.util.Map.Entry;
++import java.util.TreeMap;
+ import java.util.TreeSet;
+ 
+ import org.apache.commons.logging.Log;
+@@ -94,7 +97,7 @@ public class RegionSplitCalculator<R extends KeyRange> {
+    * 
+    * @return ENDKEY if end key is empty, else normal endkey.
+    */
+-  private byte[] specialEndKey(R range) {
++  private static <R extends KeyRange> byte[] specialEndKey(R range) {
+     byte[] end = range.getEndKey();
+     if (end.length == 0) {
+       return ENDKEY;
+@@ -159,4 +162,75 @@ public class RegionSplitCalculator<R extends KeyRange> {
+     return starts;
+   }
+ 
++  /**
++   * Find specified number of top ranges in a big overlap group.
++   * It could return less if there are not that many top ranges.
++   * Once these top ranges are excluded, the big overlap group will
++   * be broken into ranges with no overlapping, or smaller overlapped
++   * groups, and most likely some holes.
++   *
++   * @param bigOverlap a list of ranges that overlap with each other
++   * @param count the max number of ranges to find
++   * @return a list of ranges that overlap with most others
++   */
++  public static <R extends KeyRange> List<R>
++      findBigRanges(Collection<R> bigOverlap, int count) {
++    List<R> bigRanges = new ArrayList<R>();
++
++    // The key is the count of overlaps,
++    // The value is a list of ranges that have that many overlaps
++    TreeMap<Integer, List<R>> overlapRangeMap = new TreeMap<Integer, List<R>>();
++    for (R r: bigOverlap) {
++      // Calculates the # of overlaps for each region
++      // and populates rangeOverlapMap
++      byte[] startKey = r.getStartKey();
++      byte[] endKey = specialEndKey(r);
++
++      int overlappedRegions = 0;
++      for (R rr: bigOverlap) {
++        byte[] start = rr.getStartKey();
++        byte[] end = specialEndKey(rr);
++
++        if (BYTES_COMPARATOR.compare(startKey, end) < 0
++            && BYTES_COMPARATOR.compare(endKey, start) > 0) {
++          overlappedRegions++;
++        }
++      }
++
++      // One region always overlaps with itself,
++      // so overlappedRegions should be more than 1
++      // for actual overlaps.
++      if (overlappedRegions > 1) {
++        Integer key = Integer.valueOf(overlappedRegions);
++        List<R> ranges = overlapRangeMap.get(key);
++        if (ranges == null) {
++          ranges = new ArrayList<R>();
++          overlapRangeMap.put(key, ranges);
++        }
++        ranges.add(r);
++      }
++    }
++    int toBeAdded = count;
++    for (Integer key: overlapRangeMap.descendingKeySet()) {
++      List<R> chunk = overlapRangeMap.get(key);
++      int chunkSize = chunk.size();
++      if (chunkSize <= toBeAdded) {
++        bigRanges.addAll(chunk);
++        toBeAdded -= chunkSize;
++        if (toBeAdded > 0) continue;
++      } else {
++        // Try to use the middle chunk in case the overlapping is
++        // chained, for example: [a, c), [b, e), [d, g), [f h)...
++        // In such a case, sideline the middle chunk will break
++        // the group efficiently.
++        int start = (chunkSize - toBeAdded)/2;
++        int end = start + toBeAdded;
++        for (int i = start; i < end; i++) {
++          bigRanges.add(chunk.get(i));
++        }
++      }
++      break;
++    }
++    return bigRanges;
++  }
+ }
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitCalculator.java b/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitCalculator.java
+index 4dc2a81..3340110 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitCalculator.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitCalculator.java
+@@ -20,9 +20,12 @@
+ package org.apache.hadoop.hbase.util;
+ 
+ import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
+ 
++import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.Comparator;
++import java.util.List;
+ import java.util.SortedSet;
+ 
+ import org.apache.commons.logging.Log;
+@@ -347,4 +350,40 @@ public class TestRegionSplitCalculator {
+     assertEquals(res, ":\t[, A]\t\n" + "A:\t[A, B]\t\n" + "B:\t[B, ]\t\n"
+         + "null:\t\n");
+   }
++
++  @Test
++  public void testBigRanges() {
++    SimpleRange ai = new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("I"));
++    SimpleRange ae = new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("E"));
++    SimpleRange ac = new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("C"));
++
++    Collection<SimpleRange> bigOverlap = new ArrayList<SimpleRange>();
++    bigOverlap.add(new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("E")));
++    bigOverlap.add(new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("C")));
++    bigOverlap.add(new SimpleRange(Bytes.toBytes("A"), Bytes.toBytes("B")));
++    bigOverlap.add(new SimpleRange(Bytes.toBytes("B"), Bytes.toBytes("C")));
++    bigOverlap.add(new SimpleRange(Bytes.toBytes("E"), Bytes.toBytes("H")));
++    bigOverlap.add(ai);
++    bigOverlap.add(ae);
++    bigOverlap.add(ac);
++
++    // Expect 1 range to be returned: ai
++    List<SimpleRange> bigRanges = RegionSplitCalculator.findBigRanges(bigOverlap, 1);
++    assertEquals(1, bigRanges.size());
++    assertEquals(ai, bigRanges.get(0));
++
++    // Expect 3 ranges to be returned: ai, ae and ac
++    bigRanges = RegionSplitCalculator.findBigRanges(bigOverlap, 3);
++    assertEquals(3, bigRanges.size());
++    assertEquals(ai, bigRanges.get(0));
++
++    SimpleRange r1 = bigRanges.get(1);
++    SimpleRange r2 = bigRanges.get(2);
++    assertEquals(Bytes.toString(r1.start), "A");
++    assertEquals(Bytes.toString(r2.start), "A");
++    String r1e = Bytes.toString(r1.end);
++    String r2e = Bytes.toString(r2.end);
++    assertTrue((r1e.equals("C") && r2e.equals("E"))
++      || (r1e.equals("E") && r2e.equals("C")));
++  }
+ }
+-- 
+1.7.0.4
+

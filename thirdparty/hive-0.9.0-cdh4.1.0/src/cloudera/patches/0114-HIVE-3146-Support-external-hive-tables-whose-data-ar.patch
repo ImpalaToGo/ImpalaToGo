@@ -1,0 +1,56 @@
+From 201871b0dcc2517de766cc36dbb22bb92368189a Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Mon, 2 Jul 2012 23:52:44 +0000
+Subject: [PATCH 114/144] HIVE-3146 : Support external hive tables whose data are stored in Azure blob store/Azure Storage Volumes (ASV) (Kanna Karanam via Ashutosh Chauhan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356524 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 187e48e3e4799258426361da3c1f2439f5a5bad7)
+---
+ .../hadoop/hive/ql/parse/SemanticAnalyzer.java     |    2 +-
+ .../hadoop/hive/ql/session/SessionState.java       |   13 +++++++------
+ 2 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
+index bdf6a00..78afce5 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java
+@@ -1683,7 +1683,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
+     SessionState ss = SessionState.get();
+     String progName = getScriptProgName(cmd);
+ 
+-    if (progName.matches("("+ SessionState.getMatchingSchemaAsRegex() +")://.*")) {
++    if (SessionState.canDownloadResource(progName)) {
+       String filePath = ss.add_resource(ResourceType.FILE, progName, true);
+       if (filePath == null) {
+         throw new RuntimeException("Could not download the resource: " + progName);
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/session/SessionState.java b/src/ql/src/java/org/apache/hadoop/hive/ql/session/SessionState.java
+index 8edfef8..9f76dbe 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/session/SessionState.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/session/SessionState.java
+@@ -590,16 +590,17 @@ public class SessionState {
+   }
+ 
+   /**
+-   * Returns the list of filesystem schemas as regex which
+-   * are permissible for download as a resource.
++   * Returns  true if it is from any external File Systems except local
+    */
+-  public static String getMatchingSchemaAsRegex() {
+-    String[] matchingSchema = {"s3", "s3n", "hdfs"};
+-    return StringUtils.join(matchingSchema, "|");
++  public static boolean canDownloadResource(String value) {
++    // Allow to download resources from any external FileSystem.
++    // And no need to download if it already exists on local file system.
++    String scheme = new Path(value).toUri().getScheme();
++    return (scheme != null) && !scheme.equalsIgnoreCase("file");
+   }
+ 
+   private String downloadResource(String value, boolean convertToUnix) {
+-    if (value.matches("("+ getMatchingSchemaAsRegex() +")://.*")) {
++    if (canDownloadResource(value)) {
+       getConsole().printInfo("converting to local " + value);
+       File resourceDir = new File(getConf().getVar(HiveConf.ConfVars.DOWNLOADED_RESOURCES_DIR));
+       String destinationName = new Path(value).getName();
+-- 
+1.7.0.4
+

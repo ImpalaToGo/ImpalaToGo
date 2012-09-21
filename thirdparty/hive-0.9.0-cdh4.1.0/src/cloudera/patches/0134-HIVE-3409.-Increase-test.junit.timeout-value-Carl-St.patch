@@ -1,0 +1,83 @@
+From 784a01f2164bfff92c2e74e0751da133a541bd22 Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Wed, 29 Aug 2012 08:02:57 +0000
+Subject: [PATCH 134/144] HIVE-3409. Increase test.junit.timeout value (Carl Steinbach via cws)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1378470 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 5ab02843a04755bb2b5dc393a03b5b932cb022ce)
+
+Conflicts:
+	build.properties
+---
+ build-common.xml |    3 +--
+ build.properties |   17 ++++++++++++++++-
+ common/build.xml |    2 +-
+ 3 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 796f9a7..120fabb 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -81,7 +81,6 @@
+   <property name="test.include" value="Test*"/>
+   <property name="test.classpath.id" value="test.classpath"/>
+   <property name="test.output" value="true"/>
+-  <property name="test.timeout" value="18200000"/>
+   <property name="test.junit.output.format" value="xml"/>
+   <property name="test.junit.output.usefile" value="true"/>
+   <property name="minimr.query.files" value="input16_cc.q,scriptfile1.q,bucket4.q,bucketmapjoin6.q,disable_merge_for_bucketing.q,reduce_deduplicate.q,smb_mapjoin_8.q,join1.q,groupby2.q,bucketizedhiveinputformat.q"/>
+@@ -492,7 +491,7 @@
+       </then>
+     </if>
+     <junit showoutput="${test.output}" printsummary="yes" haltonfailure="no"
+-           fork="yes" maxmemory="512m" dir="${basedir}" timeout="${test.timeout}"
++           fork="yes" maxmemory="512m" dir="${basedir}" timeout="${test.junit.timeout}"
+            errorProperty="tests.failed" failureProperty="tests.failed" filtertrace="off">
+       <env key="HIVE_HADOOP_TEST_CLASSPATH" value="${hadoop.testcp}"/>
+       <env key="HADOOP_HOME" value="${hadoop.root}"/>
+diff --git a/src/build.properties b/src/build.properties
+index 98f85b7..f4dce3c 100644
+--- a/src/build.properties
++++ b/src/build.properties
+@@ -73,9 +73,24 @@ jasperc.test.jar=${hadoop.root}/lib/jetty-ext/jasper-compiler.jar
+ jsp.test.jar=${hadoop.root}/lib/jetty-ext/jsp-api.jar
+ common.jar=${hadoop.root}/lib/commons-httpclient-3.0.1.jar
+ 
+-test.submodule.exclude=
++
++#
++# Test Properties
++#
++
++# Cancel the individual tests if they don't finish in the given time
++# (measured in milliseconds). Ignored if fork is disabled. When running
++# multiple tests inside the same Java VM (see forkMode), timeout
++# applies to the time that all tests use together, not to an individual test.
++test.junit.timeout=36400000
++
++# Use this property to selectively disable tests from the command line:
++# ant test -Dtest.junit.exclude="**/TestCliDriver.class"
++# ant test -Dtest.junit.exclude="**/Test*CliDriver.class,**/TestPartitions.class"
+ test.junit.exclude=
+ 
++test.submodule.exclude=
++
+ #
+ # Ivy Properties
+ #
+diff --git a/src/common/build.xml b/src/common/build.xml
+index 2712c03..24ad8f5 100755
+--- a/src/common/build.xml
++++ b/src/common/build.xml
+@@ -50,7 +50,7 @@ to call at top-level: ant deploy-contrib compile-core-test
+   	depends="test-conditions,gen-test,compile-test,test-jar,test-init">
+     <echo message="Project: ${ant.project.name}"/>
+     <junit showoutput="${test.output}" printsummary="yes" haltonfailure="no"
+-           fork="yes" maxmemory="512m" dir="${basedir}" timeout="${test.timeout}"
++           fork="yes" maxmemory="512m" dir="${basedir}" timeout="${test.junit.timeout}"
+            errorProperty="tests.failed" failureProperty="tests.failed" filtertrace="off">
+       <sysproperty key="test.build.resources" value="${test.build.resources}"/>            
+       <classpath refid="${test.classpath.id}"/>
+-- 
+1.7.0.4
+

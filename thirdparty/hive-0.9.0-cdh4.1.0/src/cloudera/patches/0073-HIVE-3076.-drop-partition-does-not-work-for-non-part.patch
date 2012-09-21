@@ -1,0 +1,229 @@
+From 2036db352c9f3ec21a94db468914cfd76de42d27 Mon Sep 17 00:00:00 2001
+From: Kevin Wilfong <kevinwilfong@apache.org>
+Date: Fri, 1 Jun 2012 16:52:02 +0000
+Subject: [PATCH 073/144] HIVE-3076. drop partition does not work for non-partition columns (njain via kevinwilfong)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345274 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit a412315fd41d0bce82a6b09ba1315f0b012aab14)
+---
+ .../hadoop/hive/ql/parse/BaseSemanticAnalyzer.java |    9 +-
+ .../apache/hadoop/hive/ql/plan/PartitionSpec.java  |    5 +-
+ .../org/apache/hadoop/hive/ql/plan/PlanUtils.java  |    8 ++
+ .../clientpositive/drop_partitions_filter3.q       |   20 ++++
+ .../clientpositive/drop_partitions_filter3.q.out   |  107 ++++++++++++++++++++
+ 5 files changed, 140 insertions(+), 9 deletions(-)
+ create mode 100644 ql/src/test/queries/clientpositive/drop_partitions_filter3.q
+ create mode 100644 ql/src/test/results/clientpositive/drop_partitions_filter3.q.out
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/BaseSemanticAnalyzer.java b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/BaseSemanticAnalyzer.java
+index 6a60d38..3874862 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/parse/BaseSemanticAnalyzer.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/parse/BaseSemanticAnalyzer.java
+@@ -53,6 +53,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
+ import org.apache.hadoop.hive.ql.metadata.InvalidTableException;
+ import org.apache.hadoop.hive.ql.metadata.Partition;
+ import org.apache.hadoop.hive.ql.metadata.Table;
++import org.apache.hadoop.hive.ql.plan.PlanUtils;
+ import org.apache.hadoop.hive.ql.session.SessionState.LogHelper;
+ import org.apache.hadoop.hive.serde.Constants;
+ import org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe;
+@@ -271,12 +272,8 @@ public abstract class BaseSemanticAnalyzer {
+     rootTasks = new ArrayList<Task<? extends Serializable>>();
+   }
+ 
+-  public static String stripQuotes(String val) throws SemanticException {
+-    if ((val.charAt(0) == '\'' && val.charAt(val.length() - 1) == '\'')
+-        || (val.charAt(0) == '\"' && val.charAt(val.length() - 1) == '\"')) {
+-      val = val.substring(1, val.length() - 1);
+-    }
+-    return val;
++  public static String stripQuotes(String val) {
++    return PlanUtils.stripQuotes(val);
+   }
+ 
+   public static String charSetString(String charSetName, String charSetString)
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PartitionSpec.java b/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PartitionSpec.java
+index ef1c3c9..5a6553f 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PartitionSpec.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PartitionSpec.java
+@@ -18,7 +18,6 @@
+ 
+ package org.apache.hadoop.hive.ql.plan;
+ 
+-import java.util.HashMap;
+ import java.util.Iterator;
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+@@ -110,9 +109,9 @@ public class PartitionSpec {
+   // For compatibility with other non-string partition columns, this function
+   // returns the key, value mapping assuming that the operator is equality.
+   public Map<String, String> getPartSpecWithoutOperator() {
+-    Map<String, String> partSpec = new HashMap<String, String>();
++    Map<String, String> partSpec = new LinkedHashMap<String, String>();
+     for (Map.Entry<String, PredicateSpec> entry: this.partSpec.entrySet()) {
+-      partSpec.put(entry.getKey(), entry.getValue().getValue());
++      partSpec.put(entry.getKey(), PlanUtils.stripQuotes(entry.getValue().getValue()));
+     }
+ 
+     return partSpec;
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PlanUtils.java b/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PlanUtils.java
+index 21f88ed..477955a 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PlanUtils.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/plan/PlanUtils.java
+@@ -724,6 +724,14 @@ public final class PlanUtils {
+     }
+   }
+ 
++  public static String stripQuotes(String val) {
++    if ((val.charAt(0) == '\'' && val.charAt(val.length() - 1) == '\'')
++        || (val.charAt(0) == '\"' && val.charAt(val.length() - 1) == '\"')) {
++      val = val.substring(1, val.length() - 1);
++    }
++    return val;
++  }
++
+   private PlanUtils() {
+     // prevent instantiation
+   }
+diff --git a/src/ql/src/test/queries/clientpositive/drop_partitions_filter3.q b/src/ql/src/test/queries/clientpositive/drop_partitions_filter3.q
+new file mode 100644
+index 0000000..2d41da4
+--- /dev/null
++++ b/src/ql/src/test/queries/clientpositive/drop_partitions_filter3.q
+@@ -0,0 +1,20 @@
++create table ptestfilter (a string, b int) partitioned by (c string, d int);
++describe ptestfilter;
++
++alter table ptestfilter add partition (c='1', d=1);
++alter table ptestfilter add partition (c='1', d=2);
++alter table ptestFilter add partition (c='2', d=1);
++alter table ptestfilter add partition (c='2', d=2);
++alter table ptestfilter add partition (c='3', d=1);
++alter table ptestfilter add partition (c='3', d=2);
++show partitions ptestfilter;
++
++alter table ptestfilter drop partition (c='1', d=1);
++show partitions ptestfilter;
++
++alter table ptestfilter drop partition (c='2');
++show partitions ptestfilter;
++
++drop table ptestfilter;
++
++
+diff --git a/src/ql/src/test/results/clientpositive/drop_partitions_filter3.q.out b/src/ql/src/test/results/clientpositive/drop_partitions_filter3.q.out
+new file mode 100644
+index 0000000..d32721b
+--- /dev/null
++++ b/src/ql/src/test/results/clientpositive/drop_partitions_filter3.q.out
+@@ -0,0 +1,107 @@
++PREHOOK: query: create table ptestfilter (a string, b int) partitioned by (c string, d int)
++PREHOOK: type: CREATETABLE
++POSTHOOK: query: create table ptestfilter (a string, b int) partitioned by (c string, d int)
++POSTHOOK: type: CREATETABLE
++POSTHOOK: Output: default@ptestfilter
++PREHOOK: query: describe ptestfilter
++PREHOOK: type: DESCTABLE
++POSTHOOK: query: describe ptestfilter
++POSTHOOK: type: DESCTABLE
++a	string	
++b	int	
++c	string	
++d	int	
++PREHOOK: query: alter table ptestfilter add partition (c='1', d=1)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestfilter add partition (c='1', d=1)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=1/d=1
++PREHOOK: query: alter table ptestfilter add partition (c='1', d=2)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestfilter add partition (c='1', d=2)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=1/d=2
++PREHOOK: query: alter table ptestFilter add partition (c='2', d=1)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestFilter add partition (c='2', d=1)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=2/d=1
++PREHOOK: query: alter table ptestfilter add partition (c='2', d=2)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestfilter add partition (c='2', d=2)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=2/d=2
++PREHOOK: query: alter table ptestfilter add partition (c='3', d=1)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestfilter add partition (c='3', d=1)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=3/d=1
++PREHOOK: query: alter table ptestfilter add partition (c='3', d=2)
++PREHOOK: type: ALTERTABLE_ADDPARTS
++PREHOOK: Input: default@ptestfilter
++POSTHOOK: query: alter table ptestfilter add partition (c='3', d=2)
++POSTHOOK: type: ALTERTABLE_ADDPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=3/d=2
++PREHOOK: query: show partitions ptestfilter
++PREHOOK: type: SHOWPARTITIONS
++POSTHOOK: query: show partitions ptestfilter
++POSTHOOK: type: SHOWPARTITIONS
++c=1/d=1
++c=1/d=2
++c=2/d=1
++c=2/d=2
++c=3/d=1
++c=3/d=2
++PREHOOK: query: alter table ptestfilter drop partition (c='1', d=1)
++PREHOOK: type: ALTERTABLE_DROPPARTS
++PREHOOK: Input: default@ptestfilter
++PREHOOK: Output: default@ptestfilter@c=1/d=1
++POSTHOOK: query: alter table ptestfilter drop partition (c='1', d=1)
++POSTHOOK: type: ALTERTABLE_DROPPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=1/d=1
++PREHOOK: query: show partitions ptestfilter
++PREHOOK: type: SHOWPARTITIONS
++POSTHOOK: query: show partitions ptestfilter
++POSTHOOK: type: SHOWPARTITIONS
++c=1/d=2
++c=2/d=1
++c=2/d=2
++c=3/d=1
++c=3/d=2
++PREHOOK: query: alter table ptestfilter drop partition (c='2')
++PREHOOK: type: ALTERTABLE_DROPPARTS
++PREHOOK: Input: default@ptestfilter
++PREHOOK: Output: default@ptestfilter@c=2/d=1
++PREHOOK: Output: default@ptestfilter@c=2/d=2
++POSTHOOK: query: alter table ptestfilter drop partition (c='2')
++POSTHOOK: type: ALTERTABLE_DROPPARTS
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter@c=2/d=1
++POSTHOOK: Output: default@ptestfilter@c=2/d=2
++PREHOOK: query: show partitions ptestfilter
++PREHOOK: type: SHOWPARTITIONS
++POSTHOOK: query: show partitions ptestfilter
++POSTHOOK: type: SHOWPARTITIONS
++c=1/d=2
++c=3/d=1
++c=3/d=2
++PREHOOK: query: drop table ptestfilter
++PREHOOK: type: DROPTABLE
++PREHOOK: Input: default@ptestfilter
++PREHOOK: Output: default@ptestfilter
++POSTHOOK: query: drop table ptestfilter
++POSTHOOK: type: DROPTABLE
++POSTHOOK: Input: default@ptestfilter
++POSTHOOK: Output: default@ptestfilter
+-- 
+1.7.0.4
+

@@ -1,0 +1,34 @@
+From 44fce67827958ea005651ca0a027276a48debd7d Mon Sep 17 00:00:00 2001
+From: Kevin Wilfong <kevinwilfong@apache.org>
+Date: Sat, 23 Jun 2012 01:47:22 +0000
+Subject: [PATCH 104/144] HIVE-3178. retry not honored in RetryingRawMetastore. (Namit Jain via kevinwilfong)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353059 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 7134f434abd9b354a4ae0c4c265a41562eb1fcd8)
+---
+ .../hadoop/hive/metastore/RetryingRawStore.java    |    9 ++++++++-
+ 1 files changed, 8 insertions(+), 1 deletions(-)
+
+diff --git a/src/metastore/src/java/org/apache/hadoop/hive/metastore/RetryingRawStore.java b/src/metastore/src/java/org/apache/hadoop/hive/metastore/RetryingRawStore.java
+index 91cbaff..5a98a9b 100644
+--- a/src/metastore/src/java/org/apache/hadoop/hive/metastore/RetryingRawStore.java
++++ b/src/metastore/src/java/org/apache/hadoop/hive/metastore/RetryingRawStore.java
+@@ -115,7 +115,14 @@ public class RetryingRawStore implements InvocationHandler {
+       } catch (UndeclaredThrowableException e) {
+         throw e.getCause();
+       } catch (InvocationTargetException e) {
+-        throw e.getCause();
++        if (e.getCause() instanceof javax.jdo.JDOException) {
++          // Due to reflection, the jdo exception is wrapped in
++          // invocationTargetException
++          caughtException = e;
++        }
++        else {
++          throw e.getCause();
++        }
+       }
+ 
+       if (retryCount >= retryLimit) {
+-- 
+1.7.0.4
+

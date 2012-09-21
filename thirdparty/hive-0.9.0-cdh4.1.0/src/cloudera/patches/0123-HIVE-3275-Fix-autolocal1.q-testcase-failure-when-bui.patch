@@ -1,0 +1,54 @@
+From b6b59f98603639654cec0f595d4c4e89e9bb31c1 Mon Sep 17 00:00:00 2001
+From: Ashutosh Chauhan <hashutosh@apache.org>
+Date: Thu, 26 Jul 2012 05:42:11 +0000
+Subject: [PATCH 123/144] HIVE-3275 : Fix autolocal1.q testcase failure when building hive on hadoop0.23 MR2 (Zhenxiao Luo via Ashutosh Chauhan)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365888 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 737ba0afacc506450e7069b0992dee61e9b7a71c)
+---
+ ql/src/test/queries/clientnegative/autolocal1.q    |   10 ++++++++++
+ .../test/results/clientnegative/autolocal1.q.out   |   12 +++++++++++-
+ 2 files changed, 21 insertions(+), 1 deletions(-)
+
+diff --git a/src/ql/src/test/queries/clientnegative/autolocal1.q b/src/ql/src/test/queries/clientnegative/autolocal1.q
+index 6bee177..bd1c9d6 100644
+--- a/src/ql/src/test/queries/clientnegative/autolocal1.q
++++ b/src/ql/src/test/queries/clientnegative/autolocal1.q
+@@ -2,4 +2,14 @@ set mapred.job.tracker=abracadabra;
+ set hive.exec.mode.local.auto.inputbytes.max=1;
+ set hive.exec.mode.local.auto=true;
+ 
++-- INCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- hadoop0.23 changes the behavior of JobClient initialization
++-- in hadoop0.20, JobClient initialization tries to get JobTracker's address
++-- this throws the expected IllegalArgumentException
++-- in hadoop0.23, JobClient initialization only initializes cluster
++-- and get user group information
++-- not attempts to get JobTracker's address
++-- no IllegalArgumentException thrown in JobClient Initialization
++-- an exception is thrown when JobClient submitJob
++
+ SELECT key FROM src; 
+diff --git a/src/ql/src/test/results/clientnegative/autolocal1.q.out b/src/ql/src/test/results/clientnegative/autolocal1.q.out
+index 021f912..c79db3d 100644
+--- a/src/ql/src/test/results/clientnegative/autolocal1.q.out
++++ b/src/ql/src/test/results/clientnegative/autolocal1.q.out
+@@ -1,4 +1,14 @@
+-PREHOOK: query: SELECT key FROM src
++PREHOOK: query: -- INCLUDE_HADOOP_MAJOR_VERSIONS(0.20)
++-- hadoop0.23 changes the behavior of JobClient initialization
++-- in hadoop0.20, JobClient initialization tries to get JobTracker's address
++-- this throws the expected IllegalArgumentException
++-- in hadoop0.23, JobClient initialization only initializes cluster
++-- and get user group information
++-- not attempts to get JobTracker's address
++-- no IllegalArgumentException thrown in JobClient Initialization
++-- an exception is thrown when JobClient submitJob
++
++SELECT key FROM src
+ PREHOOK: type: QUERY
+ PREHOOK: Input: default@src
+ #### A masked pattern was here ####
+-- 
+1.7.0.4
+

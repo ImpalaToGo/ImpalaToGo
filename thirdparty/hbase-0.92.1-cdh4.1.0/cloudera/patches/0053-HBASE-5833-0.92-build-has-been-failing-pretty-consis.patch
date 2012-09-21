@@ -1,0 +1,56 @@
+From b44ba729e5508e71c8353c9e835eefbe978b48a1 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Thu, 19 Apr 2012 20:01:26 +0000
+Subject: [PATCH 053/151] HBASE-5833 0.92 build has been failing pretty consistently on TestMasterFailover....
+
+Reason: Test
+Author: Stack
+Ref: CDH-6041
+---
+ .../hadoop/hbase/master/TestMasterFailover.java    |    9 ++++++---
+ 1 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/master/TestMasterFailover.java b/src/test/java/org/apache/hadoop/hbase/master/TestMasterFailover.java
+index 63f8ad6..0ec0580 100644
+--- a/src/test/java/org/apache/hadoop/hbase/master/TestMasterFailover.java
++++ b/src/test/java/org/apache/hadoop/hbase/master/TestMasterFailover.java
+@@ -129,8 +129,6 @@ public class TestMasterFailover {
+ 
+     // Create config to use for this cluster
+     Configuration conf = HBaseConfiguration.create();
+-    conf.setInt("hbase.master.wait.on.regionservers.mintostart", 3);
+-    conf.setInt("hbase.master.wait.on.regionservers.maxtostart", 3);
+ 
+     // Start the cluster
+     HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility(conf);
+@@ -726,6 +724,8 @@ public class TestMasterFailover {
+       master.assignRegion(hri);
+     }
+ 
++    assertTrue(" Table must be enabled.", master.getAssignmentManager()
++        .getZKTable().isEnabledTable("enabledTable"));
+     // we also need regions assigned out on the dead server
+     List<HRegionInfo> enabledAndOnDeadRegions = new ArrayList<HRegionInfo>();
+     enabledAndOnDeadRegions.add(enabledRegions.remove(0));
+@@ -771,6 +771,9 @@ public class TestMasterFailover {
+     ZKTable zktable = new ZKTable(zkw);
+     zktable.setDisabledTable(Bytes.toString(disabledTable));
+ 
++    assertTrue(" The enabled table should be identified on master fail over.",
++        zktable.isEnabledTable("enabledTable"));
++
+     /*
+      * ZK = CLOSING
+      */
+@@ -897,7 +900,7 @@ public class TestMasterFailover {
+       Thread.sleep(100);
+     }
+     LOG.debug("\n\nRegion of disabled table was open at steady-state on dead RS"
+-        + "\n" + region + "\n\n");
++      + "\n" + region + "\n\n");
+ 
+     /*
+      * DONE MOCKING
+-- 
+1.7.0.4
+

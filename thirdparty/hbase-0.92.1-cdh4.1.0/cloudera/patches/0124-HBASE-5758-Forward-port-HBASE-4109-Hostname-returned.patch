@@ -1,0 +1,101 @@
+From 62871cd7e6060d76df47b8864ddb3eea9e0688b2 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Tue, 10 Apr 2012 16:15:34 +0000
+Subject: [PATCH 124/151] HBASE-5758 Forward port "HBASE-4109 Hostname returned via reverse dns lookup contains trailing period if configured interface is not default
+
+Reason: Regression
+Ref: CDH-5549
+Author: Michael Stack
+---
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    5 +++--
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    5 +++--
+ .../java/org/apache/hadoop/hbase/util/Strings.java |    2 +-
+ .../apache/hadoop/hbase/zookeeper/HQuorumPeer.java |    5 +++--
+ 4 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index d89e534..a58483f 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -94,6 +94,7 @@ import org.apache.hadoop.hbase.util.HasThread;
+ import org.apache.hadoop.hbase.util.InfoServer;
+ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.hbase.util.Sleeper;
++import org.apache.hadoop.hbase.util.Strings;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.hbase.util.VersionInfo;
+ import org.apache.hadoop.hbase.zookeeper.ClusterId;
+@@ -232,9 +233,9 @@ Server {
+     // Set how many times to retry talking to another server over HConnection.
+     HConnectionManager.setServerSideHConnectionRetries(this.conf, LOG);
+     // Server to handle client requests.
+-    String hostname = DNS.getDefaultHost(
++    String hostname = Strings.domainNamePointerToHostName(DNS.getDefaultHost(
+       conf.get("hbase.master.dns.interface", "default"),
+-      conf.get("hbase.master.dns.nameserver", "default"));
++      conf.get("hbase.master.dns.nameserver", "default")));
+     int port = conf.getInt(HConstants.MASTER_PORT, HConstants.DEFAULT_MASTER_PORT);
+     // Creation of a HSA will force a resolve.
+     InetSocketAddress initialIsa = new InetSocketAddress(hostname, port);
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index fee3c5f..d08f02f 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -138,6 +138,7 @@ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.InfoServer;
+ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.hbase.util.Sleeper;
++import org.apache.hadoop.hbase.util.Strings;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.hbase.util.VersionInfo;
+ import org.apache.hadoop.hbase.zookeeper.ClusterStatusTracker;
+@@ -373,9 +374,9 @@ public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
+     this.stopped = false;
+ 
+     // Server to handle client requests.
+-    String hostname = DNS.getDefaultHost(
++    String hostname = Strings.domainNamePointerToHostName(DNS.getDefaultHost(
+       conf.get("hbase.regionserver.dns.interface", "default"),
+-      conf.get("hbase.regionserver.dns.nameserver", "default"));
++      conf.get("hbase.regionserver.dns.nameserver", "default")));
+     int port = conf.getInt(HConstants.REGIONSERVER_PORT,
+       HConstants.DEFAULT_REGIONSERVER_PORT);
+     // Creation of a HSA will force a resolve.
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/Strings.java b/src/main/java/org/apache/hadoop/hbase/util/Strings.java
+index 9cbca9e..5e98c59 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/Strings.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/Strings.java
+@@ -72,4 +72,4 @@ public class Strings {
+       return null;
+     return dnPtr.endsWith(".") ? dnPtr.substring(0, dnPtr.length()-1) : dnPtr;
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/HQuorumPeer.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/HQuorumPeer.java
+index d551c6f..84b79a6 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/HQuorumPeer.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/HQuorumPeer.java
+@@ -33,6 +33,7 @@ import java.util.Map.Entry;
+ 
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.util.Strings;
+ import org.apache.hadoop.net.DNS;
+ import org.apache.hadoop.util.StringUtils;
+ import org.apache.zookeeper.server.ServerConfig;
+@@ -87,9 +88,9 @@ public class HQuorumPeer {
+     long myId = -1;
+ 
+     Configuration conf = HBaseConfiguration.create();
+-    String myAddress = DNS.getDefaultHost(
++    String myAddress = Strings.domainNamePointerToHostName(DNS.getDefaultHost(
+         conf.get("hbase.zookeeper.dns.interface","default"),
+-        conf.get("hbase.zookeeper.dns.nameserver","default"));
++        conf.get("hbase.zookeeper.dns.nameserver","default")));
+ 
+     List<String> ips = new ArrayList<String>();
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,72 @@
+From ce5dd182cfb863d5ef64db587f18781ef84c5b23 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Thu, 29 Mar 2012 20:05:50 +0000
+Subject: [PATCH 011/151] HBASE-5638 Readability improvements and backport HBASE-5633: NPE reading ZK config in HBase (Matteo Bertozzi)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1307087 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/HConstants.java   |    7 +++++--
+ .../org/apache/hadoop/hbase/LocalHBaseCluster.java |    6 +++---
+ .../apache/hadoop/hbase/zookeeper/ZKConfig.java    |    4 ++--
+ 3 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/HConstants.java b/src/main/java/org/apache/hadoop/hbase/HConstants.java
+index 2b2df6f..9e3522e 100644
+--- a/src/main/java/org/apache/hadoop/hbase/HConstants.java
++++ b/src/main/java/org/apache/hadoop/hbase/HConstants.java
+@@ -73,10 +73,13 @@ public final class HConstants {
+   public static final String HBASE_MASTER_LOADBALANCER_CLASS = "hbase.master.loadbalancer.class";
+ 
+   /** Cluster is standalone or pseudo-distributed */
+-  public static final String CLUSTER_IS_LOCAL = "false";
++  public static final boolean CLUSTER_IS_LOCAL = false;
+ 
+   /** Cluster is fully-distributed */
+-  public static final String CLUSTER_IS_DISTRIBUTED = "true";
++  public static final boolean CLUSTER_IS_DISTRIBUTED = true;
++
++  /** Default value for cluster distributed mode */
++  public static final boolean DEFAULT_CLUSTER_DISTRIBUTED = CLUSTER_IS_LOCAL;
+ 
+   /** default host address */
+   public static final String DEFAULT_HOST = "0.0.0.0";
+diff --git a/src/main/java/org/apache/hadoop/hbase/LocalHBaseCluster.java b/src/main/java/org/apache/hadoop/hbase/LocalHBaseCluster.java
+index d25b20c..f17835c 100644
+--- a/src/main/java/org/apache/hadoop/hbase/LocalHBaseCluster.java
++++ b/src/main/java/org/apache/hadoop/hbase/LocalHBaseCluster.java
+@@ -430,8 +430,8 @@ public class LocalHBaseCluster {
+    * @return True if a 'local' address in hbase.master value.
+    */
+   public static boolean isLocal(final Configuration c) {
+-    final String mode = c.get(HConstants.CLUSTER_DISTRIBUTED);
+-    return mode == null || mode.equals(HConstants.CLUSTER_IS_LOCAL);
++    boolean mode = c.getBoolean(HConstants.CLUSTER_DISTRIBUTED, HConstants.DEFAULT_CLUSTER_DISTRIBUTED);
++    return(mode == HConstants.CLUSTER_IS_LOCAL);
+   }
+ 
+   /**
+@@ -449,4 +449,4 @@ public class LocalHBaseCluster {
+     admin.createTable(htd);
+     cluster.shutdown();
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
+index d1a03a5..3e61689 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKConfig.java
+@@ -163,8 +163,8 @@ public class ZKConfig {
+       }
+       // Special case for 'hbase.cluster.distributed' property being 'true'
+       if (key.startsWith("server.")) {
+-        if (conf.get(HConstants.CLUSTER_DISTRIBUTED).equals(HConstants.CLUSTER_IS_DISTRIBUTED)
+-            && value.startsWith("localhost")) {
++        boolean mode = conf.getBoolean(HConstants.CLUSTER_DISTRIBUTED, HConstants.DEFAULT_CLUSTER_DISTRIBUTED);
++        if (mode == HConstants.CLUSTER_IS_DISTRIBUTED && value.startsWith("localhost")) {
+           String msg = "The server in zoo.cfg cannot be set to localhost " +
+               "in a fully-distributed setup because it won't be reachable. " +
+               "See \"Getting Started\" for more information.";
+-- 
+1.7.0.4
+

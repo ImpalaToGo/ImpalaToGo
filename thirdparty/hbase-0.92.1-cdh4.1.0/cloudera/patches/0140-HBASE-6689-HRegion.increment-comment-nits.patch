@@ -1,0 +1,59 @@
+From d98814527a1062cf2bfced5eb17cf1cd4c565f3a Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Wed, 29 Aug 2012 14:42:01 -0700
+Subject: [PATCH 140/151] HBASE-6689 HRegion.increment comment nits
+
+Reason: Supportability
+Author: Gregory Chanan
+Ref: CDH-5549
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |    3 +--
+ .../hadoop/hbase/regionserver/TestHRegion.java     |    4 ++--
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 3813e18..da692aa 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -3807,7 +3807,6 @@ public class HRegion implements HeapSize { // , Writable{
+     WALEdit walEdits = null;
+     List<KeyValue> allKVs = new ArrayList<KeyValue>(increment.numColumns());
+     Map<Store, List<KeyValue>> tempMemstore = new HashMap<Store, List<KeyValue>>();
+-    long before = EnvironmentEdgeManager.currentTimeMillis();
+     long size = 0;
+ 
+     // Lock row
+@@ -3849,7 +3848,7 @@ public class HRegion implements HeapSize { // , Writable{
+                 now, Bytes.toBytes(amount));
+             kvs.add(newKV);
+ 
+-            // Append update to WAL
++            // Prepare WAL updates
+             if (writeToWAL) {
+               if (walEdits == null) {
+                 walEdits = new WALEdit();
+diff --git a/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java b/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+index 546c86f..12f5770 100644
+--- a/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
++++ b/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+@@ -3480,7 +3480,7 @@ public class TestHRegion extends HBaseTestCase {
+     this.region = initHRegion(tableName, method, conf, family);
+     final HRegion region = this.region;
+     final AtomicBoolean incrementDone = new AtomicBoolean(false);
+-    Runnable reader = new Runnable() {
++    Runnable flusher = new Runnable() {
+       @Override
+       public void run() {
+         while (!incrementDone.get()) {
+@@ -3498,7 +3498,7 @@ public class TestHRegion extends HBaseTestCase {
+     int incCounter = 100;
+     long expected = threadNum * incCounter;
+     Thread[] incrementers = new Thread[threadNum];
+-    Thread flushThread = new Thread(reader);
++    Thread flushThread = new Thread(flusher);
+     for (int i = 0; i < threadNum; i++) {
+       incrementers[i] = new Thread(new Incrementer(this.region, incCounter));
+       incrementers[i].start();
+-- 
+1.7.0.4
+

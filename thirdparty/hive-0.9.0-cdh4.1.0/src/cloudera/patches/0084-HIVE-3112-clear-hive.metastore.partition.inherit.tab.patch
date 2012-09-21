@@ -1,0 +1,77 @@
+From eeaee4bfc5cb2ca0254bd2a63b4b27108b0c3574 Mon Sep 17 00:00:00 2001
+From: Kevin Wilfong <kevinwilfong@apache.org>
+Date: Tue, 12 Jun 2012 02:29:03 +0000
+Subject: [PATCH 084/144] HIVE-3112 clear hive.metastore.partition.inherit.table.properties till HIVE-3109 is fixed (njain via kevinwilfong)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349096 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 491567d52074e53d28d812cac930ee90948692b1)
+---
+ .../clientpositive/part_inherit_tbl_props.q        |    3 +++
+ .../part_inherit_tbl_props_with_star.q             |    3 +++
+ .../clientpositive/part_inherit_tbl_props.q.out    |    8 ++++++--
+ .../part_inherit_tbl_props_with_star.q.out         |    8 ++++++--
+ 4 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props.q b/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props.q
+index ba6e829..3ee1b4a 100644
+--- a/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props.q
++++ b/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props.q
+@@ -1,5 +1,8 @@
+ set hive.metastore.partition.inherit.table.properties=a,b;
++-- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
+ 
+ create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval');
+ alter table mytbl add partition (c2 = 'v1');
+ describe formatted mytbl partition (c2='v1');
++
++set hive.metastore.partition.inherit.table.properties=;
+diff --git a/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props_with_star.q b/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props_with_star.q
+index 2caa2e8..8dac611 100644
+--- a/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props_with_star.q
++++ b/src/ql/src/test/queries/clientpositive/part_inherit_tbl_props_with_star.q
+@@ -1,5 +1,8 @@
+ set hive.metastore.partition.inherit.table.properties=key1,*;
++-- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
+ 
+ create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval');
+ alter table mytbl add partition (c2 = 'v1');
+ describe formatted mytbl partition (c2='v1');
++
++set hive.metastore.partition.inherit.table.properties=;
+diff --git a/src/ql/src/test/results/clientpositive/part_inherit_tbl_props.q.out b/src/ql/src/test/results/clientpositive/part_inherit_tbl_props.q.out
+index c1639fb..ed26384 100644
+--- a/src/ql/src/test/results/clientpositive/part_inherit_tbl_props.q.out
++++ b/src/ql/src/test/results/clientpositive/part_inherit_tbl_props.q.out
+@@ -1,6 +1,10 @@
+-PREHOOK: query: create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
++PREHOOK: query: -- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
++
++create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
+ PREHOOK: type: CREATETABLE
+-POSTHOOK: query: create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
++POSTHOOK: query: -- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
++
++create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
+ POSTHOOK: type: CREATETABLE
+ POSTHOOK: Output: default@mytbl
+ PREHOOK: query: alter table mytbl add partition (c2 = 'v1')
+diff --git a/src/ql/src/test/results/clientpositive/part_inherit_tbl_props_with_star.q.out b/src/ql/src/test/results/clientpositive/part_inherit_tbl_props_with_star.q.out
+index af8e43a..ec0b3c2 100644
+--- a/src/ql/src/test/results/clientpositive/part_inherit_tbl_props_with_star.q.out
++++ b/src/ql/src/test/results/clientpositive/part_inherit_tbl_props_with_star.q.out
+@@ -1,6 +1,10 @@
+-PREHOOK: query: create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
++PREHOOK: query: -- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
++
++create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
+ PREHOOK: type: CREATETABLE
+-POSTHOOK: query: create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
++POSTHOOK: query: -- The property needs to be unset at the end of the test till HIVE-3109/HIVE-3112 is fixed
++
++create table mytbl (c1 tinyint) partitioned by (c2 string) tblproperties ('a'='myval','b'='yourval','c'='noval')
+ POSTHOOK: type: CREATETABLE
+ POSTHOOK: Output: default@mytbl
+ PREHOOK: query: alter table mytbl add partition (c2 = 'v1')
+-- 
+1.7.0.4
+

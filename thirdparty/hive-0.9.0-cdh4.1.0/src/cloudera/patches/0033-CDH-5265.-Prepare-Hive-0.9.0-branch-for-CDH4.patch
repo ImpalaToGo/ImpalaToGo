@@ -1,0 +1,382 @@
+From 096f8a5f747e4223820ad339e37ff4dbd6e429f4 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Tue, 19 Jun 2012 11:12:17 -0700
+Subject: [PATCH 033/144] CDH-5265. Prepare Hive 0.9.0 branch for CDH4
+
+Reason: CLOUDERA-BUILD
+Author: Zhenxiao Luo
+Ref: CDH-5265
+
+CLOUDERA-BUILD. Make cdh4-0.9.0 build/test for both MR1 and MR2
+
+Build Cmd:
+$ant very-clean tar
+
+Run Test in MR1 Mode:
+$ant test -Dhadoop.mr.test.rev=20 -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT
+
+Run Test in MR2 Mode:
+$ant test -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT
+
+Problem:
+1. Since we are building MR1 and MR2 on the same branch, when running MR1 test, a tag, 0.23.1-mr1-cdh4.0.0-SNAPSHOT, is needed for package downloading. Did not find a way to smoothly generate this tag in our build system.
+2. The current build/test api is using -Dhadoop.test.version=0.23.1-mr1-cdh4.0.0-SNAPSHOT for both MR1 and MR2, which is misleading. The reason is we are building both MR1 test and MR2 test, and until run time decide which test suite to run. I will work on a fix for it, so that when running in MR2 mode, no such tag needed.
+---
+ build-common.xml              |  121 ++++++++++++++++++++++++++---------------
+ build.properties              |    1 +
+ build.xml                     |   16 +-----
+ hbase-handler/ivy.xml         |   15 +++++
+ ivy.xml                       |    5 --
+ ivy/common-configurations.xml |    5 +-
+ ql/ivy.xml                    |   38 ++++++++++++-
+ 7 files changed, 132 insertions(+), 69 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index d67264e..33c4807 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -92,10 +92,23 @@
+   <property name="test.print.classpath" value="false"/>
+   <property name="test.lang" value="en_US.UTF-8"/>
+ 
+-  <property name="hadoop.opts.23" value="-D mapreduce.framework.name=local" />
+-  <property name="hadoop.opts.20" value="" />
+-  
+-  <path id="test.classpath">
++  <if>
++    <equals arg1="${hadoop.mr.test.rev}" arg2="20" />
++    <then>
++      <echo message="USING MR1 CLASSPATH"/>
++      <path id="test.classpath">
++        <path refid="mr1.test.classpath" />
++      </path>
++    </then>
++    <else>
++      <echo message="USING MR2 CLASSPATH"/>
++      <path id="test.classpath">
++        <path refid="mr2.test.classpath" />
++      </path>
++    </else>
++  </if>
++
++  <path id="base.test.classpath">
+     <pathelement location="${test.build.classes}" />
+     <pathelement location="${test.build.resources}" />
+     <pathelement location="" />
+@@ -111,37 +124,25 @@
+     <pathelement location="${build.dir.hive}/serde/test/classes"/>
+     <pathelement location="${build.dir.hive}/service/test/classes"/>
+     <pathelement location="${build.dir.hive}/shims/test/classes"/>
+-
+-    <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar"/>
+-    <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar" />
+-    <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
+-    <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" />
+-    <pathelement location="${build.classes}" />
+   </path>
+ 
+-    
+-  <path id="hadoop.test.classpath">
+-    <pathelement location="${test.build.classes}" />
+-    <pathelement location="${test.build.resources}" />
+-    <pathelement location="" />
+-    <pathelement location="${test.src.data.dir}/conf"/>
+-    <pathelement location="${hive.conf.dir}"/>
+-    <pathelement location="${build.dir.hive}/cli/test/classes"/>
+-    <pathelement location="${build.dir.hive}/common/test/classes"/>
+-    <pathelement location="${build.dir.hive}/hbase-handler/test/classes"/>
+-    <pathelement location="${build.dir.hive}/hwi/test/classes"/>
+-    <pathelement location="${build.dir.hive}/jdbc/test/classes"/>
+-    <pathelement location="${build.dir.hive}/metastore/test/classes"/>
+-    <pathelement location="${build.dir.hive}/ql/test/classes"/>
+-    <pathelement location="${build.dir.hive}/serde/test/classes"/>
+-    <pathelement location="${build.dir.hive}/service/test/classes"/>
+-    <pathelement location="${build.dir.hive}/shims/test/classes"/>
++  <path id="mr1.test.classpath">
++    <path refid="base.test.classpath" />
++    <path refid="mr1-classpath"/>
++    <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar" erroronmissingdir="false" />
++    <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar" erroronmissingdir="false" />
++    <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" excludes="**/hadoop-mapreduce*.jar,**/hadoop-yarn*.jar,**/hadoop-archives*.jar" erroronmissingdir="false" />
++    <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr1.test" includes="*.jar" />
++  </path>
+ 
+-    <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/hadoop*.jar"/>
+-    <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/hadoop*.jar" />
++  <path id="mr2.test.classpath">
++    <path refid="base.test.classpath" />
++    <path refid="classpath"/>
++    <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar"/>
++    <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar" />
+     <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
+-    <fileset dir="${hive.root}/build/ivy/lib/hadoop.test" includes="*.jar" />
+     <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" />
++    <fileset dir="${hive.root}/build/ivy/lib/hadoop-mr2.test" includes="*.jar" />
+     <pathelement location="${build.classes}" />
+   </path>
+ 
+@@ -187,6 +188,34 @@
+       log="${ivyresolvelog}"/>
+   </target>
+ 
++  <target name="ivy-resolve-hadoop-mr1.test" depends="ivy-init-settings" unless="offline">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:resolve settingsRef="${ant.project.name}.ivy.settings"
++      conf="hadoop-mr1.test" log="${ivyresolvelog}"/>
++  </target>
++
++  <target name="ivy-retrieve-hadoop-mr1.test" depends="ivy-resolve-hadoop-mr1.test"
++    description="Retrieve Ivy-managed artifacts">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
++      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}"
++      log="${ivyresolvelog}" conf="hadoop-mr1.test"/>
++  </target>
++
++  <target name="ivy-resolve-hadoop-mr2.test" depends="ivy-init-settings" unless="offline">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:resolve settingsRef="${ant.project.name}.ivy.settings"
++      conf="hadoop-mr2.test" log="${ivyresolvelog}"/>
++  </target>
++
++  <target name="ivy-retrieve-hadoop-mr2.test" depends="ivy-resolve-hadoop-mr2.test"
++    description="Retrieve Ivy-managed artifacts">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
++      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}"
++      log="${ivyresolvelog}" conf="hadoop-mr2.test"/>
++  </target>
++
+   <target name="ivy-retrieve-hadoop-source"
+     description="Retrieve Ivy-managed Hadoop source artifacts" unless="ivy.skip">
+     <echo message="Project: ${ant.project.name}"/>
+@@ -202,7 +231,7 @@
+       conf="test" log="${ivyresolvelog}"/>
+   </target>
+ 
+-  <target name="ivy-retrieve-test" depends="ivy-resolve-test"
++  <target name="ivy-retrieve-test" depends="ivy-resolve-test,ivy-retrieve-hadoop-mr1.test,ivy-retrieve-hadoop-mr2.test"
+     description="Retrieve Ivy-managed artifacts">
+     <echo message="Project: ${ant.project.name}"/>
+     <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
+@@ -225,15 +254,19 @@
+   </target>
+ 
+   <!-- the normal classpath -->
+-  <path id="common-classpath">
++  <path id="base-common-classpath">
+     <pathelement location="${build.dir.hive}/classes"/>
+     <fileset dir="${build.dir.hive}" includes="*/*.jar"/>
+     <fileset dir="${hive.root}/lib" includes="*.jar"/>
++  </path>
++
++  <path id="common-classpath">
++    <path refid="base-common-classpath" />
+     <fileset dir="${build.ivy.lib.dir}/default" includes="*.jar" 
+              erroronmissingdir="false"/>
+   </path>
+ 
+-  <path id="classpath">
++  <path id="base-classpath">
+     <pathelement location="${build.dir.hive}/service/classes"/>
+     <pathelement location="${build.dir.hive}/common/classes"/>
+     <pathelement location="${build.dir.hive}/serde/classes"/>
+@@ -241,10 +274,17 @@
+     <pathelement location="${build.dir.hive}/ql/classes"/>
+     <pathelement location="${build.dir.hive}/cli/classes"/>
+     <pathelement location="${build.dir.hive}/shims/classes"/>
+-    <pathelement location="${build.dir.hive}/hwi/classes"/>
+     <pathelement location="${build.dir.hive}/jdbc/classes"/>
+-    <pathelement location="${build.dir.hive}/hbase-handler/classes"/>
+     <fileset dir="${basedir}" includes="lib/*.jar"/>
++  </path>
++
++  <path id="mr1-classpath">
++    <path refid="base-classpath" />
++    <path refid="base-common-classpath" />
++  </path>
++
++  <path id="classpath">
++    <path refid="base-classpath" />
+     <path refid="common-classpath"/>
+   </path>
+ 
+@@ -423,16 +463,7 @@
+   <target name="test"
+   	depends="test-conditions,gen-test,compile-test,test-jar,test-init">
+     <echo message="Project: ${ant.project.name}"/>
+-    <property name="hadoop.testcp" refid="hadoop.test.classpath"/>
+-    <if>
+-      <equals arg1="${hadoop.mr.test.rev}" arg2="23" />
+-      <then>
+-        <property name="hadoop.opts" value="${hadoop.opts.23}" />
+-      </then>
+-      <else>
+-        <property name="hadoop.opts" value="${hadoop.opts.20}" />
+-      </else>
+-    </if>
++    <property name="hadoop.testcp" refid="test.classpath"/>
+     <if>
+       <equals arg1="${test.print.classpath}" arg2="true" />
+       <then>        
+diff --git a/src/build.properties b/src/build.properties
+index e9a3c59..f33eccd 100644
+--- a/src/build.properties
++++ b/src/build.properties
+@@ -39,6 +39,7 @@ hadoop.mirror2=http://archive.cloudera.com/hive-deps
+ hadoop.mr.rev=23
+ hadoop.test.version=${hadoop.version}
+ hadoop.mr.test.rev=${hadoop.mr.rev}
++hadoop.mr1.test.version=${hadoop.test.version}
+ 
+ build.dir.hive=${hive.root}/build
+ build.dir.hadoop=${build.dir.hive}/hadoopcore
+diff --git a/src/build.xml b/src/build.xml
+index 6cc92a3..4eb6b1c 100644
+--- a/src/build.xml
++++ b/src/build.xml
+@@ -341,7 +341,7 @@
+     <iterate-test target="compile-test"/>
+   </target>
+   
+-  <target name="test" depends="clean-test,jar-test,ivy-retrieve-hadoop-test" description="Run tests">
++  <target name="test" depends="clean-test,jar-test" description="Run tests">
+     <echo message="Project: ${ant.project.name}"/>
+     <antcall target="test-shims">
+       <param name="hadoop.version.ant-internal" value="${hadoop.security.version}" />
+@@ -800,20 +800,6 @@
+     </macro_tar>
+   </target>
+ 
+-  <target name="ivy-resolve-hadoop-test" depends="ivy-init-settings" unless="offline">
+-    <echo message="Project: ${ant.project.name}"/>
+-    <ivy:resolve settingsRef="${ant.project.name}.ivy.settings"
+-      conf="hadoop.test" log="${ivyresolvelog}"/>
+-  </target>
+-
+-  <target name="ivy-retrieve-hadoop-test" depends="ivy-resolve-hadoop-test"
+-    description="Retrieve Ivy-managed artifacts">
+-    <echo message="Project: ${ant.project.name}"/>
+-    <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
+-      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}"
+-      log="${ivyresolvelog}" conf="hadoop.test"/>
+-  </target>
+-
+   <!-- ================================================================== -->
+   <!-- RAT                                                                -->
+   <!-- ================================================================== -->
+diff --git a/src/hbase-handler/ivy.xml b/src/hbase-handler/ivy.xml
+index 82258e3..51f7c90 100644
+--- a/src/hbase-handler/ivy.xml
++++ b/src/hbase-handler/ivy.xml
+@@ -46,5 +46,20 @@
+                 transitive="false"/>
+     <dependency org="org.codehaus.jackson" name="jackson-jaxrs" rev="${jackson.version}"/>
+     <dependency org="org.codehaus.jackson" name="jackson-xc" rev="${jackson.version}"/>
++
++    <!-- MR1 dependency -->
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.test.version}" conf="hadoop-mr1.test->default">
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
++
++    <!-- MR2 dependency -->
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.version.ant-internal}" conf="hadoop-mr2.test->default">
++      <artifact name="hadoop-minicluster" ext="jar" />
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
+   </dependencies>
+ </ivy-module>
+diff --git a/src/ivy.xml b/src/ivy.xml
+index 490e1ce..8975472 100644
+--- a/src/ivy.xml
++++ b/src/ivy.xml
+@@ -33,11 +33,6 @@
+ 
+ 
+   <dependencies>
+-    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
+-                rev="${hadoop.test.version}" conf="hadoop.test->default">
+-      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
+-      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
+-    </dependency>
+    <dependency org="org.apache.rat" name="apache-rat-tasks"
+                rev="${rat.version}" conf="rat->default"/>
+    <dependency org="org.apache.rat" name="apache-rat-core"
+diff --git a/src/ivy/common-configurations.xml b/src/ivy/common-configurations.xml
+index 42eed5f..94be40b 100644
+--- a/src/ivy/common-configurations.xml
++++ b/src/ivy/common-configurations.xml
+@@ -21,7 +21,8 @@
+   <conf name="compile" extends="hadoop${hadoop.mr.rev}.compile" description="contains the artifact but no dependencies" visibility="private"/>
+   <conf name="runtime" description="runtime but not the artifact"/>
+   <conf name="test" extends="hadoop${hadoop.mr.rev}.test,compile" visibility="private" />
+-  <conf name="hadoop.test" visibility="private"/>
++  <conf name="hadoop-mr1.test" visibility="private"/>
++  <conf name="hadoop-mr2.test" visibility="private"/>
+   <conf name="hadoop20.compile" visibility="private"/>
+   <conf name="hadoop23.compile" visibility="private"/>
+   <conf name="hadoop20.test" visibility="private"/>
+@@ -29,4 +30,4 @@
+   <conf name="hadoop0.20.shim" visibility="private"/>
+   <conf name="hadoop0.20S.shim" visibility="private"/>
+   <conf name="hadoop0.23.shim" visibility="private"/>
+-</configurations>
+\ No newline at end of file
++</configurations>
+diff --git a/src/ql/ivy.xml b/src/ql/ivy.xml
+index c408a79..1bf04fd 100644
+--- a/src/ql/ivy.xml
++++ b/src/ql/ivy.xml
+@@ -74,9 +74,43 @@
+     <dependency org="org.datanucleus" name="datanucleus-rdbms" rev="${datanucleus-rdbms.version}"
+                 transitive="false"/>
+ 
+-    <!-- Hack to get jobclient tests dependency in. -->
++    <!-- MR1 dependency -->
++    <dependency org="org.apache.hadoop" name="hadoop-core"
++                rev="${hadoop.mr1.test.version}"
++                conf="hadoop-mr1.test->default">
++      <include type="jar"/>
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
++    <dependency org="org.apache.hadoop" name="hadoop-test"
++                rev="${hadoop.mr1.test.version}"
++                conf="hadoop-mr1.test->default">
++      <include type="jar"/>
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
++    <dependency org="org.apache.hadoop" name="hadoop-tools"
++                rev="${hadoop.mr1.test.version}"
++                conf="hadoop-mr1.test->default">
++      <include type="jar"/>
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.mr1.test.version}" conf="hadoop-mr1.test->default">
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
++
++    <!-- MR2 dependency -->
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.version.ant-internal}" conf="hadoop-mr2.test->default">
++      <artifact name="hadoop-minicluster" ext="jar" />
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
+     <dependency org="org.apache.hadoop" name="hadoop-mapreduce-client-jobclient" rev="${hadoop.version.ant-internal}"
+-                conf="hadoop23.test->default" transitive="false">
++                conf="hadoop-mr2.test->default" transitive="false">
+       <artifact name="hadoop-mapreduce-client-jobclient" ext="jar" />
+       <artifact name="hadoop-mapreduce-client-jobclient" type="tests" ext="jar" m:classifier="tests"/>
+       <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
+-- 
+1.7.0.4
+

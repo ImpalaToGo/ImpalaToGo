@@ -1,0 +1,26 @@
+From 114344b566bc71c69ad3a15d57e1eec869673e72 Mon Sep 17 00:00:00 2001
+From: Edward Capriolo <ecapriolo@apache.org>
+Date: Sun, 10 Jun 2012 02:07:25 +0000
+Subject: [PATCH 081/144] HIVE-3101. Drop table rollback hook always called. (Ransom Hezhiqiang via egc)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348523 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 9424872a03bee13b82090edbf0226fe4814f2f24)
+---
+ .../hadoop/hive/metastore/HiveMetaStoreClient.java |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
+index fd4b6a2..48fe1be 100644
+--- a/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
++++ b/src/metastore/src/java/org/apache/hadoop/hive/metastore/HiveMetaStoreClient.java
+@@ -566,6 +566,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
+       if (hook != null) {
+         hook.commitDropTable(tbl, deleteData);
+       }
++      success=true;
+     } catch (NoSuchObjectException e) {
+       if (!ignoreUknownTab) {
+         throw e;
+-- 
+1.7.0.4
+

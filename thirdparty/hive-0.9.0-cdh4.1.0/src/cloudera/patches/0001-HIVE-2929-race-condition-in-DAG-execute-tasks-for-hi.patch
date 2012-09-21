@@ -1,0 +1,44 @@
+From 08359cde992bc85ba983395c11ab2c8528eb0e7f Mon Sep 17 00:00:00 2001
+From: Siying Dong <sdong@apache.org>
+Date: Fri, 6 Apr 2012 22:27:22 +0000
+Subject: [PATCH 001/144] HIVE-2929 race condition in DAG execute tasks for hive (Namit Jain via Siying Dong)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1310619 13f79535-47bb-0310-9956-ffa450edef68
+---
+ ql/src/java/org/apache/hadoop/hive/ql/Driver.java  |    2 --
+ .../hadoop/hive/ql/exec/HadoopJobExecHelper.java   |    1 -
+ 2 files changed, 0 insertions(+), 3 deletions(-)
+
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/Driver.java b/src/ql/src/java/org/apache/hadoop/hive/ql/Driver.java
+index 8da778f..c286e90 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/Driver.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/Driver.java
+@@ -1104,13 +1104,11 @@ public class Driver implements CommandProcessor {
+       SessionState.get().setLocalMapRedErrors(new HashMap<String, List<String>>());
+ 
+       // Add root Tasks to runnable
+-
+       for (Task<? extends Serializable> tsk : plan.getRootTasks()) {
+         driverCxt.addToRunnable(tsk);
+       }
+ 
+       // Loop while you either have tasks running, or tasks queued up
+-
+       while (running.size() != 0 || runnable.peek() != null) {
+         // Launch upto maxthreads tasks
+         while (runnable.peek() != null && running.size() < maxthreads) {
+diff --git a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/HadoopJobExecHelper.java b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/HadoopJobExecHelper.java
+index 7359b9b..2aeda9e 100644
+--- a/src/ql/src/java/org/apache/hadoop/hive/ql/exec/HadoopJobExecHelper.java
++++ b/src/ql/src/java/org/apache/hadoop/hive/ql/exec/HadoopJobExecHelper.java
+@@ -403,7 +403,6 @@ public class HadoopJobExecHelper {
+     MapRedStats mapRedStats = new MapRedStats(numMap, numReduce, cpuMsec, success, rj.getID().toString());
+     mapRedStats.setCounters(ctrs);
+ 
+-    this.task.setDone();
+     // update based on the final value of the counters
+     updateCounters(ctrs, rj);
+ 
+-- 
+1.7.0.4
+

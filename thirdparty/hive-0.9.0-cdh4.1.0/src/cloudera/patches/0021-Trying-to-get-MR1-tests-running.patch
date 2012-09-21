@@ -1,0 +1,138 @@
+From fb590270a4532363f632621154dc5f7887db9257 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Mon, 30 Apr 2012 17:32:20 -0700
+Subject: [PATCH 021/144] Trying to get MR1 tests running.
+
+---
+ build-common.xml              |   29 +++++++++++++++++++++++++++--
+ build.properties              |    2 ++
+ build.xml                     |   15 ++++++++++++++-
+ ivy.xml                       |    5 +++++
+ ivy/common-configurations.xml |    1 +
+ 5 files changed, 49 insertions(+), 3 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 65fd5b2..1f5c313 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -119,6 +119,31 @@
+     <pathelement location="${build.classes}" />
+   </path>
+ 
++    
++  <path id="hadoop.test.classpath">
++    <pathelement location="${test.build.classes}" />
++    <pathelement location="${test.build.resources}" />
++    <pathelement location="" />
++    <pathelement location="${test.src.data.dir}/conf"/>
++    <pathelement location="${hive.conf.dir}"/>
++    <pathelement location="${build.dir.hive}/cli/test/classes"/>
++    <pathelement location="${build.dir.hive}/common/test/classes"/>
++    <pathelement location="${build.dir.hive}/hbase-handler/test/classes"/>
++    <pathelement location="${build.dir.hive}/hwi/test/classes"/>
++    <pathelement location="${build.dir.hive}/jdbc/test/classes"/>
++    <pathelement location="${build.dir.hive}/metastore/test/classes"/>
++    <pathelement location="${build.dir.hive}/ql/test/classes"/>
++    <pathelement location="${build.dir.hive}/serde/test/classes"/>
++    <pathelement location="${build.dir.hive}/service/test/classes"/>
++    <pathelement location="${build.dir.hive}/shims/test/classes"/>
++
++    <fileset dir="${hive.root}/build/ivy/lib/test" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/hadoop*.jar"/>
++    <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/hadoop*.jar" />
++    <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
++    <fileset dir="${hive.root}/build/ivy/lib/hadoop.test" includes="*.jar" />
++    <pathelement location="${build.classes}" />
++  </path>
++
+   <!-- include contrib on local classpath, but not on cluster -->
+   <!-- https://reviews.facebook.net/D2133#comment-47 -->
+   <path id="test.local.classpath">
+@@ -397,9 +422,9 @@
+   <target name="test"
+   	depends="test-conditions,gen-test,compile-test,test-jar,test-init">
+     <echo message="Project: ${ant.project.name}"/>
+-    <property name="hadoop.testcp" refid="test.classpath"/>
++    <property name="hadoop.testcp" refid="hadoop.test.classpath"/>
+     <if>
+-      <equals arg1="${hadoop.mr.rev}" arg2="23" />
++      <equals arg1="${hadoop.mr.test.rev}" arg2="23" />
+       <then>
+         <property name="hadoop.opts" value="${hadoop.opts.23}" />
+       </then>
+diff --git a/src/build.properties b/src/build.properties
+index d49d5c9..e9a3c59 100644
+--- a/src/build.properties
++++ b/src/build.properties
+@@ -37,6 +37,8 @@ hadoop.mirror2=http://archive.cloudera.com/hive-deps
+ # - 20: hadoop-core, hadoop-test
+ # - 23: hadoop-common, hadoop-mapreduce-*, etc
+ hadoop.mr.rev=23
++hadoop.test.version=${hadoop.version}
++hadoop.mr.test.rev=${hadoop.mr.rev}
+ 
+ build.dir.hive=${hive.root}/build
+ build.dir.hadoop=${build.dir.hive}/hadoopcore
+diff --git a/src/build.xml b/src/build.xml
+index f6ea745..6cc92a3 100644
+--- a/src/build.xml
++++ b/src/build.xml
+@@ -341,7 +341,7 @@
+     <iterate-test target="compile-test"/>
+   </target>
+   
+-  <target name="test" depends="clean-test,jar-test" description="Run tests">
++  <target name="test" depends="clean-test,jar-test,ivy-retrieve-hadoop-test" description="Run tests">
+     <echo message="Project: ${ant.project.name}"/>
+     <antcall target="test-shims">
+       <param name="hadoop.version.ant-internal" value="${hadoop.security.version}" />
+@@ -800,6 +800,19 @@
+     </macro_tar>
+   </target>
+ 
++  <target name="ivy-resolve-hadoop-test" depends="ivy-init-settings" unless="offline">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:resolve settingsRef="${ant.project.name}.ivy.settings"
++      conf="hadoop.test" log="${ivyresolvelog}"/>
++  </target>
++
++  <target name="ivy-retrieve-hadoop-test" depends="ivy-resolve-hadoop-test"
++    description="Retrieve Ivy-managed artifacts">
++    <echo message="Project: ${ant.project.name}"/>
++    <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings"
++      pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}"
++      log="${ivyresolvelog}" conf="hadoop.test"/>
++  </target>
+ 
+   <!-- ================================================================== -->
+   <!-- RAT                                                                -->
+diff --git a/src/ivy.xml b/src/ivy.xml
+index 8975472..490e1ce 100644
+--- a/src/ivy.xml
++++ b/src/ivy.xml
+@@ -33,6 +33,11 @@
+ 
+ 
+   <dependencies>
++    <dependency org="org.apache.hadoop" name="hadoop-minicluster"
++                rev="${hadoop.test.version}" conf="hadoop.test->default">
++      <exclude org="commons-daemon" module="commons-daemon"/><!--bad POM-->
++      <exclude org="org.apache.commons" module="commons-daemon"/><!--bad POM-->
++    </dependency>
+    <dependency org="org.apache.rat" name="apache-rat-tasks"
+                rev="${rat.version}" conf="rat->default"/>
+    <dependency org="org.apache.rat" name="apache-rat-core"
+diff --git a/src/ivy/common-configurations.xml b/src/ivy/common-configurations.xml
+index e109a68..42eed5f 100644
+--- a/src/ivy/common-configurations.xml
++++ b/src/ivy/common-configurations.xml
+@@ -21,6 +21,7 @@
+   <conf name="compile" extends="hadoop${hadoop.mr.rev}.compile" description="contains the artifact but no dependencies" visibility="private"/>
+   <conf name="runtime" description="runtime but not the artifact"/>
+   <conf name="test" extends="hadoop${hadoop.mr.rev}.test,compile" visibility="private" />
++  <conf name="hadoop.test" visibility="private"/>
+   <conf name="hadoop20.compile" visibility="private"/>
+   <conf name="hadoop23.compile" visibility="private"/>
+   <conf name="hadoop20.test" visibility="private"/>
+-- 
+1.7.0.4
+

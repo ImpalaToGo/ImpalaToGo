@@ -1,0 +1,75 @@
+From 5e32d12e8500889aee3038e5a248965758602b5a Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Thu, 17 May 2012 21:54:37 +0000
+Subject: [PATCH 043/151] HBASE-6018 hbck fails with a RejectedExecutionException when >50 regions present
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1339879 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Supportability
+Author: Jonathan Hsieh
+Ref: CDH-5883
+---
+ .../org/apache/hadoop/hbase/util/HBaseFsck.java    |    6 ++--
+ .../apache/hadoop/hbase/util/TestHBaseFsck.java    |   21 ++++++++++++++++++++
+ 2 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+index 451545d..535406a 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/HBaseFsck.java
+@@ -33,7 +33,7 @@ import java.util.SortedSet;
+ import java.util.TreeMap;
+ import java.util.TreeSet;
+ import java.util.concurrent.ConcurrentSkipListMap;
+-import java.util.concurrent.SynchronousQueue;
++import java.util.concurrent.LinkedBlockingQueue;
+ import java.util.concurrent.ThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicInteger;
+@@ -217,9 +217,9 @@ public class HBaseFsck {
+     this.conf = conf;
+ 
+     int numThreads = conf.getInt("hbasefsck.numthreads", MAX_NUM_THREADS);
+-    executor = new ThreadPoolExecutor(1, numThreads,
++    executor = new ThreadPoolExecutor(numThreads, numThreads,
+         THREADS_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+-        new SynchronousQueue<Runnable>());
++        new LinkedBlockingQueue<Runnable>());
+     executor.allowCoreThreadTimeOut(true);
+   }
+ 
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+index 968f2f1..5c7a60a 100644
+--- a/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
++++ b/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+@@ -351,6 +351,27 @@ public class TestHBaseFsck {
+   }
+ 
+   /**
++   * Test thread pooling in the case where there are more regions than threads
++   */
++  @Test
++  public void testHbckThreadpooling() throws Exception {
++    String table = "tableDupeStartKey";
++    try {
++      // Create table with 4 regions
++      setupTable(table);
++
++      // limit number of threads to 1.
++      Configuration newconf = new Configuration(conf);
++      newconf.setInt("hbasefsck.numthreads", 1);  
++      assertNoErrors(doFsck(newconf, false));
++      
++      // We should pass without triggering a RejectedExecutionException
++    } finally {
++      deleteTable(table);
++    }    
++  }
++
++  /**
+    * This create and fixes a bad table with regions that have a duplicate
+    * start key
+    */
+-- 
+1.7.0.4
+

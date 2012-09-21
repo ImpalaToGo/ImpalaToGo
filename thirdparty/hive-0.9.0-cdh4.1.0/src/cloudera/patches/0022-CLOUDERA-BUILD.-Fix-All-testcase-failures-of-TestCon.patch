@@ -1,0 +1,24 @@
+From cad685e58c034c0a95227a1605f960191229e990 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Mon, 4 Jun 2012 13:02:44 -0700
+Subject: [PATCH 022/144] CLOUDERA-BUILD. Fix All testcase failures of TestContribCliDriver on MR1.
+
+---
+ build-common.xml |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/src/build-common.xml b/src/build-common.xml
+index 1f5c313..3bbf02b 100644
+--- a/src/build-common.xml
++++ b/src/build-common.xml
+@@ -141,6 +141,7 @@
+     <fileset dir="${hive.root}/build/ivy/lib/default" includes="*.jar" erroronmissingdir="false" excludes="**/hive_contrib*.jar,**/hive-contrib*.jar,**/hadoop*.jar" />
+     <fileset dir="${hive.root}/testlibs" includes="*.jar"/>
+     <fileset dir="${hive.root}/build/ivy/lib/hadoop.test" includes="*.jar" />
++    <fileset dir="${hive.root}/build/ivy/lib/hadoop0.${hadoop.mr.rev}.shim" includes="*.jar" />
+     <pathelement location="${build.classes}" />
+   </path>
+ 
+-- 
+1.7.0.4
+

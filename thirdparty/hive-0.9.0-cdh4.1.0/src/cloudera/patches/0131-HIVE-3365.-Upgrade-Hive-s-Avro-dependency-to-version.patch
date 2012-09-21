@@ -1,0 +1,27 @@
+From f86aab8931706fd2ecf7f7b969bcf0ab155b8c8a Mon Sep 17 00:00:00 2001
+From: Carl Steinbach <cws@apache.org>
+Date: Sun, 26 Aug 2012 02:19:17 +0000
+Subject: [PATCH 131/144] HIVE-3365. Upgrade Hive's Avro dependency to version 1.7 (Shreepadma Venugopalan via cws)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1377370 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 73ad1898d8424f355223a51f07410a7b8f6eacbb)
+---
+ ivy/libraries.properties |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/ivy/libraries.properties b/src/ivy/libraries.properties
+index 36fd91b..1bc4208 100644
+--- a/src/ivy/libraries.properties
++++ b/src/ivy/libraries.properties
+@@ -23,7 +23,7 @@ ant-task.version=2.0.10
+ antlr.version=3.0.1
+ antlr-runtime.version=3.0.1
+ asm.version=3.1
+-avro.version=1.5.3
++avro.version=1.7.1
+ datanucleus-connectionpool.version=2.0.3
+ datanucleus-core.version=2.0.3-ZD5977-CDH5293
+ datanucleus-enhancer.version=2.0.3
+-- 
+1.7.0.4
+

@@ -1,0 +1,13 @@
+# These are for our dependency on Hadoop.
+hadoop.dep.org=org.apache.hadoop
+hadoop.dep.name=hadoop-dist
+hadoop.dep.artifact=hadoop-dist
+hadoop-0.23.version=org.apache.hadoop:hadoop-main.version
+hadoop.version=org.apache.hadoop:hadoop-main.version
+hadoop.security.version=org.apache.hadoop:hadoop-main.version
+hadoop.security.version.prefix=0.23
+reactor.repo=https://repository.cloudera.com/content/repositories/snapshots
+hbase.version=org.apache.hbase:hbase.version
+hbase-test.version=org.apache.hbase:hbase.version
+avro.version=org.apache.avro:avro.version
+zookeeper.version=org.apache.zookeeper:zookeeper.version

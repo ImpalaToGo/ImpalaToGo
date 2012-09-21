@@ -1,0 +1,125 @@
+From eb00a0f72c1e498e7ad2456a5bd62001ebf24fb1 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 29 Aug 2012 21:14:08 +0200
+Subject: [PATCH 136/151] CDH-7252: MR1 + HDFS 2.0 profile
+
+Reason: Test
+Ref: CDH-7252
+Author: Matteo Bertozzi
+---
+ pom.xml |   99 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 99 insertions(+), 0 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index da3513c..14ff626 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1692,6 +1692,105 @@
+     </profile>
+ 
+     <!--
++      profile for building against Hadoop 0.23.0 with MR1. Activate using:
++       mvn -Dhadoop.profile=mr1
++    -->
++    <profile>
++      <id>hadoop-mr1</id>
++      <activation>
++        <property>
++          <name>hadoop.profile</name>
++          <value>mr1</value>
++        </property>
++      </activation>
++      <properties>
++        <hadoop.version>${cdh.mr1.version}</hadoop.version>
++        <slf4j.version>1.6.1</slf4j.version>
++      </properties>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++          <version>${hadoop.version}</version>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++          <version>${cdh.hadoop.version}</version>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++          <version>${cdh.hadoop.version}</version>
++          <scope>compile</scope>
++          <type>test-jar</type>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++          <version>${cdh.hadoop.version}</version>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++          <version>${cdh.hadoop.version}</version>
++          <type>test-jar</type>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-test</artifactId>
++          <version>${hadoop.version}</version>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <groupId>org.codehaus.mojo</groupId>
++            <artifactId>build-helper-maven-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>add-test-resource</id>
++                <goals>
++                  <goal>add-test-resource</goal>
++                </goals>
++                <configuration>
++                  <resources>
++                    <resource>
++                      <directory>src/test/resources</directory>
++                      <includes>
++                        <include>hbase-site.xml</include>
++                      </includes>
++                    </resource>
++                  </resources>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
++
++
++    <!--
+       profile for building against Hadoop 0.23.0. Activate using:
+        mvn -Dhadoop.profile=23
+     -->
+-- 
+1.7.0.4
+

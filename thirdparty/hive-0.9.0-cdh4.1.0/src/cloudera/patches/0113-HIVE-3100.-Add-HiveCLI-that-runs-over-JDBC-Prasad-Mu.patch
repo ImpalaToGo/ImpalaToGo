@@ -1,0 +1,632 @@
+From 27d5f93a5b494ebe8cc656e3aec406c620da35b5 Mon Sep 17 00:00:00 2001
+From: Zhenxiao Luo <zhenxiao@cloudera.com>
+Date: Mon, 9 Jul 2012 22:21:31 -0700
+Subject: [PATCH 113/144] HIVE-3100. Add HiveCLI that runs over JDBC (Prasad Mujumdar via cws)
+
+git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356516 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit ca6980d326ab86171dfba262ea1efa01c0002676)
+---
+ LICENSE                                            |   17 ++-
+ NOTICE                                             |    5 +-
+ bin/ext/beeline.sh                                 |   30 +++
+ eclipse-templates/.classpath                       |    1 +
+ eclipse-templates/HiveBeeLine.launchtemplate       |   50 ++++
+ ivy/ivysettings.xml                                |    6 +
+ ivy/libraries.properties                           |    2 +
+ jdbc/ivy.xml                                       |    2 +
+ .../org/apache/hive/jdbc/beeline/HiveBeeline.java  |  112 ++++++++
+ .../apache/hive/jdbc/beeline/OptionsProcessor.java |  266 ++++++++++++++++++++
+ 10 files changed, 489 insertions(+), 2 deletions(-)
+ create mode 100644 bin/ext/beeline.sh
+ create mode 100644 eclipse-templates/HiveBeeLine.launchtemplate
+ create mode 100644 jdbc/src/java/org/apache/hive/jdbc/beeline/HiveBeeline.java
+ create mode 100644 jdbc/src/java/org/apache/hive/jdbc/beeline/OptionsProcessor.java
+
+diff --git a/src/LICENSE b/src/LICENSE
+index 05085da..2885945 100644
+--- a/src/LICENSE
++++ b/src/LICENSE
+@@ -416,6 +416,21 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
++For the SQLLine package:
++
++Copyright (c) 2002, 2003, 2004, 2005 Marc Prud'hommeaux
++
++From: http://sqlline.sourceforge.net/#license
++
++"SQLLine is distributed under the BSD License, meaning that you are free to redistribute, modify, or sell the software with almost no restrictions."
++
++Statement from Marc Prud'hommeaux regarding inconsistent licenses in some SQLLine source files:
++
++> SQLLine was once GPL, but it was changed to be BSD a few years back.
++> Any references to the GPL are vestigial. Hopefully the license
++> declaration at http://sqlline.sourceforge.net/#license is sufficiently
++> authoritative in this regard.
++
+ 
+ For the SLF4J library:
+ 
+@@ -465,4 +480,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
+- 
+\ No newline at end of file
++ 
+diff --git a/src/NOTICE b/src/NOTICE
+index 871fdde..a06ee75 100644
+--- a/src/NOTICE
++++ b/src/NOTICE
+@@ -22,6 +22,9 @@ Copyright (c) 2002 JSON.org
+ This product includes/uses JLine (http://jline.sourceforge.net/),
+ Copyright (c) 2002-2006, Marc Prud'hommeaux <mwp1@cornell.edu>.
+ 
++This product includes/uses SQLLine (http://sqlline.sourceforge.net),
++Copyright (c) 2002, 2003, 2004, 2005 Marc Prud'hommeaux <mwp1@cornell.edu>.
++
+ This product includes/uses SLF4J (http://www.slf4j.org/),
+ Copyright (c) 2004-2008 QOS.ch
+ 
+@@ -29,4 +32,4 @@ This product includes/uses Bootstrap (http://twitter.github.com/bootstrap/),
+ Copyright (c) 2012 Twitter, Inc.
+ 
+ This product includes/uses Glyphicons (http://glyphicons.com/),
+-Copyright (c) 2010 - 2012 Jan Kovarík
+\ No newline at end of file
++Copyright (c) 2010 - 2012 Jan Kovarík
+diff --git a/src/bin/ext/beeline.sh b/src/bin/ext/beeline.sh
+new file mode 100644
+index 0000000..4195d3d
+--- /dev/null
++++ b/src/bin/ext/beeline.sh
+@@ -0,0 +1,30 @@
++# Licensed to the Apache Software Foundation (ASF) under one or more
++# contributor license agreements.  See the NOTICE file distributed with
++# this work for additional information regarding copyright ownership.
++# The ASF licenses this file to You under the Apache License, Version 2.0
++# (the "License"); you may not use this file except in compliance with
++# the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++# Need arguments [host [port [db]]]
++THISSERVICE=beeline
++export SERVICE_LIST="${SERVICE_LIST}${THISSERVICE} "
++
++beeline () {
++
++  CLASS=org.apache.hive.jdbc.beeline.HiveBeeline;
++  execHiveCmd $CLASS "$@"
++}
++
++beeline_help () {
++  CLASS=org.apache.hive.jdbc.beeline.HiveBeeline;
++  execHiveCmd $CLASS "--help"
++} 
++
+diff --git a/src/eclipse-templates/.classpath b/src/eclipse-templates/.classpath
+index d45fa70..4c297f4 100644
+--- a/src/eclipse-templates/.classpath
++++ b/src/eclipse-templates/.classpath
+@@ -25,6 +25,7 @@
+   <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/@JETTYJAR@"/>
+   <classpathentry kind="lib" path="build/hadoopcore/hadoop-@HADOOPVER@/lib/@JETTYUTILJAR@"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/jline-@jline.version@.jar"/>
++  <classpathentry kind="lib" path="build/ivy/lib/default/sqlline-@sqlline.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/json-@json.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/asm-@asm.version@.jar"/>
+   <classpathentry kind="lib" path="build/ivy/lib/default/commons-compress-@commons-compress.version@.jar"/>
+diff --git a/src/eclipse-templates/HiveBeeLine.launchtemplate b/src/eclipse-templates/HiveBeeLine.launchtemplate
+new file mode 100644
+index 0000000..515fc39
+--- /dev/null
++++ b/src/eclipse-templates/HiveBeeLine.launchtemplate
+@@ -0,0 +1,50 @@
++<?xml version="1.0" encoding="UTF-8" standalone="no"?>
++<!--
++  Licensed to the Apache Software Foundation (ASF) under one
++  or more contributor license agreements.  See the NOTICE file
++  distributed with this work for additional information
++  regarding copyright ownership.  The ASF licenses this file
++  to you under the Apache License, Version 2.0 (the
++  "License"); you may not use this file except in compliance
++  with the License.  You may obtain a copy of the License at
++ 
++      http://www.apache.org/licenses/LICENSE-2.0
++ 
++  Unless required by applicable law or agreed to in writing, software
++  distributed under the License is distributed on an "AS IS" BASIS,
++  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  See the License for the specific language governing permissions and
++  limitations under the License.
++--> 
++<launchConfiguration type="org.eclipse.jdt.launching.localJavaApplication">
++  <booleanAttribute key="org.eclipse.debug.core.appendEnvironmentVariables" value="false"/>
++  <mapAttribute key="org.eclipse.debug.core.environmentVariables">
++    <mapEntry key="JAVA_HOME" value="${system_property:java.home}"/>
++    <mapEntry key="HIVE_HADOOP_TEST_CLASSPATH" value="@HIVE_HADOOP_TEST_CLASSPATH@"/>
++  </mapAttribute>
++
++  <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
++    <listEntry value="/hive/cli/src/java/org/apache/hive/jdbc/HiveBeeline.java"/>
++  </listAttribute>
++
++  <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
++    <listEntry value="1"/>
++  </listAttribute>
++
++    <listAttribute key="org.eclipse.jdt.launching.CLASSPATH">
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER&quot; javaProject=&quot;@PROJECT@&quot; path=&quot;1&quot; type=&quot;4&quot;/&gt;&#10;"/>
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/common/src/java/conf&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/metastore/hive-metastore-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry id=&quot;org.eclipse.jdt.launching.classpathentry.defaultClasspath&quot;&gt;&#10;&lt;memento exportedEntriesOnly=&quot;false&quot; project=&quot;@PROJECT@&quot;/&gt;&#10;&lt;/runtimeClasspathEntry&gt;&#10;"/>
++    <listEntry value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;runtimeClasspathEntry internalArchive=&quot;/@PROJECT@/build/ql/hive-exec-@HIVE_VERSION@.jar&quot; path=&quot;3&quot; type=&quot;2&quot;/&gt;&#10;"/>
++  </listAttribute>
++
++
++  <booleanAttribute key="org.eclipse.jdt.launching.DEFAULT_CLASSPATH" value="false"/>
++  <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="org.apache.hive.jdbc.beeline.HiveBeeline"/>
++  <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="@PROJECT@"/>
++  <stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS"
++    value="@JVM_ARGS@ -Dhive.root.logger=INFO,console -Dhadoop.bin.path=@HADOOP_BIN_PATH@"/>
++
++</launchConfiguration>
+diff --git a/src/ivy/ivysettings.xml b/src/ivy/ivysettings.xml
+index b572a08..c60318b 100644
+--- a/src/ivy/ivysettings.xml
++++ b/src/ivy/ivysettings.xml
+@@ -37,6 +37,7 @@
+   <property name="maven2.pattern" value="[organisation]/[module]/[revision]/[module]-[revision](-[classifier])"/>
+   <property name="repo.dir" value="${user.home}/.m2/repository"/>
+   <property name="maven2.pattern.ext"  value="${maven2.pattern}.[ext]"/>
++  <property name="sourceforge-repo" value="http://www.sourceforge.net/projects"/>
+   <property name="resolvers" value="default" override="false"/>
+   <!-- pull in the local repository -->
+   <include url="${ivy.default.conf.dir}/ivyconf-local.xml"/>
+@@ -70,6 +71,10 @@
+       <artifact pattern="${datanucleus.repo}/[organisation]/[module]/[revision]/[module]-[revision].[ext]"/>
+     </url>
+ 
++    <url name="sourceforge" m2compatible="false" checksums="">
++      <artifact pattern="${sourceforge-repo}/[module]/files/[module]/[branch]/[module]-[revision].[ext]"/>
++    </url>
++
+     <filesystem name="fs" m2compatible="true" force="true">
+        <artifact pattern="${repo.dir}/org/apache/hadoop/[module]/[revision]/[module]-[revision].[ext]"/>
+        <ivy pattern="${repo.dir}/org/apache/hadoop/[module]/[revision]/[module]-[revision].pom"/>
+@@ -85,6 +90,7 @@
+       <resolver ref="datanucleus-repo"/>
+       <resolver ref="cloudera-releases" />
+       <resolver ref="cloudera-snapshots" />
++      <resolver ref="sourceforge"/>
+     </chain>
+ 
+     <chain name="internal" dual="true">
+diff --git a/src/ivy/libraries.properties b/src/ivy/libraries.properties
+index 246310d..74f454c 100644
+--- a/src/ivy/libraries.properties
++++ b/src/ivy/libraries.properties
+@@ -49,6 +49,8 @@ jdo-api.version=2.3-ec
+ jdom.version=1.1
+ jetty.version=6.1.26
+ jline.version=0.9.94
++sqlline.version=1_0_2
++sqlline.branch=1.0.2
+ json.version=20090211
+ junit.version=4.10
+ libfb303.version=0.7.0
+diff --git a/src/jdbc/ivy.xml b/src/jdbc/ivy.xml
+index 9269bd1..29777a3 100644
+--- a/src/jdbc/ivy.xml
++++ b/src/jdbc/ivy.xml
+@@ -33,6 +33,8 @@
+                 transitive="false"/>
+     <dependency org="commons-logging" name="commons-logging" rev="${commons-logging.version}"
+                 transitive="false"/>
++    <dependency org="sqlline" name="sqlline" rev="${sqlline.version}" branch="${sqlline.branch}"
++                transitive="false"/>
+ 
+     <!-- Test Dependencies -->
+     <dependency org="junit" name="junit" rev="${junit.version}" conf="test->default" />
+diff --git a/src/jdbc/src/java/org/apache/hive/jdbc/beeline/HiveBeeline.java b/src/jdbc/src/java/org/apache/hive/jdbc/beeline/HiveBeeline.java
+new file mode 100644
+index 0000000..300b040
+--- /dev/null
++++ b/src/jdbc/src/java/org/apache/hive/jdbc/beeline/HiveBeeline.java
+@@ -0,0 +1,112 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hive.jdbc.beeline;
++
++import java.io.ByteArrayInputStream;
++import java.io.FileInputStream;
++import java.io.InputStream;
++import java.util.ArrayList;
++import java.util.List;
++
++import org.apache.commons.lang.StringUtils;
++import org.apache.hive.jdbc.beeline.OptionsProcessor.PrintMode;
++import sqlline.SqlLine;
++
++public class HiveBeeline {
++
++  // TODO: expose from the JDBC connection class
++  private static final String URI_PREFIX = "jdbc:hive://";
++  private static final String SQLLINE_CLASS = "sqlline.SqlLine";
++  private static final String HIVE_JDBC_DRIVER = "org.apache.hadoop.hive.jdbc.HiveDriver";
++  private static final String SQLLINE_SILENT = "--silent=true";
++  private static final String SQLLINE_VERBOSE = "--verbose=true";
++  private static final String SQLLINE_SCRIPT_CMD = "!run";
++  private static final String URL_DB_MARKER = "/";
++  private static final String URL_HIVE_CONF_MARKER = "?";
++  private static final String URL_HIVE_VAR_MARKER = "#";
++  private static final String URL_SESS_VAR_MARKER = ";";
++
++  public static void main(String[] args) throws Exception {
++    OptionsProcessor oproc = new OptionsProcessor();
++    if (!oproc.processArgs(args)) {
++      System.exit(1);
++    }
++
++    // assemble connection URL
++    String jdbcURL = URI_PREFIX;
++    if (oproc.getHost() != null) {
++      // no, host name indicates an embbeded hive invocation
++      jdbcURL += oproc.getHost() + ":" + oproc.getPort();
++    }
++
++    if (!oproc.getDatabase().isEmpty()) {
++      jdbcURL += URL_DB_MARKER + oproc.getDatabase();
++    }
++    if (!oproc.getSessVars().isEmpty()) {
++      jdbcURL += URL_SESS_VAR_MARKER + oproc.getSessVars();
++    }
++    if (!oproc.getHiveConfs().isEmpty()) {
++      jdbcURL += URL_HIVE_CONF_MARKER + oproc.getHiveConfs();
++    }
++    if (!oproc.getHiveVars().isEmpty()) {
++      jdbcURL += URL_HIVE_VAR_MARKER + oproc.getHiveVars();
++    }
++
++    // setup input file or string
++    InputStream sqlLineInput = null;
++    if (oproc.getFileName() != null) {
++      String scriptCmd = SQLLINE_SCRIPT_CMD + " " + oproc.getFileName().trim() + "\n";
++      sqlLineInput = new ByteArrayInputStream(scriptCmd.getBytes());
++    } else if (oproc.getExecString() != null) {
++      // process the string to make each stmt a separate line
++      String execString = oproc.getExecString().trim();
++      String execCommand = "";
++      String command = "";
++      for (String oneCmd : execString.split(";")) {
++        if (StringUtils.endsWith(oneCmd, "\\")) {
++          command += StringUtils.chop(oneCmd) + ";";
++          continue;
++        } else {
++          command += oneCmd;
++        }
++        if (StringUtils.isBlank(command)) {
++          continue;
++        }
++        execCommand += command + ";\n"; // stmt should end with ';' for sqlLine
++        command = "";
++      }
++      sqlLineInput = new ByteArrayInputStream(execCommand.getBytes());
++    }
++
++    // setup SQLLine args
++    List<String> argList = new ArrayList<String> ();
++    argList.add("-u");
++    argList.add(jdbcURL);
++    argList.add("-d");
++    argList.add(HIVE_JDBC_DRIVER); // TODO: make it configurable for HS or HS2
++    if (oproc.getpMode() == PrintMode.SILENT) {
++      argList.add(SQLLINE_SILENT);
++    } else if (oproc.getpMode() == PrintMode.VERBOSE) {
++      argList.add(SQLLINE_VERBOSE);
++    }
++
++     // Invoke sqlline
++     SqlLine.mainWithInputRedirection(argList.toArray(new String[0]), sqlLineInput);
++  }
++}
+diff --git a/src/jdbc/src/java/org/apache/hive/jdbc/beeline/OptionsProcessor.java b/src/jdbc/src/java/org/apache/hive/jdbc/beeline/OptionsProcessor.java
+new file mode 100644
+index 0000000..c86a51d
+--- /dev/null
++++ b/src/jdbc/src/java/org/apache/hive/jdbc/beeline/OptionsProcessor.java
+@@ -0,0 +1,266 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hive.jdbc.beeline;
++
++import java.util.Properties;
++
++import org.apache.commons.cli.GnuParser;
++import org.apache.commons.cli.HelpFormatter;
++import org.apache.commons.cli.Option;
++import org.apache.commons.cli.OptionBuilder;
++import org.apache.commons.cli.Options;
++import org.apache.commons.cli.ParseException;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++/**
++ * OptionsProcessor.
++ *
++ */
++public class OptionsProcessor {
++  enum PrintMode {
++    SILENT,
++    NORMAL,
++    VERBOSE
++  };
++
++  private static final Log l4j = LogFactory.getLog(OptionsProcessor.class.getName());
++  private final Options options = new Options();
++  private org.apache.commons.cli.CommandLine commandLine;
++
++  /**
++   * -database option if any that the session has been invoked with.
++   */
++  private String database;
++
++  /**
++   * -e option if any that the session has been invoked with.
++   */
++  private String execString;
++
++  /**
++   * -f option if any that the session has been invoked with.
++   */
++  private String fileName;
++
++  /**
++   * properties set from -hiveconf via cmdline.
++   */
++  private final Properties cmdProperties = new Properties();
++
++  /**
++   * host name and port number of remote Hive server
++   */
++  private String host;
++  private int port;
++
++  /**
++   * print mode
++   */
++  private PrintMode pMode = PrintMode.NORMAL;
++
++  /**
++   * hive var properties
++   */
++  private String hiveVars;
++
++  /**
++   * hive conf properties
++   */
++  private String hiveConfs;
++
++  /**
++   * hive session properties
++   */
++  private String sessVars;
++
++  @SuppressWarnings("static-access")
++  public OptionsProcessor() {
++
++    // -database database
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("databasename")
++        .withLongOpt("database")
++        .withDescription("Specify the database to use")
++        .create());
++
++    // -e 'quoted-query-string'
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("quoted-query-string")
++        .withDescription("SQL from command line")
++        .create('e'));
++
++    // -f <query-file>
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("filename")
++        .withDescription("SQL from files")
++        .create('f'));
++
++    // -hiveconf x=y
++    options.addOption(OptionBuilder
++        .withValueSeparator()
++        .hasArgs(2)
++        .withArgName("property=value")
++        .withLongOpt("hiveconf")
++        .withDescription("Use value for given property")
++        .create());
++
++    // -sessVar x=y
++    options.addOption(OptionBuilder
++        .withValueSeparator()
++        .hasArgs(2)
++        .withArgName("property=value")
++        .withLongOpt("sessVar")
++        .withDescription("Use value for given property")
++        .create());
++
++    // -h hostname/ippaddress
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("hostname")
++        .withDescription("connecting to Hive Server on remote host")
++        .create('h'));
++
++    // -p port
++    options.addOption(OptionBuilder
++        .hasArg()
++        .withArgName("port")
++        .withDescription("connecting to Hive Server on port number")
++        .create('p'));
++
++    // Substitution option -d, --define
++    options.addOption(OptionBuilder
++        .withValueSeparator()
++        .hasArgs(2)
++        .withArgName("key=value")
++        .withLongOpt("define")
++        .withDescription("Variable subsitution to apply to hive commands. e.g. -d A=B or --define A=B")
++        .create('d'));
++
++    // Substitution option --hivevar
++    options.addOption(OptionBuilder
++        .withValueSeparator()
++        .hasArgs(2)
++        .withArgName("key=value")
++        .withLongOpt("hivevar")
++        .withDescription("Variable subsitution to apply to hive commands. e.g. --hivevar A=B")
++        .create());
++
++    // [-S|--silent]
++    options.addOption(new Option("S", "silent", false, "Silent mode in interactive shell"));
++
++    // [-v|--verbose]
++    options.addOption(new Option("v", "verbose", false, "Verbose mode (echo executed SQL to the console)"));
++
++    // [-H|--help]
++    options.addOption(new Option("H", "help", false, "Print help information"));
++  }
++
++  public String getDatabase() {
++    return database;
++  }
++
++  public String getExecString() {
++    return execString;
++  }
++
++  public String getFileName() {
++    return fileName;
++  }
++
++  public String getHost() {
++    return host;
++  }
++
++  public int getPort() {
++    return port;
++  }
++
++  public PrintMode getpMode() {
++    return pMode;
++  }
++
++  public String getHiveVars() {
++    return hiveVars;
++  }
++
++  public String getHiveConfs() {
++    return hiveConfs;
++  }
++
++  public String getSessVars() {
++    return sessVars;
++  }
++
++  public boolean processArgs(String[] argv) {
++    try {
++      commandLine = new GnuParser().parse(options, argv);
++    } catch (ParseException e) {
++      System.err.println(e.getMessage());
++      printUsage();
++      return false;
++    }
++
++    if (commandLine.hasOption('H')) {
++      printUsage();
++      return false;
++    }
++
++    if (commandLine.hasOption('S')) {
++      pMode = PrintMode.SILENT;
++    } else if (commandLine.hasOption('v')) {
++      pMode = PrintMode.VERBOSE;
++    } else {
++      pMode = PrintMode.NORMAL;
++    }
++
++    hiveConfs = commandLine.getOptionValue("hiveconf", "");
++    hiveVars = commandLine.getOptionValue("define", "");
++    hiveVars += commandLine.getOptionValue("hivevar", "");
++    sessVars = commandLine.getOptionValue("sessvar", "");
++    database = commandLine.getOptionValue("database", "");
++    execString = commandLine.getOptionValue('e');
++    fileName = commandLine.getOptionValue('f');
++    host = (String) commandLine.getOptionValue('h');
++    port = Integer.parseInt((String) commandLine.getOptionValue('p', "10000"));
++
++    if (execString != null && fileName != null) {
++      System.err.println("The '-e' and '-f' options cannot be specified simultaneously");
++      printUsage();
++      return false;
++    }
++
++    if (commandLine.hasOption("hiveconf")) {
++      Properties confProps = commandLine.getOptionProperties("hiveconf");
++      for (String propKey : confProps.stringPropertyNames()) {
++        cmdProperties.setProperty(propKey, confProps.getProperty(propKey));
++      }
++    }
++
++    return true;
++  }
++
++  private void printUsage() {
++    new HelpFormatter().printHelp("beeline", options);
++  }
++
++}
+-- 
+1.7.0.4
+

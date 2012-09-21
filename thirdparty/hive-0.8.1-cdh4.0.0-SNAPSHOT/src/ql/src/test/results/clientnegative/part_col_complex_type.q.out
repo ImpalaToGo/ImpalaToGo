@@ -1,1 +1,0 @@
-FAILED: Error in semantic analysis: Partition column must be of primitive type. Found b of type: map<string,string>

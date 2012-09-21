@@ -1,0 +1,34 @@
+From 12cf64866c46b7e0db37510a3d842decaeebed3b Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@cloudera.com>
+Date: Tue, 29 May 2012 15:08:01 -0700
+Subject: [PATCH 062/151] HBASE-6097 TestHRegion.testBatchPut is flaky on 0.92
+
+Reason: Bug
+Author: Gregory Chanan
+Ref: CDH-5406
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1343921 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/regionserver/TestHRegion.java     |    6 +++++-
+ 1 files changed, 5 insertions(+), 1 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java b/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+index 16bc41b..7b33f40 100644
+--- a/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
++++ b/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+@@ -560,7 +560,11 @@ public class TestHRegion extends HBaseTestCase {
+     byte[] cf = Bytes.toBytes("cf");
+     byte[] qual = Bytes.toBytes("qual");
+     byte[] val = Bytes.toBytes("val");
+-    this.region = initHRegion(b, getName(), cf);
++    Configuration conf = HBaseConfiguration.create();
++    // Set optionallogflushinterval to a high value so that it doesn't flush during this test
++    // and throw off the calculation of number of syncs.  See HBASE-6097.
++    conf.setLong("hbase.regionserver.optionallogflushinterval",Integer.MAX_VALUE);
++    this.region = initHRegion(b, getName(), conf, cf);
+     try {
+       HLog.getSyncOps(); // clear counter from prior tests
+       assertEquals(0, HLog.getSyncOps());
+-- 
+1.7.0.4
+
