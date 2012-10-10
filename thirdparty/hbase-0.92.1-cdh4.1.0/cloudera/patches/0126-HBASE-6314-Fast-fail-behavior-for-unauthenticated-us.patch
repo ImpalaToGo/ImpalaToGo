@@ -1,7 +1,7 @@
 From 21c7b62fa29520bb99cbed4a4d1e118065211e80 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 28 Aug 2012 13:38:04 -0600
-Subject: [PATCH 126/151] HBASE-6314 Fast fail behavior for unauthenticated user
+Subject: [PATCH 126/154] HBASE-6314 Fast fail behavior for unauthenticated user
 
 Reason: Improvement
 Author: Himanshu Vashishtha

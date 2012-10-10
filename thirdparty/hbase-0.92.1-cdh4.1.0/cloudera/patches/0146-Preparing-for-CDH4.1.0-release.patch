@@ -1,7 +1,7 @@
 From d5697c1a97f3dc0b0d19b825e54864738c153ead Mon Sep 17 00:00:00 2001
 From: Jenkins slave <kitchen-build@cloudera.com>
 Date: Tue, 4 Sep 2012 09:17:37 -0700
-Subject: [PATCH 146/151] Preparing for CDH4.1.0 release
+Subject: [PATCH 146/154] Preparing for CDH4.1.0 release
 
 ---
  pom.xml |    4 ++--

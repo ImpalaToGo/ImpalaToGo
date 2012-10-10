@@ -1,7 +1,7 @@
 From be3da23fd10827abb8182e3f8c6f4313544f3c58 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Fri, 7 Sep 2012 13:07:58 -0700
-Subject: [PATCH 148/151] CDH-7904 Disable per table balance so as to maintain the same default behavior
+Subject: [PATCH 148/154] CDH-7904 Disable per table balance so as to maintain the same default behavior
 
 Reason: Compatibility
 Author: Jimmy Xiang

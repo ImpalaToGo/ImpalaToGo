@@ -1,7 +1,7 @@
 From 533d21b3f6abbf30cea843ccb62b63597211b4f9 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Tue, 14 Aug 2012 10:38:37 -0700
-Subject: [PATCH 108/151] HBASE-6211 Put latencies in jmx
+Subject: [PATCH 108/154] HBASE-6211 Put latencies in jmx
 
 Reason: Bug
 Author: Elliott Clark

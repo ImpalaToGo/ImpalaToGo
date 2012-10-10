@@ -1,7 +1,7 @@
 From f216043410a6e6f88d6e2c91fb3c214b2184a413 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:34:39 -0700
-Subject: [PATCH 078/151] HBASE-6392 UnknownRegionException blocks hbck from sideline big overlap regions
+Subject: [PATCH 078/154] HBASE-6392 UnknownRegionException blocks hbck from sideline big overlap regions
 
 Reason: Backport
 Author: Jimmy Xiang

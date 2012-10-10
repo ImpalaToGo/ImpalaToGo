@@ -1,7 +1,7 @@
 From 42db7cbd3eb206858f2a3c3f4d43d78c108f611c Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Mon, 27 Aug 2012 16:19:35 -0700
-Subject: [PATCH 120/151] HBASE-5871 Usability regression, we don't parse compression algos anymore
+Subject: [PATCH 120/154] HBASE-5871 Usability regression, we don't parse compression algos anymore
 
 Reason: Regression
 Author: Lars Hofhansl

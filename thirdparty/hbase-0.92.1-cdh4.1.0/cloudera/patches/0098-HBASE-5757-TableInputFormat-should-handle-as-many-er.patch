@@ -1,7 +1,7 @@
 From 9a1af94990ef0d2fe6239b8cc268b8f0d9ad9c0a Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 27 Jul 2012 14:55:54 -0700
-Subject: [PATCH 098/151] HBASE-5757 TableInputFormat should handle as many errors as possible (Jan Lukavsky)
+Subject: [PATCH 098/154] HBASE-5757 TableInputFormat should handle as many errors as possible (Jan Lukavsky)
 
 Reason: Backport
 Author: Jan Lukavsky

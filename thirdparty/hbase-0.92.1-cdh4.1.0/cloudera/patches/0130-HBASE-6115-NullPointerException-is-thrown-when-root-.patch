@@ -1,7 +1,7 @@
 From b6efce82cd82697f0dc35ca43a918bdebe75354d Mon Sep 17 00:00:00 2001
 From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
 Date: Tue, 29 May 2012 16:22:47 +0000
-Subject: [PATCH 130/151] HBASE-6115 NullPointerException is thrown when root and meta table regions are assigning to another RS. (Ram)
+Subject: [PATCH 130/154] HBASE-6115 NullPointerException is thrown when root and meta table regions are assigning to another RS. (Ram)
 
 Reason: Bug
 Author: ramkrishna.s.vasudevan

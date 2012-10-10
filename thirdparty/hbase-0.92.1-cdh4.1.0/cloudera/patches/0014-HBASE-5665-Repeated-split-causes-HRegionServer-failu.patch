@@ -1,7 +1,7 @@
 From 512faa296f54514a2beeed712fc01404ebc8128c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 3 Apr 2012 07:07:24 +0200
-Subject: [PATCH 014/151] HBASE-5665 Repeated split causes HRegionServer failures and breaks table
+Subject: [PATCH 014/154] HBASE-5665 Repeated split causes HRegionServer failures and breaks table
 
 Reason: Bug
 Author: Cosmin Lehene

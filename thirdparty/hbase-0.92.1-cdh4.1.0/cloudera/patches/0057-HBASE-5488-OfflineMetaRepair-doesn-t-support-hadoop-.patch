@@ -1,7 +1,7 @@
 From ff58c0ad2a2b1c3bb0c7ab2ef31c9f5102203942 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Fri, 13 Apr 2012 06:44:53 +0000
-Subject: [PATCH 057/151] HBASE-5488 OfflineMetaRepair doesn't support hadoop 0.20's fs.default.name property (gaojinchao)
+Subject: [PATCH 057/154] HBASE-5488 OfflineMetaRepair doesn't support hadoop 0.20's fs.default.name property (gaojinchao)
 
 Reason: Bug
 Author: Gaojinchao

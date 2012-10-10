@@ -1,7 +1,7 @@
 From 4de3e1374ca9144a8ca1b15beb882a5b84cb84b3 Mon Sep 17 00:00:00 2001
 From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
 Date: Mon, 14 May 2012 18:34:00 +0000
-Subject: [PATCH 135/151] HBASE-5806 Handle split region related failures on master restart and RS restart(Chinna rao)
+Subject: [PATCH 135/154] HBASE-5806 Handle split region related failures on master restart and RS restart(Chinna rao)
 
 Reason: Bug
 Author: Chinna Rao

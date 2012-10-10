@@ -1,7 +1,7 @@
 From d6f4f310c7475d571a3a6828d1f5dd7d032c4a89 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Wed, 18 Apr 2012 19:33:37 +0000
-Subject: [PATCH 041/151] HBASE-5823 Hbck should be able to print help
+Subject: [PATCH 041/154] HBASE-5823 Hbck should be able to print help
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1327641 13f79535-47bb-0310-9956-ffa450edef68
 

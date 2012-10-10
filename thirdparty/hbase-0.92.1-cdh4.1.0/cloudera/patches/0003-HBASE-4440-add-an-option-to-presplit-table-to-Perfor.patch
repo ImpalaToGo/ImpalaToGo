@@ -1,7 +1,7 @@
 From fa8126e0c90947b057a09e32138e3ae18101bf3b Mon Sep 17 00:00:00 2001
 From: Nicolas Spiegelberg <nspiegelberg@apache.org>
 Date: Tue, 6 Dec 2011 02:34:00 +0000
-Subject: [PATCH 003/151] HBASE-4440 add an option to presplit table to PerformanceEvaluation
+Subject: [PATCH 003/154] HBASE-4440 add an option to presplit table to PerformanceEvaluation
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1210752 13f79535-47bb-0310-9956-ffa450edef68
 ---

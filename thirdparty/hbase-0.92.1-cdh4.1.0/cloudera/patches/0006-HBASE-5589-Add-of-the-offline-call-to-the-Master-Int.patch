@@ -1,7 +1,7 @@
 From de0f8fd77f3f781565e5df1d992bc69fbf775d07 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Wed, 21 Mar 2012 23:48:45 +0000
-Subject: [PATCH 006/151] HBASE-5589 Add of the offline call to the Master Interface
+Subject: [PATCH 006/154] HBASE-5589 Add of the offline call to the Master Interface
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1303621 13f79535-47bb-0310-9956-ffa450edef68
 

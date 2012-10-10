@@ -1,7 +1,7 @@
 From cd7b881506ba4449c5cdbb629d217dc25065be1f Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 31 May 2012 19:35:10 +0200
-Subject: [PATCH 065/151] HBASE-6062 preCheckAndPut/Delete() checks for READ when also a WRITE is performed
+Subject: [PATCH 065/154] HBASE-6062 preCheckAndPut/Delete() checks for READ when also a WRITE is performed
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1344488 13f79535-47bb-0310-9956-ffa450edef68
 ---

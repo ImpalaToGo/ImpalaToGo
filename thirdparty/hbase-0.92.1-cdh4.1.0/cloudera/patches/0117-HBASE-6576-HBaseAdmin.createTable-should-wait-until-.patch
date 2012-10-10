@@ -1,7 +1,7 @@
 From 2b2b21c47cd6fab48f03cbb319f1dc624cccaaf0 Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Thu, 16 Aug 2012 13:44:43 +0000
-Subject: [PATCH 117/151] HBASE-6576 HBaseAdmin.createTable should wait until the table is enabled (Gregory)
+Subject: [PATCH 117/154] HBASE-6576 HBaseAdmin.createTable should wait until the table is enabled (Gregory)
 
 Reason: Bug
 Author: Gregory Chanan

@@ -1,7 +1,7 @@
 From ce5dd182cfb863d5ef64db587f18781ef84c5b23 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Thu, 29 Mar 2012 20:05:50 +0000
-Subject: [PATCH 011/151] HBASE-5638 Readability improvements and backport HBASE-5633: NPE reading ZK config in HBase (Matteo Bertozzi)
+Subject: [PATCH 011/154] HBASE-5638 Readability improvements and backport HBASE-5633: NPE reading ZK config in HBase (Matteo Bertozzi)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1307087 13f79535-47bb-0310-9956-ffa450edef68
 ---

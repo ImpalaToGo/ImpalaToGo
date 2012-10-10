@@ -1,7 +1,7 @@
 From d98814527a1062cf2bfced5eb17cf1cd4c565f3a Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 29 Aug 2012 14:42:01 -0700
-Subject: [PATCH 140/151] HBASE-6689 HRegion.increment comment nits
+Subject: [PATCH 140/154] HBASE-6689 HRegion.increment comment nits
 
 Reason: Supportability
 Author: Gregory Chanan

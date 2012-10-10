@@ -1,7 +1,7 @@
 From a9f6d08666b38f90c4bf77e43603f0c7891e2fd0 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 9 Aug 2012 17:51:38 -0700
-Subject: [PATCH 105/151] HBASE-5887 Make TestAcidGuarantees usable for system testing
+Subject: [PATCH 105/154] HBASE-5887 Make TestAcidGuarantees usable for system testing
 
 Ref: CDH-7230
 Reason: System Test Improvement

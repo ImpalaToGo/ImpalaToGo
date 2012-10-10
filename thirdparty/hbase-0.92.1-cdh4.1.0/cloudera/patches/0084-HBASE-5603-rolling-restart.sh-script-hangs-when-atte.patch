@@ -1,7 +1,7 @@
 From 219df3a8b08346757dca88027e3cc2e8718cb7e5 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 17:57:03 -0700
-Subject: [PATCH 084/151] HBASE-5603 rolling-restart.sh script hangs when attempting to detect expiration of /hbase/master znode
+Subject: [PATCH 084/154] HBASE-5603 rolling-restart.sh script hangs when attempting to detect expiration of /hbase/master znode
 
 Reason: Backport
 Author: Jonathan Hsieh

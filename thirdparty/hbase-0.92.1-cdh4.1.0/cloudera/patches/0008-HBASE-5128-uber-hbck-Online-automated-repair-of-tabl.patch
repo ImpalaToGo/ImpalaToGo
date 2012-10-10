@@ -1,7 +1,7 @@
 From b236e0ecea08591d25b15494f79ac1be91193a77 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Fri, 23 Mar 2012 23:54:31 +0000
-Subject: [PATCH 008/151] HBASE-5128 [uber hbck] Online automated repair of table integrity and region consistency problems
+Subject: [PATCH 008/154] HBASE-5128 [uber hbck] Online automated repair of table integrity and region consistency problems
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1304667 13f79535-47bb-0310-9956-ffa450edef68
 

@@ -1,7 +1,7 @@
 From 026f0043df6ea160847bea6aa5fb82e2ecf951f6 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 31 Aug 2012 18:27:59 -0600
-Subject: [PATCH 145/151] HBASE-6165 Replication can overrun .META. scans on cluster re-start
+Subject: [PATCH 145/154] HBASE-6165 Replication can overrun .META. scans on cluster re-start
 
 Reason: Improvement
 Author: Himanshu Vashishtha

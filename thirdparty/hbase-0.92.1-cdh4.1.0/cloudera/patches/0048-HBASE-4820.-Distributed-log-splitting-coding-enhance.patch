@@ -1,7 +1,7 @@
 From 3801269bc38a5e4e995a682c89ee53bb2985f868 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 22 Dec 2011 14:33:59 -0800
-Subject: [PATCH 048/151] HBASE-4820. Distributed log splitting coding enhancement to make it easier to understand, no semantics change. Contributed by Jimmy Xiang.
+Subject: [PATCH 048/154] HBASE-4820. Distributed log splitting coding enhancement to make it easier to understand, no semantics change. Contributed by Jimmy Xiang.
 
 Reason: Backport
 Author: Jimmy Xiang

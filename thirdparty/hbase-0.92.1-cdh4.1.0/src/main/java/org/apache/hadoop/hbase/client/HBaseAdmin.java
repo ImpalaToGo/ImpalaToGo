@@ -97,7 +97,7 @@ public class HBaseAdmin implements Abortable, Closeable {
   public HBaseAdmin(Configuration c)
   throws MasterNotRunningException, ZooKeeperConnectionException {
     this.conf = HBaseConfiguration.create(c);
-    this.connection = HConnectionManager.getConnection(this.conf);
+      this.connection = HConnectionManager.getConnection(this.conf);
     this.pause = this.conf.getLong("hbase.client.pause", 1000);
     this.numRetries = this.conf.getInt("hbase.client.retries.number", 10);
     this.retryLongerMultiplier = this.conf.getInt(
@@ -108,6 +108,9 @@ public class HBaseAdmin implements Abortable, Closeable {
         this.connection.getMaster();
         break;
       } catch (MasterNotRunningException mnre) {
+        HConnectionManager.deleteStaleConnection(this.connection);
+        this.connection = HConnectionManager.getConnection(this.conf);
+      } catch (UndeclaredThrowableException ute) {
         HConnectionManager.deleteStaleConnection(this.connection);
         this.connection = HConnectionManager.getConnection(this.conf);
       }
@@ -125,29 +128,6 @@ public class HBaseAdmin implements Abortable, Closeable {
       HConnectionManager.deleteStaleConnection(this.connection);
       throw new MasterNotRunningException("Retried " + numRetries + " times");
     }
-  }
-
- /**
-   * Constructor for externally managed HConnections.
-   * This constructor fails fast if the HMaster is not running.
-   * The HConnection can be re-used again in another attempt.
-   * This constructor fails fast.
-   *
-   * @param connection The HConnection instance to use
-   * @throws MasterNotRunningException if the master is not running
-   * @throws ZooKeeperConnectionException if unable to connect to zookeeper
-   */
-  public HBaseAdmin(HConnection connection)
-      throws MasterNotRunningException, ZooKeeperConnectionException {
-    this.conf = connection.getConfiguration();
-    this.connection = connection;
-
-    this.pause = this.conf.getLong("hbase.client.pause", 1000);
-    this.numRetries = this.conf.getInt("hbase.client.retries.number", 10);
-    this.retryLongerMultiplier = this.conf.getInt(
-        "hbase.client.retries.longer.multiplier", 10);
-
-    this.connection.getMaster();
   }
 
   /**

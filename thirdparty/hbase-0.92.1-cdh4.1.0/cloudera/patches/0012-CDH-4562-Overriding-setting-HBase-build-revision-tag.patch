@@ -1,7 +1,7 @@
 From 0859ff763129366d8cdcf3d2dfc667afcd471145 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 30 Mar 2012 12:30:16 -0600
-Subject: [PATCH 012/151] CDH-4562 Overriding/setting HBase build revision tag.
+Subject: [PATCH 012/154] CDH-4562 Overriding/setting HBase build revision tag.
 
 ---
  pom.xml            |    2 ++

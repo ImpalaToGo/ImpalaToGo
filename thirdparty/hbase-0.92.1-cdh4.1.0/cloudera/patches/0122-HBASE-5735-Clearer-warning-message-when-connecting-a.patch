@@ -1,7 +1,7 @@
 From 00cca81375f016a794e1be19765c4213cc4cf10c Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Mon, 27 Aug 2012 17:12:05 -0700
-Subject: [PATCH 122/151] HBASE-5735 Clearer warning message when connecting a non-secure HBase client to a secure HBase server
+Subject: [PATCH 122/154] HBASE-5735 Clearer warning message when connecting a non-secure HBase client to a secure HBase server
 
 Reason: Supportability
 Author: Shaneal Manek

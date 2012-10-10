@@ -1,7 +1,7 @@
 From 68271b4189396cb905b3eb130f5b10654623d53c Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Sat, 14 Apr 2012 15:40:42 -0700
-Subject: [PATCH 017/151] HBASE-5781 [hbck] hbck -fix fails due to closed zk connection.
+Subject: [PATCH 017/154] HBASE-5781 [hbck] hbck -fix fails due to closed zk connection.
 
 Reason: Bug - Functionality regression
 Author: Jonathan Hsieh

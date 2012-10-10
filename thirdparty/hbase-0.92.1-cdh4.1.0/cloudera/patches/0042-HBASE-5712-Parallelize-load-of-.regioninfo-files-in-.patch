@@ -1,7 +1,7 @@
 From bb0b5bb6504da6a1703891fde5b50dbb83c83724 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Mon, 30 Apr 2012 06:33:53 +0000
-Subject: [PATCH 042/151] HBASE-5712 Parallelize load of .regioninfo files in diagnostic/repair portion of hbck
+Subject: [PATCH 042/154] HBASE-5712 Parallelize load of .regioninfo files in diagnostic/repair portion of hbck
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1332070 13f79535-47bb-0310-9956-ffa450edef68
 

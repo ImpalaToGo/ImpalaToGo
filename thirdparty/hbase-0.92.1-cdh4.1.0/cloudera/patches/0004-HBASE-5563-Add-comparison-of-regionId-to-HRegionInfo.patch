@@ -1,7 +1,7 @@
 From f7be3b57a42a22955c6f9446ca1457660f8fa95c Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Fri, 16 Mar 2012 21:53:15 +0000
-Subject: [PATCH 004/151] HBASE-5563 Add comparison of regionId to HRegionInfo#compareTo (chunhui and jmhsieh)
+Subject: [PATCH 004/154] HBASE-5563 Add comparison of regionId to HRegionInfo#compareTo (chunhui and jmhsieh)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1301780 13f79535-47bb-0310-9956-ffa450edef68
 

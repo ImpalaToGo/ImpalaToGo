@@ -1,7 +1,7 @@
 From 4f45f481292f1c1205bd22a1da8cd86c4febbad7 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 29 Mar 2012 11:58:37 -0700
-Subject: [PATCH 010/151] HBASE-5624 Aborting regionserver when splitting region, may cause daughter region not assigned by ServerShutdownHandler
+Subject: [PATCH 010/154] HBASE-5624 Aborting regionserver when splitting region, may cause daughter region not assigned by ServerShutdownHandler
 
 Reason: Bug
 Author: Gregory Chanan

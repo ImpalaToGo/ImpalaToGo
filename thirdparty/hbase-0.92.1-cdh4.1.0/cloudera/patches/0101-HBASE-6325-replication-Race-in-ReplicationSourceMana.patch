@@ -1,7 +1,7 @@
 From de6133453be040a3b8bf5df95b4c6a63128d33b6 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sat, 4 Aug 2012 19:19:09 -0600
-Subject: [PATCH 101/151] HBASE-6325 [replication] Race in ReplicationSourceManager.init can initiate a failover even if the node is alive
+Subject: [PATCH 101/154] HBASE-6325 [replication] Race in ReplicationSourceManager.init can initiate a failover even if the node is alive
 
 ---
  .../regionserver/ReplicationSourceManager.java     |   46 ++++++++++++--------

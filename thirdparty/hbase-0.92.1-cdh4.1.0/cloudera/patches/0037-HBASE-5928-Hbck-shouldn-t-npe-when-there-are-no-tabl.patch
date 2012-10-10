@@ -1,7 +1,7 @@
 From 6f38c4de77773308e4f06fb7d93e6af3dc9948b2 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Fri, 4 May 2012 00:11:29 +0000
-Subject: [PATCH 037/151] HBASE-5928 Hbck shouldn't npe when there are no tables (Elliott Clark)
+Subject: [PATCH 037/154] HBASE-5928 Hbck shouldn't npe when there are no tables (Elliott Clark)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1333693 13f79535-47bb-0310-9956-ffa450edef68
 

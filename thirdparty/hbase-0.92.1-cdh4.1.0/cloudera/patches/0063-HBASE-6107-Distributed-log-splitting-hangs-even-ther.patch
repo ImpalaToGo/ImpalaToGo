@@ -1,7 +1,7 @@
 From 0e6b2a5aef1276552b71112ec9dbd2e812a45a76 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Tue, 29 May 2012 23:58:48 +0000
-Subject: [PATCH 063/151] HBASE-6107 Distributed log splitting hangs even there is no task under /hbase/splitlog
+Subject: [PATCH 063/154] HBASE-6107 Distributed log splitting hangs even there is no task under /hbase/splitlog
 
 Reason: Bug
 Author: Jimmy Xiang

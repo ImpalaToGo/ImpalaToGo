@@ -1,7 +1,7 @@
 From 09f9797253f0d69389dd6a5c0f1dea011cc26da0 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Wed, 8 Aug 2012 02:43:33 +0000
-Subject: [PATCH 103/151] HBASE-6444 Expose the ability to set custom HTTP Request Headers for the REST client used by RemoteHTable
+Subject: [PATCH 103/154] HBASE-6444 Expose the ability to set custom HTTP Request Headers for the REST client used by RemoteHTable
 
 Reason: Improvement
 Author: Jimmy Xiang

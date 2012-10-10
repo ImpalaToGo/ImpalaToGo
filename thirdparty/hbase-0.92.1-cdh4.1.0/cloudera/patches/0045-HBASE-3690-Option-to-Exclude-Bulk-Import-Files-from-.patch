@@ -1,7 +1,7 @@
 From 5c2915bb6f351818adee6596f887f91c9ae3e499 Mon Sep 17 00:00:00 2001
 From: Nicolas Spiegelberg <nspiegelberg@apache.org>
 Date: Thu, 10 Nov 2011 23:31:13 +0000
-Subject: [PATCH 045/151] HBASE-3690 Option to Exclude Bulk Import Files from Minor Compaction
+Subject: [PATCH 045/154] HBASE-3690 Option to Exclude Bulk Import Files from Minor Compaction
 
 Reason: Bug
 Author: Nicolas Spiegelberg

@@ -1,7 +1,7 @@
 From efde04e0f0a4f29fe1fcd63a68b4267cfd10e38d Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Sun, 13 May 2012 06:14:25 -0700
-Subject: [PATCH 028/151] HBASE-5973: Add ability for potentially long-running IPC calls to abort if client disconnects
+Subject: [PATCH 028/154] HBASE-5973: Add ability for potentially long-running IPC calls to abort if client disconnects
 
 Reason: Improvement
 Author: Todd Lipcon

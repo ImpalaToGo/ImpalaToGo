@@ -1,7 +1,7 @@
 From 9e870f0145d7e87e5428bfd77393a3c7196ca3f8 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Wed, 11 Apr 2012 17:20:02 +0000
-Subject: [PATCH 039/151] HBASE-5599 [hbck] handle NO_VERSION_FILE and SHOULD_NOT_BE_DEPLOYED inconsistencies (fulin wang)
+Subject: [PATCH 039/154] HBASE-5599 [hbck] handle NO_VERSION_FILE and SHOULD_NOT_BE_DEPLOYED inconsistencies (fulin wang)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1324879 13f79535-47bb-0310-9956-ffa450edef68
 

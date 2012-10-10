@@ -1,7 +1,7 @@
 From b0ec04351898a5ee7153d02837950f5cbd5afd86 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Thu, 17 May 2012 10:43:06 -0700
-Subject: [PATCH 035/151] HBASE-6004 Adding more logging to help debugging MR job
+Subject: [PATCH 035/154] HBASE-6004 Adding more logging to help debugging MR job
 
 Reason: Improvement
 Author: Jimmy Xiang

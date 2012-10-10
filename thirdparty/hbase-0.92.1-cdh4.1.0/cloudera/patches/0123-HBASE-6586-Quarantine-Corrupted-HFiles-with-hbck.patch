@@ -1,7 +1,7 @@
 From f9a435c58f08e9364ed29b5cc43b542738049789 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Tue, 28 Aug 2012 14:23:14 +0000
-Subject: [PATCH 123/151] HBASE-6586 Quarantine Corrupted HFiles with hbck
+Subject: [PATCH 123/154] HBASE-6586 Quarantine Corrupted HFiles with hbck
 
 Reason: Supportability
 Author: Jonathan Hsieh

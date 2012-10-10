@@ -1,7 +1,7 @@
 From 9bd47533da360fdfefd9ea80ff74b512afe67404 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 27 Jul 2012 14:41:06 -0700
-Subject: [PATCH 096/151] HBASE-6420 Gracefully shutdown logsyncer
+Subject: [PATCH 096/154] HBASE-6420 Gracefully shutdown logsyncer
 
 Reason: Bug
 Author: Jimmy Xiang

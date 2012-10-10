@@ -1,7 +1,7 @@
 From 285c67278bd9c66e80d123f00c879e37e3814553 Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Mon, 20 Aug 2012 18:19:45 +0000
-Subject: [PATCH 134/151] HBASE-6608 Fix for HBASE-6160, META entries from daughters can be deleted before parent entries, shouldn't compare HRegionInfo's (Enis)
+Subject: [PATCH 134/154] HBASE-6608 Fix for HBASE-6160, META entries from daughters can be deleted before parent entries, shouldn't compare HRegionInfo's (Enis)
 
 Reason: Bug
 Author: Enis Soztutar

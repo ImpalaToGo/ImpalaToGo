@@ -1,7 +1,7 @@
 From 5e32d12e8500889aee3038e5a248965758602b5a Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Thu, 17 May 2012 21:54:37 +0000
-Subject: [PATCH 043/151] HBASE-6018 hbck fails with a RejectedExecutionException when >50 regions present
+Subject: [PATCH 043/154] HBASE-6018 hbck fails with a RejectedExecutionException when >50 regions present
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1339879 13f79535-47bb-0310-9956-ffa450edef68
 

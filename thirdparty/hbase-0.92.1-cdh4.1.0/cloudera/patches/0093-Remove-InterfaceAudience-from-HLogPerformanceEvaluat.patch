@@ -1,7 +1,7 @@
 From 050010b25cbd80204bcc6d17d36ed57d5c44dc04 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sun, 29 Jul 2012 20:40:13 +0200
-Subject: [PATCH 093/151] Remove InterfaceAudience from HLogPerformanceEvaluation
+Subject: [PATCH 093/154] Remove InterfaceAudience from HLogPerformanceEvaluation
 
 InterfaceAudience is not available in cdh3.
 

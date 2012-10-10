@@ -1,7 +1,7 @@
 From 103f0bbbaa0e0eaba236436cbf8bc7476411c9d3 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 31 Aug 2012 18:26:33 -0600
-Subject: [PATCH 144/151] HBASE-6550 Refactoring ReplicationSink to make it more responsive of cluster health
+Subject: [PATCH 144/154] HBASE-6550 Refactoring ReplicationSink to make it more responsive of cluster health
 
 Reason: Improvement
 Author: Himanshu Vashishtha

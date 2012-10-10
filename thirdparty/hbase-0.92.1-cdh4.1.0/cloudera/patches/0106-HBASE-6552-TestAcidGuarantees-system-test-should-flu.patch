@@ -1,7 +1,7 @@
 From f342e9d5509beac293a1d35546e9d71dd9b8b7db Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 9 Aug 2012 17:53:08 -0700
-Subject: [PATCH 106/151] HBASE-6552 TestAcidGuarantees system test should flush more aggresively (Gregory Chanan)
+Subject: [PATCH 106/154] HBASE-6552 TestAcidGuarantees system test should flush more aggresively (Gregory Chanan)
 
 Reason: System Test Improvement
 Author: Gregory Chanan

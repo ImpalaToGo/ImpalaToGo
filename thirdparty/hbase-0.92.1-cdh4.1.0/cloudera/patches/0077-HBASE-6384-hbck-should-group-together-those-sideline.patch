@@ -1,7 +1,7 @@
 From bccc9dbae83c0c70672d3711ce4cd4786897f6c5 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Fri, 13 Jul 2012 03:23:44 +0000
-Subject: [PATCH 077/151] HBASE-6384 hbck should group together those sidelined regions need to be bulk loaded later
+Subject: [PATCH 077/154] HBASE-6384 hbck should group together those sidelined regions need to be bulk loaded later
 
 Reason: Backport
 Author: Jimmy Xiang

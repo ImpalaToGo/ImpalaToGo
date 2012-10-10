@@ -1,7 +1,7 @@
 From 588eb534db02c68ddc86b38825d824f41fa0320c Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Mon, 16 Apr 2012 21:59:17 +0000
-Subject: [PATCH 018/151] HBASE-5780 Fix race in HBase regionserver startup vs ZK SASL authentication (Shaneal)
+Subject: [PATCH 018/154] HBASE-5780 Fix race in HBase regionserver startup vs ZK SASL authentication (Shaneal)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1326815 13f79535-47bb-0310-9956-ffa450edef68
 

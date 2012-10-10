@@ -1,7 +1,7 @@
 From 8563f53493e86fbd54ee1360944c06bb93c1855c Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Mon, 27 Aug 2012 21:23:54 +0000
-Subject: [PATCH 128/151] HBASE-6643 Accept encoded region name in compacting/spliting region from shell
+Subject: [PATCH 128/154] HBASE-6643 Accept encoded region name in compacting/spliting region from shell
 
 Reason: Improvement
 Author: Jimmy Xiang

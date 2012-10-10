@@ -374,6 +374,9 @@ public class MiniZooKeeperCluster {
     return false;
   }
 
+  /**
+   * @return Client port the minicluster is listening on
+   */
   public int getClientPort() {
     return clientPort;
   }

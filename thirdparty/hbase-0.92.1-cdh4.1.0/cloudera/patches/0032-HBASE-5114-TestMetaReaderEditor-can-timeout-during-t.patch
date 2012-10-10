@@ -1,7 +1,7 @@
 From 5c1c2c04ca1fb1a24c0ea04851355329ccebc87f Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Sun, 1 Jan 2012 17:46:53 +0000
-Subject: [PATCH 032/151] HBASE-5114 TestMetaReaderEditor can timeout during test execution
+Subject: [PATCH 032/154] HBASE-5114 TestMetaReaderEditor can timeout during test execution
 
 Reason: Test
 Author: Zhihong Yu

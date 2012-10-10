@@ -1,7 +1,7 @@
 From a2760bf7fc5f2a192cdabc2c4d76067ca048667b Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Wed, 4 Apr 2012 15:41:17 +0000
-Subject: [PATCH 015/151] HBASE-5533 Add more metrics to HBase
+Subject: [PATCH 015/154] HBASE-5533 Add more metrics to HBase
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1309466 13f79535-47bb-0310-9956-ffa450edef68
 

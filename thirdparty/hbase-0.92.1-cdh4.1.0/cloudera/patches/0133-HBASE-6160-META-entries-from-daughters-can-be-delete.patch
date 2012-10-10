@@ -1,7 +1,7 @@
 From 9b26dac2c5eaccb4b6a179d8780fd59722652469 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Tue, 5 Jun 2012 18:09:44 +0000
-Subject: [PATCH 133/151] HBASE-6160 META entries from daughters can be deleted before parent entries
+Subject: [PATCH 133/154] HBASE-6160 META entries from daughters can be deleted before parent entries
 
 Reason: Bug
 Author: Enis Soztutar

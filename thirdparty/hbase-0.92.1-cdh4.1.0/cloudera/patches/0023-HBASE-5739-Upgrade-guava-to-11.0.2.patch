@@ -1,7 +1,7 @@
 From 1398432c0980002ff9e106b4ce17b8e67fed48f5 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Tue, 10 Apr 2012 19:23:38 +0000
-Subject: [PATCH 023/151] HBASE-5739 Upgrade guava to 11.0.2
+Subject: [PATCH 023/154] HBASE-5739 Upgrade guava to 11.0.2
 
 Reason: Improvement
 Author: Todd Lipcon

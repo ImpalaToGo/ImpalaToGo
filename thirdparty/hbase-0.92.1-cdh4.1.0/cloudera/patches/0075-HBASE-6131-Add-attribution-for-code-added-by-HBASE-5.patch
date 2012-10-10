@@ -1,7 +1,7 @@
 From 7b1188d3b59ef2e66df4ec785c406840a7c9003d Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Tue, 24 Jul 2012 13:13:59 -0700
-Subject: [PATCH 075/151] HBASE-6131 Add attribution for code added by HBASE-5533 metrics
+Subject: [PATCH 075/154] HBASE-6131 Add attribution for code added by HBASE-5533 metrics
 
 Reason: Backport
 Author: Michael Stack

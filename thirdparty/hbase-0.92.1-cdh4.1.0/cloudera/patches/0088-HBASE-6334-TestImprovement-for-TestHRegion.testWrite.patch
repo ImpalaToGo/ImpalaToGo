@@ -1,7 +1,7 @@
 From 965d7549573eae84d581cae6d5a734e861bd1dc3 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:16:20 -0700
-Subject: [PATCH 088/151] HBASE-6334 TestImprovement for TestHRegion.testWritesWhileGetting
+Subject: [PATCH 088/154] HBASE-6334 TestImprovement for TestHRegion.testWritesWhileGetting
 
 Reason: Backport
 Author: Gregory Chanan

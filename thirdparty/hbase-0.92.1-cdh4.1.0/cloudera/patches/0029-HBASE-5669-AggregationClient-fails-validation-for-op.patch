@@ -1,7 +1,7 @@
 From 7fcb44e417f891d9266221eb5a0efb1b03136010 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Thu, 29 Mar 2012 15:30:29 +0000
-Subject: [PATCH 029/151] HBASE-5669 AggregationClient fails validation for open stoprow scan
+Subject: [PATCH 029/154] HBASE-5669 AggregationClient fails validation for open stoprow scan
 
 Reason: Bug
 Author: Mubarak Seyed

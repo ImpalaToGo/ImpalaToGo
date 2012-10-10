@@ -1,7 +1,7 @@
 From b44ba729e5508e71c8353c9e835eefbe978b48a1 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Thu, 19 Apr 2012 20:01:26 +0000
-Subject: [PATCH 053/151] HBASE-5833 0.92 build has been failing pretty consistently on TestMasterFailover....
+Subject: [PATCH 053/154] HBASE-5833 0.92 build has been failing pretty consistently on TestMasterFailover....
 
 Reason: Test
 Author: Stack

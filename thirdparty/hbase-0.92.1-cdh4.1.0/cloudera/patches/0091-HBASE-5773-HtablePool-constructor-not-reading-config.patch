@@ -1,7 +1,7 @@
 From 1359806d299ef282ab6c2bdd9e383c584a9af1b1 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:44:41 -0700
-Subject: [PATCH 091/151] HBASE-5773 HtablePool constructor not reading config files in certain cases
+Subject: [PATCH 091/154] HBASE-5773 HtablePool constructor not reading config files in certain cases
 
 Reason: Backport
 Author: Ioan Eugen Stan

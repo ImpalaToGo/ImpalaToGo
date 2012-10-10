@@ -1,7 +1,7 @@
 From eddd55c90c98ce4156db329e2b6e06704f596074 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 15 Aug 2012 16:30:00 -0700
-Subject: [PATCH 111/151] HBASE-6593 TestAdmin times out sometimes
+Subject: [PATCH 111/154] HBASE-6593 TestAdmin times out sometimes
 
 Reason: Test
 Author: Jimmy Xiang

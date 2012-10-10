@@ -1,7 +1,7 @@
 From 044ab7c02191c10685d7ce3ffa9aac7589c53292 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:48:47 -0700
-Subject: [PATCH 082/151] HBASE-5360 [uberhbck] Add options for how to handle offline split parents
+Subject: [PATCH 082/154] HBASE-5360 [uberhbck] Add options for how to handle offline split parents
 
 Reason: Backport
 Author: Jimmy Xiang

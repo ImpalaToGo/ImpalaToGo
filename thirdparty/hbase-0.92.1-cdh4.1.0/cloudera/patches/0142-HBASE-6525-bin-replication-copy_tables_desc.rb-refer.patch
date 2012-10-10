@@ -1,7 +1,7 @@
 From f473b35556e85bc2eca1135b3f2e383a2d4670a5 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Fri, 31 Aug 2012 15:17:35 -0700
-Subject: [PATCH 142/151] HBASE-6525 bin/replication/copy_tables_desc.rb references non-existent class
+Subject: [PATCH 142/154] HBASE-6525 bin/replication/copy_tables_desc.rb references non-existent class
 
 Reason: Bug
 Author: David S. Wang

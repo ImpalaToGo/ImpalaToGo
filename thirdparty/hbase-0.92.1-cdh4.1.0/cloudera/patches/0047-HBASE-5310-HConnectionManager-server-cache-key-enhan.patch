@@ -1,7 +1,7 @@
 From 2b745d6e05655b5b7b2cc1e25c9ffd14d8b1d21d Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Wed, 1 Feb 2012 17:34:04 +0000
-Subject: [PATCH 047/151] HBASE-5310 HConnectionManager server cache key enhancement (Jimmy Xiang)
+Subject: [PATCH 047/154] HBASE-5310 HConnectionManager server cache key enhancement (Jimmy Xiang)
 
 Reason: Improvement
 Author: Jimmy Xiang

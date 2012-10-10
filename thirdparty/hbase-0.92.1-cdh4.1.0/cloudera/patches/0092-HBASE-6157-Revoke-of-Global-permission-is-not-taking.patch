@@ -1,7 +1,7 @@
 From 52a751fa259221ecaade2312a40c88c0b178f8b0 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 28 Jul 2012 17:39:17 +0200
-Subject: [PATCH 092/151] HBASE-6157: Revoke of Global permission is not taking effect without restart
+Subject: [PATCH 092/154] HBASE-6157: Revoke of Global permission is not taking effect without restart
 
 Reason: Bug
 Author: Laxman

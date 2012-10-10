@@ -1,7 +1,7 @@
 From bd1da75be4f0cdcd616f7f2febbde3a851535673 Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Mon, 20 Aug 2012 14:52:48 -0700
-Subject: [PATCH 112/151] HBASE-5714 Add write permission check before any hbck run that modifies hdfs
+Subject: [PATCH 112/154] HBASE-5714 Add write permission check before any hbck run that modifies hdfs
 
 Reason: Supportability
 Author: Liang Xie

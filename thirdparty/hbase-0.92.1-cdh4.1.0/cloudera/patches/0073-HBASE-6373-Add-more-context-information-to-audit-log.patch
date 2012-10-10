@@ -1,7 +1,7 @@
 From 625cbc9cb1bc72aa9bc64b5b3682552b893ab24f Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Wed, 25 Jul 2012 13:19:40 -0700
-Subject: [PATCH 073/151] HBASE-6373 Add more context information to audit log messages
+Subject: [PATCH 073/154] HBASE-6373 Add more context information to audit log messages
 
 Reason: Backport
 Author: Marcelo Vanzin

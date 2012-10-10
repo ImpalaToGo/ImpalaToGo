@@ -1,7 +1,7 @@
 From c81c79700a3a1bdfdc7a1be6de916323f55c4055 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sat, 4 Aug 2012 19:14:55 -0600
-Subject: [PATCH 100/151] HBASE-6319 ReplicationSource can call terminate on itself and deadlock
+Subject: [PATCH 100/154] HBASE-6319 ReplicationSource can call terminate on itself and deadlock
 
 ---
  .../regionserver/ReplicationSource.java            |    5 ++++-

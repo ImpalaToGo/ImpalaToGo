@@ -1,7 +1,7 @@
 From 95efe6a942b98cd40851d8278ccb95ef2ca95168 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Wed, 18 Jul 2012 14:09:43 -0700
-Subject: [PATCH 072/151] HBASE-6382: Upgrade jersey to 1.8
+Subject: [PATCH 072/154] HBASE-6382: Upgrade jersey to 1.8
 
 Reason: Backport
 Author: David S. Wang

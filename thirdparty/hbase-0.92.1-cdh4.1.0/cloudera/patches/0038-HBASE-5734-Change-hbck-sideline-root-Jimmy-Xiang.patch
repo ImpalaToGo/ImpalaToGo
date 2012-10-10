@@ -1,7 +1,7 @@
 From e9270ea860b10a34340c28c22de2a42546898a19 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Fri, 6 Apr 2012 22:42:04 +0000
-Subject: [PATCH 038/151] HBASE-5734 Change hbck sideline root (Jimmy Xiang)
+Subject: [PATCH 038/154] HBASE-5734 Change hbck sideline root (Jimmy Xiang)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1310627 13f79535-47bb-0310-9956-ffa450edef68
 

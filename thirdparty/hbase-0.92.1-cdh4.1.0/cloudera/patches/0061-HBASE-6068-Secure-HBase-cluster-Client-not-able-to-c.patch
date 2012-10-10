@@ -1,7 +1,7 @@
 From c4a1510c9a934721bd3192467f0da3cd6725ca2b Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 29 May 2012 23:54:20 +0200
-Subject: [PATCH 061/151] HBASE-6068 Secure HBase cluster: Client not able to call some admin APIs
+Subject: [PATCH 061/154] HBASE-6068 Secure HBase cluster: Client not able to call some admin APIs
 
 Reason: Bug
 Author: Matteo Bertozzi

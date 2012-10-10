@@ -1,7 +1,7 @@
 From 873ae2299fe2bd7cdb229d7530e5eb5f4a4e3356 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:59:33 -0700
-Subject: [PATCH 083/151] HBASE-4379 [hbck] Does not complain about tables with no end region [Z,] (Anoop Sam John)
+Subject: [PATCH 083/154] HBASE-4379 [hbck] Does not complain about tables with no end region [Z,] (Anoop Sam John)
 
 Reason: Backport
 Author: Jonathan Hsieh, Anoop Sam John

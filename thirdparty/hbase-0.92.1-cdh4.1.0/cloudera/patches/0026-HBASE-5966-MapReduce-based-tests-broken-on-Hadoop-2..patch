@@ -1,7 +1,7 @@
 From 10ba67c211b666cf148bf803cb71b772e58b9d38 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 9 May 2012 18:22:37 -0700
-Subject: [PATCH 026/151] HBASE-5966 MapReduce based tests broken on Hadoop 2.0.0-alpha
+Subject: [PATCH 026/154] HBASE-5966 MapReduce based tests broken on Hadoop 2.0.0-alpha
 
 Reason: Bug
 Author: Andrew Purtell, Jimmy Xiang

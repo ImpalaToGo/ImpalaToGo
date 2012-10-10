@@ -1,7 +1,7 @@
 From 6bd6816f8d633a32f61561dbe7a4f77834fa2244 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Sat, 14 Jul 2012 02:27:01 +0000
-Subject: [PATCH 070/151] HBASE-6394 verifyrep MR job map tasks throws NullPointerException
+Subject: [PATCH 070/154] HBASE-6394 verifyrep MR job map tasks throws NullPointerException
 
 Reason: Bug
 Author: Jimmy Xiang

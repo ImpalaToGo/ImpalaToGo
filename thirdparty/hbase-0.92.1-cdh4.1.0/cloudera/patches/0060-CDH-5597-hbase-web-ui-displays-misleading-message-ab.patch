@@ -1,7 +1,7 @@
 From bec5270e0a017a53f7331f8b8cce784f41c3223d Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Wed, 2 May 2012 13:12:27 -0700
-Subject: [PATCH 060/151] CDH-5597 hbase web ui displays misleading message about hdfs append
+Subject: [PATCH 060/154] CDH-5597 hbase web ui displays misleading message about hdfs append
  Change append checks to sync and hflush checks.
 
 Reason: Bug

@@ -1,7 +1,7 @@
 From eb00a0f72c1e498e7ad2456a5bd62001ebf24fb1 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 29 Aug 2012 21:14:08 +0200
-Subject: [PATCH 136/151] CDH-7252: MR1 + HDFS 2.0 profile
+Subject: [PATCH 136/154] CDH-7252: MR1 + HDFS 2.0 profile
 
 Reason: Test
 Ref: CDH-7252

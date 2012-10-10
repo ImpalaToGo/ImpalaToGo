@@ -1,7 +1,7 @@
 From 465f4379005af0a0a051f3e6a0e6e2cd1ec288f9 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 27 Jul 2012 16:01:14 -0700
-Subject: [PATCH 129/151] HBASE-5682 Allow HConnectionImplementation to recover from ZK connection loss
+Subject: [PATCH 129/154] HBASE-5682 Allow HConnectionImplementation to recover from ZK connection loss
 
 Reason: Backport
 Author: Lars Hofhansl

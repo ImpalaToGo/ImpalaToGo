@@ -1,7 +1,7 @@
 From 07574ab4a5ab16b7d4030347eacd98fc7ea42b40 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Thu, 17 May 2012 10:21:22 -0700
-Subject: [PATCH 034/151] HBASE-6029 HBCK doesn't recover Balance switch if exception occurs in onlineHbck()
+Subject: [PATCH 034/154] HBASE-6029 HBCK doesn't recover Balance switch if exception occurs in onlineHbck()
 
 Reason: Improvement
 Author: Maryann Xue

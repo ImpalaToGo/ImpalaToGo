@@ -1,7 +1,7 @@
 From 6782aa95e97ec75ae837c98f1d78f48a8a6faa71 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Fri, 2 Mar 2012 21:16:03 +0000
-Subject: [PATCH 055/151] HBASE-5486 Warn message in HTable: Stringify the byte[]
+Subject: [PATCH 055/154] HBASE-5486 Warn message in HTable: Stringify the byte[]
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1296478 13f79535-47bb-0310-9956-ffa450edef68
 ---

@@ -1,7 +1,7 @@
 From 6769fbcab73a8be559343675dc7189a8cf9a1426 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 19 Apr 2012 02:31:40 +0200
-Subject: [PATCH 019/151] HBASE-5787 Table owner can't disable/delete its own table (Matteo)
+Subject: [PATCH 019/154] HBASE-5787 Table owner can't disable/delete its own table (Matteo)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1327605 13f79535-47bb-0310-9956-ffa450edef68
 

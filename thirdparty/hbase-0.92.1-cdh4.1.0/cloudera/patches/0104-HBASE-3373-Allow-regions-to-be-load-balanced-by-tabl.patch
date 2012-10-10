@@ -1,7 +1,7 @@
 From e004f932ebfd89f1a3768fb653c7465fd04926f5 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Fri, 10 Aug 2012 08:31:37 -0700
-Subject: [PATCH 104/151] HBASE-3373 Allow regions to be load-balanced by table
+Subject: [PATCH 104/154] HBASE-3373 Allow regions to be load-balanced by table
 
 Reason: Improvement
 Author: Zhihong Yu

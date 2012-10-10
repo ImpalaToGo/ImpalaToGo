@@ -1,7 +1,7 @@
 From fe4c6ef1546eff56eecf12ebee5af8eb06a4fde2 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Sat, 25 Aug 2012 05:32:05 +0000
-Subject: [PATCH 137/151] HBASE-6662 Region server incorrectly reports its own address as master's address
+Subject: [PATCH 137/154] HBASE-6662 Region server incorrectly reports its own address as master's address
 
 Reason: Bug
 Author: Shrijeet Paliwal

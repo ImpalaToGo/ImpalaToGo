@@ -1,7 +1,7 @@
 From 4835a0081e9b7a61d39221737d8169b31a8139e5 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 23 May 2012 23:50:55 +0200
-Subject: [PATCH 044/151] HBASE-5342 Grant/Revoke global permissions
+Subject: [PATCH 044/154] HBASE-5342 Grant/Revoke global permissions
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1339924 13f79535-47bb-0310-9956-ffa450edef68
 

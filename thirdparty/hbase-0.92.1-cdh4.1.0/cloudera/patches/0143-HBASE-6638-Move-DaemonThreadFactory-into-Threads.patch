@@ -1,7 +1,7 @@
 From 739f9993923410af831e6f26f5de2a05743dae71 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 31 Aug 2012 18:24:54 -0600
-Subject: [PATCH 143/151] HBASE-6638 Move DaemonThreadFactory into Threads
+Subject: [PATCH 143/154] HBASE-6638 Move DaemonThreadFactory into Threads
 
 Reason: Refactoring
 Author: Jesse Yates

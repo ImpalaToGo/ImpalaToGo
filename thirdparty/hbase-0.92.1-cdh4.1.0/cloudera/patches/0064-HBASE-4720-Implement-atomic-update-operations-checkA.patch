@@ -1,7 +1,7 @@
 From ab58a30f37a3e95bb38700309602fcb1566f31eb Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Wed, 30 May 2012 18:40:57 +0000
-Subject: [PATCH 064/151] HBASE-4720 Implement atomic update operations (checkAndPut, checkAndDelete) for REST client/server
+Subject: [PATCH 064/154] HBASE-4720 Implement atomic update operations (checkAndPut, checkAndDelete) for REST client/server
 
 Reason: Improvement
 Author: Mubarak Seyed, Jimmy Xiang

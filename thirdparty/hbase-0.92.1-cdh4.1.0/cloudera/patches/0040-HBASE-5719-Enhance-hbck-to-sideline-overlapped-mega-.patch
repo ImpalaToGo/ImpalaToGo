@@ -1,7 +1,7 @@
 From cc3b4737a2c4745b656039d1849fcd0449c0ffae Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Thu, 12 Apr 2012 17:46:05 +0000
-Subject: [PATCH 040/151] HBASE-5719 Enhance hbck to sideline overlapped mega regions (Jimmy Xiang)
+Subject: [PATCH 040/154] HBASE-5719 Enhance hbck to sideline overlapped mega regions (Jimmy Xiang)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1325405 13f79535-47bb-0310-9956-ffa450edef68
 

@@ -1,7 +1,7 @@
 From dfeaed4b5f4d203a3a692dcd18b7588bfe48a27d Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Fri, 25 May 2012 09:37:18 -0700
-Subject: [PATCH 052/151] HBASE-6095 ActiveMasterManager NullPointerException
+Subject: [PATCH 052/154] HBASE-6095 ActiveMasterManager NullPointerException
 
 Reason: Bug
 Author: Jimmy Xiang

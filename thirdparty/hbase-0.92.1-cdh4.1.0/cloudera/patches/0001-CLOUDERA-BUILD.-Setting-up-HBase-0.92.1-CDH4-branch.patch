@@ -1,7 +1,7 @@
 From f54ea99a1807c7b15798c25822cc4865ba743206 Mon Sep 17 00:00:00 2001
 From: Shaneal Manek <smanek@cloudera.com>
 Date: Mon, 19 Mar 2012 16:04:05 -0700
-Subject: [PATCH 001/151] CLOUDERA-BUILD. Setting up HBase 0.92.1 CDH4 branch
+Subject: [PATCH 001/154] CLOUDERA-BUILD. Setting up HBase 0.92.1 CDH4 branch
 
 ---
  pom.xml |   36 ++++++++++++++++++++++++++++--------

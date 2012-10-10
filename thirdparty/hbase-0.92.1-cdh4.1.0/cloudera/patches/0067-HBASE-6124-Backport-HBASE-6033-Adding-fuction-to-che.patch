@@ -1,7 +1,7 @@
 From 6f2fda1d18d4c26a2e3b68d359e2b64b905fd485 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Wed, 30 May 2012 20:22:56 +0000
-Subject: [PATCH 067/151] HBASE-6124 Backport HBASE-6033 Adding fuction to check if a table is in compaction
+Subject: [PATCH 067/154] HBASE-6124 Backport HBASE-6033 Adding fuction to check if a table is in compaction
 
 Reason: Improvement
 Author: Jimmy Xiang

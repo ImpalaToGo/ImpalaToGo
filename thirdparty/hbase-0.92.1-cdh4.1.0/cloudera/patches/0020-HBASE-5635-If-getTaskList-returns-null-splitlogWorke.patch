@@ -1,7 +1,7 @@
 From eceb21b2bbe7a705ad2465ee97a35f4eba27ed13 Mon Sep 17 00:00:00 2001
 From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
 Date: Mon, 23 Apr 2012 16:47:04 +0000
-Subject: [PATCH 020/151] HBASE-5635 If getTaskList() returns null, splitlogWorker would go down and it won't serve any requests (Ram)
+Subject: [PATCH 020/154] HBASE-5635 If getTaskList() returns null, splitlogWorker would go down and it won't serve any requests (Ram)
 
 Reason: Bug
 Author: Chinna Rao Lalam

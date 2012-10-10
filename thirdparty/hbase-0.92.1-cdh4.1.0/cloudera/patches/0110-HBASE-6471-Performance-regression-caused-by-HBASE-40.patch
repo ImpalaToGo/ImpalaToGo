@@ -1,7 +1,7 @@
 From 2824573c0ff24760c08d6040ed273bddf16c09e4 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Thu, 16 Aug 2012 16:53:26 +0000
-Subject: [PATCH 110/151] HBASE-6471 Performance regression caused by HBASE-4054
+Subject: [PATCH 110/154] HBASE-6471 Performance regression caused by HBASE-4054
 
 Reason: Bug
 Author: Jimmy Xiang

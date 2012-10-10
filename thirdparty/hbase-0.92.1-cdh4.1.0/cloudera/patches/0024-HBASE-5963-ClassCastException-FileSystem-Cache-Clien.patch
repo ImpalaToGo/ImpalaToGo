@@ -1,7 +1,7 @@
 From b8c848f0327c37ad5c4f672267c8dbd530afc126 Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Wed, 9 May 2012 18:33:41 +0000
-Subject: [PATCH 024/151] HBASE-5963 ClassCastException: FileSystem$Cache$ClientFinalizer cannot be cast to Thread
+Subject: [PATCH 024/154] HBASE-5963 ClassCastException: FileSystem$Cache$ClientFinalizer cannot be cast to Thread
 
 Reason: Bug
 Author: Zhhong Yu

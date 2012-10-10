@@ -1,7 +1,7 @@
 From 62871cd7e6060d76df47b8864ddb3eea9e0688b2 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Tue, 10 Apr 2012 16:15:34 +0000
-Subject: [PATCH 124/151] HBASE-5758 Forward port "HBASE-4109 Hostname returned via reverse dns lookup contains trailing period if configured interface is not default
+Subject: [PATCH 124/154] HBASE-5758 Forward port "HBASE-4109 Hostname returned via reverse dns lookup contains trailing period if configured interface is not default
 
 Reason: Regression
 Ref: CDH-5549

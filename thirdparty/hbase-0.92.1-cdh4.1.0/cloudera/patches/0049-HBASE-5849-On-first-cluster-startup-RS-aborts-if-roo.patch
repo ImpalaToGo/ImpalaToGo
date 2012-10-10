@@ -1,7 +1,7 @@
 From aa1f676bf3ee88c70da6577db7212dc2efeb6313 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 24 May 2012 19:46:54 +0200
-Subject: [PATCH 049/151] HBASE-5849 On first cluster startup, RS aborts if root znode is not available
+Subject: [PATCH 049/154] HBASE-5849 On first cluster startup, RS aborts if root znode is not available
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1329530 13f79535-47bb-0310-9956-ffa450edef68
 

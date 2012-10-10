@@ -1,7 +1,7 @@
 From d61af7fbe2f8c4ca103d45cb0d9042bf31fe7072 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:36:35 -0700
-Subject: [PATCH 079/151] HBASE-5892 [hbck] Refactor parallel WorkItem* to Futures (Andrew Wang)
+Subject: [PATCH 079/154] HBASE-5892 [hbck] Refactor parallel WorkItem* to Futures (Andrew Wang)
 
 Reason: Backport
 Author: Andrew Wang

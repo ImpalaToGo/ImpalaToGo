@@ -1,7 +1,7 @@
 From f877877b1218ba9fa91fcb6eb425b74d55feeb1d Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:44:15 -0700
-Subject: [PATCH 081/151] HBASE-6173 hbck check specified tables only
+Subject: [PATCH 081/154] HBASE-6173 hbck check specified tables only
 
 Reason: Backport
 Author: Jimmy Xiang

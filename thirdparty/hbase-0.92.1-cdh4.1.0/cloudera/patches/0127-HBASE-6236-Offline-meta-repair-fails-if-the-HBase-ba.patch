@@ -1,7 +1,7 @@
 From 661e3635eda8ab4c9555c87938a67692eb8cf41a Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Tue, 28 Aug 2012 12:51:34 -0700
-Subject: [PATCH 127/151] HBASE-6236 Offline meta repair fails if the HBase base mount point is on a different cluster/volume than its parent in a ViewFS or similar FS (Aditya)
+Subject: [PATCH 127/154] HBASE-6236 Offline meta repair fails if the HBase base mount point is on a different cluster/volume than its parent in a ViewFS or similar FS (Aditya)
 
 Reason: Bug
 Author: Aditya Kishore

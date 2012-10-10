@@ -1,7 +1,7 @@
 From 117517e984bae1a8de9dab487ceb755326c57cc8 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:42:47 -0700
-Subject: [PATCH 090/151] HBASE-5618 SplitLogManager - prevent unnecessary attempts to resubmits
+Subject: [PATCH 090/154] HBASE-5618 SplitLogManager - prevent unnecessary attempts to resubmits
 
 Reason: Backport
 Author: Prakash Khemani

@@ -1,7 +1,7 @@
 From 15c84f195ffbf569f651639e4d9ecbaac1bfc76c Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Mon, 27 Aug 2012 15:32:29 -0700
-Subject: [PATCH 125/151] HBASE-4746  Use a random ZK client port in unit tests so we can run them in parallel
+Subject: [PATCH 125/154] HBASE-4746  Use a random ZK client port in unit tests so we can run them in parallel
                 (Mikhail Bautin)
 
 Reason: Test Improvement

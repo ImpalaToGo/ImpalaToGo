@@ -1,7 +1,7 @@
 From 94c71e4a9673787d451a23c1793d7442e73f0d55 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 4 May 2012 20:35:48 +0200
-Subject: [PATCH 021/151] HBASE-5886 Add new metric for possible data loss due to puts without WAL
+Subject: [PATCH 021/154] HBASE-5886 Add new metric for possible data loss due to puts without WAL
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1333676 13f79535-47bb-0310-9956-ffa450edef68
 

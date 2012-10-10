@@ -1,7 +1,7 @@
 From c0e2295a359a784b375a661866b5acc638c9608d Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:05:46 -0700
-Subject: [PATCH 085/151] HBASE-5724 Row cache of KeyValue should be cleared in readFields()
+Subject: [PATCH 085/154] HBASE-5724 Row cache of KeyValue should be cleared in readFields()
 
 Reason: Bug
 Author: Teruyoshi Zenmyo

@@ -1,7 +1,7 @@
 From 222d9178e9954ad53234b3be865997e8010b0343 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 20 Sep 2012 00:06:23 +0200
-Subject: [PATCH 151/151] HBASE-4391 Add ability to start RS as root and call mlockall
+Subject: [PATCH 151/154] HBASE-4391 Add ability to start RS as root and call mlockall
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1353289 13f79535-47bb-0310-9956-ffa450edef68
 

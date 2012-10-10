@@ -1,7 +1,7 @@
 From ca5b6eee172067a2b47f99b5dd30400a3776e197 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Wed, 15 Aug 2012 15:44:05 +0000
-Subject: [PATCH 109/151] HBASE-5728 Methods Missing in HTableInterface
+Subject: [PATCH 109/154] HBASE-5728 Methods Missing in HTableInterface
 
 Reason: Bug
 Author: Jimmy Xiang

@@ -1,7 +1,7 @@
 From c9354949e351c97cc08d470fd437698fa1190670 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 13 Sep 2012 18:49:08 -0700
-Subject: [PATCH 149/151] HBASE-5920 HBASE-5920: New Compactions Logic can silently prevent user-initiated compactions from occurring
+Subject: [PATCH 149/154] HBASE-5920 HBASE-5920: New Compactions Logic can silently prevent user-initiated compactions from occurring
 
 Reason: Bug
 Author: Derek Wollenstein

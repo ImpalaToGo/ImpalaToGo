@@ -1,7 +1,7 @@
 From 84209e15aabde966f07aa309d888182d9392135b Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Mon, 27 Aug 2012 16:13:05 -0700
-Subject: [PATCH 119/151] HBASE-5680 Improve compatibility warning about HBase with Hadoop 0.23.x
+Subject: [PATCH 119/154] HBASE-5680 Improve compatibility warning about HBase with Hadoop 0.23.x
 
 Reason: Supportability
 Author: Jonathan Hsieh

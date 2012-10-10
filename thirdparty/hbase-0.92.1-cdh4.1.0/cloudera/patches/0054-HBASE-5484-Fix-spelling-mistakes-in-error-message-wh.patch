@@ -1,7 +1,7 @@
 From 10389b5c9fe7f756509b757902ae6ef273a6a4db Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Tue, 28 Feb 2012 14:23:43 -0800
-Subject: [PATCH 054/151] HBASE-5484 Fix spelling mistakes in error message when starting HBase in standalone mode and the configured ZK port is not able to be bound to.
+Subject: [PATCH 054/154] HBASE-5484 Fix spelling mistakes in error message when starting HBase in standalone mode and the configured ZK port is not able to be bound to.
 
 ---
  .../hadoop/hbase/master/HMasterCommandLine.java    |    7 ++++---

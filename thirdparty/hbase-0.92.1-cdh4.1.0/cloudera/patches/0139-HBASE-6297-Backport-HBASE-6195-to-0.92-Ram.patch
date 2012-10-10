@@ -1,7 +1,7 @@
 From 04b9b2d859b90453934dd1787f9c051c4b5d94a9 Mon Sep 17 00:00:00 2001
 From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
 Date: Mon, 2 Jul 2012 18:00:28 +0000
-Subject: [PATCH 139/151] HBASE-6297 Backport HBASE-6195 to 0.92 (Ram)
+Subject: [PATCH 139/154] HBASE-6297 Backport HBASE-6195 to 0.92 (Ram)
 
 Reason: Bug
 Author: Ram

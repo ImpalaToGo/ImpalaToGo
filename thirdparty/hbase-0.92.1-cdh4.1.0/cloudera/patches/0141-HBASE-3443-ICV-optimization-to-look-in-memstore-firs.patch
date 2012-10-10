@@ -1,7 +1,7 @@
 From 8cc2039c0d983994a9ccfbe95b820f138f44b799 Mon Sep 17 00:00:00 2001
 From: Lars Hofhansl <larsh@apache.org>
 Date: Thu, 12 Apr 2012 19:18:16 +0000
-Subject: [PATCH 141/151] HBASE-3443 ICV optimization to look in memstore first and then store files (HBASE-3082) does not work when deletes are in the mix
+Subject: [PATCH 141/154] HBASE-3443 ICV optimization to look in memstore first and then store files (HBASE-3082) does not work when deletes are in the mix
 
 Reason: Bug
 Author: Lars Hofhansl

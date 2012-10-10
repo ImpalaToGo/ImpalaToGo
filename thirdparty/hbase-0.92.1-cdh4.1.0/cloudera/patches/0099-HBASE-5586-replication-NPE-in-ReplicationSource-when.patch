@@ -1,7 +1,7 @@
 From 165493408f4335e0c2aef821c2ee8e981a4fa46c Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sat, 4 Aug 2012 18:53:54 -0600
-Subject: [PATCH 099/151] HBASE-5586 [replication] NPE in ReplicationSource when creating a stream to an inexistent cluster
+Subject: [PATCH 099/154] HBASE-5586 [replication] NPE in ReplicationSource when creating a stream to an inexistent cluster
 
 ---
  .../hbase/replication/ReplicationZookeeper.java    |    6 +-

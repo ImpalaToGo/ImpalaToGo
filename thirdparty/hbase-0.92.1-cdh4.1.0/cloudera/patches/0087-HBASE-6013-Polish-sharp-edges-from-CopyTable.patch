@@ -1,7 +1,7 @@
 From 3120aee61d06ade898628ae3c30f67f8f7974ce4 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:13:10 -0700
-Subject: [PATCH 087/151] HBASE-6013 Polish sharp edges from CopyTable
+Subject: [PATCH 087/154] HBASE-6013 Polish sharp edges from CopyTable
 
 Author: Jonathan Hsieh
 Reason: Backport

@@ -1,7 +1,7 @@
 From b6f2e23f26eeadddd3c54cefe0e60541e3bec265 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Thu, 10 May 2012 11:42:25 -0700
-Subject: [PATCH 027/151] HBASE-5985 TestMetaMigrationRemovingHTD failed with HADOOP 2.0.0
+Subject: [PATCH 027/154] HBASE-5985 TestMetaMigrationRemovingHTD failed with HADOOP 2.0.0
 
 Reason: Bug
 Author: Jimmy Xiang

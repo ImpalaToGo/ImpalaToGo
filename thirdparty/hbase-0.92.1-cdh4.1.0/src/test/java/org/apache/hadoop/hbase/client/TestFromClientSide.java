@@ -44,8 +44,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -58,7 +56,6 @@ import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.HServerAddress;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.MiniHBaseCluster;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
 import org.apache.hadoop.hbase.filter.CompareFilter;
@@ -3783,70 +3780,6 @@ public class TestFromClientSide {
       }
       assertTrue("Not found: " + Bytes.toString(tables[i]), found);
     }
-  }
-
-  /**
-   * creates an HTable for tableName using an unmanaged HConnection.
-   *
-   * @param tableName - table to create
-   * @return the created HTable object
-   * @throws IOException
-   */
-  HTable createUnmangedHConnectionHTable(final byte [] tableName) throws IOException {
-    TEST_UTIL.createTable(tableName, HConstants.CATALOG_FAMILY);
-    HConnection conn = HConnectionManager.createConnection(TEST_UTIL.getConfiguration());
-    ExecutorService pool = new ThreadPoolExecutor(1, Integer.MAX_VALUE,
-      60, TimeUnit.SECONDS,
-      new SynchronousQueue<Runnable>(),
-      Threads.newDaemonThreadFactory("test-from-client-table"));
-    ((ThreadPoolExecutor)pool).allowCoreThreadTimeOut(true);
-    return new HTable(tableName, conn, pool);
-  }
-
-  /**
-   * simple test that just executes parts of the client
-   * API that accept a pre-created HConnction instance
-   *
-   * @throws IOException
-   */
-  @Test
-  public void testUnmanagedHConnection() throws IOException {
-    final byte[] tableName = Bytes.toBytes("testUnmanagedHConnection");
-    HTable t = createUnmangedHConnectionHTable(tableName);
-    HBaseAdmin ha = new HBaseAdmin(t.getConnection());
-    assertTrue(ha.tableExists(tableName));
-    assertTrue(t.get(new Get(ROW)).isEmpty());
-  }
-
-  /**
-   * test of that unmanaged HConnections are able to reconnect
-   * properly (see HBASE-5058)
-   *
-   * @throws Exception
-   */
-  @Test
-  public void testUnmanagedHConnectionReconnect() throws Exception {
-    final byte[] tableName = Bytes.toBytes("testUnmanagedHConnectionReconnect");
-    HTable t = createUnmangedHConnectionHTable(tableName);
-    HConnection conn = t.getConnection();
-    HBaseAdmin ha = new HBaseAdmin(conn);
-    assertTrue(ha.tableExists(tableName));
-    assertTrue(t.get(new Get(ROW)).isEmpty());
-
-    // stop the master
-    MiniHBaseCluster cluster = TEST_UTIL.getHBaseCluster();
-    cluster.stopMaster(0, false);
-    cluster.waitOnMaster(0);
-
-    // start up a new master
-    cluster.startMaster();
-    assertTrue(cluster.waitForActiveAndReadyMaster());
-
-    // test that the same unmanaged connection works with a new
-    // HBaseAdmin and can connect to the new master;
-    HBaseAdmin newAdmin = new HBaseAdmin(conn);
-    assertTrue(newAdmin.tableExists(tableName));
-    assert(newAdmin.getClusterStatus().getServersSize() == SLAVES);
   }
 
   @Test

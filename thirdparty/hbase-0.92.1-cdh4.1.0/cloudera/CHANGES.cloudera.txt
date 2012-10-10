@@ -1,3 +1,35 @@
+commit de814b5d1390ce88216e114b5d1528b7863264a7
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Tue Sep 25 17:29:42 2012 -0700
+
+    Revert of HBASE-5058 and dependent patches:
+    HBASE-6663, HBASE-6115, HBASE-5682, HBASE-6606.
+    HBASE-5058 causes YCSB to fail in scale tests.
+    
+    Reason: Bug
+    Author: Gregory Chanan
+    Ref: CDH-7895
+
+commit db76e9118ddc056939b60dfa49a0dfc26b0477a5
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Sep 21 18:07:06 2012 -0600
+
+    HBase-6860 HBASE-6550 is too aggressive, DDOSes .META.
+    
+    Author: Jean Daniel Cryans
+    Reason: Bug
+    Ref: CDH-6768
+
+commit 69c2c52e78adf566f06b937efe8bbc9cd927b3f9
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Tue Sep 18 14:48:22 2012 -0700
+
+    HBASE-6011. Unable to start master in local mode
+    
+    Author: Andrew Purtell
+    Reason: Bug
+    Ref: CDH-7977
+
 commit 222d9178e9954ad53234b3be865997e8010b0343
 Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date:   Thu Sep 20 00:06:23 2012 +0200

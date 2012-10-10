@@ -1,7 +1,7 @@
 From 3ed5ab0ecb537b621a5bd40eb080939191cc7194 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Wed, 29 Aug 2012 22:57:17 +0000
-Subject: [PATCH 138/151] HBASE-6686 HFile Quarantine fails with missing dirs in hadoop 2.0
+Subject: [PATCH 138/154] HBASE-6686 HFile Quarantine fails with missing dirs in hadoop 2.0
 
 Reason: Hadoop 2 compat bug
 Author: Jonathan Hsieh

@@ -1,7 +1,7 @@
 From df8b90f243a6d1f73f4fbf0561d7e6b118b8e480 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Wed, 25 Jul 2012 14:38:04 -0700
-Subject: [PATCH 080/151] HBASE-5874 When 'fs.default.name' not configured, the hbck tool and Merge tool throws IllegalArgumentException (fulin wang)
+Subject: [PATCH 080/154] HBASE-5874 When 'fs.default.name' not configured, the hbck tool and Merge tool throws IllegalArgumentException (fulin wang)
 
 Reason: Backport
 Author: Fulin Wang

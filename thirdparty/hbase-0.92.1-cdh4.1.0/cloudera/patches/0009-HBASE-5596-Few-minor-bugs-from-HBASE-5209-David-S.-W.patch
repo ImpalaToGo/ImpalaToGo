@@ -1,7 +1,7 @@
 From d38c78a4b5864287d268428fa451638be8ce774e Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Mon, 26 Mar 2012 23:06:24 +0000
-Subject: [PATCH 009/151] HBASE-5596 Few minor bugs from HBASE-5209 (David S. Wang)
+Subject: [PATCH 009/154] HBASE-5596 Few minor bugs from HBASE-5209 (David S. Wang)
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1305663 13f79535-47bb-0310-9956-ffa450edef68
 

@@ -26,10 +26,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -60,17 +56,12 @@ public class TestZooKeeper {
 
   private final static HBaseTestingUtility
       TEST_UTIL = new HBaseTestingUtility();
-  private static HConnection persistentConnection;
 
   /**
    * @throws java.lang.Exception
    */
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
-    // create a connection *before* the cluster is started, to validate that the
-    // connection's ZK trackers are initialized on demand
-    persistentConnection = HConnectionManager.createConnection(TEST_UTIL.getConfiguration());
-
     // Test we can first start the ZK cluster by itself
     TEST_UTIL.startMiniZKCluster();
     TEST_UTIL.getConfiguration().setBoolean("dfs.support.append", true);
@@ -82,7 +73,6 @@ public class TestZooKeeper {
    */
   @AfterClass
   public static void tearDownAfterClass() throws Exception {
-    persistentConnection.close();
     TEST_UTIL.shutdownMiniCluster();
   }
 
@@ -101,28 +91,40 @@ public class TestZooKeeper {
    */
   @Test
   public void testClientSessionExpired()
-  throws Exception {
+  throws IOException, InterruptedException {
     LOG.info("testClientSessionExpired");
     Configuration c = new Configuration(TEST_UTIL.getConfiguration());
-    new HTable(c, HConstants.META_TABLE_NAME).close();
+    new HTable(c, HConstants.META_TABLE_NAME);
+    String quorumServers = ZKConfig.getZKQuorumServersString(c);
+    int sessionTimeout = 5 * 1000; // 5 seconds
     HConnection connection = HConnectionManager.getConnection(c);
     ZooKeeperWatcher connectionZK = connection.getZooKeeperWatcher();
-    TEST_UTIL.expireSession(connectionZK, null);
+    long sessionID = connectionZK.getRecoverableZooKeeper().getSessionId();
+    byte[] password = connectionZK.getRecoverableZooKeeper().getSessionPasswd();
+    ZooKeeper zk = new ZooKeeper(quorumServers, sessionTimeout,
+        EmptyWatcher.instance, sessionID, password);
+    LOG.info("Session timeout=" + zk.getSessionTimeout() +
+      ", original=" + sessionTimeout +
+      ", id=" + zk.getSessionId());
+    zk.close();
+
+    Thread.sleep(sessionTimeout * 3L);
 
     // provoke session expiration by doing something with ZK
     ZKUtil.dump(connectionZK);
 
     // Check that the old ZK connection is closed, means we did expire
     System.err.println("ZooKeeper should have timed out");
+    String state = connectionZK.getRecoverableZooKeeper().getState().toString();
     LOG.info("state=" + connectionZK.getRecoverableZooKeeper().getState());
     Assert.assertTrue(connectionZK.getRecoverableZooKeeper().getState().
       equals(States.CLOSED));
 
     // Check that the client recovered
     ZooKeeperWatcher newConnectionZK = connection.getZooKeeperWatcher();
-    States state = newConnectionZK.getRecoverableZooKeeper().getState();
-    LOG.info("state=" + state);
-    Assert.assertTrue(state.equals(States.CONNECTED) || state.equals(States.CONNECTING));
+    LOG.info("state=" + newConnectionZK.getRecoverableZooKeeper().getState());
+    Assert.assertTrue(newConnectionZK.getRecoverableZooKeeper().getState().equals(
+      States.CONNECTED));
   }
   
   @Test
@@ -144,33 +146,21 @@ public class TestZooKeeper {
    * Make sure we can use the cluster
    * @throws Exception
    */
-  private void testSanity() throws Exception {
+  public void testSanity() throws Exception{
+    HBaseAdmin admin =
+      new HBaseAdmin(new Configuration(TEST_UTIL.getConfiguration()));
     String tableName = "test"+System.currentTimeMillis();
-    HBaseAdmin admin = new HBaseAdmin(new Configuration(TEST_UTIL.getConfiguration()));
-    testAdminSanity(admin, tableName);
-    HTable table = new HTable(new Configuration(TEST_UTIL.getConfiguration()), tableName);
-    testTableSanity(table, tableName);
-  }
-
-  private void testSanity(HConnection conn, ExecutorService pool) throws Exception {
-    String tableName = "test"+System.currentTimeMillis();
-    HBaseAdmin admin = new HBaseAdmin(persistentConnection);
-    testAdminSanity(admin, tableName);
-    HTable table = new HTable(Bytes.toBytes(tableName), persistentConnection, pool);
-    testTableSanity(table, tableName);
-
-  }
-  private void testAdminSanity(HBaseAdmin admin, String tableName) throws Exception {
     HTableDescriptor desc = new HTableDescriptor(tableName);
     HColumnDescriptor family = new HColumnDescriptor("fam");
     desc.addFamily(family);
     LOG.info("Creating table " + tableName);
     admin.createTable(desc);
-  }
 
-  private void testTableSanity(HTable table, String tableName) throws Exception {
+    HTable table =
+      new HTable(new Configuration(TEST_UTIL.getConfiguration()), tableName);
     Put put = new Put(Bytes.toBytes("testrow"));
-    put.add(Bytes.toBytes("fam"), Bytes.toBytes("col"), Bytes.toBytes("testdata"));
+    put.add(Bytes.toBytes("fam"),
+        Bytes.toBytes("col"), Bytes.toBytes("testdata"));
     LOG.info("Putting table " + tableName);
     table.put(put);
 
@@ -233,16 +223,6 @@ public class TestZooKeeper {
     } catch (IOException ex) {
       // OK
     }
-  }
-
-  /**
-   * Test with a connection that existed before the cluster was started
-   */
-  @Test
-  public void testPersistentConnection() throws Exception {
-    ExecutorService pool = new ThreadPoolExecutor(1, 10, 10, TimeUnit.SECONDS,
-        new SynchronousQueue<Runnable>());
-    testSanity(persistentConnection, pool);
   }
 
   private void testKey(String ensemble, String port, String znode)

@@ -1,7 +1,7 @@
 From 6411f6b8c8532fc81a655b793f1e54ddaad9c9c4 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 30 Mar 2012 15:58:46 -0600
-Subject: [PATCH 013/151] HBASE-5655 Cap space usage of default log4j rolling policy
+Subject: [PATCH 013/154] HBASE-5655 Cap space usage of default log4j rolling policy
 
 Reason: Improvement
 Author: Himanshu Vashishtha

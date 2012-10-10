@@ -1,7 +1,7 @@
 From 4d72c4098adf712067025ac203e163ac5d24e302 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Thu, 23 Aug 2012 20:31:21 +0000
-Subject: [PATCH 118/151] HBASE-6644 HBaseAdmin.createTable should wait more till table is enabled.
+Subject: [PATCH 118/154] HBASE-6644 HBaseAdmin.createTable should wait more till table is enabled.
 
 Reason: Improvement
 Author: Jimmy Xiang

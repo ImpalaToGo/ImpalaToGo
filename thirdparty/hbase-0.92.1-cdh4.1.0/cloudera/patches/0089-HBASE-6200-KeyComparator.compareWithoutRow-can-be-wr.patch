@@ -1,7 +1,7 @@
 From b0444dd67dba6525b58ec124429556211d7b92a2 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Thu, 26 Jul 2012 18:19:50 -0700
-Subject: [PATCH 089/151] HBASE-6200 KeyComparator.compareWithoutRow can be wrong when families have the same prefix (Jieshan)
+Subject: [PATCH 089/154] HBASE-6200 KeyComparator.compareWithoutRow can be wrong when families have the same prefix (Jieshan)
 
 Reason: Backport
 Author: Jieshan Bean

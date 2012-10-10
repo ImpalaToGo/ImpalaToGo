@@ -1,7 +1,7 @@
 From e1827355d3cd6ef90a6914a09052ac541f9f4450 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 24 May 2012 20:40:33 +0200
-Subject: [PATCH 050/151] HBASE-6061 Fix ACL "Admin" Table inconsistent permission check
+Subject: [PATCH 050/154] HBASE-6061 Fix ACL "Admin" Table inconsistent permission check
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1341268 13f79535-47bb-0310-9956-ffa450edef68
 

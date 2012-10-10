@@ -1,7 +1,7 @@
 From 2e9f70e172d842322b5bd48d21963e4ed3da8c15 Mon Sep 17 00:00:00 2001
 From: Andrew Bayer <andrew@cloudera.com>
 Date: Thu, 22 Mar 2012 12:57:36 -0700
-Subject: [PATCH 007/151] CLOUDERA-BUILD. Bumping Surefire version to 2.12. Helps prevent issues
+Subject: [PATCH 007/154] CLOUDERA-BUILD. Bumping Surefire version to 2.12. Helps prevent issues
  when running Sonar analysis, provides better logging of unit test issues.
 
 ---

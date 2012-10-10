@@ -1,7 +1,7 @@
 From de2cda4cf3419e49fa70ec23d5a6270aefbc7fc2 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Wed, 18 Jul 2012 14:04:11 -0700
-Subject: [PATCH 071/151] HBASE-6034: Upgrade jackson to 1.8.8
+Subject: [PATCH 071/154] HBASE-6034: Upgrade jackson to 1.8.8
 
 Reason: Backport
 Author: Michael Stack

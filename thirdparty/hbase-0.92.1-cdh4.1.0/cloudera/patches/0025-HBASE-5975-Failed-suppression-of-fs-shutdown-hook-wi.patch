@@ -1,7 +1,7 @@
 From 50505b1331c80a0c3bd5c4c3ba4d4610ce6696e4 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 9 May 2012 13:47:38 -0700
-Subject: [PATCH 025/151] HBASE-5975 Failed suppression of fs shutdown hook with Hadoop 2.0.0
+Subject: [PATCH 025/154] HBASE-5975 Failed suppression of fs shutdown hook with Hadoop 2.0.0
 
 Readon: Bug
 Author: Jimmy Xiang

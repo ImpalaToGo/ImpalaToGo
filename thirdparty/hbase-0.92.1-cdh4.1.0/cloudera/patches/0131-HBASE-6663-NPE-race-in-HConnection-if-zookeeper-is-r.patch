@@ -1,7 +1,7 @@
 From cdad1e25c797adc7fbd79cbb2b2df3d2ed300c5c Mon Sep 17 00:00:00 2001
 From: Lars Hofhansl <larsh@apache.org>
 Date: Sat, 25 Aug 2012 05:30:23 +0000
-Subject: [PATCH 131/151] HBASE-6663 NPE race in HConnection if zookeeper is reset (Gregory Chanan)
+Subject: [PATCH 131/154] HBASE-6663 NPE race in HConnection if zookeeper is reset (Gregory Chanan)
 
 Reason: Supportability
 Author: Gregory Chanan

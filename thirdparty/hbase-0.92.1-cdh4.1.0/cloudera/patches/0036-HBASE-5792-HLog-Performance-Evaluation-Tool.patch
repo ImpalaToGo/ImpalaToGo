@@ -1,7 +1,7 @@
 From 7eee3c1298e74b2436a0e4987eb177a3b433fe8e Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 18 May 2012 22:39:05 +0200
-Subject: [PATCH 036/151] HBASE-5792 HLog Performance Evaluation Tool
+Subject: [PATCH 036/154] HBASE-5792 HLog Performance Evaluation Tool
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1327668 13f79535-47bb-0310-9956-ffa450edef68
 

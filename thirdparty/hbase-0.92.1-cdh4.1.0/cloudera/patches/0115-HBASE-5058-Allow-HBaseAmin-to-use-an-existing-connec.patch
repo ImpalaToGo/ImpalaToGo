@@ -1,7 +1,7 @@
 From 39e7449fc4cf530de991524b9842e55bdaf157ae Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 27 Jul 2012 15:56:03 -0700
-Subject: [PATCH 115/151] HBASE-5058 Allow HBaseAmin to use an existing connection (Lars H)
+Subject: [PATCH 115/154] HBASE-5058 Allow HBaseAmin to use an existing connection (Lars H)
 
 Reason: Backport
 Author: Lars Hofhansl

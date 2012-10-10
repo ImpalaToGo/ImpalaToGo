@@ -1,7 +1,7 @@
 From 91d2dc734e8cc8641438728b544c240426af8fda Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Thu, 17 May 2012 10:16:20 -0700
-Subject: [PATCH 033/151] HBASE-6001 Upgrade slf4j to 1.6.1
+Subject: [PATCH 033/154] HBASE-6001 Upgrade slf4j to 1.6.1
 
 Reason: Improvement
 Author: Jimmy Xiang

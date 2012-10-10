@@ -1,7 +1,7 @@
 From 8f8c22825e7a0763aa5a3a67066619feba5c4438 Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Wed, 18 Jan 2012 22:43:55 +0000
-Subject: [PATCH 031/151] HBASE-5223  TestMetaReaderEditor is missing call to CatalogTracker.stop()
+Subject: [PATCH 031/154] HBASE-5223  TestMetaReaderEditor is missing call to CatalogTracker.stop()
 
 Reason: Test
 Author: Zhihong Yu

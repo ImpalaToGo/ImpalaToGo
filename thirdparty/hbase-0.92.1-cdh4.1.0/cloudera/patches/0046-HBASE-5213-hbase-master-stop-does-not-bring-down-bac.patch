@@ -1,7 +1,7 @@
 From b59929853c1fc64d286e7aeb4a62a2312a1df18c Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 9 Mar 2012 15:00:24 -0800
-Subject: [PATCH 046/151] HBASE-5213 "hbase master stop" does not bring down backup masters (Gregory)
+Subject: [PATCH 046/154] HBASE-5213 "hbase master stop" does not bring down backup masters (Gregory)
  Backport to cdh4/0.92
 
 Reason: Bug

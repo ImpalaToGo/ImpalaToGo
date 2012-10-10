@@ -1,7 +1,7 @@
 From 96fc32c805f56f9871b1b86bf80b187ce2668dce Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Fri, 6 Jul 2012 10:06:42 -0700
-Subject: [PATCH 068/151] HBASE-6283 [region_mover.rb] Add option to exclude list of hosts on unload instead of just assuming the source $
+Subject: [PATCH 068/154] HBASE-6283 [region_mover.rb] Add option to exclude list of hosts on unload instead of just assuming the source $
 
 Reason: Customer
 Author: Jonathan Hsieh

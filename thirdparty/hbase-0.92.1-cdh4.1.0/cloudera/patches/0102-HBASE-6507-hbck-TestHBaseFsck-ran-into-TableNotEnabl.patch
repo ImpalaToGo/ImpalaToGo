@@ -1,7 +1,7 @@
 From 3ef1ee99ad5f2d7a123c4e7dc49a3ac0035bad91 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Sat, 4 Aug 2012 16:48:08 +0000
-Subject: [PATCH 102/151] HBASE-6507 [hbck] TestHBaseFsck ran into TableNotEnabledException
+Subject: [PATCH 102/154] HBASE-6507 [hbck] TestHBaseFsck ran into TableNotEnabledException
 
 Reason: Test
 Author: Jimmy Xiang

@@ -1,7 +1,7 @@
 From 63e85e0249f580dfb015573ef743760aeda3a4f4 Mon Sep 17 00:00:00 2001
 From: Jonathan Hsieh <jmhsieh@apache.org>
 Date: Sat, 17 Mar 2012 07:29:35 +0000
-Subject: [PATCH 005/151] HBASE-5588 Deprecate/remove AssignmentManager#clearRegionFromTransition
+Subject: [PATCH 005/154] HBASE-5588 Deprecate/remove AssignmentManager#clearRegionFromTransition
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.92@1301881 13f79535-47bb-0310-9956-ffa450edef68
 

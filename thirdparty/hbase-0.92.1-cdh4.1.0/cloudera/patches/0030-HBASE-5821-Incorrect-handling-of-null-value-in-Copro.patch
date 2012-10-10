@@ -1,7 +1,7 @@
 From f438568f2c2cbf237340bbcdd78a4df00b8305cf Mon Sep 17 00:00:00 2001
 From: Zhihong Yu <tedyu@apache.org>
 Date: Thu, 19 Apr 2012 16:18:35 +0000
-Subject: [PATCH 030/151] HBASE-5821  Incorrect handling of null value in Coprocessor aggregation function min() (Maryann Xue)
+Subject: [PATCH 030/154] HBASE-5821  Incorrect handling of null value in Coprocessor aggregation function min() (Maryann Xue)
 
 Reason: Bug
 Author: Maryann Xue

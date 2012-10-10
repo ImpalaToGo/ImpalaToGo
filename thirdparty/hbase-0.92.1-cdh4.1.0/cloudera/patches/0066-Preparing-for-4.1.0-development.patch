@@ -1,7 +1,7 @@
 From b8d39c3edfa208d3ac96666db5ec39f7ff53cc63 Mon Sep 17 00:00:00 2001
 From: Jenkins slave <kitchen-build@cloudera.com>
 Date: Fri, 1 Jun 2012 08:27:15 -0700
-Subject: [PATCH 066/151] Preparing for 4.1.0 development.
+Subject: [PATCH 066/154] Preparing for 4.1.0 development.
 
 ---
  pom.xml |    4 ++--

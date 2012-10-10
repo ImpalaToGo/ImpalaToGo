@@ -1,7 +1,7 @@
 From 04311444e8123a55eb46720f1b22e536395cc692 Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Mon, 9 Apr 2012 22:58:19 +0000
-Subject: [PATCH 056/151] HBASE-5740 Compaction interruption may be due to balacing
+Subject: [PATCH 056/154] HBASE-5740 Compaction interruption may be due to balacing
 
 Reason: Bug
 Author: Michael Stack, Jimmy Xiang
