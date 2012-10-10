@@ -18,7 +18,7 @@
 
 package org.apache.hive.jdbc;
 
-import static org.apache.hive.service.sql.thrift.Constants.TYPE_NAMES;
+import static org.apache.hive.service.cli.thrift.Constants.TYPE_NAMES;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -28,18 +28,18 @@ import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hive.service.sql.TableSchema;
-import org.apache.hive.service.sql.thrift.TColumnDesc;
-import org.apache.hive.service.sql.thrift.TFetchOrientation;
-import org.apache.hive.service.sql.thrift.TFetchResultsReq;
-import org.apache.hive.service.sql.thrift.TFetchResultsResp;
-import org.apache.hive.service.sql.thrift.TGetResultSetMetadataReq;
-import org.apache.hive.service.sql.thrift.TGetResultSetMetadataResp;
-import org.apache.hive.service.sql.thrift.TOperationHandle;
-import org.apache.hive.service.sql.thrift.TRow;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSessionHandle;
-import org.apache.hive.service.sql.thrift.TTableSchema;
+import org.apache.hive.service.cli.TableSchema;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TColumnDesc;
+import org.apache.hive.service.cli.thrift.TFetchOrientation;
+import org.apache.hive.service.cli.thrift.TFetchResultsReq;
+import org.apache.hive.service.cli.thrift.TFetchResultsResp;
+import org.apache.hive.service.cli.thrift.TGetResultSetMetadataReq;
+import org.apache.hive.service.cli.thrift.TGetResultSetMetadataResp;
+import org.apache.hive.service.cli.thrift.TOperationHandle;
+import org.apache.hive.service.cli.thrift.TRow;
+import org.apache.hive.service.cli.thrift.TSessionHandle;
+import org.apache.hive.service.cli.thrift.TTableSchema;
 
 /**
  * HiveQueryResultSet.
@@ -49,7 +49,7 @@ public class HiveQueryResultSet extends HiveBaseResultSet {
 
   public static final Log LOG = LogFactory.getLog(HiveQueryResultSet.class);
 
-  private TSQLService.Iface client;
+  private TCLIService.Iface client;
   private TOperationHandle stmtHandle;
   private TSessionHandle sessHandle;
   private int maxRows;
@@ -63,7 +63,7 @@ public class HiveQueryResultSet extends HiveBaseResultSet {
 
   public static class Builder {
 
-    private TSQLService.Iface client = null;
+    private TCLIService.Iface client = null;
     private TOperationHandle stmtHandle = null;
     private TSessionHandle sessHandle  = null;
 
@@ -79,7 +79,7 @@ public class HiveQueryResultSet extends HiveBaseResultSet {
     private int fetchSize = 50;
     private boolean emptyResultSet = false;
 
-    public Builder setClient(TSQLService.Iface client) {
+    public Builder setClient(TCLIService.Iface client) {
       this.client = client;
       return this;
     }

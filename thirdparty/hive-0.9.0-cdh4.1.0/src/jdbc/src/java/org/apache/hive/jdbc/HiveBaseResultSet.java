@@ -41,17 +41,17 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hive.service.sql.TableSchema;
-import org.apache.hive.service.sql.Type;
-import org.apache.hive.service.sql.thrift.TBoolValue;
-import org.apache.hive.service.sql.thrift.TByteValue;
-import org.apache.hive.service.sql.thrift.TColumnValue;
-import org.apache.hive.service.sql.thrift.TDoubleValue;
-import org.apache.hive.service.sql.thrift.TI16Value;
-import org.apache.hive.service.sql.thrift.TI32Value;
-import org.apache.hive.service.sql.thrift.TI64Value;
-import org.apache.hive.service.sql.thrift.TRow;
-import org.apache.hive.service.sql.thrift.TStringValue;
+import org.apache.hive.service.cli.TableSchema;
+import org.apache.hive.service.cli.Type;
+import org.apache.hive.service.cli.thrift.TBoolValue;
+import org.apache.hive.service.cli.thrift.TByteValue;
+import org.apache.hive.service.cli.thrift.TColumnValue;
+import org.apache.hive.service.cli.thrift.TDoubleValue;
+import org.apache.hive.service.cli.thrift.TI16Value;
+import org.apache.hive.service.cli.thrift.TI32Value;
+import org.apache.hive.service.cli.thrift.TI64Value;
+import org.apache.hive.service.cli.thrift.TRow;
+import org.apache.hive.service.cli.thrift.TStringValue;
 
 /**
  * Data independent base class which implements the common part of
@@ -422,10 +422,10 @@ public abstract class HiveBaseResultSet implements ResultSet {
     return null;
   }
 
-  private Timestamp getTimestampValue(TI64Value tI64Value) {
-    if (tI64Value.isSetValue()) {
+  private Timestamp getTimestampValue(TStringValue tStringValue) {
+    if (tStringValue.isSetValue()) {
       wasNull = false;
-      return new Timestamp(tI64Value.getValue());
+      return Timestamp.valueOf(tStringValue.getValue());
     }
     wasNull = true;
     return null;
@@ -464,7 +464,7 @@ public abstract class HiveBaseResultSet implements ResultSet {
     case STRING_TYPE:
       return getStringValue(tColumnValue.getStringVal());
     case TIMESTAMP_TYPE:
-      return getTimestampValue(tColumnValue.getI64Val());
+      return getTimestampValue(tColumnValue.getStringVal());
     default:
       throw new SQLException("Unrecognized column type:" + columnType);
     }
@@ -593,11 +593,21 @@ public abstract class HiveBaseResultSet implements ResultSet {
   }
 
   public Timestamp getTimestamp(int columnIndex) throws SQLException {
-    throw new SQLException("Method not supported");
+    Object obj = getObject(columnIndex);
+    if (obj == null) {
+      return null;
+    }
+    if (obj instanceof Timestamp) {
+      return (Timestamp) obj;
+    }
+    if (obj instanceof String) {
+      return Timestamp.valueOf((String)obj);
+    }
+    throw new SQLException("Illegal conversion");
   }
 
   public Timestamp getTimestamp(String columnName) throws SQLException {
-    throw new SQLException("Method not supported");
+    return getTimestamp(findColumn(columnName));
   }
 
   public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {

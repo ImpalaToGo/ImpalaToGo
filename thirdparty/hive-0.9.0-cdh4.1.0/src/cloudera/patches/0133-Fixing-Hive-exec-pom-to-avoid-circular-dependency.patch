@@ -1,7 +1,7 @@
 From f29f10f2d76f827a8df1799db4e7d1c0a5e94e27 Mon Sep 17 00:00:00 2001
 From: Andrew Bayer <andrew@cloudera.com>
 Date: Tue, 28 Aug 2012 14:48:31 -0700
-Subject: [PATCH 133/144] Fixing Hive exec pom to avoid circular dependency
+Subject: [PATCH 133/148] Fixing Hive exec pom to avoid circular dependency
 
 ---
  cloudera/maven-packaging/hive-cli/pom.xml     |    4 ----

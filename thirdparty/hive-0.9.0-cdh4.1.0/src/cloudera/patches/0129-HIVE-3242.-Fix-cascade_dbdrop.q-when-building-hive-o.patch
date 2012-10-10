@@ -1,7 +1,7 @@
 From b2991845b6f8912609b39a0686db051bad3f1bcc Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Thu, 23 Aug 2012 12:57:08 -0700
-Subject: [PATCH 129/144] HIVE-3242. Fix cascade_dbdrop.q when building hive on hadoop0.23
+Subject: [PATCH 129/148] HIVE-3242. Fix cascade_dbdrop.q when building hive on hadoop0.23
 
 Reason: Bug
 Author: Zhenxiao Luo

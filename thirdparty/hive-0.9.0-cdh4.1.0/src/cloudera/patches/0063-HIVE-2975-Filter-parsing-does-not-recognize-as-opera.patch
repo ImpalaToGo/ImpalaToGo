@@ -1,7 +1,7 @@
 From 13805c4cfb9543d52c98b65b01e8aebf8896bdeb Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Fri, 18 May 2012 21:31:33 +0000
-Subject: [PATCH 063/144] HIVE-2975 : Filter parsing does not recognize '!=' as operator and silently ignores invalid tokens (Thomas Weise via Ashutosh Chauhan)
+Subject: [PATCH 063/148] HIVE-2975 : Filter parsing does not recognize '!=' as operator and silently ignores invalid tokens (Thomas Weise via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340264 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit a59e328cab2aec7f92cd6f9fd290ca1cdfe5e743)

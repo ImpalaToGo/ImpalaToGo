@@ -1,7 +1,7 @@
 From 52c578c6bac1e25f18e0fda9dce724f6016f3357 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Fri, 11 May 2012 00:42:04 +0000
-Subject: [PATCH 055/144] HIVE-3012 hive custom scripts do not work well if the data contains new lines (njain via kevinwilfong)
+Subject: [PATCH 055/148] HIVE-3012 hive custom scripts do not work well if the data contains new lines (njain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1336986 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 88582ee15ea899fa6c800c81e2af4cd95738ec9e)

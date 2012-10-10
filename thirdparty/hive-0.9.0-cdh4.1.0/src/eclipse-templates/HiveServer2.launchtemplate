@@ -24,7 +24,7 @@
   </mapAttribute>
 
   <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
-    <listEntry value="/hive/service/src/java/org/apache/hive/service/hs2/HiveServer2.java"/>
+    <listEntry value="/hive/service/src/java/org/apache/hive/service/server/HiveServer2.java"/>
   </listAttribute>
 
   <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_TYPES">
@@ -42,7 +42,7 @@
 
 
   <booleanAttribute key="org.eclipse.jdt.launching.DEFAULT_CLASSPATH" value="false"/>
-  <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="org.apache.hive.service.hs2.HiveServer2"/>
+  <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="org.apache.hive.service.server.HiveServer2"/>
   <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="@PROJECT@"/>
   <stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS"
     value="-Dhive.root.logger=INFO,console -Dhadoop.bin.path=@HADOOP_BIN_PATH@"/>

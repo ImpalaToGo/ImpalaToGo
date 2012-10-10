@@ -1,7 +1,7 @@
 From 30ffb8d386c4a3608a2c1f2128c2bf10ec3b0808 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Mon, 11 Jun 2012 19:16:28 +0000
-Subject: [PATCH 083/144] HIVE-2694. Add FORMAT UDF (Zhenxiao Luo via cws)
+Subject: [PATCH 083/148] HIVE-2694. Add FORMAT UDF (Zhenxiao Luo via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348976 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit fb5e41d8242f50f8b0ba244e19fc0e9276806363)

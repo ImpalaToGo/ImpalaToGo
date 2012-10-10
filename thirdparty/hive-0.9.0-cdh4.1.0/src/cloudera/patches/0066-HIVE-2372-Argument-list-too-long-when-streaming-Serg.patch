@@ -1,7 +1,7 @@
 From 0b964b61c946044dfb7bbf80254d56a2d6cd2e4c Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Fri, 25 May 2012 23:51:13 +0000
-Subject: [PATCH 066/144] HIVE-2372 Argument list too long when streaming (Sergey Tryuber via egc)
+Subject: [PATCH 066/148] HIVE-2372 Argument list too long when streaming (Sergey Tryuber via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342841 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 1d17a911ff8ee1dcb490409f4bb995df2eb1a8e8)

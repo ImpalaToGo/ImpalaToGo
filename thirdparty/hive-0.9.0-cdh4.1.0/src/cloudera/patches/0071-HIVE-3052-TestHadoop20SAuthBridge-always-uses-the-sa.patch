@@ -1,7 +1,7 @@
 From 1241a5a1768835ccccbcad997b773141ca9b9792 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 31 May 2012 16:14:26 +0000
-Subject: [PATCH 071/144] HIVE-3052 : TestHadoop20SAuthBridge always uses the same port (Navis via Ashutosh Chauhan)
+Subject: [PATCH 071/148] HIVE-3052 : TestHadoop20SAuthBridge always uses the same port (Navis via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344797 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 1ba8d2e6ac807bf988c46a21f5c573b49ff0a96a)

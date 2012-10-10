@@ -1,7 +1,7 @@
 From 1f359bf8928afd895500b07d1428455376c98776 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Fri, 22 Jun 2012 16:59:16 +0000
-Subject: [PATCH 102/144] HIVE-3135. add an option in ptest to run on a single machine (Namit Jain via kevinwilfong)
+Subject: [PATCH 102/148] HIVE-3135. add an option in ptest to run on a single machine (Namit Jain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352973 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit fbb5e17fe29b54baf6517d8d3e83a07b534e3de2)

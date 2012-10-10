@@ -1,7 +1,7 @@
 From f7f57f45565ff132b3ad684b50b7ca6df775cc8d Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 19 Jun 2012 21:14:09 +0000
-Subject: [PATCH 097/144] Fixing bug in removing ProtectMode from a Table
+Subject: [PATCH 097/148] Fixing bug in removing ProtectMode from a Table
  (Bhushan Mandhani via Carl Steinbach)
 
 Summary:

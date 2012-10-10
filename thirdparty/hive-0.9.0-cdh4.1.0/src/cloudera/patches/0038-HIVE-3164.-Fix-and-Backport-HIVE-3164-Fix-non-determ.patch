@@ -1,7 +1,7 @@
 From 70a7889a28dfc5792389616d4e5c1fc17d983b90 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Thu, 21 Jun 2012 10:04:55 -0700
-Subject: [PATCH 038/144] HIVE-3164. Fix and Backport HIVE-3164: Fix non-deterministic testcases failures when running Hive0.9.0 on MapReduce2
+Subject: [PATCH 038/148] HIVE-3164. Fix and Backport HIVE-3164: Fix non-deterministic testcases failures when running Hive0.9.0 on MapReduce2
 
 Reason: Bug
 Author: Zhenxiao Luo

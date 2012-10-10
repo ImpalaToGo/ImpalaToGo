@@ -1,7 +1,7 @@
 From e7b1800b35d662ff350bcc188de56e903341ee16 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 15 Jun 2012 20:48:46 +0000
-Subject: [PATCH 091/144] HIVE-3106 Add option to make multi inserts more atomic
+Subject: [PATCH 091/148] HIVE-3106 Add option to make multi inserts more atomic
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350792 13f79535-47bb-0310-9956-ffa450edef68

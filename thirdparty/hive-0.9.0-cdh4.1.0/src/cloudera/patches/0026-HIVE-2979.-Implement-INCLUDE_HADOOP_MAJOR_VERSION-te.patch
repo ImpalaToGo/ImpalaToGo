@@ -1,7 +1,7 @@
 From 8058533a4ac675de77c198fc832f7ceb3f7fe550 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 5 Jun 2012 14:02:38 -0700
-Subject: [PATCH 026/144] HIVE-2979. Implement INCLUDE_HADOOP_MAJOR_VERSION test macro
+Subject: [PATCH 026/148] HIVE-2979. Implement INCLUDE_HADOOP_MAJOR_VERSION test macro
 
 Reason: Bug
 Author: Zhenxiao Luo

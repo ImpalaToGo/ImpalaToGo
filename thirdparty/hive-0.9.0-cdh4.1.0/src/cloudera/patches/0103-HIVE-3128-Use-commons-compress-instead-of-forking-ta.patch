@@ -1,7 +1,7 @@
 From d656fb85b2dcadb2d3cf76d7853be97abb5309a5 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Fri, 22 Jun 2012 22:11:23 +0000
-Subject: [PATCH 103/144] HIVE-3128 Use commons-compress instead of forking tar process (Kanna Karanam via egc)
+Subject: [PATCH 103/148] HIVE-3128 Use commons-compress instead of forking tar process (Kanna Karanam via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353044 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 7d3b6dbfcf53f52e6dc15cb8c689072657edd6c9)

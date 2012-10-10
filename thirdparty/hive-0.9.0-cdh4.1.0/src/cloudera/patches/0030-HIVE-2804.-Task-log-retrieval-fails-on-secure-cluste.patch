@@ -1,7 +1,7 @@
 From 00e7b6cfe4e47f1e7f337c3829668867f368e950 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 5 Jun 2012 14:11:43 -0700
-Subject: [PATCH 030/144] HIVE-2804. Task log retrieval fails on secure cluster
+Subject: [PATCH 030/148] HIVE-2804. Task log retrieval fails on secure cluster
 
 Reason: Bug
 Author: Zhenxiao Luo

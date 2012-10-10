@@ -1,7 +1,7 @@
 From e78bd3bce9d13ce2bf69006013d295a41e56490f Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Fri, 8 Jun 2012 02:46:28 +0000
-Subject: [PATCH 080/144] HIVE-2969. Log Time To Submit metric with PerfLogger. (kevinwilfong reviewed by ashutoshc)
+Subject: [PATCH 080/148] HIVE-2969. Log Time To Submit metric with PerfLogger. (kevinwilfong reviewed by ashutoshc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347870 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 7212d3e8828033516780696adbb0cc54073f3ba0)

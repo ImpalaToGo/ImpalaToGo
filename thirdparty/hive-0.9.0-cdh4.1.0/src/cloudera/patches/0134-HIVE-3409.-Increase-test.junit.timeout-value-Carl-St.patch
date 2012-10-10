@@ -1,7 +1,7 @@
 From 784a01f2164bfff92c2e74e0751da133a541bd22 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Wed, 29 Aug 2012 08:02:57 +0000
-Subject: [PATCH 134/144] HIVE-3409. Increase test.junit.timeout value (Carl Steinbach via cws)
+Subject: [PATCH 134/148] HIVE-3409. Increase test.junit.timeout value (Carl Steinbach via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1378470 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 5ab02843a04755bb2b5dc393a03b5b932cb022ce)

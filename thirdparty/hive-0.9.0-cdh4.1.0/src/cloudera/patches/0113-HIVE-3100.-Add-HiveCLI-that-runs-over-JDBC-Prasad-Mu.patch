@@ -1,7 +1,7 @@
 From 27d5f93a5b494ebe8cc656e3aec406c620da35b5 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 9 Jul 2012 22:21:31 -0700
-Subject: [PATCH 113/144] HIVE-3100. Add HiveCLI that runs over JDBC (Prasad Mujumdar via cws)
+Subject: [PATCH 113/148] HIVE-3100. Add HiveCLI that runs over JDBC (Prasad Mujumdar via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356516 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit ca6980d326ab86171dfba262ea1efa01c0002676)

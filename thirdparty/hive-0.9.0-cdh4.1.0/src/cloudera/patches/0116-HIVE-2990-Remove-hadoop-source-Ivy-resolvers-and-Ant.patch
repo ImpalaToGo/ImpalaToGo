@@ -1,7 +1,7 @@
 From 354b0f227c2a5181262be2822554c016e9d58afc Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 9 Jul 2012 22:27:32 -0700
-Subject: [PATCH 116/144] HIVE-2990 Remove hadoop-source Ivy resolvers and Ant targets (Carl Steinbach via Ashutosh Chauhan)
+Subject: [PATCH 116/148] HIVE-2990 Remove hadoop-source Ivy resolvers and Ant targets (Carl Steinbach via Ashutosh Chauhan)
 
     git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1333249 13f79535-47bb-0310-9956-ffa450edef68
     (cherry picked from commit a5b597e906d9ff54d7ea4fd0af2c458edb03e5b5)

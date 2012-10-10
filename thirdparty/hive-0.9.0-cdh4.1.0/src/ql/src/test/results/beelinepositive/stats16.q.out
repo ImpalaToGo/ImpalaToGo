@@ -62,11 +62,6 @@ No rows selected
 'Location:           ','!!{hive.metastore.warehouse.dir}!!/stats16.db/stats16',''
 'Table Type:         ','MANAGED_TABLE       ',''
 'Table Parameters:','',''
-'','numFiles            ','1                   '
-'','numPartitions       ','0                   '
-'','numRows             ','500                 '
-'','rawDataSize         ','5312                '
-'','totalSize           ','5812                '
 '','transient_lastDdlTime','!!UNIXTIME!!          '
 '','',''
 '# Storage Information','',''
@@ -79,7 +74,7 @@ No rows selected
 'Sort Columns:       ','[]                  ',''
 'Storage Desc Params:','',''
 '','serialization.format','1                   '
-32 rows selected 
+27 rows selected 
 >>>  
 >>>  drop table stats16;
 No rows affected 

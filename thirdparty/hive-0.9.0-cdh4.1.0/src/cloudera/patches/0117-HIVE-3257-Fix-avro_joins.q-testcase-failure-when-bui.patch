@@ -1,7 +1,7 @@
 From 2eea83f01ef06d80cdc27a469e44c7f031861117 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Sat, 14 Jul 2012 12:53:10 +0000
-Subject: [PATCH 117/144] HIVE-3257 Fix avro_joins.q testcase failure when building hive on hadoop0.23. Zhenxiao Luo (via egc)
+Subject: [PATCH 117/148] HIVE-3257 Fix avro_joins.q testcase failure when building hive on hadoop0.23. Zhenxiao Luo (via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1361537 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit aaabd8836c14d8cd769b1cf550ef0e8ac68f8d0c)

@@ -44,13 +44,13 @@ import javax.security.sasl.SaslException;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.service.auth.KerberosSaslHelper;
 import org.apache.hive.service.auth.PlainSaslHelper;
-import org.apache.hive.service.sql.thrift.TCloseSessionReq;
-import org.apache.hive.service.sql.thrift.TOpenSessionReq;
-import org.apache.hive.service.sql.thrift.TOpenSessionResp;
-import org.apache.hive.service.sql.thrift.TProtocolVersion;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSessionHandle;
-import org.apache.hive.service.sql.thrift.ThriftSQLService;
+import org.apache.hive.service.cli.thrift.EmbeddedThriftCLIService;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TCloseSessionReq;
+import org.apache.hive.service.cli.thrift.TOpenSessionReq;
+import org.apache.hive.service.cli.thrift.TOpenSessionResp;
+import org.apache.hive.service.cli.thrift.TProtocolVersion;
+import org.apache.hive.service.cli.thrift.TSessionHandle;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -64,7 +64,7 @@ import org.apache.thrift.transport.TTransportException;
  */
 public class HiveConnection implements java.sql.Connection {
   private static final String HIVE_AUTH_TYPE= "auth";
-  private static final String HIVE_AUTH_SIMPLE = "simple";
+  private static final String HIVE_AUTH_SIMPLE = "noSasl";
   private static final String HIVE_AUTH_USER = "user";
   private static final String HIVE_AUTH_PRINCIPAL = "principal";
   private static final String HIVE_AUTH_PASSWD = "password";
@@ -72,7 +72,7 @@ public class HiveConnection implements java.sql.Connection {
   private static final String HIVE_ANONYMOUS_PASSWD = "anonymous";
 
   private TTransport transport;
-  private TSQLService.Iface client;
+  private TCLIService.Iface client;
   private boolean isClosed = true;
   private SQLWarning warningChain = null;
   private TSessionHandle sessHandle = null;
@@ -83,19 +83,7 @@ public class HiveConnection implements java.sql.Connection {
   public HiveConnection(String uri, Properties info) throws SQLException {
     Utils.JdbcConnectionParams connParams = Utils.parseURL(uri);
     if (connParams.isEmbeddedMode()) {
-      client = new ThriftSQLService();
-      /*
-      if (!connParams.getHiveConfs().isEmpty()) {
-        HiveConf newConf = new HiveConf(SessionState.class);
-        for (Entry<String, String> confEntry : connParams.getHiveConfs().entrySet()) {
-          newConf.set(confEntry.getKey(), confEntry.getValue());
-        }
-        client = new ThriftSQLService(newConf);
-      } else {
-        // TODO: create embedded client
-        client = new ThriftSQLService();
-      }
-      */
+      client = new EmbeddedThriftCLIService();
     } else {
       // extract user/password from JDBC connection properties if its not supplied in the connection URL
       if (info.containsKey(HIVE_AUTH_USER)) {
@@ -109,7 +97,7 @@ public class HiveConnection implements java.sql.Connection {
     }
 
     // currently only V1 is supported
-    supportedProtocols.add(TProtocolVersion.HIVE_SQL_SERVICE_PROTOCOL_V1);
+    supportedProtocols.add(TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1);
 
     // open client session
     openSession(uri);
@@ -147,7 +135,7 @@ public class HiveConnection implements java.sql.Connection {
       try {
         if (sessConf.containsKey(HIVE_AUTH_PRINCIPAL)) {
           transport = KerberosSaslHelper.getKerberosTransport(
-                  sessConf.get(HIVE_AUTH_PRINCIPAL),host, transport);
+                  sessConf.get(HIVE_AUTH_PRINCIPAL), host, transport);
         } else {
           String userName = sessConf.get(HIVE_AUTH_USER);
           if ((userName == null) || userName.isEmpty()) {
@@ -166,7 +154,7 @@ public class HiveConnection implements java.sql.Connection {
     }
 
     TProtocol protocol = new TBinaryProtocol(transport);
-    client = new TSQLService.Client(protocol);
+    client = new TCLIService.Client(protocol);
     try {
       transport.open();
     } catch (TTransportException e) {

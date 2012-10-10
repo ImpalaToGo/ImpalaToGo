@@ -1,7 +1,7 @@
 From 539c068df5e71b280557198d8fc71be7b3fdefe8 Mon Sep 17 00:00:00 2001
 From: Siying Dong <sdong@apache.org>
 Date: Tue, 22 May 2012 18:37:37 +0000
-Subject: [PATCH 064/144] HIVE-3030 escape more chars for script operator (Namit Jain via Siying Dong)
+Subject: [PATCH 064/148] HIVE-3030 escape more chars for script operator (Namit Jain via Siying Dong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1341589 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 54abc308164314a6fae0ef0b2f2241a6d4d9f058)

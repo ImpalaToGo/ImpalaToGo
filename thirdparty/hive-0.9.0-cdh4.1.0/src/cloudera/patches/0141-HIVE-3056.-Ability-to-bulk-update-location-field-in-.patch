@@ -1,7 +1,7 @@
 From b95f011c88f806e92bea8b079915a167967b9991 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 4 Sep 2012 09:22:32 +0000
-Subject: [PATCH 141/144] HIVE-3056. Ability to bulk update location field in Db/Table/Partition records (Shreepadma Venugopalan via cws)
+Subject: [PATCH 141/148] HIVE-3056. Ability to bulk update location field in Db/Table/Partition records (Shreepadma Venugopalan via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380500 13f79535-47bb-0310-9956-ffa450edef68
 ---

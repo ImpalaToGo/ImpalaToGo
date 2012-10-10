@@ -1,7 +1,7 @@
 From 201871b0dcc2517de766cc36dbb22bb92368189a Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Mon, 2 Jul 2012 23:52:44 +0000
-Subject: [PATCH 114/144] HIVE-3146 : Support external hive tables whose data are stored in Azure blob store/Azure Storage Volumes (ASV) (Kanna Karanam via Ashutosh Chauhan)
+Subject: [PATCH 114/148] HIVE-3146 : Support external hive tables whose data are stored in Azure blob store/Azure Storage Volumes (ASV) (Kanna Karanam via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1356524 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 187e48e3e4799258426361da3c1f2439f5a5bad7)

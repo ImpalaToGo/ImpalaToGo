@@ -1,7 +1,7 @@
 From e0447230b763ac4b8bd318fad801dc93d7926768 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 4 May 2012 16:59:58 +0000
-Subject: [PATCH 051/144] HIVE-3002 Revert HIVE-2986
+Subject: [PATCH 051/148] HIVE-3002 Revert HIVE-2986
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1334060 13f79535-47bb-0310-9956-ffa450edef68

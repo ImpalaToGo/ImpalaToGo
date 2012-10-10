@@ -1,7 +1,7 @@
 From ae36743e83fd6500f1af92cc8fcc63f7f70b96ea Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Tue, 12 Jun 2012 15:37:18 +0000
-Subject: [PATCH 085/144] HIVE-3085 make parallel tests work
+Subject: [PATCH 085/148] HIVE-3085 make parallel tests work
  (Shuai Ding via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349398 13f79535-47bb-0310-9956-ffa450edef68

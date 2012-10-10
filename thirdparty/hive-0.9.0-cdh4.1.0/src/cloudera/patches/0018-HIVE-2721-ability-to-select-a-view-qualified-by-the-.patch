@@ -1,7 +1,7 @@
 From 094d48e3c55560893bae3ebed70fab7a64993fe3 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Thu, 26 Apr 2012 17:47:45 +0000
-Subject: [PATCH 018/144] HIVE-2721 ability to select a view qualified by the database / schema name
+Subject: [PATCH 018/148] HIVE-2721 ability to select a view qualified by the database / schema name
  (Martin Traverso via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330991 13f79535-47bb-0310-9956-ffa450edef68

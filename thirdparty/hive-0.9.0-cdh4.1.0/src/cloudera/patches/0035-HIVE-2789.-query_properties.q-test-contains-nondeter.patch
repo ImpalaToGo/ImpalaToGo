@@ -1,7 +1,7 @@
 From c547a09409749969a44b20ca93c9b97c2e8fca77 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Wed, 20 Jun 2012 10:12:40 -0700
-Subject: [PATCH 035/144] HIVE-2789. query_properties.q test contains nondeterministic queries
+Subject: [PATCH 035/148] HIVE-2789. query_properties.q test contains nondeterministic queries
 
 Reason: Bug
 Author: Carl Steinbach

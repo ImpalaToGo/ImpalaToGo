@@ -26,8 +26,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.hive.service.sql.thrift.TStatus;
-import org.apache.hive.service.sql.thrift.TStatusCode;
+import org.apache.hive.service.cli.thrift.TStatus;
+import org.apache.hive.service.cli.thrift.TStatusCode;
 
 public class Utils {
   /**
@@ -128,6 +128,8 @@ public class Utils {
       return Types.INTEGER;
     } else if ("bigint".equalsIgnoreCase(type)) {
       return Types.BIGINT;
+    } else if ("timestamp".equalsIgnoreCase(type)) {
+      return Types.TIMESTAMP;
     } else if (type.startsWith("map<")) {
       return Types.VARCHAR;
     } else if (type.startsWith("array<")) {
@@ -150,8 +152,8 @@ public class Utils {
 
   // Verify success and optionally with_info status, else throw SQLException
   public static void verifySuccess(TStatus status, boolean withInfo) throws SQLException {
-    if ((status.getStatusCode() != TStatusCode.SUCCESS) &&
-        (withInfo && (status.getStatusCode() != TStatusCode.SUCCESS_WITH_INFO))) {
+    if ((status.getStatusCode() != TStatusCode.SUCCESS_STATUS) &&
+        (withInfo && (status.getStatusCode() != TStatusCode.SUCCESS_WITH_INFO_STATUS))) {
       throw new SQLException(status.getErrorMessage(),
            status.getSqlState(), status.getErrorCode());
       }

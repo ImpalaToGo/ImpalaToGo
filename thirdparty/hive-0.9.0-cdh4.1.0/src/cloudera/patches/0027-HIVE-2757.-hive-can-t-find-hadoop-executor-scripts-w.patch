@@ -1,7 +1,7 @@
 From 75f805cdee293485c4606fee62ec9a3b20657eab Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <carl@cloudera.com>
 Date: Wed, 9 May 2012 22:33:55 -0700
-Subject: [PATCH 027/144] HIVE-2757.  hive can't find hadoop executor scripts without HADOOP_HOME set
+Subject: [PATCH 027/148] HIVE-2757.  hive can't find hadoop executor scripts without HADOOP_HOME set
 
 Reason: Bug
 Author: Roman Shaposhnik

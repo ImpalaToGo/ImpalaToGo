@@ -1,7 +1,7 @@
 From 2ec0b3cc1c11482f10508e614fd9a0dac31664ae Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 4 Jun 2012 13:05:13 -0700
-Subject: [PATCH 023/144] HIVE-3029. Update ShimLoader to work with Hadoop 2.x
+Subject: [PATCH 023/148] HIVE-3029. Update ShimLoader to work with Hadoop 2.x
 
 Reason: Bug
 Author: Carl Steinbach

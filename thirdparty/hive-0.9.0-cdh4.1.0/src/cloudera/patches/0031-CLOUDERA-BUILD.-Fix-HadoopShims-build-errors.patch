@@ -1,7 +1,7 @@
 From 2286135320f3d4a9788a2bd677d295a393fc78e2 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 5 Jun 2012 14:51:53 -0700
-Subject: [PATCH 031/144] CLOUDERA-BUILD. Fix HadoopShims build errors
+Subject: [PATCH 031/148] CLOUDERA-BUILD. Fix HadoopShims build errors
 
 ---
  .../apache/hadoop/hive/shims/Hadoop20Shims.java    |    1 +

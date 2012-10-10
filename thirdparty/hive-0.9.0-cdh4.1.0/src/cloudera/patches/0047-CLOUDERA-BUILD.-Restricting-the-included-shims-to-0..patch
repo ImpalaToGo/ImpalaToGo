@@ -1,7 +1,7 @@
 From 46c0d5460b742dda064a7e2d7e3247559cd93e3e Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 3 Jul 2012 12:34:04 -0700
-Subject: [PATCH 047/144] CLOUDERA-BUILD. Restricting the included shims to 0.23 only
+Subject: [PATCH 047/148] CLOUDERA-BUILD. Restricting the included shims to 0.23 only
 
 ---
  build.properties |    1 +

@@ -1,7 +1,7 @@
 From bd06720a3df8b71d7d8da16c5be1486ce68efb1e Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Mon, 28 May 2012 17:35:46 +0000
-Subject: [PATCH 069/144] HIVE-3059. Revert HIVE-2703, add testcase for non-string partition columns
+Subject: [PATCH 069/148] HIVE-3059. Revert HIVE-2703, add testcase for non-string partition columns
             passed to transform operator, updated TestJdbcDriver.
  (Kevin Wilfong via namit)
 

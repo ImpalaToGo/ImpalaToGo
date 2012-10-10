@@ -1,7 +1,7 @@
 From a7b9a77443147b6455f1a3176e954c360fe3fcf2 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Mon, 14 May 2012 17:44:58 +0000
-Subject: [PATCH 057/144] HIVE-3022 Add hive.exec.rcfile.use.explicit.header to hive-default.xml.template
+Subject: [PATCH 057/148] HIVE-3022 Add hive.exec.rcfile.use.explicit.header to hive-default.xml.template
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1338311 13f79535-47bb-0310-9956-ffa450edef68

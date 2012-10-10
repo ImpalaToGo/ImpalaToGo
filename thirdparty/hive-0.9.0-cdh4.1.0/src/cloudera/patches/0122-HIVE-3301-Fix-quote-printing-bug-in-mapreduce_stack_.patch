@@ -1,7 +1,7 @@
 From c504626f0c5c2df2cf835de2b7c7a1afedc5f7dc Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 26 Jul 2012 23:23:50 +0000
-Subject: [PATCH 122/144] HIVE-3301 : Fix quote printing bug in mapreduce_stack_trace.q testcase failure when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
+Subject: [PATCH 122/148] HIVE-3301 : Fix quote printing bug in mapreduce_stack_trace.q testcase failure when running hive on hadoop23 (Zhenxiao Luo via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1366233 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 82bdad64a44df3e72b018ee1dfec11740e8351d3)

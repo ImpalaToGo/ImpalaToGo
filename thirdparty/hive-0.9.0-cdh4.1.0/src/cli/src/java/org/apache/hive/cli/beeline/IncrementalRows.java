@@ -67,6 +67,7 @@ public class IncrementalRows extends Rows {
 
     labelRow = new Row(rsMeta.getColumnCount());
     maxRow = new Row(rsMeta.getColumnCount());
+    int maxWidth = beeLine.getOpts().getMaxColumnWidth();
 
     // pre-compute normalization so we don't have to deal
     // with SQLExceptions later
@@ -76,6 +77,7 @@ public class IncrementalRows extends Rows {
       maxRow.sizes[i] = Math.max(
           maxRow.sizes[i],
           rsMeta.getColumnDisplaySize(i + 1));
+      maxRow.sizes[i] = Math.min(maxWidth, maxRow.sizes[i]);
     }
 
     nextRow = labelRow;

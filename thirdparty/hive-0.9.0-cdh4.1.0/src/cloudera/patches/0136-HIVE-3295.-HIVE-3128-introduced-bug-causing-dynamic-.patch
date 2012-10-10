@@ -1,7 +1,7 @@
 From 1f856d7b67ba8bf04d27db477acf62cf6c867633 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Wed, 25 Jul 2012 06:19:21 +0000
-Subject: [PATCH 136/144] HIVE-3295. HIVE-3128 introduced bug causing dynamic partitioning to fail. (kevinwilfong reviewed by njain, ashutoshc)
+Subject: [PATCH 136/148] HIVE-3295. HIVE-3128 introduced bug causing dynamic partitioning to fail. (kevinwilfong reviewed by njain, ashutoshc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1365460 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit d0c18c7c678bd8ce5bd9401b458fe106a2b9bf54)

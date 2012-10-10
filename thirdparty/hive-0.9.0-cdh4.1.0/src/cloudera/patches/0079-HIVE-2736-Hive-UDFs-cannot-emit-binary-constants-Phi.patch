@@ -1,7 +1,7 @@
 From 940e30d476aa79df89ea2c068ccea0e8270d9e79 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 7 Jun 2012 14:55:49 +0000
-Subject: [PATCH 079/144] HIVE-2736 : Hive UDFs cannot emit binary constants (Philip Tromans via Ashutosh Chauhan)
+Subject: [PATCH 079/148] HIVE-2736 : Hive UDFs cannot emit binary constants (Philip Tromans via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347654 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 01e16ef139b8fa55246c9aa83a9a43f8f2562121)

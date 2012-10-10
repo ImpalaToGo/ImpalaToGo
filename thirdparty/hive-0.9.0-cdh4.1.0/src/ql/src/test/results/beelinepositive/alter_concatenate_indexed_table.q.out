@@ -16,7 +16,7 @@ No rows affected
 'tab_name'
 'tableName:src_rc_concatenate_test'
 'owner:!!{user.name}!!'
-'location:!!{hive.metastore.warehouse.dir}!!/alter_concatenate_indexed_table.db/src_rc_concatenate_test'
+'location:!!{hive.metastore.warehouse.dir}!!/src_rc_concatenate_test'
 'inputformat:org.apache.hadoop.hive.ql.io.RCFileInputFormat'
 'outputformat:org.apache.hadoop.hive.ql.io.RCFileOutputFormat'
 'columns:struct columns { i32 key, string value}'
@@ -44,7 +44,7 @@ No rows affected
 No rows affected 
 >>>  show indexes on src_rc_concatenate_test;
 'idx_name','tab_name','col_names','idx_tab_name','idx_type','comment'
-'src_rc_concatenate_test_index','src_rc_concatenate_test','key                 ','alter_concatenate_indexed_table__src_rc_concatenate_test_src_rc_concatenate_test_index__','compact             ',''
+'src_rc_concatenate_test_index','src_rc_concatenate_test','key                 ','default__src_rc_concatenate_test_src_rc_concatenate_test_index__','compact             ',''
 1 row selected 
 >>>  
 >>>  alter table src_rc_concatenate_test concatenate;
@@ -54,7 +54,7 @@ No rows affected
 'tab_name'
 'tableName:src_rc_concatenate_test'
 'owner:!!{user.name}!!'
-'location:!!{hive.metastore.warehouse.dir}!!/alter_concatenate_indexed_table.db/src_rc_concatenate_test'
+'location:!!{hive.metastore.warehouse.dir}!!/src_rc_concatenate_test'
 'inputformat:org.apache.hadoop.hive.ql.io.RCFileInputFormat'
 'outputformat:org.apache.hadoop.hive.ql.io.RCFileOutputFormat'
 'columns:struct columns { i32 key, string value}'
@@ -98,7 +98,7 @@ No rows affected
 'tab_name'
 'tableName:src_rc_concatenate_test_part'
 'owner:!!{user.name}!!'
-'location:!!{hive.metastore.warehouse.dir}!!/alter_concatenate_indexed_table.db/src_rc_concatenate_test_part/ds=2011'
+'location:!!{hive.metastore.warehouse.dir}!!/src_rc_concatenate_test_part/ds=2011'
 'inputformat:org.apache.hadoop.hive.ql.io.RCFileInputFormat'
 'outputformat:org.apache.hadoop.hive.ql.io.RCFileOutputFormat'
 'columns:struct columns { i32 key, string value}'
@@ -126,7 +126,7 @@ No rows affected
 No rows affected 
 >>>  show indexes on src_rc_concatenate_test_part;
 'idx_name','tab_name','col_names','idx_tab_name','idx_type','comment'
-'src_rc_concatenate_test_part_index','src_rc_concatenate_test_part','key                 ','alter_concatenate_indexed_table__src_rc_concatenate_test_part_src_rc_concatenate_test_part_index__','compact             ',''
+'src_rc_concatenate_test_part_index','src_rc_concatenate_test_part','key                 ','default__src_rc_concatenate_test_part_src_rc_concatenate_test_part_index__','compact             ',''
 1 row selected 
 >>>  
 >>>  alter table src_rc_concatenate_test_part partition (ds='2011') concatenate;
@@ -136,7 +136,7 @@ No rows affected
 'tab_name'
 'tableName:src_rc_concatenate_test_part'
 'owner:!!{user.name}!!'
-'location:!!{hive.metastore.warehouse.dir}!!/alter_concatenate_indexed_table.db/src_rc_concatenate_test_part/ds=2011'
+'location:!!{hive.metastore.warehouse.dir}!!/src_rc_concatenate_test_part/ds=2011'
 'inputformat:org.apache.hadoop.hive.ql.io.RCFileInputFormat'
 'outputformat:org.apache.hadoop.hive.ql.io.RCFileOutputFormat'
 'columns:struct columns { i32 key, string value}'

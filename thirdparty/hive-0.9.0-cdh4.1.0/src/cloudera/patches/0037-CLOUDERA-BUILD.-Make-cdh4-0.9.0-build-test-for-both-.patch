@@ -1,7 +1,7 @@
 From e3ee8f69bb47e5fe44d86e658ab92ac4ddab6008 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Wed, 20 Jun 2012 15:11:16 -0700
-Subject: [PATCH 037/144] CLOUDERA-BUILD. Make cdh4-0.9.0 build/test for both MR1 and MR2
+Subject: [PATCH 037/148] CLOUDERA-BUILD. Make cdh4-0.9.0 build/test for both MR1 and MR2
 
 Reason: CLOUDERA-BUILD
 Author: Zhenxiao Luo

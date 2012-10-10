@@ -1,7 +1,7 @@
 From 6547ce333a2a5566d8fc10eb55345c86e23e80d1 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 1 Jun 2012 18:08:24 +0000
-Subject: [PATCH 074/144] HIVE-3066
+Subject: [PATCH 074/148] HIVE-3066
  Add the option -database DATABASE in hive cli to specify a default database to use for the cli session. (herman via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345293 13f79535-47bb-0310-9956-ffa450edef68

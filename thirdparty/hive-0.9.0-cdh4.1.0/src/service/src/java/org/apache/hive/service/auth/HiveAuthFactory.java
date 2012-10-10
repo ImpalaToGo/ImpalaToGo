@@ -23,7 +23,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
-import org.apache.hive.service.sql.ISQLService;
+import org.apache.hive.service.cli.thrift.ThriftCLIService;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
@@ -90,7 +90,7 @@ public class HiveAuthFactory {
     return transportFactory;
   }
 
-  public TProcessorFactory getAuthProcFactory(ISQLService service)
+  public TProcessorFactory getAuthProcFactory(ThriftCLIService service)
       throws LoginException {
     if (authTypeStr.equalsIgnoreCase(AuthTypes.KERBEROS.getAuthName())) {
       return KerberosSaslHelper.getKerberosProcessorFactory(saslServer, service);

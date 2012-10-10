@@ -1,7 +1,7 @@
 From f85aac6a8f2ee26d5ce74c7112167d9ee288e05f Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Sun, 6 May 2012 21:46:25 -0700
-Subject: [PATCH 024/144] HIVE-2529. Fix and backport HIVE-2529. metastore 0.8 upgrade script for PostgreSQL
+Subject: [PATCH 024/148] HIVE-2529. Fix and backport HIVE-2529. metastore 0.8 upgrade script for PostgreSQL
 
 Reason: Bug
 Author: Zhenxiao Luo

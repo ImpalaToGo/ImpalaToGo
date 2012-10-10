@@ -1,7 +1,7 @@
 From cb8feacc37461344d920cff26114a800d8975f33 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sat, 16 Jun 2012 15:13:41 +0000
-Subject: [PATCH 094/144] HIVE-3149 Dynamically generated paritions deleted by Block level merge
+Subject: [PATCH 094/148] HIVE-3149 Dynamically generated paritions deleted by Block level merge
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350946 13f79535-47bb-0310-9956-ffa450edef68

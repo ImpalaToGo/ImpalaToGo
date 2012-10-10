@@ -1,7 +1,7 @@
 From 6da71e0ea20ac2b682e8f6db3a45d4338820f92e Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <carl@cloudera.com>
 Date: Mon, 14 May 2012 15:09:49 -0700
-Subject: [PATCH 029/144] HIVE-3025. Fix Hive ARCHIVE command on 0.22 and 0.23
+Subject: [PATCH 029/148] HIVE-3025. Fix Hive ARCHIVE command on 0.22 and 0.23
 
 Reason: Bug
 Author: Carl Steinbach

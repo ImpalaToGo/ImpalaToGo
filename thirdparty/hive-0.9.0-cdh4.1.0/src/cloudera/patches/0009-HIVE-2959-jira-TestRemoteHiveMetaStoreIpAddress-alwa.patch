@@ -1,7 +1,7 @@
 From 0e4c21e266a0c0da9c15cc4a2eb0129c4a0606d5 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Wed, 18 Apr 2012 17:33:41 +0000
-Subject: [PATCH 009/144] HIVE-2959 [jira] TestRemoteHiveMetaStoreIpAddress always uses the same port
+Subject: [PATCH 009/148] HIVE-2959 [jira] TestRemoteHiveMetaStoreIpAddress always uses the same port
  (Kevin Wilfong via Ashutosh Chauhan)
 
 Summary:

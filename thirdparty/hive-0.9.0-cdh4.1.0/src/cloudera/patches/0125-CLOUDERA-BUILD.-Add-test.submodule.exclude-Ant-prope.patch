@@ -1,7 +1,7 @@
 From f6e2501f0c9a6cb50322447fc565286aa388a42b Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <carl@cloudera.com>
 Date: Wed, 8 Aug 2012 21:26:08 -0700
-Subject: [PATCH 125/144] CLOUDERA-BUILD. Add test.submodule.exclude Ant property
+Subject: [PATCH 125/148] CLOUDERA-BUILD. Add test.submodule.exclude Ant property
 
 ---
  build.properties |    1 +

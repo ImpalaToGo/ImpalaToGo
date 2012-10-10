@@ -1,7 +1,7 @@
 From af701fa34e93affdc80da2e825fa280a236073ed Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Mon, 11 Jun 2012 11:54:02 +0000
-Subject: [PATCH 082/144] HIVE-3061 hive.binary.record.max.length is a magic string
+Subject: [PATCH 082/148] HIVE-3061 hive.binary.record.max.length is a magic string
  (Edward Capriolo via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1348808 13f79535-47bb-0310-9956-ffa450edef68

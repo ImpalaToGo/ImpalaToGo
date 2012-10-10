@@ -1,7 +1,7 @@
 From ec033f62ea6630d45f4e1b93108fb2a43056ce02 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Wed, 9 May 2012 16:31:39 +0000
-Subject: [PATCH 054/144] HIVE-2956 Provide error message when using UDAF in the place of UDF instead of throwing NPE (navis via kevinwilfong)
+Subject: [PATCH 054/148] HIVE-2956 Provide error message when using UDAF in the place of UDF instead of throwing NPE (navis via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1336284 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 50f7f66f8665b3480a2da3365b4c1c8c85d6c4b8)

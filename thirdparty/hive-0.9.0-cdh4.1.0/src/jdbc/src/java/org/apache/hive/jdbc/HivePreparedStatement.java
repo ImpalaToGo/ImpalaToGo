@@ -43,11 +43,11 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.hive.service.sql.thrift.TExecuteStatementReq;
-import org.apache.hive.service.sql.thrift.TExecuteStatementResp;
-import org.apache.hive.service.sql.thrift.TOperationHandle;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSessionHandle;
+import org.apache.hive.service.cli.thrift.TExecuteStatementReq;
+import org.apache.hive.service.cli.thrift.TExecuteStatementResp;
+import org.apache.hive.service.cli.thrift.TOperationHandle;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TSessionHandle;
 
 /**
  * HivePreparedStatement.
@@ -55,7 +55,7 @@ import org.apache.hive.service.sql.thrift.TSessionHandle;
  */
 public class HivePreparedStatement implements PreparedStatement {
   private final String sql;
-  private TSQLService.Iface client;
+  private TCLIService.Iface client;
   private final TSessionHandle sessHandle;
   private TOperationHandle stmtHandle;
   Map<String,String> sessConf = new HashMap<String,String>();
@@ -96,7 +96,7 @@ public class HivePreparedStatement implements PreparedStatement {
   /**
    *
    */
-  public HivePreparedStatement(TSQLService.Iface client, TSessionHandle sessHandle,
+  public HivePreparedStatement(TCLIService.Iface client, TSessionHandle sessHandle,
       String sql) {
     this.client = client;
     this.sessHandle = sessHandle;
@@ -775,8 +775,7 @@ public class HivePreparedStatement implements PreparedStatement {
    */
 
   public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-    // TODO Auto-generated method stub
-    throw new SQLException("Method not supported");
+    this.parameters.put(parameterIndex, x.toString());
   }
 
   /*

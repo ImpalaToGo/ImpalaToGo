@@ -78,8 +78,7 @@ class BufferedRows extends Rows {
   @Override
   void normalizeWidths() {
     int[] max = null;
-    for (int i = 0; i < list.size(); i++) {
-      Row row = list.get(i);
+    for (Row row : list) {
       if (max == null) {
         max = new int[row.values.length];
       }
@@ -87,9 +86,9 @@ class BufferedRows extends Rows {
         max[j] = Math.max(max[j], row.sizes[j] + 1);
       }
     }
-    for (int i = 0; i < list.size(); i++) {
-      Row row = list.get(i);
+    for (Row row : list) {
       row.sizes = max;
     }
   }
+
 }

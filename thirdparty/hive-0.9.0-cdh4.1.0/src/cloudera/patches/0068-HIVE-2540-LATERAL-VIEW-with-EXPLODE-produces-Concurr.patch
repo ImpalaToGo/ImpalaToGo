@@ -1,7 +1,7 @@
 From a31968c22a3be393844b897f40c0008a9bbecba9 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sun, 27 May 2012 12:07:50 +0000
-Subject: [PATCH 068/144] HIVE-2540 LATERAL VIEW with EXPLODE produces ConcurrentModificationException
+Subject: [PATCH 068/148] HIVE-2540 LATERAL VIEW with EXPLODE produces ConcurrentModificationException
  (Navis via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1343036 13f79535-47bb-0310-9956-ffa450edef68

@@ -1,7 +1,7 @@
 From f63a72fd25f7dbb416fb8597674ae4ce301aafa9 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 12 Apr 2012 18:57:52 +0000
-Subject: [PATCH 004/144] HIVE-2767 [jira] Optionally use framed transport with metastore
+Subject: [PATCH 004/148] HIVE-2767 [jira] Optionally use framed transport with metastore
  (Travis Crawford via Ashutosh Chauhan)
 
 Summary:

@@ -396,6 +396,7 @@ public class BeeLine {
     reflector = new Reflector(this);
 
     // attempt to dynamically load signal handler
+    /* TODO disable signal handler
     try {
       Class<?> handlerClass =
           Class.forName("org.apache.hive.cli.beeline.SunSignalHandler");
@@ -404,7 +405,7 @@ public class BeeLine {
     } catch (Throwable t) {
       // ignore and leave cancel functionality disabled
     }
-
+    */
   }
 
 

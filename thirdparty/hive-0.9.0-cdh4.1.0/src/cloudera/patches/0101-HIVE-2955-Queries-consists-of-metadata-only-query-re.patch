@@ -1,7 +1,7 @@
 From ae98629d017ea6057d0e8ba21b69063fa0612c4c Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 22 Jun 2012 04:26:59 +0000
-Subject: [PATCH 101/144] HIVE-2955 Queries consists of metadata-only-query returns always empty value
+Subject: [PATCH 101/148] HIVE-2955 Queries consists of metadata-only-query returns always empty value
  (Navis via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352771 13f79535-47bb-0310-9956-ffa450edef68

@@ -107,11 +107,16 @@ public class QFileClient {
 
     String userName = System.getProperty("user.name");
 
-    String timePattern = "(\\?Mon|Tue|Wed|Thu|Fri|Sat|Sun) "
-        + "(\\?Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
+    String timePattern = "(Mon|Tue|Wed|Thu|Fri|Sat|Sun) "
+        + "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
         + "\\d{2} \\d{2}:\\d{2}:\\d{2} \\w+ 20\\d{2}";
     String unixTimePattern = "\\D" + currentTimePrefix + "\\d{6}\\D";
     String unixTimeMillisPattern = "\\D" + currentTimePrefix + "\\d{9}\\D";
+
+    String operatorPattern = "\"(CONDITION|COPY|DEPENDENCY_COLLECTION|DDL"
+      + "|EXPLAIN|FETCH|FIL|FS|FUNCTION|GBY|HASHTABLEDUMMY|HASTTABLESINK|JOIN"
+      + "|LATERALVIEWFORWARD|LIM|LVJ|MAP|MAPJOIN|MAPRED|MAPREDLOCAL|MOVE|OP|RS"
+      + "|SCR|SEL|STATS|TS|UDTF|UNION)_\\d+\"";
 
     filterSet = new RegexFilterSet()
     .addFilter(scratchDirectory.toString() + "[\\w\\-/]+", "!!{hive.exec.scratchdir}!!")
@@ -128,6 +133,7 @@ public class QFileClient {
     .addFilter("(\\D)" + currentTimePrefix + "\\d{6}(\\D)", "$1!!UNIXTIME!!$2")
     .addFilter("(\\D)" + currentTimePrefix + "\\d{9}(\\D)", "$1!!UNIXTIMEMILLIS!!$2")
     .addFilter(userName, "!!{user.name}!!")
+    .addFilter(operatorPattern, "\"$1_!!ELIDED!!\"")
     ;
   };
 

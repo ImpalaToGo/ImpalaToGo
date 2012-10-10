@@ -1,7 +1,7 @@
 From dba72bab06da619574593d72ec9780e031c2b539 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Fri, 18 May 2012 15:32:52 +0000
-Subject: [PATCH 060/144] HIVE-2542 : DROP DATABASE CASCADE does not drop non-native tables ( Vandana Ayyalasomayajula via Ashutosh Chauhan)
+Subject: [PATCH 060/148] HIVE-2542 : DROP DATABASE CASCADE does not drop non-native tables ( Vandana Ayyalasomayajula via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340130 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 4d8e438afac4292020e370543c4f951df89dae37)

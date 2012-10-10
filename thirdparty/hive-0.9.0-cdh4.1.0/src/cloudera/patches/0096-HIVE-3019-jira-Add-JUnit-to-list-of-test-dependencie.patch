@@ -1,7 +1,7 @@
 From 9df69ea747acb64195354db039f024a25f1a3ef2 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 9 Jul 2012 22:05:06 -0700
-Subject: [PATCH 096/144] HIVE-3019 [jira] Add JUnit to list of test dependencies managed by Ivy
+Subject: [PATCH 096/148] HIVE-3019 [jira] Add JUnit to list of test dependencies managed by Ivy
 
 Summary: HIVE-3019. Add JUnit to list of test dependencies managed by Ivy
 

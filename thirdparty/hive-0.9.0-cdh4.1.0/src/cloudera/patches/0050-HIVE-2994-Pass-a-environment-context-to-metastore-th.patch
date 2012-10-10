@@ -1,7 +1,7 @@
 From 247a2a6647ac915f935bb2f4184c9f778b8ec4b5 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 4 May 2012 16:40:25 +0000
-Subject: [PATCH 050/144] HIVE-2994 Pass a environment context to metastore thrift APIs
+Subject: [PATCH 050/148] HIVE-2994 Pass a environment context to metastore thrift APIs
  (Delia David via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1334053 13f79535-47bb-0310-9956-ffa450edef68

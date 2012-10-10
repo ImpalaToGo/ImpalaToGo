@@ -1,7 +1,7 @@
 From 096f8a5f747e4223820ad339e37ff4dbd6e429f4 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 19 Jun 2012 11:12:17 -0700
-Subject: [PATCH 033/144] CDH-5265. Prepare Hive 0.9.0 branch for CDH4
+Subject: [PATCH 033/148] CDH-5265. Prepare Hive 0.9.0 branch for CDH4
 
 Reason: CLOUDERA-BUILD
 Author: Zhenxiao Luo

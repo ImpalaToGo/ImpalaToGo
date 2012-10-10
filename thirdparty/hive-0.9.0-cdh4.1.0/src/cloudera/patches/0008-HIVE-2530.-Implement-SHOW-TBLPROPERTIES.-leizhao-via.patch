@@ -1,7 +1,7 @@
 From fa66dac9b2b735c82cb059cec03496951bb13db1 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Tue, 17 Apr 2012 17:23:04 +0000
-Subject: [PATCH 008/144] HIVE-2530. Implement SHOW TBLPROPERTIES. (leizhao via kevinwilfong)
+Subject: [PATCH 008/148] HIVE-2530. Implement SHOW TBLPROPERTIES. (leizhao via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1327189 13f79535-47bb-0310-9956-ffa450edef68
 ---

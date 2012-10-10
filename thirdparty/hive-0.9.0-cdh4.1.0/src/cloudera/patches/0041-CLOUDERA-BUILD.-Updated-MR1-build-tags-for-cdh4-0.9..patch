@@ -1,7 +1,7 @@
 From ad0a9b02547385170c1d43e20e7145a02725146f Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 26 Jun 2012 11:39:47 -0700
-Subject: [PATCH 041/144] CLOUDERA-BUILD. Updated MR1 build tags for cdh4-0.9.0
+Subject: [PATCH 041/148] CLOUDERA-BUILD. Updated MR1 build tags for cdh4-0.9.0
 
 ---
  build.properties |    2 +-

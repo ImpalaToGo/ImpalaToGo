@@ -1,7 +1,7 @@
 From c11f6582fa9f73228ccffe7134cbee2b597ff6c8 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Tue, 12 Jun 2012 21:22:55 +0000
-Subject: [PATCH 086/144] HIVE-3120 make copyLocal work for parallel tests
+Subject: [PATCH 086/148] HIVE-3120 make copyLocal work for parallel tests
  (Shuai Ding via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349548 13f79535-47bb-0310-9956-ffa450edef68

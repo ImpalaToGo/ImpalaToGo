@@ -1,7 +1,7 @@
 From 46c733f8a60345ea7a04d40f45430cdf9f60e93c Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 26 Jun 2012 12:10:17 -0700
-Subject: [PATCH 043/144] CLOUDERA-BUILD. Fix fs_default_name1.q and fs_default_name2.q on cdh4-0.9.0 for both MR1 and MR2
+Subject: [PATCH 043/148] CLOUDERA-BUILD. Fix fs_default_name1.q and fs_default_name2.q on cdh4-0.9.0 for both MR1 and MR2
 
 ---
  .../test/org/apache/hadoop/hive/ql/QTestUtil.java  |    1 -

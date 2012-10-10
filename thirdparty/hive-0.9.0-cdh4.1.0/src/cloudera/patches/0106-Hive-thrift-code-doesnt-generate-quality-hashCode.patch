@@ -1,7 +1,7 @@
 From e76648fae0296a6f9ced90a1ab741cac885f14fc Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 9 Jul 2012 22:15:47 -0700
-Subject: [PATCH 106/144] Hive thrift code doesnt generate quality hashCode()
+Subject: [PATCH 106/148] Hive thrift code doesnt generate quality hashCode()
  (Liu Tim via Carl Steinbach)
 
 Summary:

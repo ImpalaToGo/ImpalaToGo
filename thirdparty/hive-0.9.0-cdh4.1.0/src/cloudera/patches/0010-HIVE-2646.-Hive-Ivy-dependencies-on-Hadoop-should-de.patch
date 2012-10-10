@@ -1,7 +1,7 @@
 From 5f26805dc363deda6ac71baf3f6c50821d3e79b8 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Mon, 23 Apr 2012 19:19:55 +0000
-Subject: [PATCH 010/144] HIVE-2646. Hive Ivy dependencies on Hadoop should depend on jars directly, not tarballs (Andrew Bayer and Thomas Weise)
+Subject: [PATCH 010/148] HIVE-2646. Hive Ivy dependencies on Hadoop should depend on jars directly, not tarballs (Andrew Bayer and Thomas Weise)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329381 13f79535-47bb-0310-9956-ffa450edef68
 ---

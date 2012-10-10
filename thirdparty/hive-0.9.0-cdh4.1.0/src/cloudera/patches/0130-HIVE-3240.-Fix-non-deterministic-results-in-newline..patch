@@ -1,7 +1,7 @@
 From 37cf736bcbe6c440c606add862335ee0f35bb9a7 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Fri, 24 Aug 2012 11:31:37 -0700
-Subject: [PATCH 130/144] HIVE-3240. Fix non-deterministic results in newline.q and timestamp_lazy.q
+Subject: [PATCH 130/148] HIVE-3240. Fix non-deterministic results in newline.q and timestamp_lazy.q
 
 Reason: Bug
 Author: Zhenxiao Luo

@@ -1,7 +1,7 @@
 From eeaee4bfc5cb2ca0254bd2a63b4b27108b0c3574 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Tue, 12 Jun 2012 02:29:03 +0000
-Subject: [PATCH 084/144] HIVE-3112 clear hive.metastore.partition.inherit.table.properties till HIVE-3109 is fixed (njain via kevinwilfong)
+Subject: [PATCH 084/148] HIVE-3112 clear hive.metastore.partition.inherit.table.properties till HIVE-3109 is fixed (njain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349096 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 491567d52074e53d28d812cac930ee90948692b1)

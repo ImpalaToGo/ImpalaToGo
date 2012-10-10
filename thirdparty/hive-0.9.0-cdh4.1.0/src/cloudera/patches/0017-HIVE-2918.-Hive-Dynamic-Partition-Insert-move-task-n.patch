@@ -1,7 +1,7 @@
 From dca45a0174770c82258f7235858f94a90961b068 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Wed, 25 Apr 2012 16:58:54 +0000
-Subject: [PATCH 017/144] HIVE-2918. Hive Dynamic Partition Insert - move task not considering 'hive.exec.max.dynamic.partitions' from CLI. (cwsteinbach via kevinwilfong)
+Subject: [PATCH 017/148] HIVE-2918. Hive Dynamic Partition Insert - move task not considering 'hive.exec.max.dynamic.partitions' from CLI. (cwsteinbach via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330417 13f79535-47bb-0310-9956-ffa450edef68
 ---

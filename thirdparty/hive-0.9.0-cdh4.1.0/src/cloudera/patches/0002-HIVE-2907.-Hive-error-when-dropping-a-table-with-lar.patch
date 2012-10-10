@@ -1,7 +1,7 @@
 From 498a319a31dd82db858a0b0dc95dcded58ea5c9b Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Tue, 10 Apr 2012 16:37:33 +0000
-Subject: [PATCH 002/144] HIVE-2907. Hive error when dropping a table with large number of partitions. (mousom via kevinwilfong)
+Subject: [PATCH 002/148] HIVE-2907. Hive error when dropping a table with large number of partitions. (mousom via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1311850 13f79535-47bb-0310-9956-ffa450edef68
 ---

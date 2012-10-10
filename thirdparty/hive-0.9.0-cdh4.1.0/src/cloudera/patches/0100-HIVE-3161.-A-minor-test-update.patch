@@ -1,7 +1,7 @@
 From ad467db43c51c153bf0b99096991c5146b4b49b4 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Thu, 21 Jun 2012 22:39:30 +0000
-Subject: [PATCH 100/144] HIVE-3161. A minor test update
+Subject: [PATCH 100/148] HIVE-3161. A minor test update
  (Namit Jain via Carl Steinbach)
 
 Summary: The correct long term fix is HIVE-3160

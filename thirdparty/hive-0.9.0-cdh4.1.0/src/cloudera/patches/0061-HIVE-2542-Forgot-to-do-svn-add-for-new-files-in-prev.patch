@@ -1,7 +1,7 @@
 From 49e559bc688b5f32e387ddf06a7493119ff303cc Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Fri, 18 May 2012 16:25:12 +0000
-Subject: [PATCH 061/144] HIVE-2542 : Forgot to do svn add for new  files in previous patch.
+Subject: [PATCH 061/148] HIVE-2542 : Forgot to do svn add for new  files in previous patch.
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340158 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 3b7e33b04eff0670bdd3b26b4dddb162f3b9e8fc)

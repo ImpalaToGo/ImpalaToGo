@@ -50,7 +50,7 @@ public abstract class AbstractService implements Service {
   /**
    * The configuration. Will be null until the service is initialized.
    */
-  private HiveConf config;
+  private HiveConf hiveConf;
 
   /**
    * List of state change listeners; it is final to ensure
@@ -82,9 +82,9 @@ public abstract class AbstractService implements Service {
    *           this action
    */
   @Override
-  public synchronized void init(HiveConf conf) {
+  public synchronized void init(HiveConf hiveConf) {
     ensureCurrentState(STATE.NOTINITED);
-    this.config = conf;
+    this.hiveConf = hiveConf;
     changeState(STATE.INITED);
     LOG.info("Service:" + getName() + " is inited.");
   }
@@ -142,7 +142,7 @@ public abstract class AbstractService implements Service {
 
   @Override
   public synchronized HiveConf getHiveConf() {
-    return config;
+    return hiveConf;
   }
 
   @Override

@@ -1,7 +1,7 @@
 From c8b707662898ee6e6041650dd0c9bde07f98e8ea Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Sat, 23 Jun 2012 21:28:41 +0000
-Subject: [PATCH 105/144] HIVE-3125 sort_array does not work with LazyPrimitive Philip Tromans (via egc)
+Subject: [PATCH 105/148] HIVE-3125 sort_array does not work with LazyPrimitive Philip Tromans (via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353203 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 7fdc0e0451e99a7b647724c7c1c162f5f03270e6)

@@ -1,7 +1,7 @@
 From 51b6783b6216fbcdaae6c446da18d24fe1ca20e1 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Mon, 7 May 2012 16:36:12 +0000
-Subject: [PATCH 052/144] HIVE-3000 Potential infinite loop / log spew in ZookeeperHiveLockManager (njain via kevinwilfong)
+Subject: [PATCH 052/148] HIVE-3000 Potential infinite loop / log spew in ZookeeperHiveLockManager (njain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1335106 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit ed4f45aa96ed66de0b1f36a564d0df2018e5b1ca)

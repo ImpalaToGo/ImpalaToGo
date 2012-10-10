@@ -1,7 +1,7 @@
 From b8417183f832b8ca0839f25577ca5b6b2f8253ac Mon Sep 17 00:00:00 2001
 From: Andrew Bayer <andrew@cloudera.com>
 Date: Fri, 22 Jun 2012 14:27:16 -0700
-Subject: [PATCH 040/144] Bumping up Hive CDH version
+Subject: [PATCH 040/148] Bumping up Hive CDH version
 
 ---
  build.properties                                   |    2 +-

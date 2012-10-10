@@ -1,7 +1,7 @@
 From 6ada9b4969641887fc49549119d376cbf741df8c Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Thu, 7 Jun 2012 05:27:36 +0000
-Subject: [PATCH 078/144] Oracle Metastore schema script doesn't include DDL for DN internal tables (Carl Steinbach via cws)
+Subject: [PATCH 078/148] Oracle Metastore schema script doesn't include DDL for DN internal tables (Carl Steinbach via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347396 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 53d2750def6b2ab98a34cbe8e439d982af803a44)

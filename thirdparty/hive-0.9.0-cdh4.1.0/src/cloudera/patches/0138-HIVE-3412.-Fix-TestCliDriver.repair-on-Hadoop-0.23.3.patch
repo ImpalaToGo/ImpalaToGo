@@ -1,7 +1,7 @@
 From 733e1e063d321c2cb501717971059ccb29bedc5c Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 4 Sep 2012 08:04:59 +0000
-Subject: [PATCH 138/144] HIVE-3412. Fix TestCliDriver.repair on Hadoop 0.23.3, 3.0.0, and 2.2.0-alpha (Zhenxiao Luo via cws)
+Subject: [PATCH 138/148] HIVE-3412. Fix TestCliDriver.repair on Hadoop 0.23.3, 3.0.0, and 2.2.0-alpha (Zhenxiao Luo via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380479 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 09b4974ab158a315c594abe8142890d4f63a5916)

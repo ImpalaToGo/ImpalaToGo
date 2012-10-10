@@ -1,7 +1,7 @@
 From 44fce67827958ea005651ca0a027276a48debd7d Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Sat, 23 Jun 2012 01:47:22 +0000
-Subject: [PATCH 104/144] HIVE-3178. retry not honored in RetryingRawMetastore. (Namit Jain via kevinwilfong)
+Subject: [PATCH 104/148] HIVE-3178. retry not honored in RetryingRawMetastore. (Namit Jain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353059 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 7134f434abd9b354a4ae0c4c265a41562eb1fcd8)

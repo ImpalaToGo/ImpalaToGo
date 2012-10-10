@@ -1,7 +1,7 @@
 From 299d4c5acec5b242a30d67b6168db9c1a35bfdc7 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Wed, 20 Jun 2012 18:41:16 +0000
-Subject: [PATCH 098/144] HIVE-3009 Memory leak in TUGIContainingTransport (Ashutosh Chauhan via egc)
+Subject: [PATCH 098/148] HIVE-3009 Memory leak in TUGIContainingTransport (Ashutosh Chauhan via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352260 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 40eff1037813f22b89f146a7253b39ade1e6b7bb)

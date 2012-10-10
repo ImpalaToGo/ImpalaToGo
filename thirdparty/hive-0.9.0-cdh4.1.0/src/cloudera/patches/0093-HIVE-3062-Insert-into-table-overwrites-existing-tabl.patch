@@ -1,7 +1,7 @@
 From 55cb57bed3a0b0b2e2548f834f258850c54867ee Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sat, 16 Jun 2012 06:41:51 +0000
-Subject: [PATCH 093/144] HIVE-3062 Insert into table overwrites existing table if table name
+Subject: [PATCH 093/148] HIVE-3062 Insert into table overwrites existing table if table name
  contains uppercase character (Navis via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350866 13f79535-47bb-0310-9956-ffa450edef68

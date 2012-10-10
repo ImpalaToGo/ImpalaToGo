@@ -1,7 +1,7 @@
 From ffdef0d3a164ce796f3896bbf86bf04f6e5ce1b6 Mon Sep 17 00:00:00 2001
 From: Paul Yang <pauly@apache.org>
 Date: Sun, 15 Apr 2012 23:34:09 +0000
-Subject: [PATCH 007/144] HIVE-2942. substr on string containing UTF-8 characters produces StringIndexOutOfBoundsException (Kevin Wilfong via pauly)
+Subject: [PATCH 007/148] HIVE-2942. substr on string containing UTF-8 characters produces StringIndexOutOfBoundsException (Kevin Wilfong via pauly)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1326444 13f79535-47bb-0310-9956-ffa450edef68
 ---

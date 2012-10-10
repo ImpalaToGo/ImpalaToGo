@@ -1,7 +1,7 @@
 From 182ddf257d7a6a869c5b83122f20ff08ab1b0114 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Wed, 13 Jun 2012 15:37:32 +0000
-Subject: [PATCH 089/144] HIVE-3090 Timestamp types not having nano-second part breaks row (Navis via egc)
+Subject: [PATCH 089/148] HIVE-3090 Timestamp types not having nano-second part breaks row (Navis via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349907 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 9bc918059d53039736dbd0e0aae643c7bf5953a4)

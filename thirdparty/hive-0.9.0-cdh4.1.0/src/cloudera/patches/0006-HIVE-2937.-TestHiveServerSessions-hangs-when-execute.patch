@@ -1,7 +1,7 @@
 From 91446c993f2a4106cf5a70e260d708d85105d643 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Fri, 13 Apr 2012 16:29:03 +0000
-Subject: [PATCH 006/144] HIVE-2937. TestHiveServerSessions hangs when executed directly. (navis via kevinwilfong)
+Subject: [PATCH 006/148] HIVE-2937. TestHiveServerSessions hangs when executed directly. (navis via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325830 13f79535-47bb-0310-9956-ffa450edef68
 ---

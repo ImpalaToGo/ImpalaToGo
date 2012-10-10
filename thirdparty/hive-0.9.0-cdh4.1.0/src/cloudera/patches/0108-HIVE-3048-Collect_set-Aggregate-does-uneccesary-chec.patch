@@ -1,7 +1,7 @@
 From 5b8018d780e555ca0905bc049b4d981c56a73866 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Tue, 26 Jun 2012 16:03:51 +0000
-Subject: [PATCH 108/144] HIVE-3048 : Collect_set Aggregate does uneccesary check for value. (Ed Capriolo via Ashutosh Chauhan)
+Subject: [PATCH 108/148] HIVE-3048 : Collect_set Aggregate does uneccesary check for value. (Ed Capriolo via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354079 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit ce506ed5104c2bab31f627272facfc2c9e8c2b48)

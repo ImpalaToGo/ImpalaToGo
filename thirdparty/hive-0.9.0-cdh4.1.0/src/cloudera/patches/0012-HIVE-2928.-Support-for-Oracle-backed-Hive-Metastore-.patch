@@ -1,7 +1,7 @@
 From f9225226e4914095a54c4ac8914b457f646ce234 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Mon, 23 Apr 2012 20:13:03 +0000
-Subject: [PATCH 012/144] HIVE-2928. Support for Oracle-backed Hive-Metastore (longvarchar to clob in package.jdo) (Mithun Radhakrishnan and Andrew Bayer via cws)
+Subject: [PATCH 012/148] HIVE-2928. Support for Oracle-backed Hive-Metastore (longvarchar to clob in package.jdo) (Mithun Radhakrishnan and Andrew Bayer via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1329416 13f79535-47bb-0310-9956-ffa450edef68
 ---

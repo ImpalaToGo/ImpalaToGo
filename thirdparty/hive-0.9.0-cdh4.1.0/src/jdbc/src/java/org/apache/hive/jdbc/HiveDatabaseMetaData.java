@@ -28,22 +28,22 @@ import java.util.Comparator;
 import java.util.jar.Attributes;
 
 import org.apache.hadoop.hive.metastore.TableType;
-import org.apache.hive.service.sql.thrift.TGetCatalogsReq;
-import org.apache.hive.service.sql.thrift.TGetCatalogsResp;
-import org.apache.hive.service.sql.thrift.TGetColumnsReq;
-import org.apache.hive.service.sql.thrift.TGetColumnsResp;
-import org.apache.hive.service.sql.thrift.TGetFunctionsReq;
-import org.apache.hive.service.sql.thrift.TGetFunctionsResp;
-import org.apache.hive.service.sql.thrift.TGetSchemasReq;
-import org.apache.hive.service.sql.thrift.TGetSchemasResp;
-import org.apache.hive.service.sql.thrift.TGetTableTypesReq;
-import org.apache.hive.service.sql.thrift.TGetTableTypesResp;
-import org.apache.hive.service.sql.thrift.TGetTablesReq;
-import org.apache.hive.service.sql.thrift.TGetTablesResp;
-import org.apache.hive.service.sql.thrift.TGetTypeInfoReq;
-import org.apache.hive.service.sql.thrift.TGetTypeInfoResp;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSessionHandle;
+import org.apache.hive.service.cli.thrift.TGetCatalogsReq;
+import org.apache.hive.service.cli.thrift.TGetCatalogsResp;
+import org.apache.hive.service.cli.thrift.TGetColumnsReq;
+import org.apache.hive.service.cli.thrift.TGetColumnsResp;
+import org.apache.hive.service.cli.thrift.TGetFunctionsReq;
+import org.apache.hive.service.cli.thrift.TGetFunctionsResp;
+import org.apache.hive.service.cli.thrift.TGetSchemasReq;
+import org.apache.hive.service.cli.thrift.TGetSchemasResp;
+import org.apache.hive.service.cli.thrift.TGetTableTypesReq;
+import org.apache.hive.service.cli.thrift.TGetTableTypesResp;
+import org.apache.hive.service.cli.thrift.TGetTablesReq;
+import org.apache.hive.service.cli.thrift.TGetTablesResp;
+import org.apache.hive.service.cli.thrift.TGetTypeInfoReq;
+import org.apache.hive.service.cli.thrift.TGetTypeInfoResp;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TSessionHandle;
 import org.apache.thrift.TException;
 
 /**
@@ -52,7 +52,7 @@ import org.apache.thrift.TException;
  */
 public class HiveDatabaseMetaData implements DatabaseMetaData {
 
-  private final TSQLService.Iface client;
+  private final TCLIService.Iface client;
   private final TSessionHandle sessHandle;
   private static final String CATALOG_SEPARATOR = ".";
 
@@ -64,7 +64,7 @@ public class HiveDatabaseMetaData implements DatabaseMetaData {
   /**
    *
    */
-  public HiveDatabaseMetaData(TSQLService.Iface client, TSessionHandle sessHandle) {
+  public HiveDatabaseMetaData(TCLIService.Iface client, TSessionHandle sessHandle) {
     this.client = client;
     this.sessHandle = sessHandle;
   }

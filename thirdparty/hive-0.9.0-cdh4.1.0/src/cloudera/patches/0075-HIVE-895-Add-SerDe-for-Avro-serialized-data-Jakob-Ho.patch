@@ -1,7 +1,7 @@
 From c6962fd290b394a7413c126a9015d4070d4fe6a8 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Sat, 2 Jun 2012 02:14:04 +0000
-Subject: [PATCH 075/144] HIVE-895 Add SerDe for Avro serialized data (Jakob Homan via egc)
+Subject: [PATCH 075/148] HIVE-895 Add SerDe for Avro serialized data (Jakob Homan via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1345420 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit e42ec89b31ae056e51d8db25d4ecc1a8a51212e0)

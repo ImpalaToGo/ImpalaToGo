@@ -1,7 +1,7 @@
 From 9b9abde24e5adb47f4ae0ff2fa6000d7f1a85332 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <carl@cloudera.com>
 Date: Sun, 19 Aug 2012 20:55:48 -0700
-Subject: [PATCH 128/144] CLOUDERA-BUILD. Fix eclipse classpath template
+Subject: [PATCH 128/148] CLOUDERA-BUILD. Fix eclipse classpath template
 
 Reason: Bug
 Author: Carl Steinbach

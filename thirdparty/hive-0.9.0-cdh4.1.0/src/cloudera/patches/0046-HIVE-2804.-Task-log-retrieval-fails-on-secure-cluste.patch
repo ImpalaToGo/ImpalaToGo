@@ -1,7 +1,7 @@
 From 1d4cc3813f8263bf089abdacacf65a5fcdb67650 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Wed, 27 Jun 2012 15:12:53 -0700
-Subject: [PATCH 046/144] HIVE-2804. Task log retrieval fails on secure cluster, null check added
+Subject: [PATCH 046/148] HIVE-2804. Task log retrieval fails on secure cluster, null check added
 
 Reason: Bug
 Author: Zhenxiao Luo

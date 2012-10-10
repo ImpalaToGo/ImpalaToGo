@@ -1,7 +1,7 @@
 From 1cafd0d7513d32b30a8d478b9be49293fe21a2ba Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 4 Sep 2012 08:26:05 +0000
-Subject: [PATCH 139/144] HIVE-3424. Error by upgrading a Hive 0.7.0 database to 0.8.0 (008-HIVE-2246.mysql.sql) (Alexander Alten-Lorenz via cws)
+Subject: [PATCH 139/148] HIVE-3424. Error by upgrading a Hive 0.7.0 database to 0.8.0 (008-HIVE-2246.mysql.sql) (Alexander Alten-Lorenz via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380483 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 20b7cf85f132450724f3ca1bee643b1c1db933af)

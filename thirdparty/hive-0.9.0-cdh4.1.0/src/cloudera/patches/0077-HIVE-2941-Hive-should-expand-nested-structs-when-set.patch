@@ -1,7 +1,7 @@
 From 8b34125eebd4808db362dfa80dd5e302a4629cb9 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 7 Jun 2012 00:04:00 +0000
-Subject: [PATCH 077/144] HIVE-2941: Hive should expand nested structs when setting the table schema from thrift structs (Travis Crawford via Ashutosh Chauhan)
+Subject: [PATCH 077/148] HIVE-2941: Hive should expand nested structs when setting the table schema from thrift structs (Travis Crawford via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1347212 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 15009eaec1d9c741911b9f94b21062438e943ddc)

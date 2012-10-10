@@ -1,7 +1,7 @@
 From 31c2c8f820499da3df762a9d62609fcf430711f6 Mon Sep 17 00:00:00 2001
 From: Andrew Bayer <andrew@cloudera.com>
 Date: Mon, 30 Apr 2012 16:03:59 -0700
-Subject: [PATCH 020/144] CLOUDERA-BUILD. Updating with CDH build changes.
+Subject: [PATCH 020/148] CLOUDERA-BUILD. Updating with CDH build changes.
 
 ---
  build-common.xml                                   |   26 +++

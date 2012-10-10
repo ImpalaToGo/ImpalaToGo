@@ -1,7 +1,7 @@
 From c88dfc503d95319e057f9686196b021eed3b0ea8 Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Sun, 6 May 2012 22:46:28 -0700
-Subject: [PATCH 025/144] HIVE-2928- Support for Oracle-backed Hive-Metastore
+Subject: [PATCH 025/148] HIVE-2928- Support for Oracle-backed Hive-Metastore
 
 Reason: Bug
 Author: Prasad Mujumdar

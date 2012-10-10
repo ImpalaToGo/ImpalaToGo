@@ -1,7 +1,7 @@
 From f3f51c8f106c767ae1a30bf12032c0d3965f379a Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Tue, 8 May 2012 16:45:35 +0000
-Subject: [PATCH 053/144] HIVE-2971 GET_JSON_OBJECT fails on some valid JSON keys (gangtimliu via kevinwilfong)
+Subject: [PATCH 053/148] HIVE-2971 GET_JSON_OBJECT fails on some valid JSON keys (gangtimliu via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1335630 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 7ad797c64a823f9ac36f90c003073893160c00a0)

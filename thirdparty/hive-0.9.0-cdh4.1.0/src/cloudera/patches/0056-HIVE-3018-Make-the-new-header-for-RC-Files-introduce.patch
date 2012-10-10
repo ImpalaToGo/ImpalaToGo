@@ -1,7 +1,7 @@
 From f08dcd33b9c4a6d5f6cf15b9bd3a071e641e73ea Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sun, 13 May 2012 17:07:52 +0000
-Subject: [PATCH 056/144] HIVE-3018 Make the new header for RC Files introduced in HIVE-2711 optional
+Subject: [PATCH 056/148] HIVE-3018 Make the new header for RC Files introduced in HIVE-2711 optional
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1337937 13f79535-47bb-0310-9956-ffa450edef68

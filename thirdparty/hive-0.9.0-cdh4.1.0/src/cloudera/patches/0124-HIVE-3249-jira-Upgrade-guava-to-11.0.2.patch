@@ -1,7 +1,7 @@
 From 31a89660cf2cb9fe5573b4168f1be8991f3384ce Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Wed, 25 Jul 2012 00:50:22 +0000
-Subject: [PATCH 124/144] HIVE-3249 [jira] Upgrade guava to 11.0.2
+Subject: [PATCH 124/148] HIVE-3249 [jira] Upgrade guava to 11.0.2
  (Zhenxiao Luo via Carl Steinbach)
 
 Summary:

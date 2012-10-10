@@ -21,7 +21,8 @@ import static org.junit.Assert.fail;
 import static org.apache.hadoop.hive.conf.HiveConf.ConfVars.*;
 
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hive.service.sql.thrift.ThriftSQLService;
+import org.apache.hadoop.hive.ql.QTestUtil;
+import org.apache.hive.service.server.HiveServer2;
 import org.apache.hive.testutils.junit.runners.ConcurrentTestRunner;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -36,8 +37,9 @@ public class $className {
   private static final String resultsDirectory = "$resultsDir.getCanonicalPath()";
   private static boolean overwrite = false;
   private static String scratchDirectory;
+  private static QTestUtil.QTestSetup miniZKCluster = null;
 
-  private static ThriftSQLService thriftSQLService;
+  private static HiveServer2 hiveServer2;
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -51,37 +53,55 @@ public class $className {
     if (testOutputOverwrite != null && "true".equalsIgnoreCase(testOutputOverwrite)) {
       overwrite = true;
     }
+
+    miniZKCluster = new QTestUtil.QTestSetup();
+    miniZKCluster.preTest(hiveConf);
+
+    System.setProperty("hive.zookeeper.quorum",
+        hiveConf.get("hive.zookeeper.quorum"));
+    System.setProperty("hive.zookeeper.client.port",
+        hiveConf.get("hive.zookeeper.client.port"));
     
     String disableserver = System.getProperty("test.service.disable.server");
     if (null != disableserver && disableserver.equalsIgnoreCase("true")) {
       System.err.println("test.service.disable.server=true "
-        + "Skipping ThriftSQLService initialization!");
+        + "Skipping HiveServer2 initialization!");
       return;
     }
-    
-    thriftSQLService = new ThriftSQLService();
-    System.err.println("Starting ThriftSQLService...");
-    thriftSQLService.start();
+
+    hiveServer2 = new HiveServer2();
+    hiveServer2.init(hiveConf);
+    System.err.println("Starting HiveServer2...");
+    hiveServer2.start();
     Thread.sleep(5000);
   }
+
 
   @AfterClass
   public static void afterClass() {
     try {
-      if (thriftSQLService != null) {
-        System.err.println("Stopping ThriftSQLService...");
-        thriftSQLService.stop();
+      if (hiveServer2 != null) {
+        System.err.println("Stopping HiveServer2...");
+        hiveServer2.stop();
       }
-    } catch (Exception e) {
-      System.out.println("Exception: " + e.getMessage());
-      e.printStackTrace();
-      System.out.flush();
+    } catch (Throwable t) {
+      t.printStackTrace();
+    }
+    
+    if (miniZKCluster != null) {
+      try {
+        miniZKCluster.tearDown();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
     }
   }
 
 
+  /*
   public $className() {
   }
+  */
 
   protected static void runTest(String qFileName) throws Exception {
     QFileClient qClient = new QFileClient(new HiveConf(), hiveRootDirectory,

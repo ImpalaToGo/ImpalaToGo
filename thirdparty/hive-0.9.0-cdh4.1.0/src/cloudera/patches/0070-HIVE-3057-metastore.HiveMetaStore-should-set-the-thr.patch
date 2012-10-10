@@ -1,7 +1,7 @@
 From 382f27f2a3e9523d702b4e9c9f517dc62f38d2af Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 31 May 2012 16:11:19 +0000
-Subject: [PATCH 070/144] HIVE-3057: metastore.HiveMetaStore should set the thread local raw store to null in shutdown() (Travis Crawford via Ashutosh Chauhan)
+Subject: [PATCH 070/148] HIVE-3057: metastore.HiveMetaStore should set the thread local raw store to null in shutdown() (Travis Crawford via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344795 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 67cdfb523de3b7a6bf6246148ac899d2b0b6f6b7)

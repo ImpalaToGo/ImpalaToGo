@@ -1,7 +1,7 @@
 From 084bc13ac31ae01df4d8b47a5faf69f90651c2d8 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Fri, 25 May 2012 19:16:52 +0000
-Subject: [PATCH 126/144] HIVE-3049 setup classpath for templates correctly for eclipse (Shuai Ding via namit)
+Subject: [PATCH 126/148] HIVE-3049 setup classpath for templates correctly for eclipse (Shuai Ding via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342785 13f79535-47bb-0310-9956-ffa450edef68
 

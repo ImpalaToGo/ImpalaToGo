@@ -1,7 +1,7 @@
 From 15576ce2385736baef5283d9173d8a91460dbede Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Wed, 20 Jun 2012 21:26:00 +0000
-Subject: [PATCH 099/144] HIVE-2585 Collapse hive.metastore.uris and hive.metastore.local (Ashutosh Chauhan via egc)
+Subject: [PATCH 099/148] HIVE-2585 Collapse hive.metastore.uris and hive.metastore.local (Ashutosh Chauhan via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1352333 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 11015a25391c7110977a419c75dc27f4404296ad)

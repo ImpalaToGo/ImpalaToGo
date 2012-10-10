@@ -1,10 +1,52 @@
-commit 0b7dc955a661f4f1236bc157a87ba84f802d9b05
+commit 48e212efd3e6445e4c7f5ec9abce69305f2c4373
+Author: Carl Steinbach <cws@apache.org>
+Date:   Thu Sep 20 16:21:00 2012 +0000
+
+    HIVE-2935. Implement HiveServer2
+
+commit 1f4ba3fb841ec65a45ab8e11283fa5c13d92b307
+Author: Carl Steinbach <cws@apache.org>
+Date:   Wed Sep 26 09:18:46 2012 +0000
+
+    HIVE-3465. insert into statement overwrites if target table is prefixed with database name (Navis Ryu via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1390343 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 9ed51aedfc311a943e669bb8681a680204e1c448)
+
+commit a897f8eb15e39b3c3a3f278d4930b0bdda528dc1
+Author: Carl Steinbach <cws@apache.org>
+Date:   Wed Sep 26 05:05:44 2012 +0000
+
+    HIVE-3505. log4j template has logging threshold that hides all audit logs (Sean Mackrory via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1390278 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 688003b037c0d1328a1692fe9197b9fc06f3a19d)
+
+commit 0cc9fe328b0d2261f7e1aa7c6c596dc90b01be06
+Author: Carl Steinbach <cws@apache.org>
+Date:   Tue Sep 25 21:28:46 2012 +0000
+
+    HIVE-3277. Enable Metastore audit logging for non-secure connections (Sean Mackrory via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1390155 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ef80ebcb05f368a8bedee260a0210452e1ea2b9b)
+
+commit bddadbd58e0586ddce8cfd66dcc32f3a6d1d657e
+Author: Carl Steinbach <cws@apache.org>
+Date:   Thu Sep 20 16:21:00 2012 +0000
+
+    HIVE-3443. Hive Metatool should take serde_param_key from the user to allow for changes to avro serde's schema url key (Shreepadma Venugopalan via cws)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1388098 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ff63f4313bced85fa9bfd1d15c51c2dd6cb8dfe6)
+
+commit 8bb877e7d4a0c51bab7ff124236e10f4e44ef372
 Author: Andrew Bayer <andrew@cloudera.com>
 Date:   Thu Sep 13 15:45:01 2012 -0700
 
     Preparing for CDH4.1.0 Release
 
-commit db5fd738c1f517fc871e374400c33a531af392e0
+commit 5531a937de038d03094bf81ebed9d0fb556c49a5
 Author: Carl Steinbach <cws@apache.org>
 Date:   Thu Sep 13 17:50:19 2012 +0000
 
@@ -12,12 +54,6 @@ Date:   Thu Sep 13 17:50:19 2012 +0000
     
     git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1384433 13f79535-47bb-0310-9956-ffa450edef68
     (cherry picked from commit 6ff3573e9b2663466457185fd14546f2ff12c97c)
-
-commit 24ba2213793bc39a097c12ae1cf67392e9d39655
-Author: Carl Steinbach <cws@apache.org>
-Date:   Tue Sep 4 09:22:32 2012 +0000
-
-    HIVE-2935. Implement HiveServer2
 
 commit b95f011c88f806e92bea8b079915a167967b9991
 Author: Carl Steinbach <cws@apache.org>

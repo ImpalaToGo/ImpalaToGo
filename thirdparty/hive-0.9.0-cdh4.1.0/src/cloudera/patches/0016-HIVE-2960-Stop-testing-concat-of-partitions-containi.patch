@@ -1,7 +1,7 @@
 From 258e7887e6224bc5c5ed8aa07e431eedc07c4471 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Tue, 24 Apr 2012 23:21:09 +0000
-Subject: [PATCH 016/144] HIVE-2960 Stop testing concat of partitions containing control characters.
+Subject: [PATCH 016/148] HIVE-2960 Stop testing concat of partitions containing control characters.
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1330057 13f79535-47bb-0310-9956-ffa450edef68

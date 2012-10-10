@@ -1,7 +1,7 @@
 From 87181d611ede4abf3ffda1ed8f006b8684ab66b2 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Wed, 13 Jun 2012 23:30:37 +0000
-Subject: [PATCH 090/144] HIVE-3123. Hadoop20Shim. CombineFileRecordReader does not report progress within files (Dmytro Molkov via kevinwilfong)
+Subject: [PATCH 090/148] HIVE-3123. Hadoop20Shim. CombineFileRecordReader does not report progress within files (Dmytro Molkov via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1350054 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 4caebd196163050510eac210329d42dcbd07477c)

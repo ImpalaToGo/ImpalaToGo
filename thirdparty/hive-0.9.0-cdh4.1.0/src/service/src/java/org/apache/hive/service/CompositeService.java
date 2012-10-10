@@ -54,11 +54,11 @@ public class CompositeService extends AbstractService {
   }
 
   @Override
-  public synchronized void init(HiveConf conf) {
+  public synchronized void init(HiveConf hiveConf) {
     for (Service service : serviceList) {
-      service.init(conf);
+      service.init(hiveConf);
     }
-    super.init(conf);
+    super.init(hiveConf);
   }
 
   @Override
@@ -107,7 +107,7 @@ public class CompositeService extends AbstractService {
   }
 
   /**
-   * JVM Shutdown hook for CompositeService which will stop the give
+   * JVM Shutdown hook for CompositeService which will stop the given
    * CompositeService gracefully in case of JVM shutdown.
    */
   public static class CompositeServiceShutdownHook implements Runnable {

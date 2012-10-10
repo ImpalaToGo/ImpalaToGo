@@ -1,7 +1,7 @@
 From f2889262b79df897ba406b6816b0adac748ffc4f Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 9 Jul 2012 21:44:17 -0700
-Subject: [PATCH 058/144] HIVE-3001. Returning Meaningful Error Codes & Messages
+Subject: [PATCH 058/148] HIVE-3001. Returning Meaningful Error Codes & Messages
 
 Reason: New Feature
 Author: Bhushan Mandhani

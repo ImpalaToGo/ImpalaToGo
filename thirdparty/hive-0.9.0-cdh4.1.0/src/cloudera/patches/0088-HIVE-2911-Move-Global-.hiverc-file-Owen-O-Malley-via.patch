@@ -1,7 +1,7 @@
 From e997430fc1e6086c199ebc9ee4782c1ff902ad2d Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Wed, 13 Jun 2012 02:18:18 +0000
-Subject: [PATCH 088/144] HIVE-2911 Move Global .hiverc file (Owen O'Malley via egc)
+Subject: [PATCH 088/148] HIVE-2911 Move Global .hiverc file (Owen O'Malley via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1349611 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 0f6781bb2f7406764417ebcca0cfba04ad468add)

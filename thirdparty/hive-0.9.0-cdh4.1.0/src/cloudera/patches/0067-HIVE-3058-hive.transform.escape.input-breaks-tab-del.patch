@@ -1,7 +1,7 @@
 From 3439739087b19f1a5ad84cd0c8861b41cedb085c Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sun, 27 May 2012 11:41:31 +0000
-Subject: [PATCH 067/144] HIVE-3058 hive.transform.escape.input breaks tab delimited data
+Subject: [PATCH 067/148] HIVE-3058 hive.transform.escape.input breaks tab delimited data
  (Kevin Wilfong via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1343033 13f79535-47bb-0310-9956-ffa450edef68

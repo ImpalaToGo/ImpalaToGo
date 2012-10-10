@@ -1,7 +1,7 @@
 From 0a09bbce6c459b459b846817fb077b1db997bbb9 Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Thu, 28 Jun 2012 05:00:10 +0000
-Subject: [PATCH 111/144] HIVE-3206 FileUtils.tar assumes wrong directory in some cases. Navis Ryu (via egc)
+Subject: [PATCH 111/148] HIVE-3206 FileUtils.tar assumes wrong directory in some cases. Navis Ryu (via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354816 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit a386a34fbe41cf4bc8db9836b8ba90e97dd0b1bb)

@@ -1,7 +1,7 @@
 From a5706219a00e9d30170369080d8d134aa19aed00 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Mon, 23 Apr 2012 23:21:48 +0000
-Subject: [PATCH 014/144] HIVE-2803 [jira] utc_from_timestamp and utc_to_timestamp returns incorrect
+Subject: [PATCH 014/148] HIVE-2803 [jira] utc_from_timestamp and utc_to_timestamp returns incorrect
  results.
  (Kiyotaka Suzuki via Carl Steinbach)
 

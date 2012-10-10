@@ -1,7 +1,7 @@
 From 36cbf8a11d43fecb7d15eae52600b26ce6db62d5 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Thu, 24 May 2012 20:36:54 +0000
-Subject: [PATCH 065/144] HIVE-3051 JDBC cannot find metadata for tables/columns containing uppercase
+Subject: [PATCH 065/148] HIVE-3051 JDBC cannot find metadata for tables/columns containing uppercase
  character (Navis via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1342428 13f79535-47bb-0310-9956-ffa450edef68

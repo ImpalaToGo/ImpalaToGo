@@ -1,7 +1,7 @@
 From abf4915eae213bc8a4b2fd729e50d6053c8f21c2 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Sat, 19 May 2012 06:24:52 +0000
-Subject: [PATCH 115/144] HIVE-3031 : hive docs target does not work (Sushanth Sowmyan via Ashutosh Chauhan)
+Subject: [PATCH 115/148] HIVE-3031 : hive docs target does not work (Sushanth Sowmyan via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1340348 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 6da5f0b69f2182cea19d59bfaee9e0bfe630d594)

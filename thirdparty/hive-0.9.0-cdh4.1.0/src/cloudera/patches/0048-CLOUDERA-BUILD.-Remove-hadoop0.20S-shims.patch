@@ -1,7 +1,7 @@
 From 91e118d563ae2236f8e304f03ad4f4eaa376b6d2 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 3 Jul 2012 16:44:23 -0700
-Subject: [PATCH 048/144] CLOUDERA-BUILD. Remove hadoop0.20S shims
+Subject: [PATCH 048/148] CLOUDERA-BUILD. Remove hadoop0.20S shims
 
 ---
  shims/build.xml |   48 ------------------------------------------------

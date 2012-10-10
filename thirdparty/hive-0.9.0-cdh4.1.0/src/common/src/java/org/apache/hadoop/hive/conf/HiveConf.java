@@ -592,10 +592,14 @@ public class HiveConf extends Configuration {
     HIVE_SERVER2_THRIFT_MIN_WORKER_THREADS("hive.server2.thrift.min.worker.threads", 5),
     HIVE_SERVER2_THRIFT_MAX_WORKER_THREADS("hive.server2.thrift.max.worker.threads", 100),
 
+    HIVE_SERVER2_THRIFT_PORT("hive.server2.thrift.port", 10000),
+    HIVE_SERVER2_THRIFT_BIND_HOST("hive.server2.thrift.bind.host", ""),
+
+
     // HiveServer2 auth configuration
     HIVE_SERVER2_AUTHENTICATION("hive.server2.authentication", "NONE"),
-    HIVE_SERVER2_KERBEROS_KEYTAB("hive.server2.kerberos.keytab", ""),
-    HIVE_SERVER2_KERBEROS_PRINCIPAL("hive.server2.kerberos.principal", ""),
+    HIVE_SERVER2_KERBEROS_KEYTAB("hive.server2.authentication.kerberos.keytab", ""),
+    HIVE_SERVER2_KERBEROS_PRINCIPAL("hive.server2.authentication.kerberos.principal", ""),
     HIVE_SERVER2_PLAIN_LDAP_URL("hive.server2.authentication.ldap.url", null),
     HIVE_SERVER2_PLAIN_LDAP_BASEDN("hive.server2.authentication.ldap.baseDN", null),
 

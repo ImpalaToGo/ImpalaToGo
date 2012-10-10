@@ -1,7 +1,7 @@
 From f86aab8931706fd2ecf7f7b969bcf0ab155b8c8a Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Sun, 26 Aug 2012 02:19:17 +0000
-Subject: [PATCH 131/144] HIVE-3365. Upgrade Hive's Avro dependency to version 1.7 (Shreepadma Venugopalan via cws)
+Subject: [PATCH 131/148] HIVE-3365. Upgrade Hive's Avro dependency to version 1.7 (Shreepadma Venugopalan via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1377370 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 73ad1898d8424f355223a51f07410a7b8f6eacbb)

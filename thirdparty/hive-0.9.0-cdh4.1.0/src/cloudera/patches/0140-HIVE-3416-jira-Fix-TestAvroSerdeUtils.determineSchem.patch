@@ -1,7 +1,7 @@
 From 02f18092bf25aee7eb47e821d96b787195da6b51 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 4 Sep 2012 08:45:05 +0000
-Subject: [PATCH 140/144] HIVE-3416 [jira] Fix TestAvroSerdeUtils.determineSchemaCanReadSchemaFromHDFS when running Hive on hadoop23
+Subject: [PATCH 140/148] HIVE-3416 [jira] Fix TestAvroSerdeUtils.determineSchemaCanReadSchemaFromHDFS when running Hive on hadoop23
  (Zhenxiao Luo via Carl Steinbach)
 
 Summary:

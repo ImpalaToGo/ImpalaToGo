@@ -1,7 +1,7 @@
 From 72686d1cb8eb18259b5a4ba6329c6ccc8f3c1f1b Mon Sep 17 00:00:00 2001
 From: Edward Capriolo <ecapriolo@apache.org>
 Date: Thu, 28 Jun 2012 00:28:12 +0000
-Subject: [PATCH 110/144] HIVE-3127 Pass hconf values as XML instead of command line arguments to child JVM. Kanna Karanam (via egc)
+Subject: [PATCH 110/148] HIVE-3127 Pass hconf values as XML instead of command line arguments to child JVM. Kanna Karanam (via egc)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1354781 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit fab856855d0369c4b3b34371d4dfe69f697a6b23)

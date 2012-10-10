@@ -30,10 +30,9 @@ import javax.security.sasl.SaslException;
 
 import org.apache.hive.service.auth.PlainSaslServer.ExternalAuthenticationCallback;
 import org.apache.hive.service.auth.PlainSaslServer.SaslPlainProvider;
-import org.apache.hive.service.sql.ISQLService;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSQLService.Iface;
-import org.apache.hive.service.sql.thrift.ThriftSQLService;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TCLIService.Iface;
+import org.apache.hive.service.cli.thrift.ThriftCLIService;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.transport.TSaslClientTransport;
@@ -95,20 +94,20 @@ public class PlainSaslHelper {
   }
 
   private static class SQLPlainProcessorFactory extends TProcessorFactory {
-    private final ISQLService service;
-    public SQLPlainProcessorFactory(ISQLService service) {
+    private final ThriftCLIService service;
+    public SQLPlainProcessorFactory(ThriftCLIService service) {
       super(null);
       this.service = service;
     }
 
     @Override
     public TProcessor getProcessor(TTransport trans) {
-      return new TSQLService.Processor<Iface>(new ThriftSQLService(service));
+      return new TCLIService.Processor<Iface>(service);
     }
   }
 
-  public static TProcessorFactory getPlainProcessorFactory(ISQLService service) {
-    return new SQLPlainProcessorFactory (service);
+  public static TProcessorFactory getPlainProcessorFactory(ThriftCLIService service) {
+    return new SQLPlainProcessorFactory(service);
   }
 
   // Register Plain SASL server provider
@@ -119,7 +118,7 @@ public class PlainSaslHelper {
   public static TTransportFactory getPlainTransportFactory(String authTypeStr) {
     TSaslServerTransport.Factory saslFactory = new TSaslServerTransport.Factory();
     saslFactory.addServerDefinition("PLAIN",
-        authTypeStr, null , new HashMap<String, String>(),
+        authTypeStr, null, new HashMap<String, String>(),
         new PlainServerCallbackHandler());
     return saslFactory;
   }

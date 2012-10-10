@@ -1,7 +1,7 @@
 From 61a2cec83074360509495d59fa3f7a692820c5fc Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Tue, 1 May 2012 22:52:38 +0000
-Subject: [PATCH 049/144] HIVE-2986 Create the hooks (njain via kevinwilfong)
+Subject: [PATCH 049/148] HIVE-2986 Create the hooks (njain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1332873 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 254a257350360cc7b1798a2be3eb9e18428943e5)

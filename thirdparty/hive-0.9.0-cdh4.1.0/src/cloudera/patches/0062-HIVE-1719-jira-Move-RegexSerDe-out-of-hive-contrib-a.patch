@@ -1,7 +1,7 @@
 From e4bfe05ba5294879268bc946bb7e1a5690a6a00d Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Fri, 18 May 2012 21:19:50 +0000
-Subject: [PATCH 062/144] HIVE-1719 [jira] Move RegexSerDe out of hive-contrib and over to hive-serde
+Subject: [PATCH 062/148] HIVE-1719 [jira] Move RegexSerDe out of hive-contrib and over to hive-serde
  (Shreepadma Venugopalan via Carl Steinbach)
 
 Summary:

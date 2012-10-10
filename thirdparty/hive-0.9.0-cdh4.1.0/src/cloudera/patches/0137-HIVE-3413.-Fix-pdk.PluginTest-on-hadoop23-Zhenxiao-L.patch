@@ -1,7 +1,7 @@
 From d56f7e018014676b00be638212e5e54a39ba110d Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Tue, 4 Sep 2012 08:00:36 +0000
-Subject: [PATCH 137/144] HIVE-3413. Fix pdk.PluginTest on hadoop23 (Zhenxiao Luo via cws)
+Subject: [PATCH 137/148] HIVE-3413. Fix pdk.PluginTest on hadoop23 (Zhenxiao Luo via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1380478 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 336a372481437578dda304ddf409c9a3e5627e82)

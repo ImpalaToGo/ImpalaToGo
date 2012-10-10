@@ -1,7 +1,7 @@
 From e8f8eb948ce9d7c7bbb6f70900d0720e5518e13e Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Thu, 12 Apr 2012 18:46:48 +0000
-Subject: [PATCH 003/144] HIVE-2711 : Make the header of RCFile unique (Owen Omalley via Ashutosh Chauhan)
+Subject: [PATCH 003/148] HIVE-2711 : Make the header of RCFile unique (Owen Omalley via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325442 13f79535-47bb-0310-9956-ffa450edef68
 ---

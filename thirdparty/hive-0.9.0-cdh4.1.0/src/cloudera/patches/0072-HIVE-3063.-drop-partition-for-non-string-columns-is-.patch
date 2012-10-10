@@ -1,7 +1,7 @@
 From 87acceaecf8e72097e6fc514be7b0f741c0ddc61 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Thu, 31 May 2012 16:31:53 +0000
-Subject: [PATCH 072/144] HIVE-3063. drop partition for non-string columns is failing (njain via kevinwilfong)
+Subject: [PATCH 072/148] HIVE-3063. drop partition for non-string columns is failing (njain via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1344801 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 4ce656933d6d8ff7bd99348dfefc77fb8e85f44f)

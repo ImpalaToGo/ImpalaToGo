@@ -1,7 +1,7 @@
 From 84c8fe2dae550ea974cb7add658428de98273d7a Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Tue, 19 Jun 2012 18:53:46 -0700
-Subject: [PATCH 034/144] CLOUDERA-BUILD. Fix archive_mr_1806.q and archive_multi_mr_1806.q testcases failures on cdh4-0.9.0 MR2
+Subject: [PATCH 034/148] CLOUDERA-BUILD. Fix archive_mr_1806.q and archive_multi_mr_1806.q testcases failures on cdh4-0.9.0 MR2
 
 Reason: CLOUDERA-BUILD
 Author: Zhenxiao Luo

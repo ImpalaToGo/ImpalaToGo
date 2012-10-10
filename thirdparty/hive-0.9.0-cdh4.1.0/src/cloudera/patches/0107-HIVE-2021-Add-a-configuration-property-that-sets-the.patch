@@ -1,7 +1,7 @@
 From 0ab18ae1ec1d0e4435db068c7b7aaaf0b077dd31 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Tue, 26 Jun 2012 03:30:54 +0000
-Subject: [PATCH 107/144] HIVE-2021 : Add a configuration property that sets the variable substitution max depth (Edward Capriolo via Ashutosh Chauhan)
+Subject: [PATCH 107/148] HIVE-2021 : Add a configuration property that sets the variable substitution max depth (Edward Capriolo via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1353808 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 32c9345893f2ffde685c2c8fe4fe466be9917a7e)

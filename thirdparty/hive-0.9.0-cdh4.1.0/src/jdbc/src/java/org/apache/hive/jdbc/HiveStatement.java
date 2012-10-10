@@ -25,20 +25,20 @@ import java.sql.SQLWarning;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.hive.service.sql.thrift.TCloseOperationReq;
-import org.apache.hive.service.sql.thrift.TCloseOperationResp;
-import org.apache.hive.service.sql.thrift.TExecuteStatementReq;
-import org.apache.hive.service.sql.thrift.TExecuteStatementResp;
-import org.apache.hive.service.sql.thrift.TOperationHandle;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSessionHandle;
+import org.apache.hive.service.cli.thrift.TCloseOperationReq;
+import org.apache.hive.service.cli.thrift.TCloseOperationResp;
+import org.apache.hive.service.cli.thrift.TExecuteStatementReq;
+import org.apache.hive.service.cli.thrift.TExecuteStatementResp;
+import org.apache.hive.service.cli.thrift.TOperationHandle;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TSessionHandle;
 
 /**
  * HiveStatement.
  *
  */
 public class HiveStatement implements java.sql.Statement {
-  private TSQLService.Iface client;
+  private TCLIService.Iface client;
   private TOperationHandle stmtHandle;
   private final TSessionHandle sessHandle;
   Map<String,String> sessConf = new HashMap<String,String>();
@@ -72,7 +72,7 @@ public class HiveStatement implements java.sql.Statement {
   /**
    *
    */
-  public HiveStatement(TSQLService.Iface client, TSessionHandle sessHandle) {
+  public HiveStatement(TCLIService.Iface client, TSessionHandle sessHandle) {
     this.client = client;
     this.sessHandle = sessHandle;
   }

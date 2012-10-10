@@ -24,10 +24,9 @@ import javax.security.sasl.SaslException;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge.Server;
-import org.apache.hive.service.sql.ISQLService;
-import org.apache.hive.service.sql.thrift.TSQLService;
-import org.apache.hive.service.sql.thrift.TSQLService.Iface;
-import org.apache.hive.service.sql.thrift.ThriftSQLService;
+import org.apache.hive.service.cli.thrift.TCLIService;
+import org.apache.hive.service.cli.thrift.TCLIService.Iface;
+import org.apache.hive.service.cli.thrift.ThriftCLIService;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.transport.TTransport;
@@ -35,10 +34,10 @@ import org.apache.thrift.transport.TTransport;
 public class KerberosSaslHelper {
 
   private static class SQLServiceProcessorFactory extends TProcessorFactory {
-    private final ISQLService service;
+    private final ThriftCLIService service;
     private final Server saslServer;
 
-    public SQLServiceProcessorFactory(Server saslServer, ISQLService service) {
+    public SQLServiceProcessorFactory(Server saslServer, ThriftCLIService service) {
       super(null);
       this.service = service;
       this.saslServer = saslServer;
@@ -46,13 +45,13 @@ public class KerberosSaslHelper {
 
     @Override
     public TProcessor getProcessor(TTransport trans) {
-      TProcessor sqlProcessor =
-          new TSQLService.Processor<Iface>(new ThriftSQLService(service));
-        return saslServer.wrapNonAssumingProcessor(sqlProcessor);
+      TProcessor sqlProcessor = new TCLIService.Processor<Iface>(service);
+      return saslServer.wrapNonAssumingProcessor(sqlProcessor);
     }
   }
 
-  public static TProcessorFactory getKerberosProcessorFactory(Server saslServer, ISQLService service) {
+  public static TProcessorFactory getKerberosProcessorFactory(Server saslServer,
+      ThriftCLIService service) {
     return new SQLServiceProcessorFactory (saslServer, service);
   }
 

@@ -1,7 +1,7 @@
 From bd04523546db203437b5f5b986441a4bea82e7dc Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 14 May 2012 16:25:31 -0700
-Subject: [PATCH 028/144] HIVE-3014. Fix metastore test failures caused by HIVE-2757
+Subject: [PATCH 028/148] HIVE-3014. Fix metastore test failures caused by HIVE-2757
 
 Reason: Bug
 Author: Zhenxiao Luo

@@ -1,7 +1,7 @@
 From 9341acab6ae7f15cc8702946f7a809d8187ae2d0 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Wed, 29 Aug 2012 08:06:38 +0000
-Subject: [PATCH 135/144] HIVE-3265. HiveHistory.printRowCount() throws NPE (Shreepadma Venugopalan via cws)
+Subject: [PATCH 135/148] HIVE-3265. HiveHistory.printRowCount() throws NPE (Shreepadma Venugopalan via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1378472 13f79535-47bb-0310-9956-ffa450edef68
 (cherry picked from commit 4c14682e0835b171d169d377bd8ea20d0b76c232)

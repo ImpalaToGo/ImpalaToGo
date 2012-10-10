@@ -1,7 +1,7 @@
 From 2ddab60e4abd660ca5b5151d24cb98271aed55dd Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Fri, 13 Apr 2012 14:51:12 +0000
-Subject: [PATCH 005/144] git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325793 13f79535-47bb-0310-9956-ffa450edef68
+Subject: [PATCH 005/148] git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1325793 13f79535-47bb-0310-9956-ffa450edef68
 
 ---
  .../hive/ql/io/rcfile/merge/RCFileMergeMapper.java |    2 +-

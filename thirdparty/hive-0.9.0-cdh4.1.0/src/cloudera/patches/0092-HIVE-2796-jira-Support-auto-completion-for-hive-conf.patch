@@ -1,7 +1,7 @@
 From 0f0aa0a4abded3a5360361ec02119183710ced35 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Fri, 15 Jun 2012 21:23:33 +0000
-Subject: [PATCH 092/144] HIVE-2796 [jira] Support auto completion for hive configs in CliDriver
+Subject: [PATCH 092/148] HIVE-2796 [jira] Support auto completion for hive configs in CliDriver
  (Navis Ryu via Ashutosh Chauhan)
 
 Summary:
