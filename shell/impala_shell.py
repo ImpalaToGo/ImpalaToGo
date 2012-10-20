@@ -33,16 +33,18 @@ from thrift.transport.TTransport import TBufferedTransport, TTransportException
 from thrift.protocol import TBinaryProtocol
 from thrift.Thrift import TApplicationException
 
-VERSION_STRING = "Impala v0.1 "
+VERSION_FORMAT = "Impala v%(version)s (%(git_hash)s) built on %(build_date)s"
 COMMENT_TOKEN = '--'
+VERSION_STRING = "build version not available"
 
 # Tarball / packaging build makes impala_build_version available
 try:
-  from impala_build_version import get_version_string
-  from impala_build_version import get_build_date
-  VERSION_STRING += "(" + get_version_string()[:7] + ") built on " + get_build_date()
+  from impala_build_version import get_git_hash, get_build_date, get_version
+  VERSION_STRING = VERSION_FORMAT % {'version': get_version(),
+                                     'git_hash': get_git_hash()[:7],
+                                     'build_date': get_build_date()}
 except Exception:
-  VERSION_STRING += "(build version not available)"
+  pass
 
 class RpcStatus:
   """Convenience enum to describe Rpc return statuses"""
@@ -99,7 +101,7 @@ class ImpalaShell(cmd.Cmd):
     print '\n'.join(["\t%s: %s" % (k,v) for (k,v) in self.query_options.iteritems()])
 
   def __options_to_string_list(self):
-    return ["%s:%s" % (k,v) for (k,v) in self.query_options.iteritems()]
+    return ["%s=%s" % (k,v) for (k,v) in self.query_options.iteritems()]
 
   def do_shell(self, args):
     """Run a command on the shell
@@ -192,7 +194,11 @@ class ImpalaShell(cmd.Cmd):
       print "CONNECT takes exactly one argument: <hostname:port> of impalad to connect to"
       return False
     try:
-      host, port = tokens[0].split(":")
+      connection_params = tokens[0].split(':')
+      if len(connection_params) > 1:
+        host, port = connection_params
+      else:
+        host, port = connection_params[0], 21000
       self.impalad = (host, port)
     except ValueError:
       print "Connect string must be of form <hostname:port>"
@@ -510,16 +516,20 @@ def execute_queries_non_interactive_mode(options):
       query_file_handle.close()
     except Exception, e:
       print 'Error: %s' % e
-      return
+      sys.exit(1)
   elif options.query:
     queries = [options.query]
   shell = ImpalaShell(options)
+  # The impalad was specified on the command line and the connection failed.
+  # Return with an error, no need to process the query.
+  if options.impalad and shell.connected == False:
+    sys.exit(1)
   # Deal with case.
   queries = map(shell.sanitise_input, queries)
   for query in queries:
     if not shell.onecmd(query):
       print 'Could not execute command: %s' % query
-      return
+      sys.exit(1)
 
 if __name__ == "__main__":
   parser = OptionParser()
@@ -536,8 +546,14 @@ if __name__ == "__main__":
                     help="Service name of a kerberized impalad, default is 'impala'")
   parser.add_option("-V", "--verbose", dest="verbose", default=False, action="store_true",
                     help="Enable verbose output")
+  parser.add_option("-v", "--version", dest="version", default=False, action="store_true",
+                    help="Print version information")
 
-  (options, args) = parser.parse_args()
+  options, args = parser.parse_args()
+
+  if options.version:
+    print VERSION_STRING
+    sys.exit(0)
 
   if options.kerberos_service_name and not options.use_kerberos:
     print 'Kerberos not enabled, ignoring service name'

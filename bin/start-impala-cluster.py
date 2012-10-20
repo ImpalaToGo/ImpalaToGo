@@ -33,31 +33,44 @@ parser.add_option("--state_store_args", dest="state_store_args", default="",
 parser.add_option("--kill_only", dest="kill_only", action="store_true", default = False,
                   help="Instead of starting the cluster, just kill all running Impalad"\
                   " and State Store processes.")
+parser.add_option("--in-process", dest="inprocess", action="store_true", default = False,
+                  help="Start all Impala backends and state store in a single process.")
 parser.add_option("--log_dir", dest="log_dir", default="/tmp",
                   help="Directory to store output logs to.")
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", default = False,
                   help="Prints all output to stderr/stdout.")
 options, args = parser.parse_args()
 
+IMPALA_HOME = os.environ['IMPALA_HOME']
 KNOWN_BUILD_TYPES = ['debug', 'release']
-IMPALAD_PATH = os.path.join(os.environ['IMPALA_HOME'],
+IMPALAD_PATH = os.path.join(IMPALA_HOME,
                             'bin/start-impalad.sh -build_type=%s' % options.build_type)
-STATE_STORE_PATH = os.path.join(os.environ['IMPALA_BE_DIR'], 'build', options.build_type,
-                                'sparrow/state-store-service')
+STATE_STORE_PATH = os.path.join(IMPALA_HOME, 'be/build', options.build_type,
+                                'sparrow/statestored')
+MINI_IMPALA_CLUSTER_PATH = os.path.join(IMPALA_HOME, 'be/build', options.build_type,
+                                        'testutil/mini-impala-cluster')
+SET_CLASSPATH_SCRIPT_PATH = os.path.join(IMPALA_HOME, 'bin/set-classpath.sh')
 IMPALAD_ARGS = "-fe_port=%d -be_port=%d -state_store_subscriber_port=%d "\
-               "-webserver_port=%d -default_num_nodes=0 " + options.impalad_args
+               "-webserver_port=%d " + options.impalad_args
 STATE_STORE_ARGS = options.state_store_args
 REDIRECT_STR = "> %(file_name)s 2>&1"
 
 def kill_all():
+  os.system("killall mini-impala-cluster")
   os.system("killall impalad")
-  os.system("killall state-store-service")
+  os.system("killall statestored")
 
 def start_statestore():
-  output_file = os.path.join(options.log_dir, 'state-store-service.out')
-  redirect_str = '' if options.verbose else REDIRECT_STR % {'file_name': output_file}
+  output_file = os.path.join(options.log_dir, 'statestored.out')
   print "Starting State Store with logging to %s" % (output_file)
-  os.system("%s %s %s&" % (STATE_STORE_PATH, STATE_STORE_ARGS, redirect_str))
+  execute_cmd_with_redirect(STATE_STORE_PATH, STATE_STORE_ARGS, output_file)
+
+def start_mini_impala_cluster(cluster_size):
+  output_file = os.path.join(options.log_dir, 'mini-impala-cluster.out')
+  args = "--num_backends=%d" % cluster_size
+  print "Starting Mini Impala Cluster with logging to %s" % (output_file)
+  execute_cmd_with_redirect(
+      '. %s;%s' % (SET_CLASSPATH_SCRIPT_PATH, MINI_IMPALA_CLUSTER_PATH), args, output_file)
 
 def start_impalad_instances(cluster_size):
   BASE_FE_PORT = 21000
@@ -69,10 +82,13 @@ def start_impalad_instances(cluster_size):
   for i in range(options.cluster_size):
     output_file = os.path.join(options.log_dir, 'impalad.node%d.out' % i)
     print "Starting ImpalaD %d logging to %s" % (i, output_file)
-    redirect_str = '' if options.verbose else REDIRECT_STR % {'file_name': output_file}
     args = IMPALAD_ARGS % (BASE_FE_PORT + i, BASE_BE_PORT + i,
                            BASE_STATE_STORE_SUBSCRIBER_PORT + i, BASE_WEBSERVER_PORT + i)
-    os.system("%s %s %s &" % (IMPALAD_PATH, args, redirect_str))
+    execute_cmd_with_redirect(IMPALAD_PATH, args, output_file)
+
+def execute_cmd_with_redirect(cmd, args, output_file):
+  redirect_str = '' if options.verbose else REDIRECT_STR % {'file_name': output_file}
+  os.system("%s %s %s &" % (cmd, args, redirect_str))
 
 if __name__ == "__main__":
   if options.build_type not in KNOWN_BUILD_TYPES:
@@ -86,6 +102,9 @@ if __name__ == "__main__":
 
   kill_all()
   if not options.kill_only:
-    start_statestore()
-    start_impalad_instances(options.cluster_size)
+    if options.inprocess:
+      start_mini_impala_cluster(options.cluster_size)
+    else:
+      start_statestore()
+      start_impalad_instances(options.cluster_size)
     print 'ImpalaD Cluster Running with %d nodes.' % options.cluster_size

@@ -18,16 +18,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.cloudera.impala.analysis.Analyzer;
 import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.Predicate;
 import com.cloudera.impala.analysis.SlotId;
+import com.cloudera.impala.analysis.TableRef;
 import com.cloudera.impala.analysis.TupleId;
 import com.cloudera.impala.common.InternalException;
 import com.cloudera.impala.common.TreeNode;
+import com.cloudera.impala.thrift.TExplainLevel;
 import com.cloudera.impala.thrift.TPlan;
 import com.cloudera.impala.thrift.TPlanNode;
-import com.cloudera.impala.thrift.TExplainLevel;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -48,6 +52,8 @@ import com.google.common.collect.Sets;
  * its children (= are bound by tupleIds).
  */
 abstract public class PlanNode extends TreeNode<PlanNode> {
+  private final static Logger LOG = LoggerFactory.getLogger(PlanNode.class);
+
   protected final PlanNodeId id;  // unique w/in plan tree; assigned by planner
   protected PlanFragmentId fragmentId;  // assigned by planner after fragmentation step
   protected long limit; // max. # of rows to be returned; 0: no limit
@@ -62,8 +68,8 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
   protected ArrayList<TupleId> rowTupleIds = Lists.newArrayList();
 
   // A set of nullable TupleId produced by this node. It is a subset of tupleIds.
-  // A tuple is nullable if it's the "nullable" side of an outer join, and it has nothing
-  // to do with the schema.
+  // A tuple is nullable within a particular plan tree if it's the "nullable" side of
+  // an outer join, which has nothing to do with the schema.
   protected Set<TupleId> nullableTupleIds = Sets.newHashSet();
 
   protected List<Predicate> conjuncts = Lists.newArrayList();
@@ -155,9 +161,14 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     return conjuncts;
   }
 
-  public void setConjuncts(List<Predicate> conjuncts) {
-    if (!conjuncts.isEmpty()) {
-      this.conjuncts = conjuncts;
+  public void addConjuncts(List<Predicate> conjuncts) {
+    if (conjuncts == null) {
+      return;
+    }
+    this.conjuncts.addAll(conjuncts);
+    //LOG.info("added conjuncts to " + getExplainString());
+    for (Predicate p: conjuncts) {
+      //LOG.info(p.toSql());
     }
   }
 
@@ -223,14 +234,6 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
    * on the children.
    */
   public void finalize(Analyzer analyzer) throws InternalException {
-    if (this instanceof HashJoinNode && children.get(0) instanceof HdfsScanNode) {
-      PlanNode leftChild = children.get(0);
-      for (TupleId tid: rowTupleIds) {
-        if (!leftChild.rowTupleIds.contains(tid)) {
-          leftChild.rowTupleIds.add(tid);
-        }
-      }
-    }
     for (PlanNode child: children) {
       child.finalize(analyzer);
     }

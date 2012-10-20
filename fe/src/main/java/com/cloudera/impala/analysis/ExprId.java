@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "testutil/query-executor-if.h"
+package com.cloudera.impala.analysis;
 
-namespace impala {
+import com.cloudera.impala.common.Id;
+import com.cloudera.impala.common.IdGenerator;
 
-QueryExecutorIf::QueryExecutorIf() {
-}
+public class ExprId extends Id<ExprId> {
+  public ExprId() {
+    super();
+  }
 
-QueryExecutorIf::~QueryExecutorIf() {
-}
+  public ExprId(int id) {
+    super(id);
+  }
 
+  public ExprId(IdGenerator<ExprId> idGenerator) {
+    super(idGenerator.getNextId());
+  }
 }

@@ -20,7 +20,10 @@ root=`dirname "$0"`
 root=`cd "$root"; pwd`
 
 export IMPALA_HOME=$root
-export METASTORE_DB=`basename $root | sed -e "s/\\./_/g" | sed -e "s/[.-]/_/g"`
+# Create unique metastore DB name based on the directory we're in.  The result
+# must be lower case.
+METASTORE_DB=`basename $root | sed -e "s/\\./_/g" | sed -e "s/[.-]/_/g"`
+export METASTORE_DB=`echo $METASTORE_DB | tr '[A-Z]' '[a-z]'`
 export CURRENT_USER=`whoami`
 
 . "$root"/bin/impala-config.sh
@@ -90,6 +93,14 @@ then
   $IMPALA_HOME/bin/build_thirdparty.sh $*
 fi
 
+if [ -e $HADOOP_LZO/build/native/Linux-*-*/lib/libgplcompression.so ]
+then
+  cp $HADOOP_LZO/build/native/Linux-*-*/lib/libgplcompression.* \
+    $IMPALA_HOME/thirdparty/hadoop-*/lib/native/
+else
+  echo "No hadoop-lzo found"
+fi
+
 # option to clean everything first
 if [ $clean_action -eq 1 ]
 then
@@ -117,6 +128,7 @@ then
   rm -f $IMPALA_HOME/bin/version.info
 fi
 
+
 # cleanup FE process
 $IMPALA_HOME/bin/clean-fe-processes.py
 
@@ -130,6 +142,11 @@ cd $IMPALA_HOME/common/thrift
 make
 cd $IMPALA_BE_DIR
 make -j4
+
+if [ -e $IMPALA_LZO ]
+then
+  (cd $IMPALA_LZO; cmake .; make)
+fi
 
 # Get Hadoop dependencies onto the classpath
 cd $IMPALA_FE_DIR

@@ -177,7 +177,7 @@ struct ExprValue {
   void* SetToMax(PrimitiveType type) {
     switch (type) {
       case TYPE_BOOLEAN:
-        bool_val = false;
+        bool_val = true;
         return &bool_val;
       case TYPE_TINYINT:
         tinyint_val = std::numeric_limits<int8_t>::max();
@@ -209,6 +209,9 @@ class Expr {
  public:
   // typedef for compute functions.
   typedef void* (*ComputeFn)(Expr*, TupleRow*);
+
+  // Empty virtual destructor
+  virtual ~Expr() {}
 
   // Evaluate expr and return pointer to result. The result is
   // valid as long as 'row' doesn't change.

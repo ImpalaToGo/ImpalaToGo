@@ -29,6 +29,7 @@
 #include <concurrency/PosixThreadFactory.h>
 
 #include "common/logging.h"
+#include "common/daemon.h"
 // TODO: fix this: we currently need to include uid-util.h before impala-server.h
 #include "util/uid-util.h"
 #include "exec/hbase-table-scanner.h"
@@ -38,9 +39,6 @@
 #include "runtime/coordinator.h"
 #include "runtime/exec-env.h"
 #include "testutil/test-exec-env.h"
-#include "util/cpu-info.h"
-#include "util/debug-util.h"
-#include "util/disk-info.h"
 #include "util/jni-util.h"
 #include "util/logging.h"
 #include "util/thrift-util.h"
@@ -68,31 +66,10 @@ DECLARE_bool(use_statestore);
 DECLARE_int32(fe_port);
 DECLARE_int32(be_port);
 DECLARE_string(principal);
-DECLARE_string(hostname);
 
 int main(int argc, char** argv) {
-  // Set the default hostname.  The user can override this with the hostname flag.
-  FLAGS_hostname = GetHostname();
+  InitDaemon(argc, argv);
 
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  InitGoogleLoggingSafe(argv[0]);
-  
-  // gflags defines -version already to just print the name of the binary (they have
-  // a TODO to print the build info) so we can't use that.  Furthermore hadoop also
-  // display the version by running 'hadoop version' so we'll just go with that.
-  if (argc == 2 && strcmp(argv[1], "version") == 0) {
-    cout << GetVersionString() << endl;
-    return 0;
-  }
-  LOG(INFO) << GetVersionString();
-  
-  LOG(INFO) << "Using hostname: " << FLAGS_hostname;
-  
-  LogCommandLineFlags();
-
-  InitThriftLogging();
-  CpuInfo::Init();
-  DiskInfo::Init();
   LlvmCodeGen::InitializeLlvm();
   
   // Enable Kerberos security if requested.

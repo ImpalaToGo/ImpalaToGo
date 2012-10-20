@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.LiteralExpr;
 import com.cloudera.impala.analysis.NullLiteral;
+import com.cloudera.impala.catalog.Db.TableLoadingException;
 import com.cloudera.impala.catalog.HdfsPartition.FileDescriptor;
 import com.cloudera.impala.catalog.HdfsStorageDescriptor.InvalidStorageDescriptorException;
 import com.cloudera.impala.common.AnalysisException;
@@ -150,27 +151,24 @@ public class HdfsTable extends Table {
   }
 
   /**
-   * Create columns corresponding to fieldSchemas.
-   * @param fieldSchemas
-   * @return true if success, false otherwise
+   * Create columns corresponding to fieldSchemas. Throws a
+   * TableLoadingException if the metadata is incompatible with what we support.
    */
-  private boolean loadColumns(List<FieldSchema> fieldSchemas) {
+  private void loadColumns(List<FieldSchema> fieldSchemas) 
+      throws TableLoadingException {
     int pos = 0;
     for (FieldSchema s : fieldSchemas) {
       // catch currently unsupported hive schema elements
       if (!Constants.PrimitiveTypes.contains(s.getType())) {
-        LOG.warn("Ignoring table {} because column {} " +
-            "contains a field of unsupported type {}. " +
-            "Only primitive types are currently supported.",
-            new Object[] {getName(), s.getName(), s.getType()});
-        return false;
+        throw new TableLoadingException("Failed to load metadata for table: " +
+            getName() + " due to unsupported column type " + s.getType() + " in column " +
+            s.getName());
       }
       Column col = new Column(s.getName(), getPrimitiveType(s.getType()), pos);
       colsByPos.add(col);
       colsByName.put(s.getName(), col);
       ++pos;
     }
-    return true;
   }
 
   /**
@@ -234,7 +232,7 @@ public class HdfsTable extends Table {
       List<LiteralExpr> partitionKeyExprs)
       throws IOException, InvalidStorageDescriptorException {
     HdfsStorageDescriptor fileFormatDescriptor =
-        HdfsStorageDescriptor.fromStorageDescriptor(storageDescriptor);
+        HdfsStorageDescriptor.fromStorageDescriptor(this.name, storageDescriptor);
     Path path = new Path(storageDescriptor.getLocation());
     List<FileDescriptor> fileDescriptors = Lists.newArrayList();
     FileSystem fs = path.getFileSystem(new Configuration());
@@ -258,15 +256,15 @@ public class HdfsTable extends Table {
     // Default partition has no files and is not referred to by scan nodes. Data sinks
     // refer to this to understand how to create new partitions
     HdfsStorageDescriptor hdfsStorageDescriptor =
-        HdfsStorageDescriptor.fromStorageDescriptor(storageDescriptor);
+        HdfsStorageDescriptor.fromStorageDescriptor(this.name, storageDescriptor);
     HdfsPartition partition = HdfsPartition.defaultPartition(hdfsStorageDescriptor);
     partitions.add(partition);
   }
 
   @Override
   public Table load(HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) {
-    // turn all exceptions into unchecked exception
+      org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
+    // turn all exceptions into TableLoadingException
     try {
       // set nullPartitionKeyValue from the hive conf.
       nullPartitionKeyValue =
@@ -280,30 +278,15 @@ public class HdfsTable extends Table {
           partKeys.size() + tblFields.size());
       fieldSchemas.addAll(partKeys);
       fieldSchemas.addAll(tblFields);
-      if (!loadColumns(fieldSchemas)) {
-        return null;
-      }
+      loadColumns(fieldSchemas);
 
       // The number of clustering columns is the number of partition keys.
       numClusteringCols = partKeys.size();
-      try {
-        loadPartitions(client.listPartitions(db.getName(), name, Short.MAX_VALUE), msTbl);
-      } catch (Exception ex) {
-        // TODO: Do we want this behaviour for all possible exceptions?
-        LOG.warn("Ignoring HDFS table '" + msTbl.getTableName() +
-            "' due to errors loading metadata", ex);
-        return null;
-      }
-    } catch (TException e) {
-      throw new UnsupportedOperationException(e);
-    } catch (UnknownDBException e) {
-      throw new UnsupportedOperationException(e);
-    } catch (MetaException e) {
-      throw new UnsupportedOperationException(e);
-    } catch (UnknownTableException e) {
-      throw new UnsupportedOperationException(e);
-    } catch (ConfigValSecurityException e) {
-      throw new UnsupportedOperationException(e);
+      loadPartitions(client.listPartitions(db.getName(), name, Short.MAX_VALUE), msTbl);
+    } catch (TableLoadingException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new TableLoadingException("Failed to load metadata for table: " + name, e);
     }
     return this;
   }
@@ -374,6 +357,31 @@ public class HdfsTable extends Table {
     for (HdfsPartition partition: partitions) {
       for (FileDescriptor fileDescriptor: partition.getFileDescriptors()) {
         Path p = new Path(fileDescriptor.getFilePath());
+        // Check to see if the file has a compression suffix.
+        // We only support .lzo on text files that have been declared in
+        // the metastore as TEXT_LZO.  For now, raise an error on any
+        // other type.
+        HdfsCompression compressionType =
+            HdfsCompression.fromFileName(fileDescriptor.getFilePath());
+        fileDescriptor.setCompression(compressionType);
+        if (compressionType == HdfsCompression.LZO_INDEX) {
+          // Skip index files, these are read by the LZO scanner directly.
+          continue;
+        }
+
+        HdfsStorageDescriptor sd = partition.getInputFormatDescriptor();
+        if (compressionType == HdfsCompression.LZO) {
+          if (sd.getFileFormat() != HdfsFileFormat.LZO_TEXT) {
+            throw new RuntimeException(
+                "Compressed file not supported without compression input format: " + p);
+          }
+        } else if (compressionType != HdfsCompression.NONE) {
+          throw new RuntimeException("Compressed file not supported: " + p);
+        } else if (sd.getFileFormat() == HdfsFileFormat.LZO_TEXT) {
+          throw new RuntimeException("Expected file with .lzo suffix: " + p);
+        }
+
+
         BlockLocation[] locations = null;
         try {
           FileStatus fileStatus = dfs.getFileStatus(p);
@@ -388,7 +396,7 @@ public class HdfsTable extends Table {
           endingBlockIndexes.add(blocks.size());
         } catch (IOException e) {
           throw new RuntimeException("couldn't determine block locations for path '"
-              + fileDescriptor.getFilePath() + "':\n" + e.getMessage(), e);
+              + p + "':\n" + e.getMessage(), e);
         }
       }
     }
@@ -400,10 +408,10 @@ public class HdfsTable extends Table {
 
         // Convert block locations to 0 based ids.  The block location ids returned
         // from HDFS are unique but opaque (only defining comparison operators).  We need
-        // to turn them indices.  
-        // TODO: the diskId should be eventually retrievable from Hdfs when 
+        // to turn them indices.
+        // TODO: the diskId should be eventually retrievable from Hdfs when
         // the community agrees this API is useful.
-        
+
         // For each host, this is a mapping of the VolumeId object to a 0 based index.
         Map<String, Map<VolumeId, Integer>> hostDiskIds = Maps.newHashMap();
 
@@ -431,7 +439,7 @@ public class HdfsTable extends Table {
             }
 
             if (!volumeIds[j].isValid()) {
-              // The data node with this block did not respond to the block location 
+              // The data node with this block did not respond to the block location
               // rpc.  Mark it as -1 for the BE which will assign it a random disk.
               diskIds[j] = -1;
             } else if (hostDisks.containsKey(volumeIds[j])) {
@@ -452,7 +460,7 @@ public class HdfsTable extends Table {
         throw new RuntimeException("couldn't determine block storage locations:\n"
             + e.getMessage(), e);
       }
-    } 
+    }
 
     if (result.size() == 0) {
       if (supportsVolumeId) {
@@ -469,6 +477,10 @@ public class HdfsTable extends Table {
     int fileIndex = 0;
     for (HdfsPartition partition: partitions) {
       for (FileDescriptor fileDescriptor: partition.getFileDescriptors()) {
+        if (fileDescriptor.getFileCompression() == HdfsCompression.LZO_INDEX) {
+          // Don't issue scans for the index files for LZO compressed files.
+          continue;
+        }
         int lastBlockIndex = endingBlockIndexes.get(fileIndex);
         for (int i = firstBlockIndex; i < lastBlockIndex; ++i) {
           result.get(i).setFileName(fileDescriptor.getFilePath());

@@ -228,9 +228,6 @@ add_subdirectory(src/testutil)
 add_subdirectory(src/util)
 add_subdirectory(src/transport)
 
-add_subdirectory(src/benchmarks)
-add_subdirectory(src/experiments)
-
 add_subdirectory(generated-sources/gen-cpp)
 add_subdirectory(generated-sources/opcode)
 

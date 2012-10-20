@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 # cleans and rebuilds thirdparty/. The Impala build environment must be set up
 # by bin/impala-config.sh before running this script.
 
