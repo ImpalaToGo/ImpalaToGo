@@ -1,0 +1,6 @@
+*~
+
+build
+generated-sources/**/*
+src/common/version.cc
+

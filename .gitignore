@@ -1,0 +1,21 @@
+*~
+*.pyc
+.*.swp
+derby.log
+thirdparty
+cscope.files
+cscope.out
+bin/version.info
+
+pprof.out
+
+# CMake:
+Makefile
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+CTestTestfile.cmake
+!CMakeLists.txt
+llvm-ir/
+shell/gen-py/
+shell/build/

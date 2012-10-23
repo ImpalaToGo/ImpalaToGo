@@ -1,0 +1,685 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Copyright (c) 2012 Cloudera, Inc. All rights reserved.
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.cloudera</groupId>
+    <artifactId>parent</artifactId>
+    <version>1.0</version>
+  </parent>
+  <groupId>com.cloudera.impala</groupId>
+  <artifactId>impala-frontend</artifactId>
+  <version>0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>Cloudera Impala Query Engine Frontend</name>
+
+  <properties>
+    <test.hive.testdata>${project.basedir}/../testdata/target/AllTypes.txt</test.hive.testdata>
+    <backend.library.path>${env.IMPALA_HOME}/be/build/debug/service:${env.IMPALA_HOME}/be/build/release/service</backend.library.path>
+    <fe_port>21000</fe_port>
+    <impalad>localhost</impalad>
+    <use_external_impalad>false</use_external_impalad>
+    <testExecutionMode>reduced</testExecutionMode>
+    <hadoop.version>2.0.0-cdh4.1.0</hadoop.version>
+    <hive.version>0.9.0-cdh4.1.0</hive.version>
+    <hbase.version>0.92.1-cdh4.1.0</hbase.version>
+  </properties>
+
+  <dependencies>
+    <!-- Until the local-read optimisations are available in a
+         published artifact, we grab the local hdfs jar. The downside
+         is that transitive dependencies are not handled by Maven with
+         a local jar. Note: not necessary for the Java-side, but must
+         be available for the NativeBackend. -->
+    <dependency>
+      <groupId>org.hsqldb</groupId>
+      <artifactId>hsqldb</artifactId>
+      <version>2.2.8</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>system</scope>
+      <systemPath>${env.IMPALA_HOME}/thirdparty/hadoop-${hadoop.version}/share/hadoop/hdfs/hadoop-hdfs-${hadoop.version}.jar</systemPath>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>system</scope>
+      <systemPath>${env.IMPALA_HOME}/thirdparty/hadoop-${hadoop.version}/share/hadoop/common/hadoop-common-${hadoop.version}.jar</systemPath>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-auth</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>system</scope>
+      <systemPath>${env.IMPALA_HOME}/thirdparty/hadoop-${hadoop.version}/share/hadoop/common/lib/hadoop-auth-${hadoop.version}.jar</systemPath>
+    </dependency>
+
+    <dependency>
+      <groupId>net.sf.squirrel-sql.thirdparty-non-maven</groupId>
+      <artifactId>java-cup</artifactId>
+      <version>0.11a</version>
+    </dependency>
+
+    <!-- Moved above Hive, because Hive bundles its own Thrift version
+         which supercedes this one if it comes first in the dependency
+         tree -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>0.7.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libfb303</artifactId>
+      <version>0.7.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-hbase-handler</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-mapreduce-client-core</artifactId>
+      <version>${hadoop.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-common</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-serde</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-shims</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.derby</groupId>
+      <artifactId>derby</artifactId>
+      <version>10.4.2.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-connectionpool</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-core</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-rdbms</artifactId>
+      <version>2.0.3</version>
+    </dependency>
+    <!-- TODO: DO NOT SHIP THE MYSQL JAR - it's not license compatible -->
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>5.1.9</version>
+    </dependency>
+    <!-- This driver supports PostgreSQL 7.2 and newer -->
+    <dependency>
+      <groupId>postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>9.0-801.jdbc4</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+      <version>1.4</version>
+    </dependency>
+    <dependency>
+      <groupId>javax.jdo</groupId>
+      <artifactId>jdo2-api</artifactId>
+      <version>2.3-eb</version>
+    </dependency>
+    <dependency>
+      <groupId>org.antlr</groupId>
+      <artifactId>antlr-runtime</artifactId>
+      <version>3.0.1</version>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-cli</groupId>
+      <artifactId>commons-cli</artifactId>
+      <version>1.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.6.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-log4j12</artifactId>
+      <version>1.6.1</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>11.0.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.8.2</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>ant-contrib</groupId>
+      <artifactId>ant-contrib</artifactId>
+      <version>1.0b3</version>
+      <exclusions>
+        <exclusion>
+          <groupId>ant</groupId>
+          <artifactId>ant</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.ant</groupId>
+      <artifactId>ant-nodeps</artifactId>
+      <version>1.8.1</version>
+    </dependency>
+  </dependencies>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>findbugs-maven-plugin</artifactId>
+        <version>2.5.2</version>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>2.3.2</version>
+        <configuration>
+          <source>1.6</source>
+          <target>1.6</target>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>net.sourceforge.czt</groupId>
+        <artifactId>maven-cup-plugin</artifactId>
+        <version>1.6.4</version>
+        <executions>
+          <execution>
+            <id>cup</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <extension>y</extension>
+              <parserOutput>SqlParser</parserOutput>
+              <symbolOutput>SqlParserSymbols</symbolOutput>
+              <outputDirectory>${project.build.directory}/generated-sources/cup</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>de.jflex</groupId>
+        <artifactId>maven-jflex-plugin</artifactId>
+        <version>1.4.3</version>
+        <executions>
+          <execution>
+            <id>jflex</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <backup>false</backup>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+<!-- PDH - I don't think we need this right now, regardless there's a better way (ie not part of dev workflow) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+        </configuration>
+        <executions>
+          <execution>
+            <id>make-assembly</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>2.3</version>
+        <executions>
+          <execution>
+            <id>copy-dependencies</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <excludeTypes>pom</excludeTypes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.12</version>
+        <configuration>
+          <redirectTestOutputToFile>true</redirectTestOutputToFile>
+          <argLine>-Djava.library.path=${java.library.path}:${backend.library.path}</argLine>
+          <systemProperties>
+            <property>
+              <name>testExecutionMode</name>
+              <value>${testExecutionMode}</value>
+            </property>
+            <property>
+              <name>fe_port</name>
+              <value>${fe_port}</value>
+              <name>impalad</name>
+              <value>${impalad}</value>
+              <name>use_external_impalad</name>
+              <value>${use_external_impalad}</value>
+            </property>
+          </systemProperties>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>com.atlassian.maven.plugins</groupId>
+        <artifactId>maven-clover2-plugin</artifactId>
+        <version>3.0.2</version>
+        <configuration>
+          <generateHtml>true</generateHtml>
+          <generateXml>true</generateXml>
+          <excludes>
+            <exclude>**/jdbc/*.java</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>1.5</version>
+        <executions>
+          <!-- Tell maven about our generated files -->
+          <execution>
+            <id>add-source</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <!-- Make sure Eclipse knows where to find generated sources.
+                        Note that the flex plugin appears to do this for you, but we have
+                        to do this manually for the CUP and Thrift generated code
+                        -->
+                <source>${project.basedir}/generated-sources/gen-java</source>
+                <source>${project.build.directory}/generated-sources/cup</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>java</goal>
+            </goals>
+          </execution>
+        </executions>
+          <configuration>
+            <systemProperties>
+              <systemProperty>
+                <key>java.library.path</key>
+                <value>${java.library.path}:${backend.library.path}</value>
+              </systemProperty>
+              <systemProperty>
+                <key>test.hive.testdata</key>
+                <value>${project.basedir}/../testdata/target/AllTypes.txt</value>
+              </systemProperty>
+            </systemProperties>
+          </configuration>
+      </plugin>
+  </plugins>
+    <pluginManagement>
+      <plugins>
+        <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>net.sourceforge.czt</groupId>
+                    <artifactId>maven-cup-plugin</artifactId>
+                    <versionRange>[1.6.4,)</versionRange>
+                    <goals>
+                      <goal>generate</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore></ignore>
+                  </action>
+                </pluginExecution>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <versionRange>[1.6,)</versionRange>
+                    <goals>
+                      <goal>run</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore></ignore>
+                  </action>
+                </pluginExecution>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <versionRange>[2.0,)</versionRange>
+                    <goals>
+                      <goal>copy-dependencies</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore></ignore>
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <repositories>
+    <repository>
+      <id>cdh.rcs.releases.repo</id>
+      <url>https://repository.cloudera.com/content/groups/cdh-releases-rcs</url>
+      <name>CDH Releases Repository</name>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>cdh.releases.repo</id>
+      <url>https://repository.cloudera.com/content/repositories/releases</url>
+      <name>CDH Releases Repository</name>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>cdh.snapshots.repo</id>
+      <url>https://repository.cloudera.com/content/repositories/snapshots</url>
+      <name>CDH Snapshots Repository</name>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>cloudera.thirdparty.repo</id>
+      <url>https://repository.cloudera.com/content/repositories/third-party</url>
+      <name>Cloudera Third Party Repository</name>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <pluginRepositories>
+    <pluginRepository>
+      <id>cloudera.thirdparty.repo</id>
+      <url>https://repository.cloudera.com/content/repositories/third-party</url>
+      <name>Cloudera Third Party Repository</name>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+    <pluginRepository>
+      <id>cloudera.snapshot.repo</id>
+      <url>https://repository.cloudera.com/content/repositories/snapshots</url>
+      <name>Cloudera Snapshot Repository</name>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </pluginRepository>
+
+    <pluginRepository>
+      <id>dtrott</id>
+      <url>http://maven.davidtrott.com/repository</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <profiles>
+    <profile>
+      <id>load-testdata</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>start-cluster</id>
+                <phase>process-test-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target name="start-cluster" unless="cluster.format">
+                    <!-- start HDFS and HBase without formatting -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/run-all.sh">
+                    </exec>
+                    <!-- load Hive built in -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/load-hive-builtins.sh">
+                    </exec>
+                  </target>
+                </configuration>
+              </execution>
+              <execution>
+                <id>load-data</id>
+                <phase>process-test-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target name="load-data" if="cluster.format">
+                    <!-- start HDFS and HBase clean -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/run-all.sh">
+                      <arg value="-format"/>
+                    </exec>
+                    <!-- load Hive built in -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/load-hive-builtins.sh" failonerror="true">
+                    </exec>
+                    <!-- create HBase tables, load some hbase table data -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/create-hbase.sh" failonerror="true">
+                    </exec>
+                    <!-- create Hive table and load Hive data -->
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/create-load-data.sh" failonerror="true">
+                    </exec>
+                  </target>
+                    <!-- split HBase tables -->
+                    <!-- CDH-4771: splitting HBase table might crash region servers.
+                                   skip this until the issue is resolved.
+                    <exec executable="${env.IMPALA_HOME}/testdata/bin/split-hbase.sh">
+                    </exec>
+                    -->
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>load-mstr-eatwh1</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <phase>process-test-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <exec executable="${env.HIVE_HOME}/bin/hive">
+                      <arg value="-hiveconf"/>
+                      <arg value="hive.root.logger=WARN,console"/>
+                      <arg value="-v"/>
+                      <arg value="-f"/>
+                      <arg value="${project.basedir}/../testdata/data/mstr/eatwh1/EATWH1-DDL.sql"/>
+                    </exec>
+                    <exec executable="${env.HIVE_HOME}/bin/hive">
+                      <arg value="-hiveconf"/>
+                      <arg value="mstr.eatwh1.data.dir=${project.basedir}/../testdata/data/mstr/eatwh1/csv"/>
+                      <arg value="hive.root.logger=WARN,console"/>
+                      <arg value="-v"/>
+                      <arg value="-f"/>
+                      <arg value="${project.basedir}/../testdata/data/mstr/eatwh1/LoadTablesEATWH1.sql"/>
+                    </exec>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>load-mstr-eatwh2</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <phase>process-test-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <exec executable="${env.HIVE_HOME}/bin/hive">
+                      <arg value="-hiveconf"/>
+                      <arg value="hive.root.logger=WARN,console"/>
+                      <arg value="-v"/>
+                      <arg value="-f"/>
+                      <arg value="${project.basedir}/../testdata/data/mstr/eatwh2/EATWH2-DDL.sql"/>
+                    </exec>
+		    <exec executable="${env.HIVE_HOME}/bin/hive">
+                      <arg value="-hiveconf"/>
+		      <arg value="mstr.eatwh2.data.dir=${project.basedir}/../testdata/data/mstr/eatwh2/csv"/>
+                      <arg value="hive.root.logger=WARN,console"/>
+                      <arg value="-v"/>
+                      <arg value="-f"/>
+                      <arg value="${project.basedir}/../testdata/mstr/data/eatwh2/LoadTablesEATWH2.sql"/>
+                    </exec>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>thrift-home-defined</id>
+      <activation>
+        <file>
+          <exists>${env.THRIFT_HOME}/bin/thrift</exists>
+          </file>
+      </activation>
+      <properties>
+        <thrift.executable>${env.THRIFT_HOME}/bin/thrift</thrift.executable>
+      </properties>
+    </profile>
+  </profiles>
+
+</project>

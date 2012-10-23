@@ -1,0 +1,33 @@
+target
+
+# Eclipse artifacts
+.classpath
+.settings
+.project
+
+# IntelliJ artifacts
+*.iml
+*.ipr
+*.iws
+
+# OS X Artifacts
+.DS_Store
+
+# emacs backup files
+*~
+
+# Generated hive-site.xml file
+src/test/resources/hive-site.xml
+
+# Generated hbase-site.xml file
+src/test/resources/hbase-site.xml
+
+# Generated core-site.xml file
+src/test/resources/core-site.xml
+
+# Generated thrift files
+generated-sources
+
+derby.log
+
+TempStatsStore
