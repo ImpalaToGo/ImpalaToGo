@@ -8,11 +8,12 @@ import mongoose
 import sys
 
 # Handle /show and /form URIs.
-def EventHandler(event, conn, info):
+def EventHandler(event, conn):
+    info = conn.info
     if event == mongoose.HTTP_ERROR:
         conn.printf('%s', 'HTTP/1.0 200 OK\r\n')
         conn.printf('%s', 'Content-Type: text/plain\r\n\r\n')
-        conn.printf('HTTP error: %d\n', info.status_code)
+        conn.printf('HTTP error: %d\n', conn.reply_status_code)
         return True
     elif event == mongoose.NEW_REQUEST and info.uri == '/show':
         conn.printf('%s', 'HTTP/1.0 200 OK\r\n')

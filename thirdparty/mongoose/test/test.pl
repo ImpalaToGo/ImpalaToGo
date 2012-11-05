@@ -85,7 +85,8 @@ sub o {
   if ($reply =~ /$expected_reply/s) {
     print "OK\n";
   } else {
-    fail("Requested: [$request]\nExpected: [$expected_reply], got: [$reply]");
+#fail("Requested: [$request]\nExpected: [$expected_reply], got: [$reply]");
+    fail("Expected: [$expected_reply], got: [$reply]");
   }
 }
 
@@ -173,14 +174,27 @@ my $cmd = "$exe ".
   '-put_delete_passwords_file test/passfile ' .
   '-access_control_list -0.0.0.0/0,+127.0.0.1 ' .
   "-document_root $root ".
+  "-hide_files_patterns **exploit.pl ".
+  "-enable_keep_alive yes ".
   "-url_rewrite_patterns /aiased=/etc/,/ta=$test_dir";
 $cmd .= ' -cgi_interpreter perl' if on_windows();
 spawn($cmd);
+
+o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
+  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
+  'Request pipelining', 2);
+
+my $x = 'x=' . 'A' x (200 * 1024);
+my $len = length($x);
+o("POST /env.cgi HTTP/1.0\r\nContent-Length: $len\r\n\r\n$x",
+  '^HTTP/1.1 200 OK', 'Long POST');
 
 # Try to overflow: Send very long request
 req('POST ' . '/..' x 100 . 'ABCD' x 3000 . "\n\n", 0); # don't log this one
 
 o("GET /hello.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'GET regular file');
+o("GET /hello.txt HTTP/1.0\nContent-Length: -2147483648\n\n",
+  'HTTP/1.1 200 OK', 'Negative content length');
 o("GET /hello.txt HTTP/1.0\n\n", 'Content-Length: 17\s',
   'GET regular file Content-Length');
 o("GET /%68%65%6c%6c%6f%2e%74%78%74 HTTP/1.0\n\n",
@@ -200,8 +214,6 @@ $num_requests++;
 # '+' in URI must not be URL-decoded to space
 write_file("$root/a+.txt", '');
 o("GET /a+.txt HTTP/1.0\n\n", 'HTTP/1.1 200 OK', 'URL-decoding, + in URI');
-
-o("GET /%5c/a.txt HTTP/1.0\n\n", 'blah', 'GET dir backslash');
 
 # Test HTTP version parsing
 o("GET / HTTPX/1.0\r\n\r\n", '400 Bad Request', 'Bad HTTP Version', 0);
@@ -237,7 +249,8 @@ o("GET /$test_dir_uri/x/ HTTP/1.0\n\n",
   "SCRIPT_FILENAME=test/test_dir/x/index.cgi", 'SCRIPT_FILENAME');
 o("GET /ta/x/ HTTP/1.0\n\n", "SCRIPT_NAME=/ta/x/index.cgi",
   'Aliases SCRIPT_NAME');
-o("GET /hello.txt HTTP/1.1\n\n", 'Connection: close', 'No keep-alive');
+o("GET /hello.txt HTTP/1.1\nConnection: close\n\n", 'Connection: close',
+  'No keep-alive');
 
 $path = $test_dir . $dir_separator . 'x' . $dir_separator . 'a.cgi';
 system("ln -s `which perl` $root/myperl") == 0 or fail("Can't symlink perl");
@@ -245,11 +258,6 @@ write_file($path, "#!../../myperl\n" .
            "print \"Content-Type: text/plain\\n\\nhi\";");
 chmod(0755, $path);
 o("GET /$test_dir_uri/x/a.cgi HTTP/1.0\n\n", "hi", 'Relative CGI interp path');
-
-#o("GET /hello.txt HTTP/1.1\n\n   GET /hello.txt HTTP/1.0\n\n",
-#  'HTTP/1.1 200.+keep-alive.+HTTP/1.1 200.+close',
-#  'Request pipelining', 2);
-
 o("GET * HTTP/1.0\n\n", "^HTTP/1.1 404", '* URI');
 
 my $mime_types = {
@@ -335,7 +343,16 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
     "realm=\"mydomain.com\", nonce=\"1291376417\", uri=\"/\",".
     "response=\"e8dec0c2a1a0c8a7e9a97b4b5ea6a6e6\", qop=auth, nc=00000001, cnonce=\"1a49b53a47a66e82\"";
   o("GET /hello.txt HTTP/1.0\nAuthorization: $auth_header\n\n", 'HTTP/1.1 200 OK', 'GET regular file with auth');
+  o("GET / HTTP/1.0\nAuthorization: $auth_header\n\n", '^(.(?!(.htpasswd)))*$',
+    '.htpasswd is hidden from the directory list');
+  o("GET / HTTP/1.0\nAuthorization: $auth_header\n\n", '^(.(?!(exploit.pl)))*$',
+    'hidden file is hidden from the directory list');
+  o("GET /.htpasswd HTTP/1.0\nAuthorization: $auth_header\n\n",
+    '^HTTP/1.1 404 ', '.htpasswd must not be shown');
+  o("GET /exploit.pl HTTP/1.0\nAuthorization: $auth_header\n\n",
+    '^HTTP/1.1 404', 'hidden files must not be shown');
   unlink "$root/.htpasswd";
+
 
   o("GET /env.cgi HTTP/1.0\n\r\n", 'HTTP/1.1 200 OK', 'GET CGI file');
   o("GET /bad2.cgi HTTP/1.0\n\n", "HTTP/1.1 123 Please pass me to the client\r",
@@ -365,7 +382,8 @@ unless (scalar(@ARGV) > 0 and $ARGV[0] eq "basic_tests") {
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_FOO=foo\n', '-cgi_env 1');
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_BAR=bar\n', '-cgi_env 2');
   o("GET /env.cgi HTTP/1.0\n\r\n", '\nCGI_BAZ=baz\n', '-cgi_env 3');
-  o("GET /env.cgi/a/b HTTP/1.0\n\r\n", 'PATH_INFO=/a/b\n', 'PATH_INFO');
+  o("GET /env.cgi/a/b/98 HTTP/1.0\n\r\n", 'PATH_INFO=/a/b/98\n', 'PATH_INFO');
+  o("GET /env.cgi/a/b/9 HTTP/1.0\n\r\n", 'PATH_INFO=/a/b/9\n', 'PATH_INFO');
 
   # Check that CGI's current directory is set to script's directory
   my $copy_cmd = on_windows() ? 'copy' : 'cp';
@@ -435,8 +453,8 @@ sub do_PUT_test {
 }
 
 sub do_unit_test {
-  my $cmd = "cc -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
-  "-pthread -DNO_SSL ";
+  my $cmd = "cc -g -W -Wall -o $unit_test_exe $root/unit_test.c -I. ".
+    "-pthread -DNO_SSL ";
   if (on_windows()) {
     $cmd = "cl $root/embed.c mongoose.c /I. /nologo /DNO_SSL ".
     "/DLISTENING_PORT=\\\"$port\\\" /link /out:$embed_exe.exe ws2_32.lib ";
