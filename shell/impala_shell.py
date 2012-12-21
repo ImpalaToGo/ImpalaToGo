@@ -28,6 +28,7 @@ from beeswaxd.BeeswaxService import QueryState
 from ImpalaService import ImpalaService
 from ImpalaService.ImpalaService import TImpalaQueryOptions
 from JavaConstants.constants import DEFAULT_QUERY_OPTIONS
+from Status.ttypes import TStatus, TStatusCode
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
 from thrift.protocol import TBinaryProtocol
@@ -36,6 +37,7 @@ from thrift.Thrift import TApplicationException
 VERSION_FORMAT = "Impala v%(version)s (%(git_hash)s) built on %(build_date)s"
 COMMENT_TOKEN = '--'
 VERSION_STRING = "build version not available"
+HISTORY_LENGTH = 100
 
 # Tarball / packaging build makes impala_build_version available
 try:
@@ -78,9 +80,18 @@ class ImpalaShell(cmd.Cmd):
     self.connected = False
     self.imp_service = None
     self.transport = None
+    self.fetch_batch_size = 1024
     self.query_options = {}
     self.__make_default_options()
     self.query_state = QueryState._NAMES_TO_VALUES
+    self.refresh_after_connect = options.refresh_after_connect
+    self.default_db = options.default_db
+    self.history_file = os.path.expanduser("~/.impalahistory")
+    try:
+      self.readline = __import__('readline')
+      self.readline.set_history_length(HISTORY_LENGTH)
+    except ImportError:
+      self.readline = None
     if options.impalad != None:
       self.do_connect(options.impalad)
 
@@ -119,7 +130,7 @@ class ImpalaShell(cmd.Cmd):
     """Convert the command to lower case, so it's recognized"""
     # A command terminated by a semi-colon is legal. Check for the trailing
     # semi-colons and strip them from the end of the command.
-    args = args.strip().rstrip(';')
+    args = args.strip()
     tokens = args.split(' ')
     # The first token should be the command
     # If it's EOF, call do_quit()
@@ -127,7 +138,7 @@ class ImpalaShell(cmd.Cmd):
       return 'quit'
     else:
       tokens[0] = tokens[0].lower()
-    return ' '.join(tokens)
+    return ' '.join(tokens).rstrip(';')
 
   def __signal_handler(self, signal, frame):
     self.is_interrupted.set()
@@ -157,6 +168,7 @@ class ImpalaShell(cmd.Cmd):
     Usage: SET <option>=<value>
 
     """
+    # TODO: Expand set to allow for setting more than just query options.
     if len(args) == 0:
       self.__print_if_verbose("Impala query options:")
       self.__print_options()
@@ -207,6 +219,10 @@ class ImpalaShell(cmd.Cmd):
     if self.__connect():
       self.__print_if_verbose('Connected to %s:%s' % self.impalad)
       self.prompt = "[%s:%s] > " % self.impalad
+      if self.refresh_after_connect:
+        self.cmdqueue.append('refresh')
+      if self.default_db:
+        self.cmdqueue.append('use %s' % self.default_db)
     return True
 
   def __connect(self):
@@ -285,27 +301,28 @@ class ImpalaShell(cmd.Cmd):
     # Results are ready, fetch them till they're done.
     self.__print_if_verbose('Query finished, fetching results ...')
     result_rows = []
+    num_rows_fetched = 0
     while True:
-      # TODO: Fetch more than one row at a time.
-      # Also fetch rows asynchronously, so we can print them to screen without
-      # pausing the fetch process
-      (results, status) = self.__do_rpc(lambda: self.imp_service.fetch(handle,
-                                                                       False, -1))
+      # Fetch rows in batches of at most fetch_batch_size
+      (results, status) = self.__do_rpc(lambda: self.imp_service.fetch(
+                                                  handle, False, self.fetch_batch_size))
 
       if self.is_interrupted.isSet() or status != RpcStatus.OK:
         # Worth trying to cleanup the query even if fetch failed
         if self.connected:
           self.__close_query_handle(handle)
         return False
-
+      num_rows_fetched += len(results.data)
       result_rows.extend(results.data)
-      if not results.has_more:
-        break
+      if len(result_rows) >= self.fetch_batch_size or not results.has_more:
+        print '\n'.join(result_rows)
+        result_rows = []
+        if not results.has_more:
+          break
     end = time.time()
 
-    print '\n'.join(result_rows)
     self.__print_if_verbose(
-      "Returned %d row(s) in %2.2fs" % (len(result_rows), end - start))
+      "Returned %d row(s) in %2.2fs" % (num_rows_fetched, end - start))
     return self.__close_query_handle(handle)
 
   def __close_query_handle(self, handle):
@@ -414,7 +431,16 @@ class ImpalaShell(cmd.Cmd):
       return (None, RpcStatus.ERROR)
     try:
       ret = rpc()
-      return (ret, RpcStatus.OK)
+      status = RpcStatus.OK
+      # TODO: In the future more advanced error detection/handling can be done based on
+      # the TStatus return value. For now, just print any error(s) that were encountered
+      # and validate the result of the operation was a succes.
+      if ret is not None and isinstance(ret, TStatus):
+        if ret.status_code != TStatusCode.OK:
+          if ret.error_msgs:
+            print 'RPC Error: %s' % '\n'.join(ret.error_msgs)
+          status = RpcStatus.ERROR
+      return (ret, status)
     except BeeswaxService.QueryNotFoundException, q:
       print 'Error: Stale query handle'
     # beeswaxException prints out the entire object, printing
@@ -456,6 +482,33 @@ class ImpalaShell(cmd.Cmd):
     print "Successfully refreshed catalog"
     return True
 
+  def do_history(self, args):
+    """Display command history"""
+    # Deal with readline peculiarity. When history does not exists,
+    # readline returns 1 as the history length and stores 'None' at index 0.
+    if self.readline and self.readline.get_current_history_length() > 0:
+      for index in xrange(1, self.readline.get_current_history_length() + 1):
+        print '[%d]: %s' % (index, self.readline.get_history_item(index))
+    else:
+      print 'readline module not found, history is not supported.'
+    return True
+
+  def preloop(self):
+    """Load the history file if it exists"""
+    if self.readline:
+      try:
+        self.readline.read_history_file(self.history_file)
+      except IOError, i:
+        print 'Unable to load history: %s' % i
+
+  def postloop(self):
+    """Save session commands in history."""
+    if self.readline:
+      try:
+        self.readline.write_history_file(self.history_file)
+      except IOError, i:
+        print 'Unable to save history: %s' % i
+
   def default(self, args):
     print "Unrecognized command"
     return True
@@ -468,7 +521,6 @@ class ImpalaShell(cmd.Cmd):
     """Prints the Impala build version"""
     print "Build version: %s" % VERSION_STRING
     return True
-
 
 WELCOME_STRING = """Welcome to the Impala shell. Press TAB twice to see a list of \
 available commands.
@@ -524,12 +576,14 @@ def execute_queries_non_interactive_mode(options):
   # Return with an error, no need to process the query.
   if options.impalad and shell.connected == False:
     sys.exit(1)
+  queries = shell.cmdqueue + queries
   # Deal with case.
   queries = map(shell.sanitise_input, queries)
   for query in queries:
     if not shell.onecmd(query):
       print 'Could not execute command: %s' % query
-      sys.exit(1)
+      if not options.ignore_query_failure:
+        sys.exit(1)
 
 if __name__ == "__main__":
   parser = OptionParser()
@@ -544,10 +598,19 @@ if __name__ == "__main__":
   parser.add_option("-s", "--kerberos_service_name",
                     dest="kerberos_service_name", default=None,
                     help="Service name of a kerberized impalad, default is 'impala'")
-  parser.add_option("-V", "--verbose", dest="verbose", default=False, action="store_true",
+  parser.add_option("-V", "--verbose", dest="verbose", default=True, action="store_true",
                     help="Enable verbose output")
+  parser.add_option("--quiet", dest="verbose", default=True, action="store_false",
+                    help="Disable verbose output")
   parser.add_option("-v", "--version", dest="version", default=False, action="store_true",
                     help="Print version information")
+  parser.add_option("-c", "--ignore_query_failure", dest="ignore_query_failure",
+                    default=False, action="store_true", help="Continue on query failure")
+  parser.add_option("-r", "--refresh_after_connect", dest="refresh_after_connect",
+                    default=False, action="store_true",
+                    help="Refresh Impala catalog after connecting")
+  parser.add_option("-d", "--database", dest="default_db", default=None,
+                    help="Issue a use database command on startup.")
 
   options, args = parser.parse_args()
 
@@ -555,18 +618,31 @@ if __name__ == "__main__":
     print VERSION_STRING
     sys.exit(0)
 
-  if options.kerberos_service_name and not options.use_kerberos:
-    print 'Kerberos not enabled, ignoring service name'
-  elif options.use_kerberos:
-    if not options.kerberos_service_name: options.kerberos_service_name = 'impala'
-    print "Using service name '%s' for kerberos" % options.kerberos_service_name
-
   if options.use_kerberos:
+    # The saslwrapper module has the same API as sasl, and is easier
+    # to install on CentOS / RHEL. Look for saslwrapper first before
+    # looking for the sasl module.
+    try:
+      import saslwrapper as sasl
+    except ImportError:
+      try:
+        import sasl
+      except ImportError:
+        print 'Neither saslwrapper nor sasl module found'
+        sys.exit(1)
     from thrift_sasl import TSaslClientTransport
-    import sasl
+
+    # The service name defaults to 'impala' if not specified by the user.
+    if not options.kerberos_service_name:
+      options.kerberos_service_name = 'impala'
+    print "Using service name '%s' for kerberos" % options.kerberos_service_name
+  elif options.kerberos_service_name:
+    print 'Kerberos not enabled, ignoring service name'
+
   if options.query or options.query_file:
     execute_queries_non_interactive_mode(options)
     sys.exit(0)
+
   intro = WELCOME_STRING
   shell = ImpalaShell(options)
   while shell.is_alive:

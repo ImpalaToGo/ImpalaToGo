@@ -37,11 +37,15 @@ ExchangeNode::ExchangeNode(
 Status ExchangeNode::Prepare(RuntimeState* state) {
   RETURN_IF_ERROR(ExecNode::Prepare(state));
   
+  convert_row_batch_timer_ = 
+      ADD_COUNTER(runtime_profile(), "ConvertRowBatchTime", TCounterType::CPU_TICKS);
+
   // TODO: figure out appropriate buffer size
   // row descriptor of this node and the incoming stream should be the same.
   DCHECK_GT(num_senders_, 0);
   stream_recvr_.reset(state->stream_mgr()->CreateRecvr(
-    row_descriptor_, state->fragment_instance_id(), id_, num_senders_, 1024 * 1024));
+    row_descriptor_, state->fragment_instance_id(), id_, num_senders_, 1024 * 1024,
+    runtime_profile()));
   return Status::OK;
 }
 
@@ -52,6 +56,11 @@ Status ExchangeNode::Open(RuntimeState* state) {
 
 Status ExchangeNode::GetNext(RuntimeState* state, RowBatch* output_batch, bool* eos) {
   SCOPED_TIMER(runtime_profile_->total_time_counter());
+  if (ReachedLimit()) {
+    *eos = true;
+    return Status::OK;
+  }
+
   bool is_cancelled;
   scoped_ptr<RowBatch> input_batch(stream_recvr_->GetBatch(&is_cancelled));
   VLOG_FILE << "exch: has batch=" << (input_batch.get() == NULL ? "false" : "true")
@@ -63,6 +72,8 @@ Status ExchangeNode::GetNext(RuntimeState* state, RowBatch* output_batch, bool* 
   *eos = (input_batch.get() == NULL);
   if (*eos) return Status::OK;
 
+  SCOPED_TIMER(convert_row_batch_timer_);
+
   // We assume that we can always move the entire input batch into the output batch
   // (if that weren't the case, the code would be more complicated).
   DCHECK_GE(output_batch->capacity(), input_batch->capacity());
@@ -71,10 +82,6 @@ Status ExchangeNode::GetNext(RuntimeState* state, RowBatch* output_batch, bool* 
   DCHECK(input_batch->row_desc().IsPrefixOf(output_batch->row_desc()));
   int i = 0;
   for (; i < input_batch->num_rows(); ++i) {
-    if (ReachedLimit()) {
-      *eos = true;
-      break;
-    }
     TupleRow* src = input_batch->GetRow(i);
     int j = output_batch->AddRow();
     DCHECK_EQ(i, j);
@@ -83,8 +90,12 @@ Status ExchangeNode::GetNext(RuntimeState* state, RowBatch* output_batch, bool* 
     // rows in output_batch
     input_batch->CopyRow(src, dest);
     output_batch->CommitLastRow();
+    ++num_rows_returned_;
+    if (ReachedLimit()) {
+      *eos = true;
+      break;
+    }
   }
-  num_rows_returned_ += i;
   COUNTER_SET(rows_returned_counter_, num_rows_returned_);
   input_batch->TransferResourceOwnership(output_batch);
   return Status::OK;

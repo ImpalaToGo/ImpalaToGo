@@ -502,9 +502,6 @@ class ExprTest : public testing::Test {
     TestStringValue("cast(" + stmt + " as string)", 
         lexical_cast<string>(val));
   }
-
-
- private:
 };
 
 // TODO: Remove this specialization once the parser supports
@@ -1886,7 +1883,7 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestValidTimestampValue("now()");
   TestValidTimestampValue("cast(unix_timestamp() as timestamp)");
 
-  // Test invalid formats returnning NULL
+  // Test invalid formats returning NULL
   TestIsNull("unix_timestamp('1970-01-01 0:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
   TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd hh:mm:ss')", TYPE_INT);
   TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yy-MM-dd HH:mm:ss')", TYPE_INT);
@@ -2215,7 +2212,7 @@ int main(int argc, char **argv) {
   if (ret != 0) return ret;
 
   vector<string> options;
-  options.push_back("disable_jit=1");
+  options.push_back("DISABLE_CODEGEN=1");
   executor_->setExecOptions(options);
   cout << endl << "Running without Jit" << endl;
   return RUN_ALL_TESTS();

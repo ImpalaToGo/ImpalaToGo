@@ -25,10 +25,9 @@
 #include "common/logging.h"
 #include "common/status.h"
 #include "common/object-pool.h"
+#include "util/webserver.h"
 
 namespace impala {
-
-class Webserver;
 
 // Publishes execution metrics to a webserver page
 // TODO: Reconsider naming here; Metrics is too general.
@@ -57,6 +56,11 @@ class Metrics {
     void Update(const T& value) { 
       boost::lock_guard<boost::mutex> l(lock_);
       value_ = value;
+    }
+
+    void Increment(const T& delta) {
+      boost::lock_guard<boost::mutex> l(lock_);
+      value_ += delta;
     }
 
     // If current value == test_, update with new value. In all cases return
@@ -169,6 +173,17 @@ class Metrics {
     return mt;    
   }
 
+  // Returns a metric by key.  Returns NULL if there is no metric with that 
+  // key.  This is not a very cheap operation and should not be called in a loop.
+  // If the metric needs to be updated in a loop, the returned metric should be cached.
+  template <typename M>
+  M* GetMetric(const std::string& key) {
+    boost::lock_guard<boost::mutex> l(lock_);    
+    MetricMap::iterator it = metric_map_.find(key);
+    if (it == metric_map_.end()) return NULL;
+    return reinterpret_cast<M*>(it->second);
+  }
+
   // Register page callbacks with the webserver
   Status Init(Webserver* webserver);
 
@@ -193,10 +208,10 @@ class Metrics {
   void PrintMetricMapAsJson(std::vector<std::string>* metrics);
 
   // Webserver callback (on /metrics), renders metrics as single text page
-  void TextCallback(std::stringstream* output);
+  void TextCallback(const Webserver::ArgumentMap& args, std::stringstream* output);
 
   // Webserver callback (on /jsonmetrics), renders metrics as a single json document
-  void JsonCallback(std::stringstream* output);
+  void JsonCallback(const Webserver::ArgumentMap& args, std::stringstream* output);
 };
 
 }

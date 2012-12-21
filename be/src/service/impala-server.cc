@@ -53,6 +53,7 @@
 #include "sparrow/simple-scheduler.h"
 #include "util/container-util.h"
 #include "util/debug-util.h"
+#include "util/impalad-metric-keys.h"
 #include "util/string-parser.h"
 #include "util/thrift-util.h"
 #include "util/thrift-server.h"
@@ -95,6 +96,8 @@ DEFINE_int32(be_service_threads, 64,
 DEFINE_bool(load_catalog_at_startup, false, "if true, load all catalog data at startup");
 DEFINE_string(default_query_options, "", "key=value pair of default query options for"
     " impalad, separated by ','");
+DEFINE_int32(query_log_size, 25, "Number of queries to retain in the query log. If -1, "
+                                 "the query log has unbounded size.");
 
 namespace impala {
 
@@ -103,8 +106,6 @@ ThreadManager* be_tm;
 
 // Used for queries that execute instantly and always succeed
 const string NO_QUERY_HANDLE = "no_query_handle";
-
-const string NUM_QUERIES_METRIC = "impala-server.num.queries";
 
 // Execution state of a query. This captures everything necessary
 // to convert row batches received by the coordinator into results
@@ -187,6 +188,7 @@ class ImpalaServer::QueryExecState {
   const Status& query_status() const { return query_status_; }
   RuntimeProfile::Counter* planner_timer() { return planner_timer_; }
   void set_result_metadata(const TResultSetMetadata& md) { result_metadata_ = md; }
+  const RuntimeProfile& profile() const { return profile_; }
 
  private:
   TUniqueId query_id_;
@@ -683,36 +685,44 @@ ImpalaServer::ImpalaServer(ExecEnv* exec_env)
   }
 
   Webserver::PathHandlerCallback default_callback =
-      bind<void>(mem_fn(&ImpalaServer::RenderHadoopConfigs), this, _1);
+      bind<void>(mem_fn(&ImpalaServer::RenderHadoopConfigs), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/varz", default_callback);
 
   Webserver::PathHandlerCallback query_callback =
-      bind<void>(mem_fn(&ImpalaServer::QueryStatePathHandler), this, _1);
+      bind<void>(mem_fn(&ImpalaServer::QueryStatePathHandler), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/queries", query_callback);
 
   Webserver::PathHandlerCallback sessions_callback =
-      bind<void>(mem_fn(&ImpalaServer::SessionPathHandler), this, _1);
+      bind<void>(mem_fn(&ImpalaServer::SessionPathHandler), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/sessions", sessions_callback);
 
   Webserver::PathHandlerCallback catalog_callback =
-      bind<void>(mem_fn(&ImpalaServer::CatalogPathHandler), this, _1);
+      bind<void>(mem_fn(&ImpalaServer::CatalogPathHandler), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/catalog", catalog_callback);
 
   Webserver::PathHandlerCallback backends_callback =
-      bind<void>(mem_fn(&ImpalaServer::BackendsPathHandler), this, _1);
+      bind<void>(mem_fn(&ImpalaServer::BackendsPathHandler), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/backends", backends_callback);
 
-  num_queries_metric_ = 
-      exec_env->metrics()->CreateAndRegisterPrimitiveMetric(NUM_QUERIES_METRIC, 0L);
+  Webserver::PathHandlerCallback profile_callback =
+      bind<void>(mem_fn(&ImpalaServer::QueryProfilePathHandler), this, _1, _2);
+  exec_env->webserver()->RegisterPathHandler("/query_profile", profile_callback);
+
+  num_queries_metric_ = exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
+      ImpaladMetricKeys::NUM_QUERIES, 0L);
+  exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
+      ImpaladMetricKeys::TOTAL_SCAN_RANGES_PROCESSED, 0L);
+  exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
+      ImpaladMetricKeys::NUM_SCAN_RANGES_MISSING_VOLUME_ID, 0L);
 }
 
-void ImpalaServer::RenderHadoopConfigs(stringstream* output) {
+void ImpalaServer::RenderHadoopConfigs(const Webserver::ArgumentMap& args,
+    stringstream* output) {
   (*output) << "<h2>Hadoop Configuration</h2>";
   if (FLAGS_use_planservice) {
     (*output) << "Using external PlanService, no Hadoop configs available";
     return;
   }
-  (*output) << "<pre>";
   JNIEnv* jni_env = getJNIEnv();
   jstring java_explain_string =
       static_cast<jstring>(jni_env->CallObjectMethod(fe_, get_hadoop_config_id_));
@@ -721,64 +731,132 @@ void ImpalaServer::RenderHadoopConfigs(stringstream* output) {
   const char *str = jni_env->GetStringUTFChars(java_explain_string, &is_copy);
   RETURN_IF_EXC(jni_env);
   (*output) << str;
-  (*output) << "</pre>";
   jni_env->ReleaseStringUTFChars(java_explain_string, str);
   RETURN_IF_EXC(jni_env);
 }
 
-void ImpalaServer::QueryStatePathHandler(stringstream* output) {
+void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args, 
+    stringstream* output) {
+  // We expect the query id to be passed as two parameters, 'hi' and 'lo'. If
+  // either are absent, we cannot proceed.
+  int64_t hi, lo;
+  Webserver::ArgumentMap::const_iterator it = args.find("hi");
+  if (it == args.end()) {
+    (*output) << "No query specified";
+    return;
+  } else {
+    StringParser::ParseResult parse_result;
+    hi = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(), 
+             &parse_result);
+    if (parse_result != StringParser::PARSE_SUCCESS) {
+      (*output) << "Invalid query id";
+      return;
+    }
+  }
+
+  it = args.find("lo");
+  if (it == args.end()) {
+    (*output) << "No query specified";
+    return;
+  } else {
+    StringParser::ParseResult parse_result;
+    lo = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(), 
+             &parse_result);
+    if (parse_result != StringParser::PARSE_SUCCESS) {
+      (*output) << "Invalid query id";
+      return;
+    }
+  }
+
+  TUniqueId unique_id;
+  unique_id.hi = hi;
+  unique_id.lo = lo;
+  {
+    lock_guard<mutex> l(query_exec_state_map_lock_);
+    QueryExecStateMap::const_iterator exec_state = query_exec_state_map_.find(unique_id);
+
+    if (exec_state != query_exec_state_map_.end()) {
+      (*output) << "<pre>";
+      exec_state->second->profile().PrettyPrint(output);
+      (*output) << "</pre>";
+      return;
+    }
+  }
+
+  // Check the query log
+  {
+    lock_guard<mutex> l(query_log_lock_);
+    QueryLogIndex::const_iterator query_record = query_log_index_.find(unique_id);
+    if (query_record == query_log_index_.end()) {
+      (*output) << "Query '" << unique_id.hi << ":" << unique_id.lo << "' not found";
+      return;
+    }
+
+    (*output) << "<pre>" << query_record->second->profile_str << "</pre>";  
+  }
+}
+
+void ImpalaServer::RenderSingleQueryTableRow(
+    const ImpalaServer::QueryStateRecord& record, stringstream* output) {
+  QueryHandle handle;
+  TUniqueIdToQueryHandle(record.id, &handle);
+  (*output) << "<tr><td>" << handle.id << "</td>"
+            << "<td>" << record.stmt << "</td>"
+            << "<td>"
+            << _TStmtType_VALUES_TO_NAMES.find(record.stmt_type)->second
+            << "</td>"
+            << "<td>";
+  
+  if (record.has_coord == false) {
+    (*output) << "N/A";
+  } else {
+    (*output) << record.num_complete_fragments << " / " << record.total_fragments 
+              << " (" << setw(4);
+    if (record.total_fragments == 0) {
+      (*output) << " (0%)";
+    } else {
+      (*output) << 
+          (100.0 * record.num_complete_fragments / (1.f * record.total_fragments)) 
+                << "%)";
+    }
+  }
+  
+  (*output) << "</td>"
+            << "<td>" << _QueryState_VALUES_TO_NAMES.find(record.query_state)->second 
+            << "</td><td>" << record.num_rows_fetched << "</td>";
+  
+  (*output) << "<td><a href='/query_profile?hi=" << record.id.hi << "&lo=" 
+            << record.id.lo << "'>Profile</a></td>";
+  (*output) << "</tr>" << endl;
+}
+
+void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args, 
+    stringstream* output) {
   (*output) << "<h2>Queries</h2>";
   lock_guard<mutex> l(query_exec_state_map_lock_);
   (*output) << "This page lists all registered queries, i.e., those that are not closed "
     " nor cancelled.<br/>" << endl;
   (*output) << query_exec_state_map_.size() << " queries in flight" << endl;
-  (*output) << "<table border=1><tr><th>Query Id</th>" << endl;
+  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>" 
+            << endl;
   (*output) << "<th>Statement</th>" << endl;
   (*output) << "<th>Query Type</th>" << endl;
   (*output) << "<th>Backend Progress</th>" << endl;
   (*output) << "<th>State</th>" << endl;
   (*output) << "<th># rows fetched</th>" << endl;
+  (*output) << "<th>Profile</th>" << endl;
   (*output) << "</tr>";
   BOOST_FOREACH(const QueryExecStateMap::value_type& exec_state, query_exec_state_map_) {
-    QueryHandle handle;
-    TUniqueIdToQueryHandle(exec_state.first, &handle);
-    const TExecRequest& request = exec_state.second->exec_request();
-    const string& query_stmt = 
-        (request.stmt_type != TStmtType::DDL && request.__isset.sql_stmt) ?
-        request.sql_stmt : "N/A";
-    (*output) << "<tr><td>" << handle.id << "</td>"
-              << "<td>" << query_stmt << "</td>"
-              << "<td>"
-              << _TStmtType_VALUES_TO_NAMES.find(request.stmt_type)->second
-              << "</td>"
-              << "<td>";
-
-    Coordinator* coord = exec_state.second->coord(); 
-    if (coord == NULL) {
-      (*output) << "N/A";
-    } else {
-      int64_t num_complete = coord->progress().num_complete();
-      int64_t total = coord->progress().total();
-      (*output) << num_complete << " / " << total << " (" << setw(4);
-      if (total == 0) {
-        (*output) << " (0%)";
-      } else {
-        (*output) << (100.0 * num_complete / (1.f * total)) << "%)";
-      }
-    }
-
-    (*output) << "</td>"
-              << "<td>" << _QueryState_VALUES_TO_NAMES.find(
-                  exec_state.second->query_state())->second << "</td>"
-              << "<td>" << exec_state.second->num_rows_fetched() << "</td>"
-              << "</tr>" << endl;
+    QueryStateRecord record(*exec_state.second, false);
+    RenderSingleQueryTableRow(record, output);
   }
 
   (*output) << "</table>";
 
   // Print the query location counts.
   (*output) << "<h2>Query Locations</h2>";
-  (*output) << "<table border=1><tr><th>Location</th><th>Query Ids</th></tr>" << endl;
+  (*output) << "<table class='table table-hover table-bordered'>";
+  (*output) << "<tr><th>Location</th><th>Number of Fragments</th></tr>" << endl;
   {
     lock_guard<mutex> l(query_locations_lock_);
     BOOST_FOREACH(const QueryLocations::value_type& location, query_locations_) {
@@ -787,13 +865,36 @@ void ImpalaServer::QueryStatePathHandler(stringstream* output) {
     }
   }
   (*output) << "</table>";
+
+  // Print the query log
+  (*output) << "<h2>Finished Queries</h2>";
+  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>" 
+            << endl;
+  (*output) << "<th>Statement</th>" << endl;
+  (*output) << "<th>Query Type</th>" << endl;
+  (*output) << "<th>Backend Progress</th>" << endl;
+  (*output) << "<th>State</th>" << endl;
+  (*output) << "<th># rows fetched</th>" << endl;
+  (*output) << "<th>Profile</th>" << endl;
+  (*output) << "</tr>";
+
+  {
+    lock_guard<mutex> l(query_log_lock_);
+    BOOST_FOREACH(const QueryStateRecord& log_entry, query_log_) {
+      RenderSingleQueryTableRow(log_entry, output);
+    }
+  }
+
+  (*output) << "</table>";
 }
 
-void ImpalaServer::SessionPathHandler(stringstream* output) {
+void ImpalaServer::SessionPathHandler(const Webserver::ArgumentMap& args, 
+    stringstream* output) {
   (*output) << "<h2>Sessions</h2>" << endl;
   lock_guard<mutex> l_(session_state_map_lock_);
   (*output) << "There are " << session_state_map_.size() << " active sessions." << endl
-            << "<table border=1><tr><th>Session Key</th>"
+            << "<table class='table table-bordered table-hover'>"
+            << "<tr><th>Session Key</th>"
             << "<th>Default Database</th><th>Start Time</th></tr>" << endl;
   BOOST_FOREACH(const SessionStateMap::value_type& session, session_state_map_) {
     (*output) << "<tr>"
@@ -806,7 +907,8 @@ void ImpalaServer::SessionPathHandler(stringstream* output) {
   (*output) << "</table>";
 }
 
-void ImpalaServer::CatalogPathHandler(stringstream* output) {
+void ImpalaServer::CatalogPathHandler(const Webserver::ArgumentMap& args, 
+    stringstream* output) {
   (*output) << "<h2>Catalog</h2>" << endl;
   vector<string> db_names;
   Status status = GetDbNames(NULL, &db_names);
@@ -844,7 +946,8 @@ void ImpalaServer::CatalogPathHandler(stringstream* output) {
   }
 }
 
-void ImpalaServer::BackendsPathHandler(stringstream* output) {
+void ImpalaServer::BackendsPathHandler(const Webserver::ArgumentMap& args, 
+    stringstream* output) {
   (*output) << "<h2>Known Backends</h2>";
   Scheduler::HostList backends;
   (*output) << "<pre>";
@@ -855,15 +958,35 @@ void ImpalaServer::BackendsPathHandler(stringstream* output) {
   (*output) << "</pre>";
 }
 
+void ImpalaServer::ArchiveQuery(const QueryExecState& query) {
+  if (FLAGS_query_log_size == 0) return;
+  QueryStateRecord record(query);
+  {
+    lock_guard<mutex> l(query_log_lock_);
+    // Add record to the beginning of the log, and to the lookup index.
+    query_log_index_[query.query_id()] = query_log_.insert(query_log_.begin(), record);
+
+    if (FLAGS_query_log_size > -1 && FLAGS_query_log_size < query_log_.size()) {
+      DCHECK_EQ(query_log_.size() - FLAGS_query_log_size, 1);
+      query_log_index_.erase(query_log_.back().id);
+      query_log_.pop_back();
+    }
+  }
+}
+
 ImpalaServer::~ImpalaServer() {}
 
 void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
-  TClientRequest query_request;
-  QueryToTClientRequest(query, &query_request);
   VLOG_QUERY << "query(): query=" << query.query;
+  TClientRequest query_request;
+  Status status = QueryToTClientRequest(query, &query_request);
+  if (!status.ok()) {
+    // raise general error for request conversion error;
+    RaiseBeeswaxException(status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+  }
 
   shared_ptr<QueryExecState> exec_state;
-  Status status = Execute(query_request, &exec_state);
+  status = Execute(query_request, &exec_state);
   
   if (!status.ok()) {
     // raise Syntax error or access violation;
@@ -890,12 +1013,16 @@ void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
 
 void ImpalaServer::executeAndWait(QueryHandle& query_handle, const Query& query,
     const LogContextId& client_ctx) {
-  TClientRequest query_request;
-  QueryToTClientRequest(query, &query_request);
   VLOG_QUERY << "executeAndWait(): query=" << query.query;
+  TClientRequest query_request;
+  Status status = QueryToTClientRequest(query, &query_request);
+  if (!status.ok()) {
+    // raise general error for request conversion error;
+    RaiseBeeswaxException(status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+  }
 
   shared_ptr<QueryExecState> exec_state;
-  Status status = Execute(query_request, &exec_state);
+  status = Execute(query_request, &exec_state);
 
   if (!status.ok()) {
     // raise Syntax error or access violation;
@@ -1015,10 +1142,11 @@ bool ImpalaServer::UnregisterQuery(const TUniqueId& query_id) {
       return false;
     } else {
       exec_state = entry->second;
-    }      
+    }
     query_exec_state_map_.erase(entry);
   }
   
+  ArchiveQuery(*exec_state);
 
   if (exec_state->coord() != NULL) {
     const unordered_set<THostPort>& unique_hosts = 
@@ -1259,11 +1387,15 @@ void ImpalaServer::Cancel(impala::TStatus& tstatus,
 void ImpalaServer::explain(QueryExplanation& query_explanation, const Query& query) {
   // Translate Beeswax Query to Impala's QueryRequest and then set the explain plan bool
   // before shipping to FE
-  TClientRequest query_request;
-  QueryToTClientRequest(query, &query_request);
   VLOG_QUERY << "explain(): query=" << query.query;
+  TClientRequest query_request;
+  Status status = QueryToTClientRequest(query, &query_request);
+  if (!status.ok()) {
+    // raise general error for request conversion error;
+    RaiseBeeswaxException(status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+  }
 
-  Status status = GetExplainPlan(query_request, &query_explanation.textual);
+  status = GetExplainPlan(query_request, &query_explanation.textual);
   if (!status.ok()) {
     // raise Syntax error or access violation; this is the closest.
     RaiseBeeswaxException(
@@ -1494,11 +1626,12 @@ void ImpalaServer::get_default_configuration(vector<ConfigVariable> &configurati
       default_configs_.end());
 }
 
-void ImpalaServer::QueryToTClientRequest(const Query& query,
+Status ImpalaServer::QueryToTClientRequest(const Query& query,
     TClientRequest* request) {
   request->queryOptions = default_query_options_;
   request->queryOptions.return_as_ascii = true;
   request->stmt = query.query;
+  VLOG_QUERY << "query: " << ThriftDebugString(query);
   {
     lock_guard<mutex> l_(session_state_map_lock_);
     SessionStateMap::iterator it = 
@@ -1511,16 +1644,16 @@ void ImpalaServer::QueryToTClientRequest(const Query& query,
   // Override default query options with Query.Configuration
   if (query.__isset.configuration) {
     BOOST_FOREACH(const string& option, query.configuration) {
-      ParseQueryOptions(option, &request->queryOptions);
+      RETURN_IF_ERROR(ParseQueryOptions(option, &request->queryOptions));
     }
     VLOG_QUERY << "TClientRequest.queryOptions: "
                << ThriftDebugString(request->queryOptions);
   }
+  return Status::OK;
 }
 
 Status ImpalaServer::ParseQueryOptions(const string& options,
     TQueryOptions* query_options) {
-  Status result;
   if (options.length() == 0) return Status::OK;
   vector<string> kv_pairs;
   split(kv_pairs, options, is_any_of(","), token_compress_on );
@@ -1533,9 +1666,7 @@ Status ImpalaServer::ParseQueryOptions(const string& options,
       stringstream ss;
       ss << "Ignoring invalid configuration option " << kv_string
          << ": bad format (expected key=value)";
-      LOG(WARNING) << ss.str();
-      if (result.ok()) result.AddErrorMsg(ss.str());
-      continue;
+      return Status(ss.str());
     }
 
     int option = GetQueryOption(key_value[0]);
@@ -1543,8 +1674,9 @@ Status ImpalaServer::ParseQueryOptions(const string& options,
       stringstream ss;
       ss << "Ignoring invalid configuration option: " << key_value[0];
       LOG(WARNING) << ss.str();
-      if (result.ok()) result.AddErrorMsg(ss.str());
+      return Status(ss.str());
     } else {
+      VLOG_QUERY << "option " << option << " value " << key_value[1];
       switch (option) {
         case TImpalaQueryOptions::ABORT_ON_ERROR:
           query_options->abort_on_error =
@@ -1572,13 +1704,12 @@ Status ImpalaServer::ParseQueryOptions(const string& options,
         case TImpalaQueryOptions::NUM_SCANNER_THREADS:
           query_options->num_scanner_threads = atoi(key_value[1].c_str());
           break;
-        case TImpalaQueryOptions::PARTITION_AGG:
-          query_options->partition_agg =
-              iequals(key_value[1], "true") || iequals(key_value[1], "1");
-            break;
         case TImpalaQueryOptions::ALLOW_UNSUPPORTED_FORMATS:
           query_options->allow_unsupported_formats =
               iequals(key_value[1], "true") || iequals(key_value[1], "1");
+            break;
+        case TImpalaQueryOptions::DEFAULT_ORDER_BY_LIMIT:
+          query_options->__set_default_order_by_limit(atoi(key_value[1].c_str()));
             break;
         default:
           // We hit this DCHECK(false) if we forgot to add the corresponding entry here
@@ -1589,7 +1720,7 @@ Status ImpalaServer::ParseQueryOptions(const string& options,
       }
     }
   }
-  return result;
+  return Status::OK;
 }
 
 
@@ -1683,7 +1814,8 @@ void ImpalaServer::ReportExecStatus(
 void ImpalaServer::CancelPlanFragment(
     TCancelPlanFragmentResult& return_val, const TCancelPlanFragmentParams& params) {
   VLOG_QUERY << "CancelPlanFragment(): instance_id=" << params.fragment_instance_id;
-  shared_ptr<FragmentExecState> exec_state = GetFragmentExecState(params.fragment_instance_id);
+  shared_ptr<FragmentExecState> exec_state = 
+      GetFragmentExecState(params.fragment_instance_id);
   if (exec_state.get() == NULL) {
     stringstream str;
     str << "unknown fragment id: " << params.fragment_instance_id;
@@ -1820,11 +1952,11 @@ void ImpalaServer::InitializeConfigVariables() {
       case TImpalaQueryOptions::NUM_SCANNER_THREADS:
         value << default_query_options_.num_scanner_threads;
         break;
-      case TImpalaQueryOptions::PARTITION_AGG:
-        value << default_query_options_.partition_agg;
-        break;
       case TImpalaQueryOptions::ALLOW_UNSUPPORTED_FORMATS:
         value << default_query_options_.allow_unsupported_formats;
+        break;
+      case TImpalaQueryOptions::DEFAULT_ORDER_BY_LIMIT:
+        value << default_query_options_.default_order_by_limit;
         break;
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
@@ -1904,6 +2036,32 @@ void ImpalaServer::MembershipCallback(const ServiceStateMap& service_state) {
       CancelInternal(query_id);
     }
     last_membership_ = current_membership;
+  }
+}
+
+ImpalaServer::QueryStateRecord::QueryStateRecord(const QueryExecState& exec_state, 
+    bool copy_profile) {
+  id = exec_state.query_id();
+  const TExecRequest& request = exec_state.exec_request();
+
+  stmt = (request.stmt_type != TStmtType::DDL && request.__isset.sql_stmt) ?
+      request.sql_stmt : "N/A";
+  stmt_type = request.stmt_type;
+  has_coord = false;
+  
+  Coordinator* coord = exec_state.coord(); 
+  if (coord != NULL) {
+    num_complete_fragments = coord->progress().num_complete();
+    total_fragments = coord->progress().total();
+    has_coord = true;
+  }
+  query_state = exec_state.query_state();
+  num_rows_fetched = exec_state.num_rows_fetched();
+
+  if (copy_profile) {
+    stringstream ss;
+    exec_state.profile().PrettyPrint(&ss);
+    profile_str = ss.str();
   }
 }
 

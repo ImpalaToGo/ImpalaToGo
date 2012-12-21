@@ -20,26 +20,15 @@ root=`dirname "$0"`
 root=`cd "$root"; pwd`
 
 export IMPALA_HOME=$root
-# Create unique metastore DB name based on the directory we're in.  The result
-# must be lower case.
-METASTORE_DB=`basename $root | sed -e "s/\\./_/g" | sed -e "s/[.-]/_/g"`
-export METASTORE_DB=`echo $METASTORE_DB | tr '[A-Z]' '[a-z]'`
-export CURRENT_USER=`whoami`
-
 . "$root"/bin/impala-config.sh
 
 clean_action=1
 testdata_action=1
 tests_action=1
-metastore_is_derby=0
 
 FORMAT_CLUSTER=1
 TARGET_BUILD_TYPE=Debug
-TEST_EXECUTION_MODE=reduced
-
-if [[ ${METASTORE_IS_DERBY} ]]; then
-  metastore_is_derby=1
-fi
+EXPLORATION_STRATEGY=core
 
 # Exit on reference to uninitialized variable
 set -u
@@ -66,8 +55,11 @@ do
     -codecoverage_release)
       TARGET_BUILD_TYPE=CODE_COVERAGE_RELEASE
       ;;
+    -testpairwise)
+      EXPLORATION_STRATEGY=pairwise
+      ;;
     -testexhaustive)
-      TEST_EXECUTION_MODE=exhaustive
+      EXPLORATION_STRATEGY=exhaustive
       ;;
     -help|*)
       echo "buildall.sh [-noclean] [-notestdata] [-noformat] [-codecoverage]"\
@@ -79,6 +71,8 @@ do
       echo "[-codecoverage] : build with 'gcov' code coverage instrumentation at the"\
            "cost of performance"
       echo "[-skiptests] : skips execution of all tests"
+      echo "[-testpairwise] : run tests in 'pairwise' mode (increases"\
+           "test execution time)"
       echo "[-testexhaustive] : run tests in 'exhaustive' mode (significantly increases"\
            "test execution time)"
       exit 1
@@ -111,10 +105,8 @@ then
   # don't use git clean because we need to retain Eclipse conf files
   cd $IMPALA_FE_DIR
   rm -rf target
-  rm -f src/test/resources/hbase-site.xml
-  rm -f src/test/resources/hive-site.xml
+  rm -f src/test/resources/{core,hbase,hive}-site.xml
   rm -rf src/generated-sources/*
-  rm -f derby.log
 
   # clean be
   cd $IMPALA_HOME/be
@@ -128,9 +120,15 @@ then
   rm -f $IMPALA_HOME/bin/version.info
 fi
 
+# Generate the Hadoop configs needed by Impala
+if [ $FORMAT_CLUSTER -eq 1 ]; then
+  ${IMPALA_HOME}/bin/create-test-configuration.sh -create_metastore
+else
+  ${IMPALA_HOME}/bin/create-test-configuration.sh
+fi
 
-# cleanup FE process
-$IMPALA_HOME/bin/clean-fe-processes.py
+# Exit on non-true return value
+set -e
 
 # build common and backend
 cd $IMPALA_HOME
@@ -160,18 +158,8 @@ mvn package -DskipTests=true
 
 if [ $tests_action -eq 1 ]
 then
-  cd $IMPALA_FE_DIR
-  if [ $metastore_is_derby -eq 1 ]
-  then
-    echo "Cleaning up locks from previous test runs for derby for metastore"
-    ls target/test_metastore_db/*.lck
-    rm -f target/test_metastore_db/{db,dbex}.lck
-  fi
-  mvn exec:java -Dexec.mainClass=com.cloudera.impala.testutil.PlanService \
-              -Dexec.classpathScope=test &
-  PID=$!
-  ${IMPALA_HOME}/bin/run-backend-tests.sh
-  kill $PID
+    # Run backend tests
+    ${IMPALA_HOME}/bin/run-backend-tests.sh
 fi
 
 # Build the shell tarball
@@ -180,5 +168,3 @@ ${IMPALA_HOME}/shell/make_shell_tarball.sh
 
 # Generate list of files for Cscope to index
 $IMPALA_HOME/bin/gen-cscope.sh
-
-

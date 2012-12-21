@@ -36,6 +36,7 @@
 #include "runtime/raw-value.h"
 #include "runtime/row-batch.h"
 #include "util/debug-util.h"
+#include "util/impalad-metric-keys.h"
 #include "util/runtime-profile.h"
 
 #include "gen-cpp/PlanNodes_types.h"
@@ -69,7 +70,8 @@ HdfsScanNode::HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode,
       next_range_to_issue_idx_(0),
       all_ranges_in_queue_(false),
       ranges_in_flight_(0),
-      all_ranges_issued_(false) {
+      all_ranges_issued_(false),
+      counters_reported_(false) {
 }
 
 HdfsScanNode::~HdfsScanNode() {
@@ -82,6 +84,7 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
   {
     unique_lock<recursive_mutex> l(lock_);
     if (per_file_scan_ranges_.size() == 0 || ReachedLimit() || !status_.ok()) {
+      UpdateCounters();
       *eos = true;
       return status_;
     }
@@ -116,6 +119,7 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
         COUNTER_SET(rows_returned_counter_, num_rows_returned_);
 
         *eos = true;
+        UpdateCounters();
         // Wake up disk thread notifying it we are done.  This triggers tear down
         // of the scanner threads.
         done_ = true;
@@ -131,22 +135,30 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
   // TODO: remove when all scanners are updated to use io mgr.
   if (current_scanner_ == NULL) {
     RETURN_IF_ERROR(InitNextScanRange(state, eos));
-    if (*eos) return Status::OK;
+    if (*eos) {
+      UpdateCounters();
+      return Status::OK;
+    }
   }
 
   // Loops until all the scan ranges are complete or batch is full
   *eos = false;
   do {
     bool eosr = false;
+    int rows_before = row_batch->num_rows();
     RETURN_IF_ERROR(current_scanner_->GetNext(row_batch, &eosr));
     RETURN_IF_CANCELLED(state);
 
-    num_rows_returned_ += row_batch->num_rows();
+    num_rows_returned_ += row_batch->num_rows() - rows_before;
     COUNTER_SET(rows_returned_counter_, num_rows_returned_);
 
     if (ReachedLimit()) {
+      int num_rows_over = num_rows_returned_ - limit_;
+      row_batch->set_num_rows(row_batch->num_rows() - num_rows_over);
+      num_rows_returned_ -= num_rows_over;
+      COUNTER_SET(rows_returned_counter_, num_rows_returned_);
       *eos = true;
-      return Status::OK;
+      break;
     }
 
     if (eosr) { // Current scan range is finished
@@ -158,6 +170,8 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
       if (*eos) break;
     }
   } while (!row_batch->IsFull());
+
+  if (*eos) UpdateCounters();
 
   return Status::OK;
 }
@@ -176,6 +190,8 @@ Status HdfsScanNode::CreateConjuncts(vector<Expr*>* expr) {
 
 Status HdfsScanNode::SetScanRanges(const vector<TScanRangeParams>& scan_range_params) {
   // Convert the input ranges into per file DiskIO::ScanRange objects
+  int num_ranges_missing_volume_id = 0;
+  
   for (int i = 0; i < scan_range_params.size(); ++i) {
     DCHECK(scan_range_params[i].scan_range.__isset.hdfs_file_split);
     const THdfsFileSplit& split = scan_range_params[i].scan_range.hdfs_file_split;
@@ -194,11 +210,18 @@ Status HdfsScanNode::SetScanRanges(const vector<TScanRangeParams>& scan_range_pa
       LOG(WARNING) << "Unknown disk id.  This will negatively affect performance. "
                    << " Check your hdfs settings to enable block location metadata.";
       unknown_disk_id_warned_ = true;
+      ++num_ranges_missing_volume_id;
     }
 
     desc->ranges.push_back(AllocateScanRange(desc->filename.c_str(), 
        split.length, split.offset, split.partition_id, scan_range_params[i].volume_id));
   }
+
+  // Update server wide metrics for number of scan ranges and ranges that have 
+  // incomplete metadata.
+  total_ranges_metric_->Increment(scan_range_params.size());
+  missing_volume_id_count_metric_->Increment(num_ranges_missing_volume_id);
+
   return Status::OK;
 }
 
@@ -402,6 +425,16 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
     if (text_fn != NULL) codegend_fn_map_[THdfsFileFormat::TEXT] = text_fn;
     if (seq_fn != NULL) codegend_fn_map_[THdfsFileFormat::SEQUENCE_FILE] = seq_fn;
   }
+  
+  Metrics* metrics = runtime_state_->exec_env()->metrics();
+  DCHECK(metrics != NULL);
+
+  total_ranges_metric_ = metrics->GetMetric<Metrics::IntMetric>(
+      ImpaladMetricKeys::TOTAL_SCAN_RANGES_PROCESSED);
+  missing_volume_id_count_metric_ = metrics->GetMetric<Metrics::IntMetric>(
+      ImpaladMetricKeys::NUM_SCAN_RANGES_MISSING_VOLUME_ID);
+  DCHECK(total_ranges_metric_ != NULL);
+  DCHECK(missing_volume_id_count_metric_ != NULL);
 
   return Status::OK;
 }
@@ -566,6 +599,7 @@ Status HdfsScanNode::Close(RuntimeState* state) {
   if (memory_used_counter_ != NULL) {
     COUNTER_UPDATE(memory_used_counter_, tuple_pool_->peak_allocated_bytes());
   }
+
   return ExecNode::Close(state);
 }
 
@@ -696,8 +730,6 @@ void HdfsScanNode::DiskThread() {
       }
     }
   }
-  runtime_profile()->StopRateCounterUpdates(total_throughput_counter());
-
   // At this point the disk thread is starting cleanup and will no longer read
   // from the io mgr.  This can happen in one of these conditions:
   //   1. All ranges were returned.  (common case).
@@ -715,8 +747,8 @@ void HdfsScanNode::DiskThread() {
 
   scanner_threads_.join_all();
   contexts_.clear();
-  
-  // Wake up thread in GetNext
+   
+  // Wake up thread in GetNext	
   {
     unique_lock<mutex> l(row_batches_lock_);
     done_ = true;
@@ -785,9 +817,15 @@ void HdfsScanNode::ScannerThread(HdfsScanner* scanner, ScanRangeContext* context
   }
 }
 
-void HdfsScanNode::RangeComplete() {
+void HdfsScanNode::RangeComplete(const THdfsFileFormat::type& file_type, 
+    const THdfsCompression::type& compression_type) {
   scan_ranges_complete_counter()->Update(1);
   progress_.Update(1);
+
+  {
+    unique_lock<mutex> l(file_type_counts_lock_);
+    ++file_type_counts_[make_pair(file_type, compression_type)];
+  }
 }
 
 void HdfsScanNode::ComputeSlotMaterializationOrder(vector<int>* order) const {
@@ -813,6 +851,26 @@ void HdfsScanNode::ComputeSlotMaterializationOrder(vector<int>* order) const {
         (*order)[slot_idx] = conjunct_idx;
       }
     }
+  }
+}
+
+void HdfsScanNode::UpdateCounters() {
+  unique_lock<recursive_mutex> l(lock_);
+  if (counters_reported_) return;
+  counters_reported_ = true;
+
+  runtime_profile()->StopRateCounterUpdates(total_throughput_counter());
+  
+  // output completed file types and counts to info string
+  if (!file_type_counts_.empty()) {
+    unique_lock<mutex> l2(file_type_counts_lock_);
+    stringstream ss;
+    for (FileTypeCountsMap::const_iterator it = file_type_counts_.begin();
+        it != file_type_counts_.end(); ++it) {
+      ss << it->first.first << "/" << it->first.second
+        << ":" << it->second << " ";
+    }
+    runtime_profile_->AddInfoString("File Formats", ss.str());
   }
 }
 

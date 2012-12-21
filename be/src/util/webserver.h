@@ -30,8 +30,10 @@ namespace impala {
 // methods which produce output for a given URL path
 class Webserver {
  public:
-  typedef boost::function<void (std::stringstream* output)> PathHandlerCallback;
-
+  typedef std::map<std::string, std::string> ArgumentMap;
+  typedef boost::function<void (const ArgumentMap& args, std::stringstream* output)> 
+      PathHandlerCallback;
+  
   // If interface is set to the empty string the socket will bind to all available
   // interfaces.
   Webserver(const std::string& interface, const int port);
@@ -48,11 +50,45 @@ class Webserver {
   // Stops the webserver synchronously.
   void Stop();
 
-  // Register a handler with a particular URL path. Path should not include the
-  // http://hostname/ prefix.
-  void RegisterPathHandler(const std::string& path, const PathHandlerCallback& callback);
+  // Register a callback for a URL path. Path should not include the
+  // http://hostname/ prefix. If is_styled is true, a link to this page is
+  // printed in the navigation bar at the top of each debug page. Otherwise the
+  // link does not appear, and the page is rendered without HTML headers and
+  // footers. This option is used for pages that are typically read by machine.
+  // The first registration's choice of is_styled overrides all
+  // subsequent registrations for that URL.
+  void RegisterPathHandler(const std::string& path, const PathHandlerCallback& callback,
+                           bool is_styled = true);
 
  private:
+  // Container class for a list of path handler callbacks for a single URL.
+  class PathHandler {
+   public:
+    PathHandler(bool is_styled) 
+        : is_styled_(is_styled) {};
+
+    void AddCallback(const PathHandlerCallback& callback) {
+      callbacks_.push_back(callback);
+    }
+
+    bool is_styled() const { return is_styled_; }
+    const std::vector<PathHandlerCallback>& callbacks() const { return callbacks_; }
+
+   private:
+    // If true, the page appears in the navigation bar.
+    bool is_styled_;
+
+    // List of callbacks to render output for this page, called in order.
+    std::vector<PathHandlerCallback> callbacks_;
+  };
+
+  // Renders a common Bootstrap-styled header 
+  void BootstrapPageHeader(std::stringstream* output);
+
+  // Renders a common Bootstrap-styled footer. Must be used in conjunction with
+  // BootstrapPageHeader.
+  void BootstrapPageFooter(std::stringstream* output);
+
   // Static so that it can act as a function pointer, and then call the next method
   static void* MongooseCallbackStatic(enum mg_event event, 
       struct mg_connection* connection);
@@ -62,14 +98,20 @@ class Webserver {
       const struct mg_request_info* request_info);
 
   // Registered to handle "/", and prints a list of available URIs
-  void RootHandler(std::stringstream* output);
+  void RootHandler(const ArgumentMap& args, std::stringstream* output);
+
+  // Builds a map of argument name to argument value from a typical URL argument
+  // string (that is, "key1=value1&key2=value2.."). If no value is given for a
+  // key, it is entered into the map as (key, "").
+  void BuildArgumentMap(const std::string& args, ArgumentMap* output);
 
   // Lock guarding the path_handlers_ map
   boost::mutex path_handlers_lock_;
 
-  // Map of path to a list of handlers. More than one handler may register itself with a
-  // path so that many components may contribute to a single page.
-  typedef std::map<std::string, std::vector<PathHandlerCallback> > PathHandlerMap;
+  // Map of path to a PathHandler containing a list of handlers for that
+  // path. More than one handler may register itself with a path so that many
+  // components may contribute to a single page.
+  typedef std::map<std::string, PathHandler> PathHandlerMap;
   PathHandlerMap path_handlers_;
 
   const int port_;

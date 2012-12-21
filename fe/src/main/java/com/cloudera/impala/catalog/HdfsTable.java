@@ -31,14 +31,9 @@ import org.apache.hadoop.fs.VolumeId;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
-import org.apache.hadoop.hive.metastore.api.UnknownDBException;
-import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.serde.Constants;
-import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,7 +100,9 @@ public class HdfsTable extends Table {
      * volumn id is not supported.
      */
     public int getVolumeId(int hostIndex) {
-      if (diskIds == null) return -1;
+      if (diskIds == null) {
+        return -1;
+      }
       Preconditions.checkArgument(hostIndex >= 0);
       Preconditions.checkArgument(hostIndex < diskIds.length);
       return diskIds[hostIndex];
@@ -154,7 +151,7 @@ public class HdfsTable extends Table {
    * Create columns corresponding to fieldSchemas. Throws a
    * TableLoadingException if the metadata is incompatible with what we support.
    */
-  private void loadColumns(List<FieldSchema> fieldSchemas) 
+  private void loadColumns(List<FieldSchema> fieldSchemas)
       throws TableLoadingException {
     int pos = 0;
     for (FieldSchema s : fieldSchemas) {
@@ -336,7 +333,8 @@ public class HdfsTable extends Table {
     List<Integer> endingBlockIndexes = Lists.newArrayList();
 
     boolean supportsVolumeId =
-        CONF.getBoolean(DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED, false);
+        CONF.getBoolean(DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED,
+                        DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED_DEFAULT);
 
     // TODO: Is DistributedFileSystem thread safe? If so, make it a static final object.
     DistributedFileSystem dfs;
@@ -354,6 +352,7 @@ public class HdfsTable extends Table {
       throw new RuntimeException("couldn't retrieve FileSystem:\n" + e.getMessage(), e);
     }
 
+    LOG.info("getting file block locations");
     for (HdfsPartition partition: partitions) {
       for (FileDescriptor fileDescriptor: partition.getFileDescriptors()) {
         Path p = new Path(fileDescriptor.getFilePath());
@@ -376,7 +375,7 @@ public class HdfsTable extends Table {
                 "Compressed file not supported without compression input format: " + p);
           }
         } else if (compressionType != HdfsCompression.NONE) {
-          throw new RuntimeException("Compressed file not supported: " + p);
+          throw new RuntimeException("Compressed text files are not supported: " + p);
         } else if (sd.getFileFormat() == HdfsFileFormat.LZO_TEXT) {
           throw new RuntimeException("Expected file with .lzo suffix: " + p);
         }
@@ -401,6 +400,7 @@ public class HdfsTable extends Table {
       }
     }
 
+    LOG.info("getting  block storage locations");
     if (supportsVolumeId) {
       try {
         // Get the BlockStorageLocations for all the blocks
@@ -453,7 +453,9 @@ public class HdfsTable extends Table {
               diskIds[j] = index;
             }
           }
-          if (found_null) break;
+          if (found_null) {
+            break;
+          }
           result.add(new BlockMetadata(locations[i], diskIds));
         }
       } catch (IOException e) {
@@ -473,6 +475,7 @@ public class HdfsTable extends Table {
     }
 
     // Construct block metadata to also include file names and partition information
+    LOG.info("setting per-block file names and partitions");
     int firstBlockIndex = 0;
     int fileIndex = 0;
     for (HdfsPartition partition: partitions) {

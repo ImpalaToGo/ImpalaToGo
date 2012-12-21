@@ -19,3 +19,4 @@ CTestTestfile.cmake
 llvm-ir/
 shell/gen-py/
 shell/build/
+tests/results

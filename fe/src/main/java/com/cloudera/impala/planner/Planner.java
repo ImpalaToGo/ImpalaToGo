@@ -88,7 +88,9 @@ public class Planner {
     }
     Analyzer analyzer = analysisResult.getAnalyzer();
 
-    PlanNode singleNodePlan = createQueryPlan(queryStmt, analyzer);
+    LOG.info("create single-node plan");
+    PlanNode singleNodePlan =
+        createQueryPlan(queryStmt, analyzer, queryOptions.getDefault_order_by_limit());
     //LOG.info("single-node plan:"
         //+ singleNodePlan.getExplainString("", TExplainLevel.VERBOSE));
     ArrayList<PlanFragment> fragments = Lists.newArrayList();
@@ -103,9 +105,8 @@ public class Planner {
       if (analysisResult.isInsertStmt() && !queryStmt.hasLimitClause()) {
           isPartitioned = true;
       }
-      createPlanFragments(
-          singleNodePlan, isPartitioned, queryOptions.partition_agg,
-          fragments);
+      LOG.info("create plan fragments");
+      createPlanFragments(singleNodePlan, isPartitioned, false, fragments);
     }
 
     PlanFragment rootFragment = fragments.get(fragments.size() - 1);
@@ -116,6 +117,7 @@ public class Planner {
     // set output exprs before calling finalize()
     rootFragment.setOutputExprs(queryStmt.getResultExprs());
 
+    LOG.info("finalize plan fragments");
     for (PlanFragment fragment: fragments) {
       fragment.finalize(analyzer, !queryOptions.allow_unsupported_formats);
     }
@@ -448,10 +450,11 @@ public class Planner {
   /**
    * Create plan tree for single-node execution.
    */
-  private PlanNode createQueryPlan(QueryStmt stmt, Analyzer analyzer)
+  private PlanNode createQueryPlan(
+      QueryStmt stmt, Analyzer analyzer, long defaultOrderByLimit)
       throws NotImplementedException, InternalException {
     if (stmt instanceof SelectStmt) {
-      return createSelectPlan((SelectStmt) stmt, analyzer);
+      return createSelectPlan((SelectStmt) stmt, analyzer, defaultOrderByLimit);
     } else {
       Preconditions.checkState(stmt instanceof UnionStmt);
       return createUnionPlan((UnionStmt) stmt, analyzer);
@@ -462,8 +465,10 @@ public class Planner {
    * Create tree of PlanNodes that implements the Select/Project/Join/Group by/Having
    * of the selectStmt query block.
    * @throws NotImplementedException if selectStmt contains Order By clause w/o Limit
+   *   and the query options don't contain a default limit
    */
-  private PlanNode createSelectPlan(SelectStmt selectStmt, Analyzer analyzer)
+  private PlanNode createSelectPlan(
+      SelectStmt selectStmt, Analyzer analyzer, long defaultOrderByLimit)
       throws NotImplementedException, InternalException {
     if (selectStmt.getTableRefs().isEmpty()) {
       // no from clause -> nothing to plan
@@ -488,7 +493,8 @@ public class Planner {
       assignConjuncts(root, analyzer);
     }
 
-    if (selectStmt.getSortInfo() != null && selectStmt.getLimit() == -1) {
+    if (selectStmt.getSortInfo() != null
+        && selectStmt.getLimit() == -1 && defaultOrderByLimit == -1) {
       // TODO: only use topN if the memory footprint is expected to be low;
       // how to account for strings?
       throw new NotImplementedException(
@@ -513,15 +519,18 @@ public class Planner {
     // add order by and limit
     SortInfo sortInfo = selectStmt.getSortInfo();
     if (sortInfo != null) {
-      Preconditions.checkState(selectStmt.getLimit() != -1);
+      Preconditions.checkState(selectStmt.getLimit() != -1 || defaultOrderByLimit != -1);
       root = new SortNode(new PlanNodeId(nodeIdGenerator), root, sortInfo, true);
       // Don't assign conjuncts here. If this is the tree for an inline view, and
       // it contains a limit clause, we need to evaluate the conjuncts inherited
       // from the enclosing select block *after* the limit.
       // TODO: have HashJoinNode evaluate those conjuncts after receiving rows
       // from the build tree
+      root.setLimit(
+          selectStmt.getLimit() != -1 ? selectStmt.getLimit() : defaultOrderByLimit);
+    } else {
+      root.setLimit(selectStmt.getLimit());
     }
-    root.setLimit(selectStmt.getLimit());
 
     // All the conjuncts should be assigned at this point.
     Preconditions.checkState(!analyzer.hasUnassignedConjuncts());
@@ -650,7 +659,7 @@ public class Planner {
       throws NotImplementedException, InternalException {
     // determine which conjuncts can be evaluated inside the subquery tree
     List<Predicate> conjuncts = Lists.newArrayList();
-    for (Predicate p: 
+    for (Predicate p:
         analyzer.getUnassignedConjuncts(inlineViewRef.getMaterializedTupleIds())) {
       //LOG.info("view pred: " + p.toSql());
       if (canEvalPredicate(inlineViewRef.getMaterializedTupleIds(), p, analyzer)) {
@@ -662,7 +671,7 @@ public class Planner {
     // from the enclosing scope if it contains a limit clause
     inlineViewRef.getAnalyzer().registerConjuncts(conjuncts);
     analyzer.markConjunctsAssigned(conjuncts);
-    return createQueryPlan(inlineViewRef.getViewStmt(), inlineViewRef.getAnalyzer());
+    return createQueryPlan(inlineViewRef.getViewStmt(), inlineViewRef.getAnalyzer(), -1);
   }
 
   /**
@@ -931,7 +940,7 @@ public class Planner {
     Analyzer analyzer = operand.getAnalyzer();
     if (queryStmt instanceof SelectStmt) {
       SelectStmt selectStmt = (SelectStmt) queryStmt;
-      PlanNode selectPlan = createSelectPlan(selectStmt, analyzer);
+      PlanNode selectPlan = createSelectPlan(selectStmt, analyzer, -1);
       if (selectPlan == null) {
         // Select with no FROM clause.
         topMergeNode.addConstExprList(selectStmt.getResultExprs());
