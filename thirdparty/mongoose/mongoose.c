@@ -4290,6 +4290,8 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 
   // Send FIN to the client
   (void) shutdown(sock, SHUT_WR);
+
+#if defined(_WIN32)
   set_non_blocking_mode(sock);
 
   // Read and discard pending incoming data. If we do not do that and close the
@@ -4300,6 +4302,7 @@ static void close_socket_gracefully(struct mg_connection *conn) {
   do {
     n = pull(NULL, conn, buf, sizeof(buf));
   } while (n > 0);
+#endif // _WIN32
 
   // Now we know that our FIN is ACK-ed, safe to close
   (void) closesocket(sock);
