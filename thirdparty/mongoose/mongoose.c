@@ -20,7 +20,7 @@
 
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
-#else
+#else 
 #ifdef __linux__
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
 #endif
@@ -4185,7 +4185,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
   const char *pem;
-
+  
   // If PEM file is not specified, skip SSL initialization.
   if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
     return 1;
@@ -4210,7 +4210,7 @@ static int set_ssl_option(struct mg_context *ctx) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
     return 0;
   }
-
+  
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
@@ -4285,8 +4285,6 @@ static void close_socket_gracefully(struct mg_connection *conn) {
 
   // Send FIN to the client
   (void) shutdown(sock, SHUT_WR);
-
-#if defined(_WIN32)
   set_non_blocking_mode(sock);
 
   // Read and discard pending incoming data. If we do not do that and close the
@@ -4297,7 +4295,6 @@ static void close_socket_gracefully(struct mg_connection *conn) {
   do {
     n = pull(NULL, conn, buf, sizeof(buf));
   } while (n > 0);
-#endif // _WIN32
 
   // Now we know that our FIN is ACK-ed, safe to close
   (void) closesocket(sock);
