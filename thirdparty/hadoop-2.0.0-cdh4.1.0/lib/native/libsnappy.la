@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/usr/local/lib'
+libdir='/data/1/sean/impala-static/repos/cdh/Impala/thirdparty/snappy-1.0.5/build/lib'
