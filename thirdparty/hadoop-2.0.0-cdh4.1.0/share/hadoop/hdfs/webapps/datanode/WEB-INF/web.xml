@@ -21,6 +21,11 @@ description, distributable, and context-param elements.
 -->
 
     <servlet>
+        <servlet-name>org.apache.hadoop.hdfs.server.datanode.tail_jsp</servlet-name>
+        <servlet-class>org.apache.hadoop.hdfs.server.datanode.tail_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>org.apache.hadoop.hdfs.server.datanode.browseBlock_jsp</servlet-name>
         <servlet-class>org.apache.hadoop.hdfs.server.datanode.browseBlock_jsp</servlet-class>
     </servlet>
@@ -30,10 +35,10 @@ description, distributable, and context-param elements.
         <servlet-class>org.apache.hadoop.hdfs.server.datanode.browseDirectory_jsp</servlet-class>
     </servlet>
 
-    <servlet>
+    <servlet-mapping>
         <servlet-name>org.apache.hadoop.hdfs.server.datanode.tail_jsp</servlet-name>
-        <servlet-class>org.apache.hadoop.hdfs.server.datanode.tail_jsp</servlet-class>
-    </servlet>
+        <url-pattern>/tail.jsp</url-pattern>
+    </servlet-mapping>
 
     <servlet-mapping>
         <servlet-name>org.apache.hadoop.hdfs.server.datanode.browseBlock_jsp</servlet-name>
@@ -43,11 +48,6 @@ description, distributable, and context-param elements.
     <servlet-mapping>
         <servlet-name>org.apache.hadoop.hdfs.server.datanode.browseDirectory_jsp</servlet-name>
         <url-pattern>/browseDirectory.jsp</url-pattern>
-    </servlet-mapping>
-
-    <servlet-mapping>
-        <servlet-name>org.apache.hadoop.hdfs.server.datanode.tail_jsp</servlet-name>
-        <url-pattern>/tail.jsp</url-pattern>
     </servlet-mapping>
 
 <!--

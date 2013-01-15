@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/home/nong/Projects/CDHImpala/thirdparty/snappy-1.0.5/build/lib'
+libdir='/usr/local/lib'

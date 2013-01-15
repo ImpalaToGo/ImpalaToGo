@@ -21,18 +21,13 @@ description, distributable, and context-param elements.
 -->
 
     <servlet>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-name>
-        <servlet-class>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-class>
-    </servlet>
-
-    <servlet>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-name>
-        <servlet-class>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-class>
-    </servlet>
-
-    <servlet>
         <servlet-name>org.apache.hadoop.hdfs.server.namenode.decommission_jsp</servlet-name>
         <servlet-class>org.apache.hadoop.hdfs.server.namenode.decommission_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-name>
+        <servlet-class>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-class>
     </servlet>
 
     <servlet>
@@ -46,8 +41,8 @@ description, distributable, and context-param elements.
     </servlet>
 
     <servlet>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-name>
-        <servlet-class>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-class>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-name>
+        <servlet-class>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-class>
     </servlet>
 
     <servlet>
@@ -56,23 +51,23 @@ description, distributable, and context-param elements.
     </servlet>
 
     <servlet>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-name>
+        <servlet-class>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>org.apache.hadoop.hdfs.server.namenode.dfsclusterhealth_jsp</servlet-name>
         <servlet-class>org.apache.hadoop.hdfs.server.namenode.dfsclusterhealth_jsp</servlet-class>
     </servlet>
 
     <servlet-mapping>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-name>
-        <url-pattern>/corrupt_files.jsp</url-pattern>
-    </servlet-mapping>
-
-    <servlet-mapping>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-name>
-        <url-pattern>/dfsnodelist.jsp</url-pattern>
-    </servlet-mapping>
-
-    <servlet-mapping>
         <servlet-name>org.apache.hadoop.hdfs.server.namenode.decommission_jsp</servlet-name>
         <url-pattern>/decommission.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-name>
+        <url-pattern>/corrupt_replicas_xml.jsp</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
@@ -86,13 +81,18 @@ description, distributable, and context-param elements.
     </servlet-mapping>
 
     <servlet-mapping>
-        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005freplicas_005fxml_jsp</servlet-name>
-        <url-pattern>/corrupt_replicas_xml.jsp</url-pattern>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.dfsnodelist_jsp</servlet-name>
+        <url-pattern>/dfsnodelist.jsp</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
         <servlet-name>org.apache.hadoop.hdfs.server.namenode.block_005finfo_005fxml_jsp</servlet-name>
         <url-pattern>/block_info_xml.jsp</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>org.apache.hadoop.hdfs.server.namenode.corrupt_005ffiles_jsp</servlet-name>
+        <url-pattern>/corrupt_files.jsp</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
