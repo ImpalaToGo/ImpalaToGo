@@ -32,7 +32,6 @@
 #include "runtime/descriptors.h"
 #include "runtime/disk-io-mgr.h"
 #include "runtime/string-buffer.h"
-#include "util/metrics.h"
 #include "util/progress-updater.h"
 
 #include "gen-cpp/PlanNodes_types.h"
@@ -79,8 +78,6 @@ struct HdfsFileDesc {
 // a better way.
 // TODO: this needs to be moved into the io mgr.  RegisterReader needs to take
 // another argument for max parallel ranges or something like that.
-// TODO: this class supports two types of scanners, TEXT and SEQUENCE which use
-// the io mgr and RCFILE and TREVNI which don't.  Remove the non io mgr path.
 class HdfsScanNode : public ScanNode {
  public:
   HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
@@ -174,7 +171,9 @@ class HdfsScanNode : public ScanNode {
   // This is thread safe.
   void SetFileMetadata(const std::string& filename, void* metadata);
 
-  // Called by the scanner when a range is complete.  Used to log progress.
+  // Called by the scanner when a range is complete.  Used to trigger done_ and
+  // to log progress.  This *must* only be called after the scanner has completely
+  // finished the scan range (i.e. context->Flush()).
   void RangeComplete(const THdfsFileFormat::type& file_type, 
       const THdfsCompression::type& compression_type);
 
@@ -217,10 +216,6 @@ class HdfsScanNode : public ScanNode {
   // this once per scan node since it can be noisy.
   bool unknown_disk_id_warned_;
   
-  // ImpalaD-wide metrics that are updated by this scan node
-  Metrics::IntMetric* total_ranges_metric_;
-  Metrics::IntMetric* missing_volume_id_count_metric_;
-
   // Mem pool for tuple buffer data. Used by scanners for allocation,
   // but owned here.
   boost::scoped_ptr<MemPool> tuple_pool_;
@@ -256,14 +251,6 @@ class HdfsScanNode : public ScanNode {
   // object is.
   boost::scoped_ptr<ObjectPool> scanner_pool_;
 
-  // The scanner in use for the current file / scan-range
-  // combination.
-  HdfsScanner* current_scanner_;
-
-  // The source of byte data for consumption by the scanner for the
-  // current file / scan-range combination.
-  boost::scoped_ptr<ByteStream> current_byte_stream_;
-
   // Total number of partition slot descriptors, including non-materialized ones.
   int num_partition_keys_;
 
@@ -298,6 +285,7 @@ class HdfsScanNode : public ScanNode {
   ProgressUpdater progress_;
 
   // Scanner specific per file metadata (e.g. header information) and associated lock.
+  // This lock cannot be taken together with any other locks except lock_.
   boost::mutex metadata_lock_;
   std::map<std::string, void*> per_file_metadata_;
 
@@ -307,6 +295,7 @@ class HdfsScanNode : public ScanNode {
   // Lock and condition variable protecting materialized_row_batches_.  Row batches
   // are produced by the scanner threads and consumed by the main thread in GetNext
   // Lock to protect materialized_row_batches_
+  // This lock cannot be taken together with any other locks except lock_.
   boost::mutex row_batches_lock_;
   boost::condition_variable row_batch_added_cv_;
   std::list<RowBatch*> materialized_row_batches_;
@@ -317,8 +306,8 @@ class HdfsScanNode : public ScanNode {
   bool done_;
 
   // Lock protects access between scanner thread and main query thread (the one calling
-  // GetNext()) for all fields below.  If this lock and one of the condition variable
-  // locks needs to be take together, this lock must be taken first.
+  // GetNext()) for all fields below.  If this lock and any other locks needs to be taken
+  // together, this lock must be taken first.
   // This lock is recursive since some of the functions provided to the scanner are
   // also called from internal functions.
   // TODO: we can split out 'external' functions for internal functions and make this
@@ -355,6 +344,7 @@ class HdfsScanNode : public ScanNode {
 
   // Mapping of file formats (file type, compression type) to the number of
   // scan ranges of that type and the lock protecting it.
+  // This lock cannot be taken together with any other locks except lock_.
   boost::mutex file_type_counts_lock_;
   typedef std::map<
       std::pair<THdfsFileFormat::type, THdfsCompression::type>, int> FileTypeCountsMap;
@@ -367,15 +357,6 @@ class HdfsScanNode : public ScanNode {
   // the number of scan ranges being parsed to the number of scanner threads.
   Status IssueMoreRanges();
   
-  // Called once per scan-range to initialise (potentially) a new byte
-  // stream and to call the same method on the current scanner.
-  Status InitNextScanRange(RuntimeState* state, bool* scan_ranges_finished);
-
-  // Gets a scanner for the file type for this partition, creating one if none
-  // exists.
-  // TODO: remove when all scanners are updated.
-  HdfsScanner* GetScanner(HdfsPartitionDescriptor*);
-
   // Create a new scanner for this partition type and initialize it.
   // If the scanner cannot be created return NULL.
   HdfsScanner* CreateScanner(HdfsPartitionDescriptor*);

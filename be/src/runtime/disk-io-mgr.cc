@@ -22,6 +22,7 @@
 #include "common/logging.h"
 #include "util/disk-info.h"
 #include "util/hdfs-util.h"
+#include "util/impalad-metrics.h"
 
 // Control the number of disks on the machine.  If 0, this comes from the system 
 // settings.
@@ -113,7 +114,7 @@ struct DiskIoMgr::ReaderContext {
     int num_scan_ranges;
   
     // Queue of scan ranges that can be scheduled.  A scan range that is currently being
-    // read by one thread, cannot be picked up by another thread and is temporarily
+    // read by one thread cannot be picked up by another thread and is temporarily
     // removed from the queue.  The size of this queue is always less than or equal
     // to num_scan_ranges. 
     // TODO: this is simpler to get right but not optimal.  We do not parallelize a
@@ -504,6 +505,17 @@ void DiskIoMgr::UnregisterReader(ReaderContext* reader) {
     DCHECK_EQ(reader->num_empty_buffers_, 
         reader->num_buffers_per_disk_ * disk_queues_.size());
   } 
+  for (int i = 0; i < reader->disk_states_.size(); ++i) {
+    // Close any open scan ranges now.  If the reader is cancelled, then there
+    // might be open scan ranges that did not get closed by the disk threads.
+    // The ranges are normally closed when the read is complete, which does not
+    // happen with cancellation.
+    ReaderContext::PerDiskState& state = reader->disk_states_[i];
+    list<ScanRange*>::iterator range_it = state.ranges.begin();
+    for (; range_it != state.ranges.end(); ++range_it) {
+      CloseScanRange(reader->hdfs_connection_, *range_it);
+    }
+  }
   DCHECK(reader->Validate()) << endl << reader->DebugString();
   reader_cache_->ReturnReader(reader);
 }
@@ -782,6 +794,9 @@ char* DiskIoMgr::GetFreeBuffer() {
   unique_lock<mutex> lock(free_buffers_lock_);
   if (free_buffers_.empty()) {
     ++num_allocated_buffers_;
+    if (ImpaladMetrics::IO_MGR_NUM_BUFFERS != NULL) {
+      ImpaladMetrics::IO_MGR_NUM_BUFFERS->Increment(1L);
+    }
     return new char[max_read_size_];
   } else {
     char* buffer = free_buffers_.front();
@@ -858,6 +873,9 @@ Status DiskIoMgr::OpenScanRange(hdfsFS hdfs_connection, ScanRange* range) const 
       return Status(ss.str());
     }
   } 
+  if (ImpaladMetrics::IO_MGR_NUM_OPEN_FILES != NULL) {
+    ImpaladMetrics::IO_MGR_NUM_OPEN_FILES->Increment(1L);
+  }
   return Status::OK;
 }
 
@@ -872,6 +890,9 @@ void DiskIoMgr::CloseScanRange(hdfsFS hdfs_connection, ScanRange* range) const {
     if (range->local_file_ == NULL) return;
     fclose(range->local_file_);
     range->local_file_ = NULL;
+  }
+  if (ImpaladMetrics::IO_MGR_NUM_OPEN_FILES != NULL) {
+    ImpaladMetrics::IO_MGR_NUM_OPEN_FILES->Increment(-1L);
   }
 }
 

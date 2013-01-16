@@ -50,7 +50,7 @@ KNOWN_BUILD_TYPES = ['debug', 'release']
 IMPALAD_PATH = os.path.join(IMPALA_HOME,
                             'bin/start-impalad.sh -build_type=%s' % options.build_type)
 STATE_STORE_PATH = os.path.join(IMPALA_HOME, 'be/build', options.build_type,
-                                'sparrow/statestored')
+                                'statestore/statestored')
 MINI_IMPALA_CLUSTER_PATH = os.path.join(IMPALA_HOME, 'be/build', options.build_type,
                                         'testutil/mini-impala-cluster')
 IMPALA_SHELL = os.path.join(IMPALA_HOME, 'bin/impala-shell.sh')
@@ -82,7 +82,7 @@ def start_impalad_instances(cluster_size):
   BASE_FE_PORT = 21000
   BASE_BE_PORT = 22000
   BASE_STATE_STORE_SUBSCRIBER_PORT = 23000
-  BASE_WEBSERVER_PORT = 9090
+  BASE_WEBSERVER_PORT = 25000
 
   # Start each impalad instance and optionally redirect the output to a log file.
   for i in range(options.cluster_size):

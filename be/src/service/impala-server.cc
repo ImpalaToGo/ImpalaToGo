@@ -32,12 +32,17 @@
 #include <boost/foreach.hpp>
 #include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
+#include <google/heap-profiler.h>
+#include <google/malloc_extension.h>
 
+#include "codegen/llvm-codegen.h"
 #include "common/logging.h"
 #include "common/service-ids.h"
-#include "exprs/expr.h"
+#include "exec/ddl-executor.h"
+#include "exec/exec-node.h"
 #include "exec/hdfs-table-sink.h"
-#include "codegen/llvm-codegen.h"
+#include "exec/scan-node.h"
+#include "exprs/expr.h"
 #include "runtime/data-stream-mgr.h"
 #include "runtime/client-cache.h"
 #include "runtime/descriptors.h"
@@ -47,13 +52,11 @@
 #include "runtime/hdfs-fs-cache.h"
 #include "runtime/exec-env.h"
 #include "runtime/coordinator.h"
-#include "exec/exec-node.h"
-#include "exec/scan-node.h"
-#include "exec/ddl-executor.h"
-#include "sparrow/simple-scheduler.h"
+#include "runtime/timestamp-value.h"
+#include "statestore/simple-scheduler.h"
 #include "util/container-util.h"
 #include "util/debug-util.h"
-#include "util/impalad-metric-keys.h"
+#include "util/impalad-metrics.h"
 #include "util/string-parser.h"
 #include "util/thrift-util.h"
 #include "util/thrift-server.h"
@@ -80,9 +83,6 @@ using namespace apache::thrift::transport;
 using namespace apache::thrift::server;
 using namespace apache::thrift::concurrency;
 using namespace beeswax;
-using sparrow::Scheduler;
-using sparrow::ServiceStateMap;
-using sparrow::Membership;
 
 DEFINE_bool(use_planservice, false, "Use external planservice if true");
 DECLARE_string(planservice_host);
@@ -98,6 +98,11 @@ DEFINE_string(default_query_options, "", "key=value pair of default query option
     " impalad, separated by ','");
 DEFINE_int32(query_log_size, 25, "Number of queries to retain in the query log. If -1, "
                                  "the query log has unbounded size.");
+// TODO: this logging should go into a per query log.
+DEFINE_int32(log_mem_usage_interval, 0, "If non-zero, impalad will output memory usage "
+    "every log_mem_usage_interval'th fragment completion.");
+DEFINE_string(heap_profile_dir, "", "if non-empty, enable heap profiling and output "
+    " to specified directory.");
 
 namespace impala {
 
@@ -127,7 +132,8 @@ class ImpalaServer::QueryExecState {
       current_batch_(NULL),
       current_batch_row_(0),
       num_rows_fetched_(0),
-      impala_server_(server) {
+      impala_server_(server),
+      start_time_(TimestampValue::local_time()) {
     planner_timer_ = ADD_COUNTER(&profile_, "PlanningTime", TCounterType::CPU_TICKS);
   }
 
@@ -143,11 +149,11 @@ class ImpalaServer::QueryExecState {
   // Call this to ensure that rows are ready when calling FetchRowsAsAscii().
   // Must be preceded by call to Exec().
   Status Wait() {
-    if (coord_.get() != NULL) { 
+    if (coord_.get() != NULL) {
       RETURN_IF_ERROR(coord_->Wait());
       RETURN_IF_ERROR(UpdateMetastore());
     }
-        
+
     return Status::OK;
   }
 
@@ -189,6 +195,7 @@ class ImpalaServer::QueryExecState {
   RuntimeProfile::Counter* planner_timer() { return planner_timer_; }
   void set_result_metadata(const TResultSetMetadata& md) { result_metadata_ = md; }
   const RuntimeProfile& profile() const { return profile_; }
+  const TimestampValue& start_time() const { return start_time_; }
 
  private:
   TUniqueId query_id_;
@@ -218,6 +225,9 @@ class ImpalaServer::QueryExecState {
 
   // To get access to UpdateMetastore
   ImpalaServer* impala_server_;
+
+  // Start time of the query
+  TimestampValue start_time_;
 
   // Core logic of FetchRowsAsAscii(). Does not update query_state_/status_.
   Status FetchRowsAsAsciiInternal(const int32_t max_rows, vector<string>* fetched_rows);
@@ -253,7 +263,7 @@ Status ImpalaServer::QueryExecState::Exec(TExecRequest* exec_request) {
   profile_.set_name("Query (id=" + PrintId(exec_request->request_id) + ")");
   query_id_ = exec_request->request_id;
 
-  if (exec_request->stmt_type == TStmtType::QUERY || 
+  if (exec_request->stmt_type == TStmtType::QUERY ||
       exec_request->stmt_type == TStmtType::DML) {
     DCHECK(exec_request_.__isset.query_exec_request);
     TQueryExecRequest& query_exec_request = exec_request_.query_exec_request;
@@ -269,13 +279,13 @@ Status ImpalaServer::QueryExecState::Exec(TExecRequest* exec_request) {
         query_exec_request.fragments[0].partition.type == TPartitionType::UNPARTITIONED;
     DCHECK(has_coordinator_fragment || query_exec_request.__isset.desc_tbl);
     bool has_from_clause = query_exec_request.__isset.desc_tbl;
-    
+
     if (!has_from_clause) {
       // query without a FROM clause: only one fragment, and it doesn't have a plan
       DCHECK(!query_exec_request.fragments[0].__isset.plan);
       DCHECK_EQ(query_exec_request.fragments.size(), 1);
       // TODO: This does not handle INSERT INTO ... SELECT 1 because there is no
-      // coordinator fragment actually executing to drive the sink. 
+      // coordinator fragment actually executing to drive the sink.
       // Workaround: INSERT INTO ... SELECT 1 FROM tbl LIMIT 1
       local_runtime_state_.Init(
           exec_request->request_id, exec_request->query_options,
@@ -352,7 +362,7 @@ Status ImpalaServer::QueryExecState::FetchRowsAsAsciiInternal(const int32_t max_
         fetched_rows->push_back(all_rows[num_rows_fetched_++]);
         ++num_rows;
       }
-      
+
       eos_ = (num_rows_fetched_ == all_rows.size());
 
       return Status::OK;
@@ -401,24 +411,24 @@ Status ImpalaServer::QueryExecState::UpdateMetastore() {
 
   TCatalogUpdate catalog_update;
   if (!coord()->PrepareCatalogUpdate(&catalog_update)) {
-    VLOG_QUERY << "No partitions altered, not updating metastore (query id: " 
+    VLOG_QUERY << "No partitions altered, not updating metastore (query id: "
                << query_id() << ")";
   } else {
     // TODO: We track partitions written to, not created, which means
     // that we do more work than is necessary, because written-to
     // partitions don't always require a metastore change.
     VLOG_QUERY << "Updating metastore with " << catalog_update.created_partitions.size()
-               << " altered partitions (" 
+               << " altered partitions ("
                << join (catalog_update.created_partitions, ", ") << ")";
-    
+
     catalog_update.target_table = query_exec_request.finalize_params.table_name;
     catalog_update.db_name = query_exec_request.finalize_params.table_db;
     RETURN_IF_ERROR(impala_server_->UpdateMetastore(catalog_update));
   }
 
   // TODO: Reset only the updated table
-  return impala_server_->ResetCatalogInternal(); 
-} 
+  return impala_server_->ResetCatalogInternal();
+}
 
 Status ImpalaServer::QueryExecState::FetchNextBatch() {
   DCHECK(!eos_);
@@ -602,7 +612,7 @@ void ImpalaServer::FragmentExecState::ReportStatusCb(
     TInsertExecStatus insert_status;
     insert_status.__set_files_to_move(*runtime_state->hdfs_files_to_move());
 
-    if (executor_.runtime_state()->num_appended_rows()->size() > 0) { 
+    if (executor_.runtime_state()->num_appended_rows()->size() > 0) {
       insert_status.__set_num_appended_rows(
           *executor_.runtime_state()->num_appended_rows());
     }
@@ -644,6 +654,13 @@ ImpalaServer::ImpalaServer(ExecEnv* exec_env)
     : exec_env_(exec_env) {
   // Initialize default config
   InitializeConfigVariables();
+
+#ifndef ADDRESS_SANITIZER
+  // tcmalloc and address sanitizer can not be used together
+  if (!FLAGS_heap_profile_dir.empty()) {
+    HeapProfilerStart(FLAGS_heap_profile_dir.c_str());
+  }
+#endif
 
   if (!FLAGS_use_planservice) {
     JNIEnv* jni_env = getJNIEnv();
@@ -708,12 +725,10 @@ ImpalaServer::ImpalaServer(ExecEnv* exec_env)
       bind<void>(mem_fn(&ImpalaServer::QueryProfilePathHandler), this, _1, _2);
   exec_env->webserver()->RegisterPathHandler("/query_profile", profile_callback);
 
-  num_queries_metric_ = exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
-      ImpaladMetricKeys::NUM_QUERIES, 0L);
-  exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
-      ImpaladMetricKeys::TOTAL_SCAN_RANGES_PROCESSED, 0L);
-  exec_env->metrics()->CreateAndRegisterPrimitiveMetric(
-      ImpaladMetricKeys::NUM_SCAN_RANGES_MISSING_VOLUME_ID, 0L);
+  // Initialize impalad metrics
+  ImpaladMetrics::CreateMetrics(exec_env->metrics());
+  ImpaladMetrics::IMPALA_SERVER_START_TIME->Update(
+      TimestampValue::local_time().DebugString());
 }
 
 void ImpalaServer::RenderHadoopConfigs(const Webserver::ArgumentMap& args,
@@ -735,7 +750,7 @@ void ImpalaServer::RenderHadoopConfigs(const Webserver::ArgumentMap& args,
   RETURN_IF_EXC(jni_env);
 }
 
-void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args, 
+void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args,
     stringstream* output) {
   // We expect the query id to be passed as two parameters, 'hi' and 'lo'. If
   // either are absent, we cannot proceed.
@@ -746,7 +761,7 @@ void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args,
     return;
   } else {
     StringParser::ParseResult parse_result;
-    hi = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(), 
+    hi = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(),
              &parse_result);
     if (parse_result != StringParser::PARSE_SUCCESS) {
       (*output) << "Invalid query id";
@@ -760,7 +775,7 @@ void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args,
     return;
   } else {
     StringParser::ParseResult parse_result;
-    lo = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(), 
+    lo = StringParser::StringToInt<int64_t>(it->second.c_str(), it->second.length(),
              &parse_result);
     if (parse_result != StringParser::PARSE_SUCCESS) {
       (*output) << "Invalid query id";
@@ -792,55 +807,63 @@ void ImpalaServer::QueryProfilePathHandler(const Webserver::ArgumentMap& args,
       return;
     }
 
-    (*output) << "<pre>" << query_record->second->profile_str << "</pre>";  
+    (*output) << "<pre>" << query_record->second->profile_str << "</pre>";
   }
 }
 
-void ImpalaServer::RenderSingleQueryTableRow(
-    const ImpalaServer::QueryStateRecord& record, stringstream* output) {
-  QueryHandle handle;
-  TUniqueIdToQueryHandle(record.id, &handle);
-  (*output) << "<tr><td>" << handle.id << "</td>"
+void ImpalaServer::RenderSingleQueryTableRow(const ImpalaServer::QueryStateRecord& record,
+    bool render_end_time, stringstream* output) {
+  (*output) << "<tr><td>" << record.id << "</td>"
             << "<td>" << record.stmt << "</td>"
             << "<td>"
             << _TStmtType_VALUES_TO_NAMES.find(record.stmt_type)->second
-            << "</td>"
-            << "<td>";
+            << "</td>";
+
+  // Output start/end times
+  (*output) << "<td>" << record.start_time.DebugString() << "</td>";
+  if (render_end_time) {
+    (*output) << "<td>" << record.end_time.DebugString() << "</td>";
+  }
   
+  // Output progress
+  (*output) << "<td>";
   if (record.has_coord == false) {
     (*output) << "N/A";
   } else {
-    (*output) << record.num_complete_fragments << " / " << record.total_fragments 
+    (*output) << record.num_complete_fragments << " / " << record.total_fragments
               << " (" << setw(4);
     if (record.total_fragments == 0) {
       (*output) << " (0%)";
     } else {
-      (*output) << 
-          (100.0 * record.num_complete_fragments / (1.f * record.total_fragments)) 
+      (*output) <<
+          (100.0 * record.num_complete_fragments / (1.f * record.total_fragments))
                 << "%)";
     }
   }
   
+  // Output state and rows fetched
   (*output) << "</td>"
-            << "<td>" << _QueryState_VALUES_TO_NAMES.find(record.query_state)->second 
+            << "<td>" << _QueryState_VALUES_TO_NAMES.find(record.query_state)->second
             << "</td><td>" << record.num_rows_fetched << "</td>";
   
+  // Output profile
   (*output) << "<td><a href='/query_profile?hi=" << record.id.hi << "&lo=" 
             << record.id.lo << "'>Profile</a></td>";
   (*output) << "</tr>" << endl;
 }
 
-void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args, 
+void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args,
     stringstream* output) {
   (*output) << "<h2>Queries</h2>";
   lock_guard<mutex> l(query_exec_state_map_lock_);
   (*output) << "This page lists all registered queries, i.e., those that are not closed "
     " nor cancelled.<br/>" << endl;
   (*output) << query_exec_state_map_.size() << " queries in flight" << endl;
-  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>" 
+  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>"
             << endl;
   (*output) << "<th>Statement</th>" << endl;
   (*output) << "<th>Query Type</th>" << endl;
+  (*output) << "<th>Start Time</th>" << endl;
   (*output) << "<th>Backend Progress</th>" << endl;
   (*output) << "<th>State</th>" << endl;
   (*output) << "<th># rows fetched</th>" << endl;
@@ -848,7 +871,7 @@ void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args,
   (*output) << "</tr>";
   BOOST_FOREACH(const QueryExecStateMap::value_type& exec_state, query_exec_state_map_) {
     QueryStateRecord record(*exec_state.second, false);
-    RenderSingleQueryTableRow(record, output);
+    RenderSingleQueryTableRow(record, false, output);
   }
 
   (*output) << "</table>";
@@ -860,7 +883,7 @@ void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args,
   {
     lock_guard<mutex> l(query_locations_lock_);
     BOOST_FOREACH(const QueryLocations::value_type& location, query_locations_) {
-      (*output) << "<tr><td>" << location.first.ipaddress << ":" << location.first.port 
+      (*output) << "<tr><td>" << location.first.ipaddress << ":" << location.first.port
                 << "<td><b>" << location.second.size() << "</b></td></tr>";
     }
   }
@@ -868,10 +891,12 @@ void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args,
 
   // Print the query log
   (*output) << "<h2>Finished Queries</h2>";
-  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>" 
+  (*output) << "<table class='table table-hover table-border'><tr><th>Query Id</th>"
             << endl;
   (*output) << "<th>Statement</th>" << endl;
   (*output) << "<th>Query Type</th>" << endl;
+  (*output) << "<th>Start Time</th>" << endl;
+  (*output) << "<th>End Time</th>" << endl;
   (*output) << "<th>Backend Progress</th>" << endl;
   (*output) << "<th>State</th>" << endl;
   (*output) << "<th># rows fetched</th>" << endl;
@@ -881,14 +906,14 @@ void ImpalaServer::QueryStatePathHandler(const Webserver::ArgumentMap& args,
   {
     lock_guard<mutex> l(query_log_lock_);
     BOOST_FOREACH(const QueryStateRecord& log_entry, query_log_) {
-      RenderSingleQueryTableRow(log_entry, output);
+      RenderSingleQueryTableRow(log_entry, true, output);
     }
   }
 
   (*output) << "</table>";
 }
 
-void ImpalaServer::SessionPathHandler(const Webserver::ArgumentMap& args, 
+void ImpalaServer::SessionPathHandler(const Webserver::ArgumentMap& args,
     stringstream* output) {
   (*output) << "<h2>Sessions</h2>" << endl;
   lock_guard<mutex> l_(session_state_map_lock_);
@@ -907,7 +932,7 @@ void ImpalaServer::SessionPathHandler(const Webserver::ArgumentMap& args,
   (*output) << "</table>";
 }
 
-void ImpalaServer::CatalogPathHandler(const Webserver::ArgumentMap& args, 
+void ImpalaServer::CatalogPathHandler(const Webserver::ArgumentMap& args,
     stringstream* output) {
   (*output) << "<h2>Catalog</h2>" << endl;
   vector<string> db_names;
@@ -935,7 +960,7 @@ void ImpalaServer::CatalogPathHandler(const Webserver::ArgumentMap& args,
       continue;
     }
 
-    (*output) << "<p>" << db << " contains <b>" << table_names.size() 
+    (*output) << "<p>" << db << " contains <b>" << table_names.size()
               << "</b> tables</p>";
 
     (*output) << "<ul>" << endl;
@@ -946,7 +971,7 @@ void ImpalaServer::CatalogPathHandler(const Webserver::ArgumentMap& args,
   }
 }
 
-void ImpalaServer::BackendsPathHandler(const Webserver::ArgumentMap& args, 
+void ImpalaServer::BackendsPathHandler(const Webserver::ArgumentMap& args,
     stringstream* output) {
   (*output) << "<h2>Known Backends</h2>";
   Scheduler::HostList backends;
@@ -987,7 +1012,7 @@ void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
 
   shared_ptr<QueryExecState> exec_state;
   status = Execute(query_request, &exec_state);
-  
+
   if (!status.ok()) {
     // raise Syntax error or access violation;
     // it's likely to be syntax/analysis error
@@ -1000,7 +1025,7 @@ void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
     // No execution required for this query (USE)
     query_handle.id = NO_QUERY_HANDLE;
     query_handle.log_context = NO_QUERY_HANDLE;
-    return;    
+    return;
   }
 
   exec_state->UpdateQueryState(QueryState::RUNNING);
@@ -1058,7 +1083,7 @@ void ImpalaServer::executeAndWait(QueryHandle& query_handle, const Query& query,
 Status ImpalaServer::Execute(const TClientRequest& request,
     shared_ptr<QueryExecState>* exec_state) {
   bool registered_exec_state;
-  num_queries_metric_->Increment(1L);
+  ImpaladMetrics::IMPALA_SERVER_NUM_QUERIES->Increment(1L);
   Status status = ExecuteInternal(request, &registered_exec_state, exec_state);
   if (!status.ok() && registered_exec_state) {
     UnregisterQuery((*exec_state)->query_id());
@@ -1078,7 +1103,7 @@ Status ImpalaServer::ExecuteInternal(
     RETURN_IF_ERROR(GetExecRequest(request, &result));
   }
 
-  if (result.stmt_type == TStmtType::DDL && 
+  if (result.stmt_type == TStmtType::DDL &&
       result.ddl_exec_request.ddl_type == TDdlType::USE) {
     {
       lock_guard<mutex> l_(session_state_map_lock_);
@@ -1090,7 +1115,7 @@ Status ImpalaServer::ExecuteInternal(
     exec_state->reset();
     return Status::OK;
   }
-  
+
   if (result.__isset.result_set_metadata) {
     (*exec_state)->set_result_metadata(result.result_set_metadata);
   }
@@ -1145,11 +1170,11 @@ bool ImpalaServer::UnregisterQuery(const TUniqueId& query_id) {
     }
     query_exec_state_map_.erase(entry);
   }
-  
+
   ArchiveQuery(*exec_state);
 
   if (exec_state->coord() != NULL) {
-    const unordered_set<THostPort>& unique_hosts = 
+    const unordered_set<THostPort>& unique_hosts =
         exec_state->coord()->unique_hosts();
     if (!unique_hosts.empty()) {
       lock_guard<mutex> l(query_locations_lock_);
@@ -1167,10 +1192,6 @@ bool ImpalaServer::UnregisterQuery(const TUniqueId& query_id) {
     }
   }
 
-  {
-    lock_guard<mutex> l(*exec_state->lock());
-    //exec_state->Cancel();
-  }
   return true;
 }
 
@@ -1204,7 +1225,7 @@ Status ImpalaServer::UpdateMetastore(const TCatalogUpdate& catalog_update) {
   return Status::OK;
 }
 
-Status ImpalaServer::DescribeTable(const string& db, const string& table, 
+Status ImpalaServer::DescribeTable(const string& db, const string& table,
     vector<TColumnDesc>* columns) {
  if (!FLAGS_use_planservice) {
     JNIEnv* jni_env = getJNIEnv();
@@ -1221,7 +1242,7 @@ Status ImpalaServer::DescribeTable(const string& db, const string& table,
 
     TDescribeTableResult result;
     RETURN_IF_ERROR(DeserializeThriftMsg(jni_env, result_bytes, &result));
-    
+
     columns->insert(columns->begin(),
         result.columns.begin(), result.columns.end());
     return Status::OK;
@@ -1230,7 +1251,7 @@ Status ImpalaServer::DescribeTable(const string& db, const string& table,
  }
 }
 
-Status ImpalaServer::GetTableNames(const string* db, const string* pattern, 
+Status ImpalaServer::GetTableNames(const string* db, const string* pattern,
     vector<string>* table_names) {
   if (!FLAGS_use_planservice) {
     JNIEnv* jni_env = getJNIEnv();
@@ -1251,7 +1272,7 @@ Status ImpalaServer::GetTableNames(const string* db, const string* pattern,
 
     TGetTablesResult result;
     RETURN_IF_ERROR(DeserializeThriftMsg(jni_env, result_bytes, &result));
-    
+
     table_names->insert(table_names->begin(),
         result.tables.begin(), result.tables.end());
     return Status::OK;
@@ -1277,7 +1298,7 @@ Status ImpalaServer::GetDbNames(const string* pattern, vector<string>* db_names)
 
     TGetDbsResult result;
     RETURN_IF_ERROR(DeserializeThriftMsg(jni_env, result_bytes, &result));
-    
+
     db_names->insert(db_names->begin(), result.dbs.begin(), result.dbs.end());
     return Status::OK;
   } else {
@@ -1416,7 +1437,7 @@ void ImpalaServer::fetch(Results& query_results, const QueryHandle& query_handle
 
   if (query_handle.id == NO_QUERY_HANDLE) {
     query_results.ready = true;
-    query_results.has_more = false;    
+    query_results.has_more = false;
     return;
   }
 
@@ -1634,7 +1655,7 @@ Status ImpalaServer::QueryToTClientRequest(const Query& query,
   VLOG_QUERY << "query: " << ThriftDebugString(query);
   {
     lock_guard<mutex> l_(session_state_map_lock_);
-    SessionStateMap::iterator it = 
+    SessionStateMap::iterator it =
         session_state_map_.find(*ThriftServer::GetThreadSessionKey());
     DCHECK(it != session_state_map_.end());
 
@@ -1795,7 +1816,7 @@ void ImpalaServer::ReportExecStatus(
             << " backend#=" << params.backend_num
             << " instance_id=" << params.fragment_instance_id
             << " done=" << (params.done ? "true" : "false");
-  // TODO: implement something more efficient here, we're currently 
+  // TODO: implement something more efficient here, we're currently
   // acquiring/releasing the map lock and doing a map lookup for
   // every report (assign each query a local int32_t id and use that to index into a
   // vector of QueryExecStates, w/o lookup or locking?)
@@ -1814,7 +1835,7 @@ void ImpalaServer::ReportExecStatus(
 void ImpalaServer::CancelPlanFragment(
     TCancelPlanFragmentResult& return_val, const TCancelPlanFragmentParams& params) {
   VLOG_QUERY << "CancelPlanFragment(): instance_id=" << params.fragment_instance_id;
-  shared_ptr<FragmentExecState> exec_state = 
+  shared_ptr<FragmentExecState> exec_state =
       GetFragmentExecState(params.fragment_instance_id);
   if (exec_state.get() == NULL) {
     stringstream str;
@@ -1884,6 +1905,7 @@ Status ImpalaServer::StartPlanFragmentExecution(
 }
 
 void ImpalaServer::RunExecPlanFragment(FragmentExecState* exec_state) {
+  ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->Increment(1L);
   exec_state->Exec();
 
   // we're done with this plan fragment
@@ -1899,6 +1921,18 @@ void ImpalaServer::RunExecPlanFragment(FragmentExecState* exec_state) {
                  << exec_state->fragment_instance_id();
     }
   }
+#ifndef ADDRESS_SANITIZER
+  // tcmalloc and address sanitizer can not be used together
+  if (FLAGS_log_mem_usage_interval > 0) {
+    uint64_t num_complete = ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->value();
+    if (num_complete % FLAGS_log_mem_usage_interval == 0) {
+      char buf[2048];
+      // This outputs how much memory is currently being used by this impalad
+      MallocExtension::instance()->GetStats(buf, 2048);
+      LOG(INFO) << buf;
+    }
+  }
+#endif
 }
 
 int ImpalaServer::GetQueryOption(const string& key) {
@@ -2004,15 +2038,15 @@ void ImpalaServer::MembershipCallback(const ServiceStateMap& service_state) {
     vector<THostPort> current_membership(it->second.membership.size());;
     // TODO: Why is Membership not just a set? Would save a copy.
     BOOST_FOREACH(const Membership::value_type& member, it->second.membership) {
-      // This is ridiculous: have to clear out hostname so that THostPorts match. 
+      // This is ridiculous: have to clear out hostname so that THostPorts match.
       current_membership.push_back(member.second);
       current_membership.back().hostname = "";
     }
-    
+
     vector<THostPort> difference;
     sort(current_membership.begin(), current_membership.end());
     set_difference(last_membership_.begin(), last_membership_.end(),
-                   current_membership.begin(), current_membership.end(), 
+                   current_membership.begin(), current_membership.end(),
                    std::inserter(difference, difference.begin()));
     vector<TUniqueId> to_cancel;
     {
@@ -2020,12 +2054,12 @@ void ImpalaServer::MembershipCallback(const ServiceStateMap& service_state) {
       // Build a list of hosts that have currently executing queries but aren't
       // in the membership list. Cancel them in a separate loop to avoid holding
       // on to the location map lock too long.
-      BOOST_FOREACH(const THostPort& hostport, difference) {        
+      BOOST_FOREACH(const THostPort& hostport, difference) {
         QueryLocations::iterator it = query_locations_.find(hostport);
-        if (it != query_locations_.end()) {          
+        if (it != query_locations_.end()) {
           to_cancel.insert(to_cancel.begin(), it->second.begin(), it->second.end());
         }
-        // We can remove the location wholesale once we know it's failed. 
+        // We can remove the location wholesale once we know it's failed.
         query_locations_.erase(hostport);
         exec_env_->client_cache()->CloseConnections(
             make_pair(hostport.ipaddress, hostport.port));
@@ -2039,7 +2073,7 @@ void ImpalaServer::MembershipCallback(const ServiceStateMap& service_state) {
   }
 }
 
-ImpalaServer::QueryStateRecord::QueryStateRecord(const QueryExecState& exec_state, 
+ImpalaServer::QueryStateRecord::QueryStateRecord(const QueryExecState& exec_state,
     bool copy_profile) {
   id = exec_state.query_id();
   const TExecRequest& request = exec_state.exec_request();
@@ -2047,9 +2081,11 @@ ImpalaServer::QueryStateRecord::QueryStateRecord(const QueryExecState& exec_stat
   stmt = (request.stmt_type != TStmtType::DDL && request.__isset.sql_stmt) ?
       request.sql_stmt : "N/A";
   stmt_type = request.stmt_type;
+  start_time = exec_state.start_time();
+  end_time = TimestampValue::local_time();
   has_coord = false;
-  
-  Coordinator* coord = exec_state.coord(); 
+
+  Coordinator* coord = exec_state.coord();
   if (coord != NULL) {
     num_complete_fragments = coord->progress().num_complete();
     total_fragments = coord->progress().total();
@@ -2063,6 +2099,9 @@ ImpalaServer::QueryStateRecord::QueryStateRecord(const QueryExecState& exec_stat
     exec_state.profile().PrettyPrint(&ss);
     profile_str = ss.str();
   }
+}
+
+void ImpalaServer::PingImpalaService() {
 }
 
 ImpalaServer* CreateImpalaServer(ExecEnv* exec_env, int fe_port, int be_port,
@@ -2079,7 +2118,7 @@ ImpalaServer* CreateImpalaServer(ExecEnv* exec_env, int fe_port, int be_port,
   if (fe_port != 0 && fe_server != NULL) {
     // FE must be a TThreadPoolServer because ODBC and Hue only support TThreadPoolServer.
     shared_ptr<TProcessor> fe_processor(new ImpalaServiceProcessor(handler));
-    *fe_server = new ThriftServer("ImpalaServer Frontend", fe_processor, fe_port, 
+    *fe_server = new ThriftServer("ImpalaServer Frontend", fe_processor, fe_port,
         FLAGS_fe_service_threads, ThriftServer::ThreadPool);
 
     (*fe_server)->SetSessionHandler(handler.get());
@@ -2089,7 +2128,7 @@ ImpalaServer* CreateImpalaServer(ExecEnv* exec_env, int fe_port, int be_port,
 
   if (be_port != 0 && be_server != NULL) {
     shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(handler));
-    *be_server = new ThriftServer("ImpalaServer Backend", be_processor, be_port, 
+    *be_server = new ThriftServer("ImpalaServer Backend", be_processor, be_port,
         FLAGS_be_service_threads);
 
     LOG(INFO) << "ImpalaInternalService listening on " << be_port;

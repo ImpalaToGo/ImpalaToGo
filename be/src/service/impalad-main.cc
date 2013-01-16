@@ -42,7 +42,7 @@
 #include "util/jni-util.h"
 #include "util/logging.h"
 #include "util/thrift-util.h"
-#include "sparrow/subscription-manager.h"
+#include "statestore/subscription-manager.h"
 #include "util/thrift-server.h"
 #include "common/service-ids.h"
 #include "util/authorization.h"
@@ -53,7 +53,6 @@
 
 using namespace impala;
 using namespace std;
-using namespace sparrow;
 using namespace boost;
 using namespace apache::thrift::server;
 using namespace apache::thrift::protocol;
@@ -71,12 +70,12 @@ int main(int argc, char** argv) {
   InitDaemon(argc, argv);
 
   LlvmCodeGen::InitializeLlvm();
-  
+
   // Enable Kerberos security if requested.
   if (!FLAGS_principal.empty()) {
     EXIT_IF_ERROR(InitKerberos("Impalad"));
   }
-  
+
   JniUtil::InitLibhdfs();
   EXIT_IF_ERROR(JniUtil::Init());
   EXIT_IF_ERROR(HBaseTableScanner::Init());
@@ -87,7 +86,7 @@ int main(int argc, char** argv) {
   ExecEnv exec_env;
   ThriftServer* fe_server = NULL;
   ThriftServer* be_server = NULL;
-  ImpalaServer* server = 
+  ImpalaServer* server =
       CreateImpalaServer(&exec_env, FLAGS_fe_port, FLAGS_be_port, &fe_server, &be_server);
   be_server->Start();
 
@@ -114,9 +113,9 @@ int main(int argc, char** argv) {
     services.insert(IMPALA_SERVICE_ID);
     cb.reset(new SubscriptionManager::UpdateCallback(
         bind<void>(mem_fn(&ImpalaServer::MembershipCallback), server, _1)));
-    exec_env.subscription_mgr()->RegisterSubscription(services, "impala.server", 
+    exec_env.subscription_mgr()->RegisterSubscription(services, "impala.server",
         cb.get());
-                                                      
+
     if (!status.ok()) {
       LOG(ERROR) << "Could not register with state store service: "
                  << status.GetErrorMsg();

@@ -603,7 +603,7 @@ TEST_F(ExprTest, LiteralConstruction) {
   // Min/Max Boundary value test for tiny/small/int/long
   c_val = 127;
   const char c_array_max[] = {(const char)127}; // avoid implicit casting
-  string c_input_max(c_array_max);
+  string c_input_max(c_array_max, 1);
   s_val = 32767;
   i_val = 2147483647;
   l_val = 9223372036854775807l;
@@ -613,7 +613,7 @@ TEST_F(ExprTest, LiteralConstruction) {
   TestSingleLiteralConstruction(TYPE_BIGINT, &l_val, "9223372036854775807");
 
   const char c_array_min[] = {(const char)(-128)}; // avoid implicit casting
-  string c_input_min(c_array_min);
+  string c_input_min(c_array_min, 1);
   c_val = -128;
   s_val = -32768;
   i_val = -2147483648;
@@ -1881,7 +1881,11 @@ TEST_F(ExprTest, TimestampFunctions) {
 
   // Test functions with unknown expected value.
   TestValidTimestampValue("now()");
+  TestValidTimestampValue("current_timestamp()");
   TestValidTimestampValue("cast(unix_timestamp() as timestamp)");
+
+  // Test alias
+  TestValue("now() = current_timestamp()", TYPE_BOOLEAN, true);
 
   // Test invalid formats returning NULL
   TestIsNull("unix_timestamp('1970-01-01 0:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
