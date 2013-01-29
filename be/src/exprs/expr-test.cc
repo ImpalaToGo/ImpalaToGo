@@ -1677,6 +1677,7 @@ TEST_F(ExprTest, MathRoundingFunctions) {
   TestValue("round(-3.14159265, 5)", TYPE_DOUBLE, -3.14159);
 }
 
+// TODO: I think a lot of these casts are not necessary and we should fix this
 TEST_F(ExprTest, TimestampFunctions) {
   TestStringValue("cast(cast('2012-01-01 09:10:11.123456789' as timestamp) as string)",
       "2012-01-01 09:10:11.123456789");
@@ -1798,6 +1799,9 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestValue("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT, 0);
   TestValue("unix_timestamp('1970-01-01', 'yyyy-MM-dd')", TYPE_INT, 0);
   TestValue("unix_timestamp('   1970-01-01 ', 'yyyy-MM-dd')", TYPE_INT, 0);
+  TestValue("unix_timestamp('1970-01-01 10:10:10', 'yyyy-MM-dd')", TYPE_INT, 0);
+  TestValue("unix_timestamp('1970-01-01 00:00:00 extra text', 'yyyy-MM-dd HH:mm:ss')",
+            TYPE_INT, 0);
   TestStringValue("cast(cast(0 as timestamp) as string)", "1970-01-01 00:00:00");
   TestStringValue("from_unixtime(0)", "1970-01-01 00:00:00");
   TestStringValue("from_unixtime(0, 'yyyy-MM-dd HH:mm:ss')", "1970-01-01 00:00:00");
@@ -1830,8 +1834,9 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestValue("second(cast('09:10:11.000000' as timestamp))", TYPE_INT, 11); 
   TestStringValue(
       "to_date(cast('2011-12-22 09:10:11.12345678' as timestamp))", "2011-12-22");
-  TestValue("datediff(cast('2011-12-22 09:10:11.12345678' as timestamp), "
-      "cast('2012-12-22' as timestamp))", TYPE_INT, 366);
+  
+  TestValue("datediff('2011-12-22 09:10:11.12345678', '2012-12-22')", TYPE_INT, -366);
+  TestValue("datediff('2012-12-22', '2011-12-22 09:10:11.12345678')", TYPE_INT, 366);
 
   TestIsNull("year(cast('09:10:11.000000' as timestamp))", TYPE_INT); 
   TestIsNull("month(cast('09:10:11.000000' as timestamp))", TYPE_INT); 
@@ -1891,9 +1896,9 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestIsNull("unix_timestamp('1970-01-01 0:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
   TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd hh:mm:ss')", TYPE_INT);
   TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yy-MM-dd HH:mm:ss')", TYPE_INT);
-  TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd')", TYPE_INT);
   TestIsNull("unix_timestamp('1970-01-01', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
-  TestIsNull("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd')", TYPE_INT);
+  TestIsNull("unix_timestamp('1970', 'yyyy-MM-dd')", TYPE_INT);
+  TestIsNull("unix_timestamp('', 'yyyy-MM-dd')", TYPE_INT);
 
   TestIsNull("from_unixtime(0, 'yy-MM-dd HH:mm:dd')", TYPE_STRING);
   TestIsNull("from_unixtime(0, 'yyyy-MM-dd HH::dd')", TYPE_STRING);

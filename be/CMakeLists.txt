@@ -82,9 +82,7 @@ elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "CODE_COVERAGE_DEBUG")
 elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "CODE_COVERAGE_RELEASE")
   SET(CMAKE_CXX_FLAGS "${CXX_FLAGS_RELEASE} ${CXX_COVERAGE_FLAGS}")
 elseif ("${CMAKE_BUILD_TYPE}" STREQUAL "ADDRESS_SANITIZER")
-# TODO: when we move to llvm 3.2 for the IR cross compile, this should just be 'clang++'
-# For now, it needs to the path to a 3.1+ clang compiler
-  SET(CMAKE_CXX_COMPILER "$ENV{CLANG_3_2_DIR}/clang++")
+  SET(CMAKE_CXX_COMPILER ${LLVM_CLANG_EXECUTABLE})
   SET(CMAKE_CXX_FLAGS ${CXX_FLAGS_ADDRESS_SANITIZER})
 else()
   message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
@@ -98,9 +96,13 @@ SET(CMAKE_CXX_FLAGS "${CXX_COMMON_FLAGS} ${CMAKE_CXX_FLAGS}")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fverbose-asm")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CFLAGS}")
 
+# Thrift requires these two definitions for some types that we use
+add_definitions(-DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H)
+
 # Set clang to IR cross compile flags
 # IR_COMPILE is #defined for the cross compile to remove code that bloats the IR
-set(CLANG_IR_CXX_FLAGS "-emit-llvm" "-O3" "-c" "-DIR_COMPILE" "-DNDEBUG")
+set(CLANG_IR_CXX_FLAGS "-emit-llvm" "-O3" "-c" "-DIR_COMPILE" "-DNDEBUG" 
+  "-DHAVE_INTTYPES_H" "-DHAVE_NETINET_IN_H")
 
 # setup doc generation with Doxygen
 find_package(Doxygen)
@@ -142,7 +144,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/generated-sources)
 set(CLANG_INCLUDE_FLAGS
   "-I${CMAKE_CURRENT_SOURCE_DIR}/src"
   "-I${CMAKE_CURRENT_SOURCE_DIR}/generated-sources"
-  "-I${Thrift_INCLUDE_DIR}"
+  "-I${THRIFT_INCLUDE_DIR}"
 )
 
 # allow linking of static libs into dynamic lib

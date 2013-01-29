@@ -71,7 +71,4 @@ rm hive-${IMPALA_HIVE_VERSION}.tar.gz
 echo "Fetching Apache Thrift"
 wget http://archive.apache.org/dist/thrift/${IMPALA_THRIFT_VERSION}/thrift-${IMPALA_THRIFT_VERSION}.tar.gz
 tar xzf thrift-${IMPALA_THRIFT_VERSION}.tar.gz
-mkdir python-thrift-${IMPALA_THRIFT_VERSION}
-mv thrift-${IMPALA_THRIFT_VERSION}/lib/py/src python-thrift-${IMPALA_THRIFT_VERSION}/thrift
 rm thrift-${IMPALA_THRIFT_VERSION}.tar.gz
-rm -rf thrift-${IMPALA_THRIFT_VERSION}

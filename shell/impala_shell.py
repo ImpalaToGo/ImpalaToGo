@@ -27,7 +27,7 @@ from beeswaxd import BeeswaxService
 from beeswaxd.BeeswaxService import QueryState
 from ImpalaService import ImpalaService
 from ImpalaService.ImpalaService import TImpalaQueryOptions
-from JavaConstants.constants import DEFAULT_QUERY_OPTIONS
+from ImpalaService.constants import DEFAULT_QUERY_OPTIONS
 from Status.ttypes import TStatus, TStatusCode
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
@@ -389,6 +389,10 @@ class ImpalaShell(cmd.Cmd):
       elif query_state == self.query_state["EXCEPTION"]:
         print 'Remote error'
         if self.connected:
+          # Retrieve error message (if any) from log.
+          log, status = self._ImpalaShell__do_rpc(
+            lambda: self.imp_service.get_log(handle.log_context))
+          print log,
           # It's ok to close an INSERT that's failed rather than do the full
           # CloseInsert. The latter builds an InsertResult which is meaningless
           # here.
