@@ -14,38 +14,21 @@ The rest of this README describes how to build Cloudera Impala from this reposit
     make cmake doxygen.x86_64 glib-devel boost-devel python-devel bzip2-devel svn libevent-devel cyrus-sasl-devel \
     wget git unzip
 
-### Install Thrift 0.7.0
-
-_Note: we will be upgrading to a more recent Thrift in the near future, but for now Thrift 0.7.0 is the only release we have tested against_
-
-    wget http://archive.apache.org/dist/thrift/0.7.0/thrift-0.7.0.tar.gz
-    tar xvzf thrift-0.7.0.tar.gz
-    cd thrift-0.7.0
-    chmod 755 configure
-    ./configure --with-pic
-    make
-    sudo make install
-    cd contrib/fb303
-    chmod 755 ./bootstrap.sh
-    ./bootstrap.sh
-    chmod 755 configure
-    ./configure
-    make
-    sudo make install
+*Note:* Ubuntu 12.04 (and later) requires the libevent1-dev package to work with Thrift v0.9 
 
 ### Install LLVM
 
-    wget http://llvm.org/releases/3.0/llvm-3.0.tar.gz
-    tar xvzf llvm-3.0.tar.gz
-    cd llvm.3.0.src/tools
-    svn co http://llvm.org/svn/llvm-project/cfe/tags/RELEASE_30/final/ clang
+    wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz
+    tar xvzf llvm-3.2.src.tar.gz
+    cd llvm-3.2.src/tools
+    svn co http://llvm.org/svn/llvm-project/cfe/tags/RELEASE_32/final/ clang
     cd ../projects
-    svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_30/final/ compiler-rt
+    svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_32/final/ compiler-rt
     cd ..
     ./configure --with-pic
-    make
+    make -j4 REQUIRES_RTTI=1
     sudo make install
-
+    
 ### Install the JDK
 
 Make sure that the Oracle Java Development Kit 6 is installed (not OpenJDK), and that `JAVA_HOME` is set in your environment.
@@ -97,7 +80,7 @@ Confirm your environment looks correct:
     IMPALA_HADOOP_VERSION=2.0.0-cdh4.1.0
     IMPALA_HIVE_VERSION=0.9.0-cdh4.1.0
     IMPALA_MONGOOSE_VERSION=3.3
-    IMPALA_THRIFT_VERSION=0.7.0
+    IMPALA_THRIFT_VERSION=0.9.0
 
 ### Download required third-party packages
 
