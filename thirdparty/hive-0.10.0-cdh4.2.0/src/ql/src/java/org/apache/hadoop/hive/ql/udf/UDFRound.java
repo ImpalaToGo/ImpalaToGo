@@ -1,0 +1,91 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hadoop.hive.ql.udf;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+import org.apache.hadoop.hive.ql.exec.Description;
+import org.apache.hadoop.hive.ql.exec.UDF;
+import org.apache.hadoop.hive.serde2.io.BigDecimalWritable;
+import org.apache.hadoop.hive.serde2.io.DoubleWritable;
+import org.apache.hadoop.io.IntWritable;
+
+/**
+ * UDFRound.
+ *
+ */
+@Description(name = "round",
+    value = "_FUNC_(x[, d]) - round x to d decimal places",
+    extended = "Example:\n"
+    + "  > SELECT _FUNC_(12.3456, 1) FROM src LIMIT 1;\n" + "  12.3'")
+public class UDFRound extends UDF {
+  private final BigDecimalWritable bigDecimalWritable = new BigDecimalWritable();
+  private final DoubleWritable doubleWritable = new DoubleWritable();
+
+  public UDFRound() {
+  }
+
+  private DoubleWritable evaluate(DoubleWritable n, int i) {
+    double d = n.get();
+    if (Double.isNaN(d) || Double.isInfinite(d)) {
+      doubleWritable.set(d);
+    } else {
+      doubleWritable.set(BigDecimal.valueOf(d).setScale(i,
+          RoundingMode.HALF_UP).doubleValue());
+    }
+    return doubleWritable;
+  }
+
+  public DoubleWritable evaluate(DoubleWritable n) {
+    if (n == null) {
+      return null;
+    }
+    return evaluate(n, 0);
+  }
+
+  public DoubleWritable evaluate(DoubleWritable n, IntWritable i) {
+    if ((n == null) || (i == null)) {
+      return null;
+    }
+    return evaluate(n, i.get());
+  }
+
+  private BigDecimalWritable evaluate(BigDecimalWritable n, int i) {
+    if (n == null) {
+      return null;
+    }
+    BigDecimal bd = n.getBigDecimal();
+    bd = n.getBigDecimal().setScale(i, RoundingMode.HALF_UP);
+    bigDecimalWritable.set(bd);
+    return bigDecimalWritable;
+  }
+
+  public BigDecimalWritable evaluate(BigDecimalWritable n) {
+    return evaluate(n, 0);
+  }
+
+  public BigDecimalWritable evaluate(BigDecimalWritable n, IntWritable i) {
+    if (i == null) {
+      return null;
+    }
+    return evaluate(n, i.get());
+  }
+
+}

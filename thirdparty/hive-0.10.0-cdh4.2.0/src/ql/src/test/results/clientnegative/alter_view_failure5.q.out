@@ -1,0 +1,18 @@
+PREHOOK: query: DROP VIEW xxx6
+PREHOOK: type: DROPVIEW
+POSTHOOK: query: DROP VIEW xxx6
+POSTHOOK: type: DROPVIEW
+PREHOOK: query: CREATE VIEW xxx6
+PARTITIONED ON (value)
+AS 
+SELECT * FROM src
+PREHOOK: type: CREATEVIEW
+#### A masked pattern was here ####
+POSTHOOK: query: CREATE VIEW xxx6
+PARTITIONED ON (value)
+AS 
+SELECT * FROM src
+POSTHOOK: type: CREATEVIEW
+POSTHOOK: Output: default@xxx6
+#### A masked pattern was here ####
+FAILED: SemanticException value not found in table's partition spec: {v=val_86}

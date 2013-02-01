@@ -1,0 +1,19 @@
+PREHOOK: query: DESCRIBE FUNCTION <
+PREHOOK: type: DESCFUNCTION
+POSTHOOK: query: DESCRIBE FUNCTION <
+POSTHOOK: type: DESCFUNCTION
+a < b - Returns TRUE if a is less than b
+PREHOOK: query: DESCRIBE FUNCTION EXTENDED <
+PREHOOK: type: DESCFUNCTION
+POSTHOOK: query: DESCRIBE FUNCTION EXTENDED <
+POSTHOOK: type: DESCFUNCTION
+a < b - Returns TRUE if a is less than b
+PREHOOK: query: SELECT true<false, false<true, false<false, true<true FROM src LIMIT 1
+PREHOOK: type: QUERY
+PREHOOK: Input: default@src
+#### A masked pattern was here ####
+POSTHOOK: query: SELECT true<false, false<true, false<false, true<true FROM src LIMIT 1
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@src
+#### A masked pattern was here ####
+false	true	false	false

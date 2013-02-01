@@ -1,0 +1,4 @@
+PREHOOK: query: describe src_thrift.$elem$
+PREHOOK: type: DESCTABLE
+#### A masked pattern was here ####
+FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask

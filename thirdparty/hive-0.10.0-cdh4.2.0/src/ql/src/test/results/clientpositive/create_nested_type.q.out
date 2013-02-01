@@ -1,0 +1,51 @@
+PREHOOK: query: CREATE TABLE table1 (
+       a STRING,
+       b ARRAY<STRING>,
+       c ARRAY<MAP<STRING,STRING>>,
+       d MAP<STRING,ARRAY<STRING>>
+       ) STORED AS TEXTFILE
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE table1 (
+       a STRING,
+       b ARRAY<STRING>,
+       c ARRAY<MAP<STRING,STRING>>,
+       d MAP<STRING,ARRAY<STRING>>
+       ) STORED AS TEXTFILE
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: default@table1
+PREHOOK: query: DESCRIBE table1
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE table1
+POSTHOOK: type: DESCTABLE
+a	string	
+b	array<string>	
+c	array<map<string,string>>	
+d	map<string,array<string>>	
+PREHOOK: query: DESCRIBE EXTENDED table1
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE EXTENDED table1
+POSTHOOK: type: DESCTABLE
+a	string	
+b	array<string>	
+c	array<map<string,string>>	
+d	map<string,array<string>>	
+	 	 
+#### A masked pattern was here ####
+PREHOOK: query: LOAD DATA LOCAL INPATH '../data/files/create_nested_type.txt' OVERWRITE INTO TABLE table1
+PREHOOK: type: LOAD
+PREHOOK: Output: default@table1
+POSTHOOK: query: LOAD DATA LOCAL INPATH '../data/files/create_nested_type.txt' OVERWRITE INTO TABLE table1
+POSTHOOK: type: LOAD
+POSTHOOK: Output: default@table1
+PREHOOK: query: SELECT * from table1
+PREHOOK: type: QUERY
+PREHOOK: Input: default@table1
+#### A masked pattern was here ####
+POSTHOOK: query: SELECT * from table1
+POSTHOOK: type: QUERY
+POSTHOOK: Input: default@table1
+#### A masked pattern was here ####
+a0	["b00","b01"]	[{"c001":"C001","c002":"C002"},{"c011":null,"c012":"C012"}]	{"d01":["d011","d012"],"d02":["d021","d022"]}
+a1	["b10"]	[{"c001":"C001","c002":"C002"}]	{"d01":["d011","d012"],"d02":null}
+a2	[]	[{"c001":null,"c002":"C002"},{"c011":"C011","c012":"C012"}]	{"d01":[null,"d012"],"d02":["d021","d022"]}
+a3	null	null	null
