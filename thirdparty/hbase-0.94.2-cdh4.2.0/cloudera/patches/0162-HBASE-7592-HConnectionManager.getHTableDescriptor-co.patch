@@ -1,0 +1,43 @@
+From 2e5ab9bc94a13a77961348f088edde865c1ff940 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 16 Jan 2013 17:30:22 -0800
+Subject: [PATCH 162/196] HBASE-7592 HConnectionManager.getHTableDescriptor() compares too much
+
+Reason: Improvement
+Author: Matteo Bertozzi
+Ref: CDH-9872
+---
+ .../hadoop/hbase/client/HConnectionManager.java    |   10 +++-------
+ 1 files changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java b/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+index e3f483a..b20415a 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+@@ -1822,20 +1822,16 @@ public class HConnectionManager {
+       if (this.master == null) {
+         this.master = getMaster();
+       }
+-      HTableDescriptor hTableDescriptor = null;
++
+       HTableDescriptor[] htds = master.getHTableDescriptors();
+       if (htds != null && htds.length > 0) {
+         for (HTableDescriptor htd: htds) {
+           if (Bytes.equals(tableName, htd.getName())) {
+-            hTableDescriptor = htd;
++            return htd;
+           }
+         }
+       }
+-      //HTableDescriptor htd = master.getHTableDescriptor(tableName);
+-      if (hTableDescriptor == null) {
+-        throw new TableNotFoundException(Bytes.toString(tableName));
+-      }
+-      return hTableDescriptor;
++      throw new TableNotFoundException(Bytes.toString(tableName));
+     }
+   }
+ 
+-- 
+1.7.0.4
+

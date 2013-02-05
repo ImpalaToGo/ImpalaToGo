@@ -1,0 +1,44 @@
+From 622b26da03c232b258465fcc800f6981fa23f172 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Wed, 14 Nov 2012 17:51:51 -0700
+Subject: [PATCH 040/196] HBASE-6305 TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds
+ Updated with patch that was applied upstream.
+
+Reason: Test
+Author: Himanshu Vashishtha
+Ref: CDH-8726
+
+ Please enter the commit message for your changes. Lines starting
+---
+ .../apache/hadoop/hbase/TestLocalHBaseCluster.java |    8 +++-----
+ 1 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java b/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
+index 56ca5ec..8b1c018 100644
+--- a/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
++++ b/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
+@@ -22,7 +22,6 @@ import static org.junit.Assert.fail;
+ import java.io.IOException;
+ 
+ import org.apache.hadoop.conf.Configuration;
+-import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+@@ -45,10 +44,9 @@ public class TestLocalHBaseCluster {
+   @Test
+   public void testLocalHBaseCluster() throws Exception {
+     Configuration conf = TEST_UTIL.getConfiguration();
+-    String scheme = FileSystem.getDefaultUri(conf).getScheme();
+-    if (scheme == null) scheme = "";
+-    conf.set(HConstants.HBASE_DIR, scheme + "://"
+-        + TEST_UTIL.getDataTestDir("hbase.rootdir").toString());
++    conf.set(HConstants.HBASE_DIR, TEST_UTIL.getDataTestDir("hbase.rootdir").
++      makeQualified(TEST_UTIL.getTestFileSystem().getUri(), 
++        TEST_UTIL.getTestFileSystem().getWorkingDirectory()).toString());
+     MiniZooKeeperCluster zkCluster = TEST_UTIL.startMiniZKCluster();
+     conf.set(HConstants.ZOOKEEPER_CLIENT_PORT, Integer.toString(zkCluster.getClientPort()));
+     LocalHBaseCluster cluster = new LocalHBaseCluster(conf, 1, 1, MyHMaster.class,
+-- 
+1.7.0.4
+

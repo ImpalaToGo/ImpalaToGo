@@ -1,0 +1,2015 @@
+commit bdb08a0f1b533dd6b578d141a2d6abf25f329b87
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 30 16:42:46 2013 -0800
+
+    HBASE-7685 Closing socket connection can't be removed from SecureClient
+    
+    Reason: Bug
+    Author: cuijianwei
+    Ref: CDH-10221
+
+commit c32d308cf5ec9b6ae7d6aed7a1eee50d16ee8add
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 30 16:42:24 2013 -0800
+
+    HBASE-7684 NullPointerException in SecureClient when Call is cleaned up due to RPC timeout
+    
+    Reason: Bug
+    Author: cuijianwei
+    Ref: CDH-10220
+
+commit 34a2af0b3132a49e4819b8894662c8eee0d1f5aa
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 30 13:07:33 2013 -0800
+
+    HBASE-7720 Improve logging messages of failed snapshot attempts.
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-10223
+
+commit 1b6b95899551aa10a758da4b3a908074dda22048
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 30 12:58:29 2013 -0800
+
+    HBASE-7703 Eventually all online snapshots failing due to Timeout at same regionserver.
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-10223
+
+commit e3cdde01221b4d670b4fc8053efae0b741d3f2d4
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Wed Jan 30 10:28:41 2013 -0800
+
+    Preparing for CDH4.2.0 release
+
+commit 553c29b2f41c1dcb4778d262dda3bd88681a2e94
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Jan 29 14:40:33 2013 -0700
+
+    HBASE-2611 Handle RS that fails while processing the failure of another one
+    
+    Reason: Bug
+    Author: Himanshu Vashishtha
+    Ref: CDH-6055
+
+commit d6c98692451a962f6a0463590cee968f6082c155
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Jan 29 14:30:22 2013 -0700
+
+    HBASE-7694 Secure HBase should use replication call queue
+    
+    Reason: Bug
+    Author: Jieshan Bean
+    Ref: CDH-10203
+
+commit 8634806636040470b73a601488d297adc87866d3
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 28 19:12:18 2013 -0800
+
+    HBASE-7699 Replace LOG.info() with LOG.debug() in FSUtils.listStatus()
+    
+    Reason: Snapshots Debug
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 751150061682f303f967a974c61614bb0d9999ff
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Mon Jan 28 18:43:26 2013 +0000
+
+    HBASE-7693 Hostname returned by TableInputFormatBase.reverseDNS contains trailing period (Robert Dyer)
+    
+    Reason: Performance
+    Author: Robert Dyer
+    Ref: CDH-10166
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1439558 13f79535-47bb-0310-9956-ffa450edef68
+    Signed-off-by: Elliott Clark <eclark@cloudera.com>
+
+commit 5bc9877430854d190eae55ff3fe1ad7f67274f84
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 28 10:43:39 2013 -0800
+
+    HBASE-7689 CloneTableHandler notify completion too early
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 3f00f4d27818ffdb4e7d661849779291199eb218
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 24 18:49:50 2013 -0800
+
+    HBASE-7657 Make ModifyTableHandler synchronous
+    
+    Reason: Bug
+    Author: Himanshu Vashishtha
+    Ref: CDH-10057
+
+commit 2c2ff6579c49e61968778c9138187f8bbf268ef9
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Thu Jan 24 15:09:07 2013 -0800
+
+    HBASE-7666 More logging improvements in online snapshots code
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 347a4f31de0c2cd6c831f790c9cab62ff48ee170
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Thu Jan 24 15:01:07 2013 -0800
+
+    HBASE-7651 RegionServerSnapshotManager fails with CancellationException if previous snapshot fails in per region task
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 74b6f684c6d801a84f4a22486399699a249d1a36
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Tue Jan 22 18:44:07 2013 +0000
+
+    HBASE-7644 Port HBASE-4802 'Disable show table metrics in bulk loader' to 0.94
+    
+    Reason: Bug
+    Author: Zhihong Yu
+    Ref: CDH-9997
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1437091 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2235f018fcccb2f52fa6595f623152a2c437753d
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Thu Jan 24 20:45:56 2013 +0000
+
+    HBASE-7647 0.94 hfiles v2.1 are not backwards compatible with HFilev2.0
+    
+    Reason: Bug
+    Author: Elliott Clark
+    Ref: CDH-9896
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1438175 13f79535-47bb-0310-9956-ffa450edef68
+
+commit f162c0bdb7ce87013c77df562d5e0e1e52a39ecc
+Author: Jean-Daniel Cryans <jdcryans@cloudera.com>
+Date:   Thu Jan 24 13:07:55 2013 -0800
+
+    CDH-9875  Take two on fixing loadTesting
+
+commit 84be4d48abee1fdffec58f7377ea739dee9bd781
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 24 10:44:24 2013 -0800
+
+    HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
+    
+    Reason: Test Failure (Fix admin semantic)
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit ab379cb33a9fa0cac3ba73048b57035ff1a1ee93
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 23 11:07:03 2013 -0800
+
+    HBASE-7643 HFileArchiver.resolveAndArchive() race condition may lead to snapshot data loss
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 786604c71f85c9ad6e5ccb2eb10e5eaec8ada0ec
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 23 10:47:12 2013 -0800
+
+    HBASE-7622 Add table descriptor verification after snapshot restore
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 7a4ca9f8ebd4db8eb704494335597371b1174da0
+Author: David S. Wang <dsw@cloudera.com>
+Date:   Wed Jan 23 10:35:15 2013 -0800
+
+    HBASE-7336: HFileBlock.readAtOffset does not work well with multiple threads
+    
+    Reason: Improvement
+    Author: Lars Hofhansl
+    Ref: CDH-9750
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423084 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 7355e9b019406b44d339b02810d65e84aee7dcaa)
+
+commit e49405df6159122cfda2d8234963fe5b65c765e0
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Wed Jan 23 16:22:58 2013 +0000
+
+    HBASE-7648 TestAcidGuarantees.testMixedAtomicity hangs sometimes
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-10002
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1437539 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 493083df46a730d6736a204d754db5d6f0703c8b
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Tue Jan 22 20:04:08 2013 +0000
+
+    HBASE-7646 Make forkedProcessTimeoutInSeconds configurable
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: KITCHEN-3098
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1437132 13f79535-47bb-0310-9956-ffa450edef68
+
+commit c92b249c87f08f4c0e540288095421f10eb3a62b
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Jan 21 16:19:15 2013 -0700
+
+    CDH-9975 Updating thrift to 0.9.0
+
+commit 7abd3968f99c2e3f2fad523e85c669eb7ef70152
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Tue Jan 8 22:36:29 2013 +0000
+
+    HBASE-7513 HDFSBlocksDistribution shouldn't send NPEs when something goes wrong
+    
+    Reason: Bug
+    Author: Elliott Clark
+    Ref: CDH-9938
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1430580 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 95c4de170a1817b898dcde25e788e77c65771586
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 21 08:00:15 2013 -0800
+
+    HBASE-7627 UnsupportedOperationException in CatalogJanitor thread
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 4d4128124aaa893fdc5243d98a624eb719d8d4aa
+Author: Alexander Alten-Lorenz <alexander@cloudera.com>
+Date:   Tue Jan 15 12:09:50 2013 +0100
+
+    HBASE-6694. Test scanner batching in export job feature HBASE-6372
+    
+    Description: This issue is about adding a test of HBASE-6372. We should also have numbers for the improvement that HBASE-6372 brings.
+    Reason: Customer request
+    Author: Jonathan Hsieh
+    Ref: CDH-7016
+
+commit 591a8f9f0f3a9b58e199fc5cc669ab01afe7ffd2
+Author: Alexander Alten-Lorenz <alexander@cloudera.com>
+Date:   Tue Jan 15 11:44:47 2013 +0100
+
+    HBASE-6372 Add scanner batching to Export job
+    
+    Description: When a single row is too large for the RS heap then an OOME can take out the entire RS. Setting scanner batching in custom scans helps avoiding this scenario, but for the supplied Export job this is not set.
+    Reason: Customer request
+    Author: Alexander Alten-Lorenz
+    Ref: CDH-7016
+
+commit 969172f5a1cc892c794aac6596582e5c12c7cad2
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Jan 18 19:20:19 2013 -0800
+
+    HBASE-7625 Remove duplicated logFSTree() from TestRestoreFlushSnapshotFromClient
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 38d82de2e9b9ae3ddbe0e405c834195c01043e16
+Author: Jean-Daniel Cryans <jdcryans@cloudera.com>
+Date:   Fri Jan 18 16:23:16 2013 -0800
+
+    HBASE-7545  [replication] Break out TestReplication into manageable classes
+    
+    Reason: Improvement
+    Author: Jean-Daniel Cryans
+    Ref: CDH-9875
+
+commit 4cb686d01171976320d65b3fbd90c078b310de91
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Fri Jan 18 19:35:35 2013 +0000
+
+    HBASE-5458 Thread safety issues with Compression.Algorithm.GZ and CompressionTest
+    
+    Reason: Bug
+    Author: Elliott Clark
+    Ref: CDH-9923
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1435317 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2982e890a5e6c0fa25ed339000bcdf6d5a8bd564
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Thu Jan 17 16:29:13 2013 -0800
+
+    HBASE-7616 NPE in ZKProcedure.nodeCreated
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9931
+
+commit cc4b01165f4e91f69b4c5732570a46bd13ac7061
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Jan 18 14:10:36 2013 -0700
+
+    HBASE-7562  ZKUtil: missing "else condition" in multi processing
+    
+    Reason: Bug
+    Author: Himanshu Vashishtha
+    Ref: CDH-9925
+
+commit 734c61e812a1700ba7790d67f127f9fa051a1e54
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 17 18:30:51 2013 -0800
+
+    HBASE-7596 Redundant FSTableDescriptor update
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-9889
+
+commit f1b3a296ee3ce1580cc368a609391b094a9d0dec
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 17 11:57:13 2013 -0800
+
+    HBASE-7604 Remove duplicated code from HFileLink
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 2e5ab9bc94a13a77961348f088edde865c1ff940
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 16 17:30:22 2013 -0800
+
+    HBASE-7592 HConnectionManager.getHTableDescriptor() compares too much
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9872
+
+commit a2d0340c24c33b78d86b2f030595225cfd495d5d
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 16 11:55:11 2013 -0800
+
+    HBASE-7583 Fixes and cleanups
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 5851c69a0dd21d49c1c6bd3628403877cc762fd1
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Wed Jan 16 12:15:11 2013 -0700
+
+    HBASE-7172 TestSplitLogManager.testVanishingTaskZNode() fails when run individually and is flaky
+    
+    Reason: Bug
+    Author: Enis Soztutar
+    Ref: CDH-8957
+
+commit edeab6f62bb5af54169aaa9d89f4f951a35a5b89
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Wed Jan 16 16:26:11 2013 +0000
+
+    HBASE-7575 FSUtils#getTableStoreFilePathMap should all ignore non-table folders
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-9828
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1434021 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 80fb4a8d1a391676ea145ba0d5efe6a6e88e0a04
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 16 09:29:45 2013 -0800
+
+    HBASE-7560 TestCompactionState failures
+    
+    Reason: Test failure
+    Author: Matteo Bertozzi
+    Ref: CDH-9858
+
+commit e52671bfbcfda7b55527a4dd3217e4b0383c3d93
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 17:26:46 2013 -0800
+
+    HBASE-6622 TestUpgradeFromHFileV1ToEncoding#testUpgrade fails in trunk
+    
+    Reason: Test failure
+    Author: Ted Yu
+    Ref: CDH-9833
+
+commit a1d60b82de01f50934b8c61d62c88dcd2407aadc
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:59:40 2013 -0800
+
+    HBASE-7536 Add test that confirms that multiple concurrent snapshot requests are rejected
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 4fab99fe4cd9bd24f9b65507096d2077e70b6ba4
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:57:37 2013 -0800
+
+    HBASE-7538 Improve snapshot related error and exception messages
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit cb57a65e71fed83654c6105591816b93870f6076
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:52:03 2013 -0800
+
+    HBASE-7548 Fix javadoc warnings in snapshot classes
+    
+    Reason: Snapshots
+    Author: Ted Yu
+    Ref: CDH-9551
+
+commit b2a3107050c46cd54fcfce2d674089130f8eecbe
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:47:10 2013 -0800
+
+    HBASE-7547 Fix findbugs warnings in snapshot classes
+    
+    Reason: Snapshots
+    Author: Ted Yu
+    Ref: CDH-9551
+
+commit 8ba412311c4031e028ed6ac03abe52413a18c98a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:25:04 2013 -0800
+
+    HBASE-7360 snapshot 0.94 backport, add takeSnasphotAsync
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 641e698a55e5aedd37a35097e1e10698711a93eb
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 12:08:51 2013 -0800
+
+    HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 02a21c4fa7e87e23966b2f2b0a0192ae2c9e28f5
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 11:53:01 2013 -0800
+
+    HBASE-6459 Improve speed of table creation
+    
+    Reason: Improvement
+    Author: Zhou Wenjian
+    Ref: CDH-9551
+
+commit f741357c42e19db2b8a9f29bf9a681568991fa91
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 10:22:18 2013 -0800
+
+    HBASE-7501 Introduce MetaEditor method that both adds and deletes rows in .META. table
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit e70e48265b086db4dbfa88bfbbab5f8181f0cca9
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Jan 15 13:04:21 2013 -0700
+
+    HBASE-7540 Make znode dump to print a dump of replication znodes
+    
+    Reason: Improvement
+    Author: Himanshu Vashishtha
+    Ref: CDH-9837
+
+commit c1c24795b31d47cfe97e80072df4dd148c63e41b
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 09:20:39 2013 -0800
+
+    HBASE-7552 Pass bufferSize param to FileLinkInputStream constructor within FileLink.open method, and remove unnecessary import packages.
+    
+    Reason: Snapshots
+    Author: Julian Zhou
+    Ref: CDH-9551
+
+commit dafd9a32329a47e8a72de77dc869d6dd793dc68f
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 09:08:43 2013 -0800
+
+    HBASE-7535 Fix restore reference files
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 1bd3eb82db703399299fb6a066b27d96d654909f
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 15 09:05:23 2013 -0800
+
+    HBASE-7537 .regioninfo not created by createHRegion()
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 07c90db23619bd0281d713f7b97752eb76afccb6
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 14 16:56:22 2013 -0800
+
+    HBASE-7558 Client not able to access /hbase/unassigned in secure cluster
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-9101
+
+commit 393de616387749e34ec1063abcba47f5c8acd8fd
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Jan 14 11:24:24 2013 -0700
+
+    HBASE-7550  Synchronization problem in AssignmentManager
+    Reason: Bug
+    Author: Lars H
+    Ref: CDH-9797
+
+commit 02f4e2d6a29ce1654440f44cbf3c1b1563651226
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Jan 11 10:23:12 2013 -0800
+
+    HBASE-7480 Explicit message for not allowed snapshot on meta tables
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 29cef68d200856ded31240c4a9a527fcde13de04
+Author: Jean-Daniel Cryans <jdcryans@cloudera.com>
+Date:   Thu Jan 10 15:52:00 2013 -0800
+
+    HBASE-5778  Fix HLog compression's incompatibilities
+    HBASE-7530  [replication] Work around HDFS-4380 else we get NPEs
+    HBASE-7531  [replication] NPE in SequenceFileLogReader because
+                ReplicationSource doesn't nullify the reader
+    HBASE-7534  [replication] TestReplication.queueFailover can fail
+                because HBaseTestingUtility.createMultiRegions is dangerous
+    
+    Reason: Improvement
+    Author: Jean-Daniel Cryans
+    Ref: CDH-8447
+
+commit f8d7b6d6c2da3d4a5a425ddbcecf99ae4b3e1ed6
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 9 16:56:13 2013 -0800
+
+    HBASE-7526 create table does not log the table name in audit log
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9633
+
+commit 4fa5df5eeffcdb6de31f0eaf95cef74031ecf8bd
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Sun Dec 30 23:34:27 2012 -0800
+
+    HBASE-7523 Snapshot attempt with the name of a previously taken snapshot fails sometimes.
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit e9b15a9d51112eb2f32e83eed70fa8d2035cc1bd
+Author: Michael Stack <stack@apache.org>
+Date:   Tue May 1 18:04:07 2012 +0000
+
+    HBASE-5548 Add ability to get a table in the shell; ADDENDUM
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1332766 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Testing, Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9584
+
+commit f8465c05e93c9ca20aab4196202da8691712c8ca
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 8 22:56:34 2013 -0800
+
+    HBASE-6386 Audit log messages do not include column family / qualifier information consistently
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1430631 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Improvement
+    Author: Marcelo Vanzin
+    Ref: CDH-9641
+
+commit f9e23d5b90d1e1504bcf495d6cd37140317be217
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Jan 8 22:21:16 2013 -0800
+
+    HBASE-7518 Move AuthResult out of AccessController
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1430631 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Improvement
+    Author: Marcelo Vanzin
+    Ref: CDH-9641
+
+commit b7c76411eedb8e24c6b825f1a3e26e6731e8a217
+Author: Michael Stack <stack@apache.org>
+Date:   Mon Apr 30 21:48:54 2012 +0000
+
+    HBASE-5548 Add ability to get a table in the shell
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1332419 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Testing, Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9584
+
+commit 921810c92d53bfb5c9af596ee1cbce800b94de19
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 7 20:21:12 2013 -0800
+
+    HBASE-7214 CleanerChore logs too much, so much so it obscures all else that is going on
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit 7dd6646e97f2f62c20adc6beeed317b6ba26f383
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 7 20:15:03 2013 -0800
+
+    HBASE-7467 CleanerChore checkAndDeleteDirectory not deleting empty directories
+    
+    Reason: Snapshots
+    Author: Jean-Marc Spaggiari
+    Ref: CDH-9551
+
+commit bdb3cf1b4fd0de65c05891d39b9175599d9b2318
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 7 15:00:22 2013 -0800
+
+    HBASE-7299 TestMultiParallel fails intermittently
+    
+    Reason: Test Failure
+    Author: Matteo Bertozzi
+    Ref: CDH-9691
+
+commit 39f7ef455f0824feee6714b7c22aa16962cc9f8a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 7 13:55:01 2013 -0800
+
+    Fix EventType enum compatibility
+    
+    Reason: Rolling upgrade failure
+    Author: Matteo Bertozzi
+    Ref: CDH-9699
+
+commit 2c690a0db1567359f89b35db9f47952a41f1ecd7
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Jan 7 09:48:34 2013 -0800
+
+    HBASE-7419 revisit hfilelink file name format
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 046256f227bfec61968cd0329adfb90d06483110
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Jan 7 13:38:10 2013 -0700
+
+    HBAES-7040 Port HBASE-5867 Improve Compaction Throttle Default to 0.94
+    
+    Author: Sergey
+    Reason: Improvement
+    Ref:CDH-9521
+
+commit f9176b8915129f03b38d04c06a2b991330a10870
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sun Jan 6 20:21:12 2013 -0800
+
+    HBASE-7502 TestScannerTimeout fails on snapshot branch
+    
+    Reason: Test Failure
+    Author: Himanshu Vashishtha
+    Ref: CDH-9695
+
+commit 949769c3196c7beb6e983ced7b64074a0b49b67a
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Jan 6 13:06:13 2013 -0700
+
+    HBASE-5987  HFileBlockIndex improvement
+    Author: Liyin Tang
+    Reason: Performance
+    Ref: CDH-9521
+
+commit 070b891313e37704074bb729f1908375a8c89d29
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Fri Jan 4 14:48:05 2013 -0800
+
+    HBASE-7498 Make REST server thread pool size configurable
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-9660
+
+commit 4f2ee9db1424f21dcf9ce36726e5b2ce070c473a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Jan 4 14:26:27 2013 -0800
+
+    HBASE-7484 Fix Restore with schema changes
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 9207d1d8500a9e69ae2554b4b82eb0d7a92bd63c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Jan 4 10:36:06 2013 -0800
+
+    HBASE-7496 TestZKProcedure fails interrmittently.
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 24200970adbab92e9f632733bfb2b76e998553ff
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 3 22:15:43 2013 -0800
+
+    HBASE-7321 Simple Flush Snapshot
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 58841f56596467ea5b9c52c51393c33dd926f8a9
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 3 22:05:55 2013 -0800
+
+    HBASE-6864 Online snapshots scaffolding
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 570b0e4c58a42360158510e6049a4096738fc11c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jan 3 14:50:59 2013 -0800
+
+    HBASE-7212 Globally Barriered Procedure Mechanism
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit aad4b00e13a8b5afdfda69e98863951409370c11
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 2 13:34:08 2013 -0800
+
+    HBASE-7453 HBASE-7423 snapshot followup
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 0d4c4e2c552b95718a6c5b0349d1b7c877d0922a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 2 12:33:13 2013 -0800
+
+    HBASE-7423 HFileArchiver should not use the configuration from the Filesystem
+    
+    Reason: Snapshots
+    Author: Enis Soztutar
+    Ref: CDH-9551
+
+commit 388a88ea57d364fc8908ed4e1d77e8f4408c44d3
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 2 11:59:25 2013 -0800
+
+    HBASE-5672 TestLruBlockCache#testBackgroundEvictionThread fails occasionally
+    
+    Reason: Test Failure
+    Author: Chunhui Shen
+    Ref: CDH-9645
+
+commit 1717629191e90a69b0f90a53cc6b7f85fafe4986
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jan 2 09:34:22 2013 -0800
+
+    HBASE-7354 Snapshot Info/Debug Tool
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit f1cc4a506ea9bf6c5408e2387dc25f7210b895a8
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Wed Jan 2 10:07:34 2013 -0700
+
+    HBASE-7440 ReplicationZookeeper#addPeer is racy
+    Reason: Bug
+    Author: Himanshu Vashistha
+    Ref: CDH-9622
+
+commit a8967f3904fc913b31feca93d2d023eafe8c7d77
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 19:19:54 2012 +0000
+
+    HBASE-7294 Check for snapshot file cleaners on start
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 5bb1265f0eb3af2404b336106de6269f590e6ff2
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 19:13:14 2012 +0000
+
+    HBASE-7352 clone operation from HBaseAdmin can hang forever
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit caea1e2633002d7c0658862ee492d1c18cf37b5b
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 12:13:01 2012 +0000
+
+    HBASE-7400 ExportSnapshot mapper closes the FileSystem
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit a960c3e5dd1f9b736cd93f89b5d200d073d80861
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 11:30:04 2012 +0000
+
+    HBASE-7207 Consolidate snapshot related classes into fewer packages
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 1947136d10991fa3cf4f89d6435c9c408bc6223b
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 11:19:09 2012 +0000
+
+    HBASE-7208 Transition Offline Snapshots to ForeignExceptions and Refactor for merge
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit ca3e723ad243a937b62e9b9cc404ec81aad53b37
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Sat Dec 29 10:55:30 2012 +0000
+
+    HBASE-7452 Change ForeignExceptionListener#receive(String, FE)  to only be #receive(FE)
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 6bf177cab6ff8143fbe66e8868bd917f867252a8
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Fri Dec 28 23:14:31 2012 +0000
+
+    HBASE-7412 Fix how HTableDescriptor handles default max file size and flush size
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-9627
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1426658 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 28424c710ba0d11eba9a4016a6385e2763f5de6b
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Dec 28 17:27:20 2012 +0000
+
+    HBASE-7439 HFileLink should not use the configuration from the Filesystem
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 56af50168f5cdcb2efa571cb9f684958aa551a26
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Dec 27 11:51:08 2012 -0700
+
+    HBASE-7142 TestSplitLogManager#testDeadWorker may fail because of hard limit on the TimeoutMonitor's timeout period
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-8966
+
+commit 59ec165c42aef8a93b502dd596d488a1b8826832
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 26 17:07:07 2012 +0000
+
+    HBASE-7339 Splitting an HFileLink causes region servers to go down.
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 35c49f6dcf6c7855790dcd2add33247387be072a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 26 15:17:15 2012 +0000
+
+    HBASE-7436 Improve stack trace info dumped by ForeignExceptionSnare#rethrowException
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit a8d60fa201987d3bd3ca6fb9d6260f48e5e9ba22
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Dec 24 09:42:48 2012 +0000
+
+    HBASE-7430 TestSnapshotDescriptionUtils break compaction/scanner tests (EnvironmentEdge issue)
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 4383e417e75044c19835b58bf93738846a80a32c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Dec 24 09:40:33 2012 +0000
+
+    HBASE-7206 ForeignException framework v2 (simplifies and replaces HBASE-6571)
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 897135ce7689d2b3d175e812fcd465de13cb4d90
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Mon Dec 24 09:31:22 2012 +0000
+
+    HBASE-7420 TestSnapshotExceptionSnare and TestWALReferenceTask missing test category annotation and failing TestCheckTestClasses
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 30e6f680aff2c8494218210b3e38d180ff53ab67
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Dec 21 14:24:08 2012 -0700
+
+    HBASE-7422 MasterFS doesn't set scheme for internal FileSystem
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-9572
+
+commit afbfcbe68a777cc4e54700ca91ed9dd8b7ca37d7
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Dec 21 10:39:15 2012 -0700
+
+    HBASE-7421 TestHFileCleaner->testHFileCleaning  has an aggressive timeout
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-9605
+
+commit 87da052160f1e4cbc24f0e7c6ca2592dfe5c596c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Dec 20 22:56:42 2012 +0000
+
+    HBASE-7418 HFileLink flaky test
+    
+    Reason: Test Failure
+    Author: Matteo Bertozzi
+    Ref: CDH-9573
+
+commit 32144193ebe7b7eb5a157566775cdad8faad53c5
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Dec 20 11:27:47 2012 -0700
+
+    Fixes the compile error with java update < 27
+    Reason: Compile error fix
+    Author: Himanshu Vashishtha
+    Ref: CDH-9593
+
+commit 24da9747e837e8886971061a189e78887f6ae74c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Dec 20 00:32:36 2012 +0000
+
+    HBASE-7311 Add snapshot information to hbase master webui
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 3b0a93aa90a302c4df77826c92ea6f3f32aba706
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:46:49 2012 +0000
+
+    HBASE-7367 Snapshot coprocessor and ACL security
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 8352997f731d716520293ab590dfaa2b6be9e430
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:28:10 2012 +0000
+
+    HBASE-7174 Refactor snapshot file cleaner cache to use Snapshot
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit b7087c990ab1d0b097a3c43408147b7f33899c05
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:27:37 2012 +0000
+
+    HBSE-7535 [shell] have list and list_snapshot return jruby string arrays
+    
+    Reason: Improvement
+    Author: Jonathan Hsieh
+    Ref: CDH-9551
+
+commit 513b4ef3b1bea4c0e6ba1f1c4b9348a4c4ff51d3
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:27:07 2012 +0000
+
+    HBASE-7240 Cleanup old snapshots on start
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit b376648d9121c73fd18155cf7998f7b99136117d
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:26:29 2012 +0000
+
+    HBASE-6802 Export Snapshot
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit b8020515661b421019e789b34aec71a99abae93a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:12:04 2012 +0000
+
+    HBASE-6230 Clone/Restore Snapshots
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 153120319940b57ecd3ad53ae1317a2e6d3ae39a
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:05:23 2012 +0000
+
+    HBASE-6777 Snapshot Restore Interface
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 55e6383933755097973918c77c536a6c0dbe2a36
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 22:02:12 2012 +0000
+
+    HBASE-6865 Snapshot File Cleaners
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit 54795e302a037d32c2da7dd20d8c981041aa3304
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 21:56:05 2012 +0000
+
+    HBASE-6836 Offline snapshots
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit 80fe47a78537ab70240db13ba59d19d3cd00ebc8
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 20:59:52 2012 +0000
+
+    HBASE-7107 Snapshot References Utils (FileSystem Visitor)
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 35de84abde830e865d68c45fd66045e922b21e3d
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 20:59:03 2012 +0000
+
+    HBASE-6353 Snapshots shell
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+
+commit 6a882497a493f83d551282e25dd9f374b9abe2d0
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 20:58:17 2012 +0000
+
+    HBASE-6571 Generic multi-thread/cross-process error handling framework
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit 183760db5bad8afade04e5896289221bb0183bcd
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 20:56:51 2012 +0000
+
+    HBASE-6765 Take a Snapshot interface
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+
+commit 893bcce9f52c7998b526766f75e1f8261656370d
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 20:47:45 2012 +0000
+
+    HBASE-6610 HFileLink: Hardlink alternative for snapshot restore
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1391326 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 4664bc400404d4c594771bfb5d2bdd69460da551)
+
+commit 191d4660c4f811740eb27704ec8dbc2712b7cff2
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Sat Dec 15 17:34:32 2012 +0000
+
+    HBASE-7197. Add multi get to RemoteHTable (Elliott Clark)
+    
+    Reason: Feature
+    Author: Elliott Clark
+    Ref: CDH-9189
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1422297 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 374b0dfd4c25829e3d5bce7c08ed60ec4a3bf99e
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Dec 18 18:24:57 2012 -0700
+
+    HBASE-6852 SchemaMetrics.updateOnCacheHit costs too much while full scanning a table with all of its fields
+    Reason: Performance
+    Author: Cheng Hao
+    Ref: CDH-9521
+
+commit 1c92f3de0219ce0f4ecf743d9e5648e0ac1987a1
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Wed Dec 19 18:01:35 2012 +0000
+
+    HBASE-7199 hbck should check lingering reference hfile and have option to sideline them automatically
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-9552
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423987 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 28ec42139cf4d3c821495ce5186907ffd8a01e49
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 18:13:17 2012 +0000
+
+    HBASE-7283 Backport HBASE-6564 + HBASE-7202 to 0.94
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9551
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423774 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 91ca402f680b1c64d7b81b19b4e9ca5610dae817)
+
+commit 2fcce75acbdb11b0e6117f710a5f842f9686b2a3
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 18:11:40 2012 +0000
+
+    HBASE-6796 Backport HBASE-5547, Don't delete HFiles in backup mode.
+    
+    Reason: Snapshots
+    Author: Jesse Yates
+    Ref: CDH-9551
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1404762 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 57ade632587419d124e1a93f33d59e8a3a092e03)
+
+commit 6c9a0dc10c586bd66c8a68e6ae391571875b4a5c
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Dec 19 17:53:01 2012 +0000
+
+    HBASE-6585 Audit log messages should contain info about the higher level operation being executed
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9556
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423927 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 9cd813e7e00048b93367072e126fda7fc8c16974)
+
+commit 131c821a7b2253cd98c55fe203cef5bf6be0b361
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Tue Dec 18 14:08:18 2012 -0800
+
+    CDH-9549 Enable ZK.multi by default for HBASE in CDH4.2
+
+commit c6ecd1207e2f2924233ba52581b739874a0cdabe
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Tue Dec 18 12:52:24 2012 -0800
+
+    HBASE-6775 Use ZK.multi when available for HBASE-6710 0.92/0.94 compatibility fix
+    
+    Reason: Supportability
+    Author: Gregory Chanan
+    Ref: CDH-8548
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423616 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 41f187465a4bc13307a46ed7a237bc929fc3b59b
+Author: Gregory Chanan <gchanan@apache.org>
+Date:   Tue Dec 18 21:27:53 2012 +0000
+
+    HBASE-7377 Clean up TestHBase7051
+    
+    Reason: Supportability
+    Author: Gregory Chanan
+    Ref: CDH-9524
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1423671 13f79535-47bb-0310-9956-ffa450edef68
+
+commit abba09f1e3a1d145b269d0e9881e764cee6d20f2
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Wed Oct 31 22:12:28 2012 +0000
+
+    HBASE-7077 Test for: CheckAndPut should properly read MVCC (Ram)
+    
+    Reason: Test
+    Author: ramkrishna.s.vasudevan
+    Ref: CDH-9524
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1404383 13f79535-47bb-0310-9956-ffa450edef68
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1404641 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 670efcc02d7d79e223e6e530a346c6f38eaee7fa
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Wed Oct 31 22:04:34 2012 +0000
+
+    HBASE-7051 CheckAndPut should properly read MVCC
+    
+    Reason: Bug
+    Author: Lars Hofhansl
+    Ref: CDH-9524
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1404379 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 0af3bc8624cd9070759bccf5d5ca5118f36f8e29
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Tue Dec 18 12:26:45 2012 -0800
+
+    CDH-8548 Turn 92/94 compatibility mode on by default in CDH4.2
+    
+    Reason: Compatibility
+    Author: Gregory Chanan
+    Ref: CDH-8548
+
+commit 5ac7e2ebe37b96752dd4066d75886caf028aa506
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Dec 18 10:46:41 2012 -0700
+
+    HBASE-7103 Need to fail split if SPLIT znode is deleted even before the split is completed.
+    Reason: Bug
+    Author: Ram
+    Ref: CDH-9521
+
+commit 0c2207c71ae5fd640989c5607b93d43c0f1a7c74
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Dec 18 15:07:30 2012 +0000
+
+    HBASE-4791 Allow Secure Zookeeper JAAS configuration to be programmatically set (rather than only by reading JAAS configuration file)
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-5601
+
+commit c24f5b8255bce9a13fb3c24ad9c5c3af2b860d1f
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Dec 17 15:07:59 2012 -0700
+
+    HBASE-6846  BitComparator bug - ArrayIndexOutOfBoundsException
+    Reason: Bug
+    Author: Lucian George Iordache
+    Ref: CDH-9521
+
+commit 757d12d21a06e0a51b403989e38950b013076116
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Dec 17 15:05:22 2012 -0700
+
+    HBASE-7016 port HBASE-6518 'Bytes.toBytesBinary() incorrect trailing backslash escape' to 0.94
+    Reason: Bug
+    Author: Sergey Shelukhin
+    Ref: CDH-9521
+
+commit 6f3160189de3c0589c525e359c0958c669250b36
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Dec 17 12:33:54 2012 -0700
+
+    HBASE-7017  Backport "[replication] The replication-executor should make sure the file that it is replicating is closed before declaring success on that file" to 0.94
+    Reason: Bug
+    Author: Devaraj
+    Ref: CDH-9521
+
+commit 3e7e4f2a154dd02fd9409bce3e95b67f62b8b97b
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Dec 17 11:44:27 2012 -0700
+
+    HBASE-6700 [replication] empty znodes created during queue failovers aren't deleted
+    Reason: Bug
+    Author: Terry Zhang
+    Ref: CDH-9521
+
+commit 549244b6dc70ac370352c421e72d70c300a6203f
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Mon Dec 17 11:41:21 2012 -0700
+
+    HBASE-6733 [0.92 UNIT TESTS] TestReplication.queueFailover occasionally fails [Part-2]
+    Reason: Bug
+    Author: Devraj Dass
+    Ref: CDH-9521
+
+commit 79f76df6268485c6ad182cdc303d3ee981b4b86b
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Dec 14 15:51:03 2012 -0700
+
+    HBASE-6826: Fix TestFromClientSide Failures
+    Reason: Test
+    Author: Enis
+    Ref: CDH-9513
+
+commit 7fdb3a62a51ede9cacadaea20c92c7c2ecb238af
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Dec 13 14:27:51 2012 -0700
+
+    HBASE-7343 Fix flaky condition for TestDrainingServer
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-7341
+
+commit b3a973ad2cd090dd5d001fa5f6558904c5fce330
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Dec 13 14:23:32 2012 -0700
+
+    HBASE-7338 Fix flaky condition for org.apache.hadoop.hbase.TestRegionRebalancing.testRebalanceOnRegionServerNumberChange
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-9181
+
+commit 4a2a36d3a1e518ab69f6cdd523fd89e12a3c748f
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Dec 11 14:25:17 2012 -0700
+
+    HBASE-6528  Raise the wait time for TestSplitLogWorker#testAcquireTaskAtStartup to reduce the failure probability
+    Reason: Test Failure
+    Author: ShiXing
+    Ref: CDH-9423
+
+commit 9d8485a8fbd824d9a4054b5017f6c0477c554907
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Dec 11 09:54:18 2012 +0000
+
+    Use 0.92 format to write HServerLoad.RegionLoad
+    
+    Reason: Compatibility
+    Author: Matteo Bertozzi
+    Ref: CDH-8724
+
+commit 41df5319156f66daf1689f82d3bdde4090671ad8
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Tue Dec 11 00:57:31 2012 +0000
+
+    HBASE-7314 Can't start REST/Thrift server if HBASE_JMX_OPTS not set
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-9400
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1419955 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2e8b78f19ff14041eae0742fb0e7510cd96fccc4
+Author: Michael Stack <stack@apache.org>
+Date:   Sat Dec 8 21:41:02 2012 +0000
+
+    HBASE-7301 Force ipv4 for unit tests
+    
+    Reason: Improvement
+    Author: Jean-Daniel Cryans
+    Ref: CDH-9406
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1418758 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 3f58c188e3d424cfe407a812ea68d15e526e4e7f)
+
+commit e4bca69d735e13ac75e9749eb739b6c070c7ad6d
+Author: Jean-Daniel Cryans <jdcryans@apache.org>
+Date:   Sat Dec 8 00:46:56 2012 +0000
+
+    HBASE-7300  HbckTestingUtil needs to keep a static executor to lower the number of threads used
+    
+    Reason: Improvement
+    Author: Jean-Daniel Cryans
+    Ref: CDH-9404
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1418571 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit ae692efab78a929494b5e2decaa0129338e7124d)
+
+commit f635760e1f927e088e1ced1c2c7a29aa33a49ffe
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Tue Nov 13 06:54:16 2012 +0000
+
+    HBASE-5898 Consider double-checked locking for block cache lock (Todd, Elliot, LarsH)
+    
+    Reason: Performance
+    Author: Lars Hofhansl
+    Ref: CDH-8649
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1408621 13f79535-47bb-0310-9956-ffa450edef68
+
+commit a2de49f28be0ccc3d7d7235c0ead3dd19167af9f
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Dec 7 16:56:56 2012 +0000
+
+    HBASE-7253 Compaction Tool
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-9105
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1418131 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit bc02f866ff02e0b180f53902348cbcbf67a1dbf7)
+
+commit 0f0cad3b6203eb50b326c3a3ad9de646c1017b37
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Dec 7 16:56:29 2012 +0000
+
+    HBASE-5616 Make compaction code standalone
+    
+    Reason: Improvement
+    Author: Michael Stack
+    Ref: CDH-9105
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1418131 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit bc02f866ff02e0b180f53902348cbcbf67a1dbf7)
+
+commit 86e5c26bbd1a9a69acd524e8e9310846fffaa2b3
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Dec 7 16:26:15 2012 +0000
+
+    HBASE-6327 HLog can be null when create table
+    
+    Reason: Bug
+    Author: Shi Xing
+    Ref: CDH-9105
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1418131 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit bc02f866ff02e0b180f53902348cbcbf67a1dbf7)
+
+commit 29059ea928733fd33739b9917edfd6775aa8c414
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Dec 7 16:13:53 2012 +0000
+
+    HBASE-5693 When creating a region, the master initializes it and creates a memstore within the master server
+    
+    Reason: Improvement
+    Author: Nicolas Liochon
+    Ref: CDH-9105
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1418131 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit bc02f866ff02e0b180f53902348cbcbf67a1dbf7)
+
+commit c135a57d447f86971928777e776d4ea43d6a5c96
+Author: David S. Wang <dsw@cloudera.com>
+Date:   Thu Dec 6 09:41:45 2012 -0800
+
+    HBASE-7069 HTable.batch does not have to be synchronized
+    
+    Reason: Bug
+    Author: Lars Hofhansl
+    Ref: CDH-9159
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1403808 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 2e18c3ddc186a38a464be79ca4af335d7692f7db)
+
+commit ebbd679b964900bf4be4f5669ce898eef16c25d2
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed Dec 5 09:22:42 2012 -0800
+
+    HBASE-7277 Thrift default JMX port should be 10103 instead of 8093
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-9320
+
+commit 1c818adca5e06fe27b5ddef80ff6ceaa396feaeb
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed Dec 5 09:20:18 2012 -0800
+
+    HBASE-7274 Enable JMX metrics collection for REST Server
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-8762
+
+commit 549a1018be620c0d26f6c7705e483cad4e24963c
+Author: Jean-Daniel Cryans <jdcryans@cloudera.com>
+Date:   Mon Dec 3 16:11:23 2012 -0800
+
+    HBASE-6804  [replication] lower the amount of logging to a more human-readable level
+    
+    Reason: Improvement
+    Author: Jean-Daniel Cryans
+    Ref: CDH-9303
+
+commit 83a5197ba8ca873073dab6662a59e2454cc854e3
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu Nov 29 15:56:54 2012 -0800
+
+    HBASE-7204 Make hbck ErrorReporter pluggable
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-8553
+
+commit 4272b15f0478b165e2869fe262c47c78080bf074
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Mon Nov 26 19:40:31 2012 +0000
+
+    HBASE-7190 Add an option to hbck to check only meta and assignment
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-9099
+
+commit faca6b191c16cda8772e77720d5dc027c8e4a63b
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed Oct 10 14:56:41 2012 -0700
+
+    HBASE-6963 unable to run hbck on a secure cluster
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-8328
+
+commit 22a64fb365dc96d9066a9bbe8b793b347d03bf6b
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Nov 20 11:11:34 2012 +0100
+
+    HBASE-7178 Compression tests
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1410496 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Test
+    Ref: CDH-8687
+    Author: Matteo Bertozzi
+
+commit e5ad0ae31c76191088111c3362a08a3995fd2e49
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Mon Nov 19 15:03:45 2012 -0800
+
+    HBASE-7038 Port HBASE-5970 Improve the AssignmentManager#updateTimer and speed up handling opened event to 0.94
+    
+    Reason: MTTR Improvement
+    Author: Sergey Shelukhin
+    Ref: CDH-8648
+
+commit 5892790a648023cce1010da2da9a887fd8b608f2
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Fri Nov 16 15:37:50 2012 -0800
+
+    HBASE-7170 [0.94 branch] Allow HConnectionImplementation to reconnect to master multiple times
+    
+    Reason: Bug
+    Author: Gregory Chanan
+    Ref: CDH-9055
+
+commit 622b26da03c232b258465fcc800f6981fa23f172
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Wed Nov 14 17:51:51 2012 -0700
+
+    HBASE-6305 TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds
+    Updated with patch that was applied upstream.
+    
+    Reason: Test
+    Author: Himanshu Vashishtha
+    Ref: CDH-8726
+    
+     Please enter the commit message for your changes. Lines starting
+
+commit 8f309b5701975f832bbbe6af4bf3ade71db9c32a
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Wed Nov 14 11:31:06 2012 -0700
+
+    CLOUDERA-BUILD Fix the pom to run all tests, and set environment variables
+
+commit 570bdd2e30426e8087f534f8d9cceea747b07ca2
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Nov 14 10:52:49 2012 +0100
+
+    HBASE-7156 Add Data Block Encoding and -D opts to Performance Evaluation
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1408986 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Test
+    Ref: CDH-8448
+    Author: Matteo Bertozzi
+
+commit 65c6584dee002ad4a066d3ee1bba5c8604590668
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Nov 14 00:03:57 2012 +0100
+
+    HBASE-5934 Add the ability for Performance Evaluation to set the table compression
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1353290 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Test
+    Ref: CDH-8684
+    Author: Matteo Bertozzi
+
+commit 77946fde4adaea629427ffc0544a61324ec1fe0c
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Tue Nov 13 19:25:31 2012 +0000
+
+    HBASE-4913 Addendum: Fix TestShell
+    
+    Reason: Bug
+    Author: Lars Hofhansl
+    Ref: CDH-7570
+
+commit bd3a21d8e191a33efc2ee3c3683ca4ecb96d50bb
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Mon Nov 12 14:37:43 2012 -0800
+
+    HBASE-7152 testShouldCheckMasterFailOverWhenMETAIsInOpenedState times out occasionally
+    
+    Reason: test
+    Author: Jimmy Xiang
+    Ref: CDH-8819
+
+commit 695dbd8c4b2d10196d1e161d929f5d4c08f47e8d
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Mon Nov 12 15:32:49 2012 -0800
+
+    HBASE-7151 Better log message for Per-CF compactions
+    
+    Reason: Supportability
+    Author: Gregory Chanan
+    Ref: CDH-7570
+
+commit 64957854b624b53157c081a36df11f13b9d5838f
+Author: Gregory Chanan <gchanan@cloudera.com>
+Date:   Mon Nov 12 12:24:40 2012 -0800
+
+    HBASE-4913 Per-CF compaction Via the Shell
+    
+    Reason: Feature
+    Author: Mubarak Seyed and Gregory Chanan
+    Ref: CDH-7570
+
+commit 95d9a633686c533656d647ae59635c3b77015337
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Fri Nov 9 16:32:45 2012 -0800
+
+    HBASE-7130 NULL qualifier is ignored
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-8984
+
+commit 4bbf41e036a37407b9980828a055c4cb1e75540c
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Nov 8 17:08:33 2012 -0700
+
+    HBASE-5257 Allow INCLUDE_AND_NEXT_COL in filters and use it in ColumnPaginationFilter
+    Author: Varun Sharma
+    Ref: CDH-8888
+    Reason: Client ask
+
+commit b79e8702a7d95b859f0ff85c191721fd541f04f8
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Tue Oct 30 20:58:45 2012 +0000
+
+    HBASE-7073 OperationMetrics needs to cache the value of hbase.metrics.exposeOperationTimes
+    
+    Reason: Bug
+    Author: Elliott Neil Clark <eclark@apache.org>
+    Ref: CDH-8785
+
+commit e15f3c4e08f78ee3816ce3d555d3a73eb5f5cddb
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed Nov 7 09:13:57 2012 -0800
+
+    HBASE-7113 TestGzipFilter is flaky with jdk1.7
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-8954
+
+commit 3d08c2f2c1911e6ecc6cfa6e25c4d5786125ce12
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Tue Nov 6 13:17:06 2012 -0800
+
+    HBASE-6958 TestAssignmentManager sometimes fails
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-8936
+
+commit 6529a822e051050f0f917e50c3844575d15dd12d
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Mon Nov 5 21:00:13 2012 -0800
+
+    HBASE-6202 Medium tests fail with jdk1.7
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-8905
+
+commit 61081c100ab0cc228867b42983be2189337a0091
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Mon Nov 5 15:28:34 2012 -0800
+
+    HBASE-6921 String and ConcurrentHashMap sizes change on jdk7; makes TestHeapSize fail
+    
+    Reason: Bug
+    Author: Michael Stack
+    Ref: CDH-8900
+
+commit 11b338066af37bc101107b417a758860b9e02287
+Author: Gregory Chanan <gchanan@apache.org>
+Date:   Wed Oct 31 22:18:50 2012 +0000
+
+    HBASE-6904 In the HBase shell, an error is thrown that states replication-related znodes already exist
+    
+    Reason: Bug
+    Author: Gregory Chanan
+    Ref: CDH-8288
+
+commit d4311dc1de4e324195cb8977bb7e6fe946cfce2b
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Wed Oct 31 11:19:53 2012 -0700
+
+    HBASE-7080 TestHFileOutputFormat.testColumnFamilyCompression failing due to UnsatisfiedLinkError
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-8628
+
+commit 5faebe9ef80ab965291db20e7eaab0243b78e477
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Oct 25 16:56:36 2012 -0600
+
+    HBASE-6305  TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds.
+    Reason:Test
+    Ref:CDH-8726
+    Author: Himanshu Vashishtha
+
+commit 859df2227f2e1a19e5abc62d209481aeb99d69c6
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Tue Oct 16 05:12:12 2012 +0000
+
+    HBASE-6996 HRegion.mutateRowsWithLocks should call checkResources/checkReadOnl
+    
+    Reason: Bug
+    Author: Lars Hofhansl
+    Ref: CDH-8745
+
+commit 53350db0e828d6f3935460681512913b68e1decc
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Mon Oct 22 17:10:08 2012 +0000
+
+    HBASE-6951 Allow the master info server to be started in a read only mode.
+    
+    Reason: Improvement
+    Author:    Elliott Neil Clark
+    Ref: CDH-7964
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1400957 13f79535-47bb-0310-9956-ffa450edef68
+
+commit d91be8887608d7aa5ff0cc8b0f4bee538beeff67
+Author: Gregory Chanan <gchanan@apache.org>
+Date:   Wed Oct 24 01:10:48 2012 +0000
+
+    HBASE-7018 Fix and Improve TableDescriptor caching for bulk assignment
+    
+    Reason: Bug
+    Ref: CDH-8672
+    Author: Gregory Chanan
+
+commit 6312caa02303a0d8bed1f0b0f2399425bd3ba21f
+Author: Michael Stack <stack@apache.org>
+Date:   Mon Apr 30 22:26:31 2012 +0000
+
+    HBASE-5879 Enable JMX metrics collection for the Thrift proxy
+    
+    Reason: Improvement
+    Author: Mikhail Bautin
+    Ref: CDh-8723
+
+commit b180ab320e65618fe36495e2078ff008e1ca1975
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Fri Oct 19 21:54:15 2012 -0700
+
+    HBASE-6979 recovered.edits file should not break distributed log splitting
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-6907
+
+commit b8a51b05424cc924c3533c2df1f6f50809c0a0bf
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Fri Oct 19 21:40:19 2012 -0700
+
+    HBASE-6858 Fix the incorrect BADVERSION checking in the recoverable zookeeper
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-8161
+
+commit 7f0ec75e5481d11c73b800de54c182160714fe30
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Oct 19 14:16:54 2012 -0600
+
+    HBASE-6601 TestImportExport on Hadoop 2 must copy YARN configuration vars
+    
+    Author: Scott Forman
+    Reason: Test
+    Ref:CDH-8668
+
+commit df5da3e931cad57a30acbf771e0a0bae3dfaa668
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Mar 20 09:47:13 2012 -0700
+
+    CLOUDERA-BUILD. Re-adding cloudera to assembly.
+
+commit 9e80b6d559c50456092175d600b6c3b544f766ae
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:59:07 2012 -0600
+
+    HBASE-6950 TestAcidGuarantees system test now flushes too aggressively
+    
+    Reason: Bug
+    Author: Gregory Chanan
+    Ref: CDH-7462
+
+commit f284bee8d2320d7b5fa573dcd6d5501948a5482f
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:53:09 2012 -0600
+
+    HBASE-4391 Add ability to start RS as root and call mlockall
+    
+    Reason: Improvement
+    Author: Matteo Bertozzi
+    Ref: CDH-3622
+
+commit a55cd41b45e99f7ca5f4ef75c6cfc0acf739fb5c
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:46:53 2012 -0600
+
+    CDH-7904 Disable per table balance so as to maintain the same default behavior
+    
+    Reason: Compatibility
+    Author: Jimmy Xiang
+    Ref: CDH-7904
+
+commit fd99bd85f5820cb6ef962e028684c3ffdcb46d16
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:44:51 2012 -0600
+
+    CLOUDERA-BUILD. Upgrade Jetty to 6.1.26.cloudera.2.
+    
+    This version of Jetty has been found to be much more
+    reliable in the context of MapReduce, so should be used
+    in HBase as well.
+    
+    The source for this Jetty release can be found at
+    https://github.com/cloudera/jetty-hadoop-fix and corresponds to
+    commit 51042f4 in that repository.
+    
+    Author: Todd Lipcon
+    Ref: CDH-7767
+
+commit 442578ccc70521c7a684eb419cc9b50af5105ffb
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:43:13 2012 -0600
+
+    HBASE-6689 HRegion.increment comment nits
+    
+    Reason: Supportability
+    Author: Gregory Chanan
+    Ref: CDH-5549
+
+commit 2a187418a37cdc72a55bc72824afaa97823d3f9b
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:40:19 2012 -0600
+
+    CDH-7252: MR1 + HDFS 2.0 profile
+    
+    Reason: Test
+    Ref: CDH-7252
+    Author: Matteo Bertozzi
+
+commit 2ff1e098e69fc3a7500a717c1c3c2ffd14c31402
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:38:25 2012 -0600
+
+    HBASE-6606 Test for reconnecting with HBaseAdmin using unmanaged HConnection
+    
+    Reason: Supportability
+    Author: Gregory Chanan
+    Ref: CDH-5549
+
+commit 4102802f49d5d3285dc227a965eea07858ff6b5e
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:29:52 2012 -0600
+
+    HBASE-6604 Bump log4j to 1.2.17
+    
+    Reason: Dependency Harmonization
+    Author: Jonathan Hsieh
+    Ref: CDH-6878
+
+commit 75f5325cfe15711b8d1f45ec133731f4f7ef286c
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:18:10 2012 -0600
+
+    HBASE-6553 Remove Avro Gateway
+    
+    Reason: Supportability
+    Author: Elliott Clark
+    Ref: CDH-7504
+
+commit dc138376295affe507cde71178a5f20c9066691d
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:07:04 2012 -0600
+
+    HBASE-5740 Compaction interruption may be due to balancing
+    
+    Reason: Bug
+    Author: Michael Stack, Jimmy Xiang
+    Ref: CDH-4963
+
+commit 6265420895e7130cb44117b180af545bce4311ea
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 17:05:43 2012 -0600
+
+    HBASE-5655 Cap space usage of default log4j rolling policy
+    
+    Reason: Improvement
+    Author: Himanshu Vashishtha
+    Ref: CDH-3602 (sub task: CDH-5069)
+
+commit 2f8bbe413397fcffb792d8a4934b9df0c2923cbc
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Sun Oct 14 16:58:01 2012 -0600
+
+    CDH-4562 Overriding/setting HBase build revision tag.
+    
+    Reason: Improvement
+    Author: Himanshu Vashishtha
+
+commit 480beee37fd06b25cc7e27a8175c9c9aa2d41e68
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Fri Oct 12 17:28:50 2012 -0600
+
+    CLOUDERA.BUILD Setting up HBase-0.94.2 CDH4.2.0 branch
+
+commit d98f2590576dc5b928df38adedb604a9486f4d53
+Author: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
+Date:   Wed Oct 10 17:52:09 2012 +0000
+
+    HBASE-6853 IllegalArgument Exception is thrown when an empty region is spliitted(Ram) : Addendum for testcase failure
+    
+    
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1396708 13f79535-47bb-0310-9956-ffa450edef68

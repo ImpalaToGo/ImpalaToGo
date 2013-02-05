@@ -1,0 +1,39 @@
+From 751150061682f303f967a974c61614bb0d9999ff Mon Sep 17 00:00:00 2001
+From: Lars Hofhansl <larsh@apache.org>
+Date: Mon, 28 Jan 2013 18:43:26 +0000
+Subject: [PATCH 188/196] HBASE-7693 Hostname returned by TableInputFormatBase.reverseDNS contains trailing period (Robert Dyer)
+
+Reason: Performance
+Author: Robert Dyer
+Ref: CDH-10166
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1439558 13f79535-47bb-0310-9956-ffa450edef68
+Signed-off-by: Elliott Clark <eclark@cloudera.com>
+---
+ .../hbase/mapreduce/TableInputFormatBase.java      |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableInputFormatBase.java b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableInputFormatBase.java
+index eb4954a..ad855e2 100644
+--- a/src/main/java/org/apache/hadoop/hbase/mapreduce/TableInputFormatBase.java
++++ b/src/main/java/org/apache/hadoop/hbase/mapreduce/TableInputFormatBase.java
+@@ -40,6 +40,7 @@ import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+ import org.apache.hadoop.hbase.util.Addressing;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Pair;
++import org.apache.hadoop.hbase.util.Strings;
+ import org.apache.hadoop.mapreduce.InputFormat;
+ import org.apache.hadoop.mapreduce.InputSplit;
+ import org.apache.hadoop.mapreduce.JobContext;
+@@ -215,7 +216,7 @@ extends InputFormat<ImmutableBytesWritable, Result> {
+   private String reverseDNS(InetAddress ipAddress) throws NamingException {
+     String hostName = this.reverseDNSCacheMap.get(ipAddress);
+     if (hostName == null) {
+-      hostName = DNS.reverseDns(ipAddress, this.nameServer);
++      hostName = Strings.domainNamePointerToHostName(DNS.reverseDns(ipAddress, this.nameServer));
+       this.reverseDNSCacheMap.put(ipAddress, hostName);
+     }
+     return hostName;
+-- 
+1.7.0.4
+

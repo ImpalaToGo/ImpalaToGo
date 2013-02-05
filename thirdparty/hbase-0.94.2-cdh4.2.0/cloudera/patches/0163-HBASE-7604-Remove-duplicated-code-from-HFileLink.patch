@@ -1,0 +1,163 @@
+From f1b3a296ee3ce1580cc368a609391b094a9d0dec Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Thu, 17 Jan 2013 11:57:13 -0800
+Subject: [PATCH 163/196] HBASE-7604 Remove duplicated code from HFileLink
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../java/org/apache/hadoop/hbase/io/HFileLink.java |   62 ++------------------
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |    6 +-
+ 2 files changed, 9 insertions(+), 59 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+index b09ded9..1a03c6c 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+@@ -21,37 +21,31 @@ package org.apache.hadoop.hbase.io;
+ import java.io.IOException;
+ import java.util.regex.Matcher;
+ import java.util.regex.Pattern;
+-import java.security.MessageDigest;
+-import java.security.NoSuchAlgorithmException;
+ 
+-import org.apache.commons.codec.binary.Hex;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileSystem;
+-import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.StoreFile;
+-import org.apache.hadoop.hbase.util.Bytes;
+-import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+ import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+ 
+ /**
+  * HFileLink describes a link to an hfile.
+  *
+- * An hfile can be served from a region or from the hfile archive directory as
+- * specified by {@value HConstants.HFILE_ARCHIVE_DIRECTORY} conf property.
++ * An hfile can be served from a region or from the hfile archive directory (/hbase/.archive)
+  * HFileLink allows to access the referenced hfile regardless of the location where it is.
+  *
+  * <p>Searches for hfiles in the following order and locations:
+  * <ul>
+  *  <li>/hbase/table/region/cf/hfile</li>
+- *  <li>/hbase/archive/table/region/cf/hfile</li>
++ *  <li>/hbase/.archive/table/region/cf/hfile</li>
+  * </ul>
+  *
+  * The link checks first in the original path if it is not present
+@@ -102,7 +96,7 @@ public class HFileLink extends FileLink {
+   }
+ 
+   /**
+-   * @param rootdir Path to the root directory where hbase files are stored
++   * @param rootDir Path to the root directory where hbase files are stored
+    * @param archiveDir Path to the hbase archive directory
+    * @param path The path of the HFile Link.
+    */
+@@ -129,7 +123,7 @@ public class HFileLink extends FileLink {
+   }
+ 
+   /**
+-   * @param p Path to check.
++   * @param path Path to check.
+    * @return True if the path is a HFileLink.
+    */
+   public static boolean isHFileLink(final Path path) {
+@@ -149,50 +143,6 @@ public class HFileLink extends FileLink {
+   }
+ 
+   /**
+-   * The returned path can be the "original" file path like: /hbase/table/region/cf/hfile
+-   * or a path to the archived file like: /hbase/archive/table/region/cf/hfile
+-   *
+-   * @param fs {@link FileSystem} on which to check the HFileLink
+-   * @param conf {@link Configuration} from which to extract specific archive locations
+-   * @param path HFileLink path
+-   * @return Referenced path (original path or archived path)
+-   * @throws IOException on unexpected error.
+-   */
+-  public static Path getReferencedPath(final Configuration conf, final FileSystem fs,
+-      final Path path) throws IOException {
+-    return getReferencedPath(fs, FSUtils.getRootDir(conf),
+-                             HFileArchiveUtil.getArchivePath(conf), path);
+-  }
+-
+-  /**
+-   * The returned path can be the "original" file path like: /hbase/table/region/cf/hfile
+-   * or a path to the archived file like: /hbase/archive/table/region/cf/hfile
+-   *
+-   * @param fs {@link FileSystem} on which to check the HFileLink
+-   * @param rootdir root hbase directory
+-   * @param archiveDir Path to the hbase archive directory
+-   * @param path HFileLink path
+-   * @return Referenced path (original path or archived path)
+-   * @throws IOException on unexpected error.
+-   */
+-  public static Path getReferencedPath(final FileSystem fs, final Path rootDir,
+-      final Path archiveDir, final Path path) throws IOException {
+-    Path hfilePath = getRelativeTablePath(path);
+-
+-    Path originPath = new Path(rootDir, hfilePath);
+-    if (fs.exists(originPath)) {
+-      return originPath;
+-    }
+-
+-    Path archivePath = new Path(archiveDir, hfilePath);
+-    if (fs.exists(archivePath)) {
+-      return archivePath;
+-    }
+-
+-    return new Path(new Path(rootDir, HConstants.HBASE_TEMP_DIRECTORY), hfilePath);
+-  }
+-
+-  /**
+    * Convert a HFileLink path to a table relative path.
+    * e.g. the link: /hbase/test/0123/cf/testtb=4567-abcd
+    *      becomes: /hbase/testtb/4567/cf/abcd
+@@ -386,7 +336,7 @@ public class HFileLink extends FileLink {
+   /**
+    * Get the full path of the HFile referenced by the back reference
+    *
+-   * @param rootdir root hbase directory
++   * @param rootDir root hbase directory
+    * @param linkRefPath Link Back Reference path
+    * @return full path of the referenced hfile
+    * @throws IOException on unexpected error.
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index a7c50d2..bb96be3 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -312,8 +312,8 @@ public final class ExportSnapshot extends Configured implements Tool {
+     private FileStatus getFileStatus(final FileSystem fs, final Path path) {
+       try {
+         if (HFileLink.isHFileLink(path)) {
+-          Path refPath = HFileLink.getReferencedPath(fs, inputRoot, inputArchive, path);
+-          return fs.getFileStatus(refPath);
++          HFileLink link = new HFileLink(inputRoot, inputArchive, path);
++          return link.getFileStatus(fs);
+         } else if (isHLogLinkPath(path)) {
+           String serverName = path.getParent().getName();
+           String logName = path.getName();
+@@ -383,7 +383,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+         public void storeFile (final String region, final String family, final String hfile)
+             throws IOException {
+           Path path = new Path(family, HFileLink.createHFileLinkName(table, region, hfile));
+-          long size = fs.getFileStatus(HFileLink.getReferencedPath(conf, fs, path)).getLen();
++          long size = new HFileLink(conf, path).getFileStatus(fs).getLen();
+           files.add(new Pair<Path, Long>(path, size));
+         }
+ 
+-- 
+1.7.0.4
+

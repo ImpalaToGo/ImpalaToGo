@@ -1,0 +1,30 @@
+From bdb08a0f1b533dd6b578d141a2d6abf25f329b87 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 30 Jan 2013 16:42:46 -0800
+Subject: [PATCH 196/196] HBASE-7685 Closing socket connection can't be removed from SecureClient
+
+Reason: Bug
+Author: cuijianwei
+Ref: CDH-10221
+---
+ .../org/apache/hadoop/hbase/ipc/SecureClient.java  |    4 +---
+ 1 files changed, 1 insertions(+), 3 deletions(-)
+
+diff --git a/security/src/main/java/org/apache/hadoop/hbase/ipc/SecureClient.java b/security/src/main/java/org/apache/hadoop/hbase/ipc/SecureClient.java
+index ce8305f..1296a0a 100644
+--- a/security/src/main/java/org/apache/hadoop/hbase/ipc/SecureClient.java
++++ b/security/src/main/java/org/apache/hadoop/hbase/ipc/SecureClient.java
+@@ -418,9 +418,7 @@ public class SecureClient extends HBaseClient {
+       // release the resources
+       // first thing to do;take the connection out of the connection list
+       synchronized (connections) {
+-        if (connections.get(remoteId) == this) {
+-          connections.remove(remoteId);
+-        }
++        connections.remove(remoteId, this);
+       }
+ 
+       // close the streams and therefore the socket
+-- 
+1.7.0.4
+

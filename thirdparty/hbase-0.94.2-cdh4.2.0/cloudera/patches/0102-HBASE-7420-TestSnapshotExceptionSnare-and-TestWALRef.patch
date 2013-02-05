@@ -1,0 +1,66 @@
+From 897135ce7689d2b3d175e812fcd465de13cb4d90 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Mon, 24 Dec 2012 09:31:22 +0000
+Subject: [PATCH 102/196] HBASE-7420 TestSnapshotExceptionSnare and TestWALReferenceTask missing test category annotation and failing TestCheckTestClasses
+
+Reason: Snapshots
+Author: Jonathan Hsieh
+Ref: CDH-9551
+---
+ .../snapshot/error/TestSnapshotExceptionSnare.java |    3 +++
+ .../server/snapshot/task/TestWALReferenceTask.java |    3 +++
+ 2 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/server/snapshot/error/TestSnapshotExceptionSnare.java b/src/test/java/org/apache/hadoop/hbase/server/snapshot/error/TestSnapshotExceptionSnare.java
+index 0699057..a115ed5 100644
+--- a/src/test/java/org/apache/hadoop/hbase/server/snapshot/error/TestSnapshotExceptionSnare.java
++++ b/src/test/java/org/apache/hadoop/hbase/server/snapshot/error/TestSnapshotExceptionSnare.java
+@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.SmallTests;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.server.errorhandling.ExceptionListener;
+ import org.apache.hadoop.hbase.server.errorhandling.OperationAttemptTimer;
+@@ -29,10 +30,12 @@ import org.apache.hadoop.hbase.server.snapshot.TakeSnapshotUtils;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.snapshot.exception.HBaseSnapshotException;
+ import org.junit.Test;
++import org.junit.experimental.categories.Category;
+ 
+ /**
+  * Test the exception snare propagates errors as expected
+  */
++@Category(SmallTests.class)
+ public class TestSnapshotExceptionSnare {
+ 
+   private static final Log LOG = LogFactory.getLog(TestSnapshotExceptionSnare.class);
+diff --git a/src/test/java/org/apache/hadoop/hbase/server/snapshot/task/TestWALReferenceTask.java b/src/test/java/org/apache/hadoop/hbase/server/snapshot/task/TestWALReferenceTask.java
+index dfc8f93..5393f86 100644
+--- a/src/test/java/org/apache/hadoop/hbase/server/snapshot/task/TestWALReferenceTask.java
++++ b/src/test/java/org/apache/hadoop/hbase/server/snapshot/task/TestWALReferenceTask.java
+@@ -28,17 +28,20 @@ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.SmallTests;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.server.snapshot.TakeSnapshotUtils;
+ import org.apache.hadoop.hbase.server.snapshot.error.SnapshotExceptionSnare;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.junit.Test;
++import org.junit.experimental.categories.Category;
+ import org.mockito.Mockito;
+ 
+ /**
+  * Test that the WAL reference task works as expected
+  */
++@Category(SmallTests.class)
+ public class TestWALReferenceTask {
+ 
+   private static final Log LOG = LogFactory.getLog(TestWALReferenceTask.class);
+-- 
+1.7.0.4
+

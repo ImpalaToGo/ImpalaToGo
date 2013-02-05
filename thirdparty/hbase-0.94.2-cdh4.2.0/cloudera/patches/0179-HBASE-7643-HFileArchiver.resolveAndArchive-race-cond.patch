@@ -1,0 +1,263 @@
+From ab379cb33a9fa0cac3ba73048b57035ff1a1ee93 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 23 Jan 2013 11:07:03 -0800
+Subject: [PATCH 179/196] HBASE-7643 HFileArchiver.resolveAndArchive() race condition may lead to snapshot data loss
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../apache/hadoop/hbase/backup/HFileArchiver.java  |   55 ++++++++++++----
+ .../hadoop/hbase/backup/TestHFileArchiving.java    |   68 ++++++++++++++++++++
+ .../hadoop/hbase/util/StoppableImplementation.java |   40 ++++++++++++
+ 3 files changed, 151 insertions(+), 12 deletions(-)
+ create mode 100644 src/test/java/org/apache/hadoop/hbase/util/StoppableImplementation.java
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+index 1bd6843..66d7481 100644
+--- a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
++++ b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+@@ -55,6 +55,9 @@ public class HFileArchiver {
+   private static final Log LOG = LogFactory.getLog(HFileArchiver.class);
+   private static final String SEPARATOR = ".";
+ 
++  /** Number of retries in case of fs operation failure */
++  private static final int DEFAULT_RETRIES_NUMBER = 6;
++
+   private HFileArchiver() {
+     // hidden ctor since this is just a util
+   }
+@@ -133,6 +136,7 @@ public class HFileArchiver {
+     try {
+       success = resolveAndArchive(fs, regionArchiveDir, toArchive);
+     } catch (IOException e) {
++      LOG.error("Failed to archive: " + toArchive, e);
+       success = false;
+     }
+ 
+@@ -273,14 +277,12 @@ public class HFileArchiver {
+     long start = EnvironmentEdgeManager.currentTimeMillis();
+     List<File> failures = resolveAndArchive(fs, baseArchiveDir, toArchive, start);
+ 
+-    // clean out the failures by just deleting them
++    // notify that some files were not archived.
++    // We can't delete the files otherwise snapshots or other backup system
++    // that relies on the archiver end up with data loss.
+     if (failures.size() > 0) {
+-      try {
+-        LOG.error("Failed to complete archive, deleting extra store files.");
+-        deleteFilesWithoutArchiving(failures);
+-      } catch (IOException e) {
+-        LOG.warn("Failed to delete store file(s) when archiving failed", e);
+-      }
++      LOG.warn("Failed to complete archive of: " + failures +
++        ". Those files are still in the original location, and they may slow down reads.");
+       return false;
+     }
+     return true;
+@@ -383,19 +385,48 @@ public class HFileArchiver {
+         if (!fs.delete(archiveFile, false)) {
+           throw new IOException("Couldn't delete existing archive file (" + archiveFile
+               + ") or rename it to the backup file (" + backedupArchiveFile
+-              + ")to make room for similarly named file.");
++              + ") to make room for similarly named file.");
+         }
+       }
+       LOG.debug("Backed up archive file from: " + archiveFile);
+     }
+ 
+-    LOG.debug("No existing file in archive for:" + archiveFile + ", free to archive original file.");
++    LOG.debug("No existing file in archive for:" + archiveFile +
++        ", free to archive original file.");
+ 
+     // at this point, we should have a free spot for the archive file
+-    if (currentFile.moveAndClose(archiveFile)) {
++    boolean success = false;
++    for (int i = 0; !success && i < DEFAULT_RETRIES_NUMBER; ++i) {
++      if (i > 0) {
++        // Ensure that the archive directory exists.
++        // The previous "move to archive" operation has failed probably because
++        // the cleaner has removed our archive directory (HBASE-7643).
++        // (we're in a retry loop, so don't worry too much about the exception)
++        try {
++          if (!fs.exists(archiveDir)) {
++            if (fs.mkdirs(archiveDir)) {
++              LOG.debug("Created archive directory:" + archiveDir);
++            }
++          }
++        } catch (IOException e) {
++          LOG.warn("Failed to create the archive directory: " + archiveDir, e);
++        }
++      }
++
++      try {
++        success = currentFile.moveAndClose(archiveFile);
++      } catch (IOException e) {
++        LOG.warn("Failed to archive file: " + currentFile + " on try #" + i, e);
++        success = false;
++      }
++    }
++
++    if (!success) {
+       LOG.error("Failed to archive file:" + currentFile);
+       return false;
+-    } else if (LOG.isDebugEnabled()) {
++    }
++
++    if (LOG.isDebugEnabled()) {
+       LOG.debug("Finished archiving file from: " + currentFile + ", to: " + archiveFile);
+     }
+     return true;
+@@ -572,7 +603,7 @@ public class HFileArchiver {
+     public boolean moveAndClose(Path dest) throws IOException {
+       this.close();
+       Path p = this.getPath();
+-      return !fs.rename(p, dest);
++      return fs.rename(p, dest);
+     }
+ 
+     /**
+diff --git a/src/test/java/org/apache/hadoop/hbase/backup/TestHFileArchiving.java b/src/test/java/org/apache/hadoop/hbase/backup/TestHFileArchiving.java
+index eb17ac7..c2b3d76 100644
+--- a/src/test/java/org/apache/hadoop/hbase/backup/TestHFileArchiving.java
++++ b/src/test/java/org/apache/hadoop/hbase/backup/TestHFileArchiving.java
+@@ -36,7 +36,11 @@ import org.apache.hadoop.fs.PathFilter;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.Stoppable;
++import org.apache.hadoop.hbase.backup.HFileArchiver;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.master.MasterFileSystem;
++import org.apache.hadoop.hbase.master.cleaner.HFileCleaner;
+ import org.apache.hadoop.hbase.regionserver.ConstantSizeRegionSplitPolicy;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.HRegionServer;
+@@ -44,6 +48,7 @@ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.HFileArchiveTestingUtil;
+ import org.apache.hadoop.hbase.util.HFileArchiveUtil;
++import org.apache.hadoop.hbase.util.StoppableImplementation;
+ import org.junit.After;
+ import org.junit.AfterClass;
+ import org.junit.Assert;
+@@ -319,6 +324,69 @@ public class TestHFileArchiving {
+       archivedFiles.containsAll(storeFiles));
+   }
+ 
++  /**
++   * Test HFileArchiver.resolveAndArchive() race condition HBASE-7643
++   */
++  @Test
++  public void testCleaningRace() throws Exception {
++    final long TEST_TIME = 20 * 1000;
++
++    Configuration conf = UTIL.getMiniHBaseCluster().getMaster().getConfiguration();
++    Path rootDir = UTIL.getDataTestDir("testCleaningRace");
++    FileSystem fs = UTIL.getTestFileSystem();
++
++    Path archiveDir = new Path(rootDir, HConstants.HFILE_ARCHIVE_DIRECTORY);
++    Path regionDir = new Path("table", "abcdef");
++    Path familyDir = new Path(regionDir, "cf");
++
++    Path sourceRegionDir = new Path(rootDir, regionDir);
++    fs.mkdirs(sourceRegionDir);
++
++    Stoppable stoppable = new StoppableImplementation();
++
++    // The cleaner should be looping without long pauses to reproduce the race condition.
++    HFileCleaner cleaner = new HFileCleaner(1, stoppable, conf, fs, archiveDir);
++    try {
++      cleaner.start();
++
++      // Keep creating/archiving new files while the cleaner is running in the other thread
++      long startTime = System.currentTimeMillis();
++      for (long fid = 0; (System.currentTimeMillis() - startTime) < TEST_TIME; ++fid) {
++        Path file = new Path(familyDir,  String.valueOf(fid));
++        Path sourceFile = new Path(rootDir, file);
++        Path archiveFile = new Path(archiveDir, file);
++
++        fs.createNewFile(sourceFile);
++
++        try {
++          // Try to archive the file
++          HFileArchiver.archiveRegion(fs, rootDir,
++              sourceRegionDir.getParent(), sourceRegionDir);
++
++          // The archiver succeded, the file is no longer in the original location
++          // but it's in the archive location.
++          LOG.debug("hfile=" + fid + " should be in the archive");
++          assertTrue(fs.exists(archiveFile));
++          assertFalse(fs.exists(sourceFile));
++        } catch (IOException e) {
++          // The archiver is unable to archive the file. Probably HBASE-7643 race condition.
++          // in this case, the file should not be archived, and we should have the file
++          // in the original location.
++          LOG.debug("hfile=" + fid + " should be in the source location");
++          assertFalse(fs.exists(archiveFile));
++          assertTrue(fs.exists(sourceFile));
++
++          // Avoid to have this file in the next run
++          fs.delete(sourceFile, false);
++        }
++      }
++    } finally {
++      stoppable.stop("test end");
++      cleaner.join();
++      fs.delete(rootDir, true);
++    }
++  }
++
+   private void clearArchiveDirectory() throws IOException {
+     UTIL.getTestFileSystem().delete(new Path(UTIL.getDefaultRootDirPath(), ".archive"), true);
+   }
+diff --git a/src/test/java/org/apache/hadoop/hbase/util/StoppableImplementation.java b/src/test/java/org/apache/hadoop/hbase/util/StoppableImplementation.java
+new file mode 100644
+index 0000000..51a22f3
+--- /dev/null
++++ b/src/test/java/org/apache/hadoop/hbase/util/StoppableImplementation.java
+@@ -0,0 +1,40 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.util;
++
++import org.apache.hadoop.classification.InterfaceAudience;
++import org.apache.hadoop.hbase.Stoppable;
++
++/**
++ * A base implementation for a Stoppable service
++ */
++@InterfaceAudience.Private
++public class StoppableImplementation implements Stoppable {
++  volatile boolean stopped = false;
++
++  @Override
++  public void stop(String why) {
++    this.stopped = true;
++  }
++
++  @Override
++  public boolean isStopped() {
++    return stopped;
++  }
++}
+\ No newline at end of file
+-- 
+1.7.0.4
+

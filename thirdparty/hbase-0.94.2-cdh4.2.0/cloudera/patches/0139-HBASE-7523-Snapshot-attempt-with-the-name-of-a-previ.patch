@@ -1,0 +1,133 @@
+From 4fa5df5eeffcdb6de31f0eaf95cef74031ecf8bd Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jon@cloudera.com>
+Date: Sun, 30 Dec 2012 23:34:27 -0800
+Subject: [PATCH 139/196] HBASE-7523 Snapshot attempt with the name of a previously taken snapshot fails sometimes.
+
+Reason: Snapshots
+Author: Jonathan Hsieh
+Ref: CDH-9551
+---
+ .../snapshot/EnabledTableSnapshotHandler.java      |    2 +-
+ .../apache/hadoop/hbase/procedure/Procedure.java   |    3 ++-
+ .../hbase/procedure/ProcedureCoordinator.java      |   13 +++++++++++--
+ .../hadoop/hbase/procedure/Subprocedure.java       |    1 -
+ .../hbase/procedure/ZKProcedureMemberRpcs.java     |   10 +++++-----
+ 5 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/EnabledTableSnapshotHandler.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/EnabledTableSnapshotHandler.java
+index f3476b4..a4693ad 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/EnabledTableSnapshotHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/EnabledTableSnapshotHandler.java
+@@ -74,7 +74,7 @@ public class EnabledTableSnapshotHandler extends TakeSnapshotHandler {
+     Procedure proc = coordinator.startProcedure(this.monitor, this.snapshot.getName(),
+       this.snapshot.toByteArray(), Lists.newArrayList(regionServers));
+     if (proc == null) {
+-      String msg = "Failed to submit distribute procedure for snapshot '"
++      String msg = "Failed to submit distributed procedure for snapshot '"
+           + snapshot.getName() + "'";
+       LOG.error(msg);
+       throw new HBaseSnapshotException(msg);
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java b/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
+index 0df2d62..af8f06d 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
+@@ -310,7 +310,8 @@ public class Procedure implements Callable<Void>, ForeignExceptionListener {
+     }
+     if (removed) {
+       LOG.debug("Member: '" + member + "' released barrier for procedure'" + procName
+-          + "', counting down latch");
++          + "', counting down latch.  Waiting for " + releasedBarrierLatch.getCount()
++          + " more");
+     } else {
+       LOG.warn("Member: '" + member + "' released barrier for procedure'" + procName
+           + "', but we weren't waiting on it to release!");
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
+index 2ce3e69..f87b2c4 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
+@@ -113,8 +113,15 @@ public class ProcedureCoordinator {
+ 
+     // make sure we aren't already running an procedure of that name
+     synchronized (procedures) {
+-      if (procedures.get(procName) != null) {
+-        return false;
++      Procedure oldProc = procedures.get(procName);
++      if (oldProc != null) {
++        // procedures are always eventually completed on both successful and failed execution
++        if (oldProc.completedLatch.getCount() != 0) {
++          LOG.warn("Procedure " + procName + " currently running.  Rejecting new request");
++          return false;
++        }
++        LOG.debug("Procedure " + procName + " was in running list but was completed.  Accepting new attempt.");
++        procedures.remove(procName);
+       }
+     }
+ 
+@@ -128,6 +135,8 @@ public class ProcedureCoordinator {
+       }
+       return true;
+     } catch (RejectedExecutionException e) {
++      LOG.warn("Procedure " + procName + " rejected by execution pool.  Propagating error and " +
++          "cancelling operation.", e);
+       // the thread pool is full and we can't run the procedure
+       proc.receive(new ForeignException(procName, e));
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java b/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
+index b02cd56..8e50409 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
+@@ -185,7 +185,6 @@ abstract public class Subprocedure implements Callable<Void> {
+ 
+       // make sure we didn't get an external exception
+       rethrowException();
+-      LOG.debug("Subprocedure '" + barrierName + "' locally completed");
+     } catch (Exception e) {
+       String msg = null;
+       if (e instanceof InterruptedException) {
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureMemberRpcs.java b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureMemberRpcs.java
+index 8017f81..e59b596 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureMemberRpcs.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureMemberRpcs.java
+@@ -87,7 +87,7 @@ public class ZKProcedureMemberRpcs implements ProcedureMemberRpcs {
+           String parent = ZKUtil.getParent(path);
+           // if its the end barrier, the procedure can be completed
+           if (parent.equals(this.reachedZnode)) {
+-            recievedReachedGlobalBarrier(path);
++            receivedReachedGlobalBarrier(path);
+             return;
+           } else if (parent.equals(this.abortZnode)) {
+             abort(path);
+@@ -104,10 +104,10 @@ public class ZKProcedureMemberRpcs implements ProcedureMemberRpcs {
+       public void nodeChildrenChanged(String path) {
+         LOG.info("Received children changed event:" + path);
+         if (path.equals(this.acquiredZnode)) {
+-          LOG.info("Recieved start event.");
++          LOG.info("Received start event.");
+           waitForNewProcedures();
+         } else if (path.equals(this.abortZnode)) {
+-          LOG.info("Recieved abort event.");
++          LOG.info("Received abort event.");
+           watchForAbortedProcedures();
+         }
+       }
+@@ -134,7 +134,7 @@ public class ZKProcedureMemberRpcs implements ProcedureMemberRpcs {
+    * Pass along the procedure global barrier notification to any listeners
+    * @param path full znode path that cause the notification
+    */
+-  private void recievedReachedGlobalBarrier(String path) {
++  private void receivedReachedGlobalBarrier(String path) {
+     LOG.debug("Recieved reached global barrier:" + path);
+     String procName = ZKUtil.getNodeName(path);
+     this.member.receivedReachedGlobalBarrier(procName);
+@@ -244,7 +244,7 @@ public class ZKProcedureMemberRpcs implements ProcedureMemberRpcs {
+       String reachedBarrier = zkController.getReachedBarrierNode(procName);
+       LOG.debug("Watch for global barrier reached:" + reachedBarrier);
+       if (ZKUtil.watchAndCheckExists(zkController.getWatcher(), reachedBarrier)) {
+-        recievedReachedGlobalBarrier(reachedBarrier);
++        receivedReachedGlobalBarrier(reachedBarrier);
+       }
+     } catch (KeeperException e) {
+       member.controllerConnectionFailure("Failed to acquire barrier for procedure: "
+-- 
+1.7.0.4
+

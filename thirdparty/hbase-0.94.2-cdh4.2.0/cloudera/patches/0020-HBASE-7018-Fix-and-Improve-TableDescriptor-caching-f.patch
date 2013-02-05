@@ -1,0 +1,230 @@
+From d91be8887608d7aa5ff0cc8b0f4bee538beeff67 Mon Sep 17 00:00:00 2001
+From: Gregory Chanan <gchanan@apache.org>
+Date: Wed, 24 Oct 2012 01:10:48 +0000
+Subject: [PATCH 020/196] HBASE-7018 Fix and Improve TableDescriptor caching for bulk assignment
+
+Reason: Bug
+Ref: CDH-8672
+Author: Gregory Chanan
+---
+ .../org/apache/hadoop/hbase/TableDescriptors.java  |    9 +---
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    2 +-
+ .../hadoop/hbase/util/FSTableDescriptors.java      |   54 ++++++++++++--------
+ .../hadoop/hbase/master/TestCatalogJanitor.java    |    5 +-
+ 4 files changed, 38 insertions(+), 32 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/TableDescriptors.java b/src/main/java/org/apache/hadoop/hbase/TableDescriptors.java
+index 1455895..58c211b 100644
+--- a/src/main/java/org/apache/hadoop/hbase/TableDescriptors.java
++++ b/src/main/java/org/apache/hadoop/hbase/TableDescriptors.java
+@@ -17,7 +17,6 @@
+  */
+ package org.apache.hadoop.hbase;
+ 
+-import java.io.FileNotFoundException;
+ import java.io.IOException;
+ import java.util.Map;
+ 
+@@ -29,22 +28,18 @@ public interface TableDescriptors {
+   /**
+    * @param tablename
+    * @return HTableDescriptor for tablename
+-   * @throws TableExistsException
+-   * @throws FileNotFoundException
+    * @throws IOException
+    */
+   public HTableDescriptor get(final String tablename)
+-  throws FileNotFoundException, IOException;
++  throws IOException;
+ 
+   /**
+    * @param tablename
+    * @return HTableDescriptor for tablename
+-   * @throws TableExistsException
+-   * @throws FileNotFoundException
+    * @throws IOException
+    */
+   public HTableDescriptor get(final byte[] tablename)
+-  throws FileNotFoundException, IOException;
++  throws IOException;
+ 
+   /**
+    * Get Map of all HTableDescriptors. Populates the descriptor cache as a
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index 8f9cf0c..4fdbd5a 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -2761,7 +2761,7 @@ public class HRegionServer implements HRegionInterface, HBaseRPCErrorHandler,
+       htd = htds.get(region.getTableNameAsString());
+       if (htd == null) {
+         htd = this.tableDescriptors.get(region.getTableName());
+-        htds.put(region.getRegionNameAsString(), htd);
++        htds.put(region.getTableNameAsString(), htd);
+       }
+     }
+     this.regionsInTransitionInRS.putIfAbsent(region.getEncodedNameAsBytes(),
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java b/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
+index 4913a19..5141121 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/FSTableDescriptors.java
+@@ -122,7 +122,7 @@ public class FSTableDescriptors implements TableDescriptors {
+    */
+   @Override
+   public HTableDescriptor get(final byte [] tablename)
+-  throws FileNotFoundException, IOException {
++  throws IOException {
+     return get(Bytes.toString(tablename));
+   }
+ 
+@@ -131,7 +131,7 @@ public class FSTableDescriptors implements TableDescriptors {
+    */
+   @Override
+   public HTableDescriptor get(final String tablename)
+-  throws FileNotFoundException, IOException {
++  throws IOException {
+     invocations++;
+     if (HTableDescriptor.ROOT_TABLEDESC.getNameAsString().equals(tablename)) {
+       cachehits++;
+@@ -148,20 +148,19 @@ public class FSTableDescriptors implements TableDescriptors {
+     }
+ 
+     // Look in cache of descriptors.
+-    TableDescriptorModtime tdm = this.cache.get(tablename);
++    TableDescriptorModtime cachedtdm = this.cache.get(tablename);
+ 
+-    // Check mod time has not changed (this is trip to NN).
+-    long modtime = getTableInfoModtime(this.fs, this.rootdir, tablename);
+-    if (tdm != null) {
+-      if (modtime <= tdm.getModtime()) {
++    if (cachedtdm != null) {
++      // Check mod time has not changed (this is trip to NN).
++      if (getTableInfoModtime(this.fs, this.rootdir, tablename) <= cachedtdm.getModtime()) {
+         cachehits++;
+-        return tdm.getTableDescriptor();
++        return cachedtdm.getTableDescriptor();
+       }
+     }
+     
+-    HTableDescriptor htd = null;
++    TableDescriptorModtime tdmt = null;
+     try {
+-       htd = getTableDescriptor(this.fs, this.rootdir, tablename);
++      tdmt = getTableDescriptorModtime(this.fs, this.rootdir, tablename);
+     } catch (NullPointerException e) {
+       LOG.debug("Exception during readTableDecriptor. Current table name = "
+           + tablename, e);
+@@ -170,14 +169,14 @@ public class FSTableDescriptors implements TableDescriptors {
+           + tablename, ioe);
+     }
+     
+-    if (htd == null) {
++    if (tdmt == null) {
+       LOG.warn("The following folder is in HBase's root directory and " +
+         "doesn't contain a table descriptor, " +
+         "do consider deleting it: " + tablename);
+     } else {
+-      this.cache.put(tablename, new TableDescriptorModtime(modtime, htd));
++      this.cache.put(tablename, tdmt);
+     }
+-    return htd;
++    return tdmt == null ? null : tdmt.getTableDescriptor();
+   }
+ 
+   /* (non-Javadoc)
+@@ -231,7 +230,7 @@ public class FSTableDescriptors implements TableDescriptors {
+       }
+     }
+     TableDescriptorModtime tdm = this.cache.remove(tablename);
+-    return tdm == null? null: tdm.getTableDescriptor();
++    return tdm == null ? null : tdm.getTableDescriptor();
+   }
+ 
+   /**
+@@ -383,7 +382,9 @@ public class FSTableDescriptors implements TableDescriptors {
+   throws IOException {
+      HTableDescriptor htd = null;
+      try {
+-       htd = getTableDescriptor(fs, hbaseRootDir, Bytes.toString(tableName));
++       TableDescriptorModtime tdmt =
++         getTableDescriptorModtime(fs, hbaseRootDir, Bytes.toString(tableName));
++       htd = tdmt == null ? null : tdmt.getTableDescriptor();
+      } catch (NullPointerException e) {
+        LOG.debug("Exception during readTableDecriptor. Current table name = "
+            + Bytes.toString(tableName), e);
+@@ -392,19 +393,23 @@ public class FSTableDescriptors implements TableDescriptors {
+   }
+ 
+   static HTableDescriptor getTableDescriptor(FileSystem fs,
++      Path hbaseRootDir, String tableName) throws NullPointerException, IOException {
++    TableDescriptorModtime tdmt = getTableDescriptorModtime(fs, hbaseRootDir, tableName);
++    return tdmt == null ? null : tdmt.getTableDescriptor();
++  }
++
++  static TableDescriptorModtime getTableDescriptorModtime(FileSystem fs,
+       Path hbaseRootDir, String tableName) throws NullPointerException, IOException{
+-    HTableDescriptor htd = null;
+     // ignore both -ROOT- and .META. tables
+     if (Bytes.compareTo(Bytes.toBytes(tableName), HConstants.ROOT_TABLE_NAME) == 0
+         || Bytes.compareTo(Bytes.toBytes(tableName), HConstants.META_TABLE_NAME) == 0) {
+       return null;
+     }
+-    htd = getTableDescriptor(fs, FSUtils.getTablePath(hbaseRootDir, tableName));
+-    return htd;
++    return getTableDescriptorModtime(fs, FSUtils.getTablePath(hbaseRootDir, tableName));
+   }
+ 
+-  public static HTableDescriptor getTableDescriptor(FileSystem fs, Path tableDir)
+-  throws IOException, NullPointerException {
++  static TableDescriptorModtime getTableDescriptorModtime(FileSystem fs, Path tableDir)
++  throws NullPointerException, IOException {
+     if (tableDir == null) throw new NullPointerException();
+     FileStatus status = getTableInfoPath(fs, tableDir);
+     if (status == null) {
+@@ -419,8 +424,15 @@ public class FSTableDescriptors implements TableDescriptors {
+     } finally {
+       fsDataInputStream.close();
+     }
+-    return hTableDescriptor;
++    return new TableDescriptorModtime(status.getModificationTime(), hTableDescriptor);
++  }
++
++  public static HTableDescriptor getTableDescriptor(FileSystem fs, Path tableDir)
++  throws IOException, NullPointerException {
++    TableDescriptorModtime tdmt = getTableDescriptorModtime(fs, tableDir);
++    return tdmt == null? null: tdmt.getTableDescriptor();
+   }
++ 
+ 
+   /**
+    * Update table descriptor
+diff --git a/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java b/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
+index 47bc119..b4afa3b 100644
+--- a/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
++++ b/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
+@@ -27,7 +27,6 @@ import static org.junit.Assert.assertEquals;
+ import static org.mockito.Mockito.doReturn;
+ import static org.mockito.Mockito.spy;
+ 
+-import java.io.FileNotFoundException;
+ import java.io.IOException;
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -247,13 +246,13 @@ public class TestCatalogJanitor {
+         
+         @Override
+         public HTableDescriptor get(byte[] tablename)
+-        throws FileNotFoundException, IOException {
++        throws IOException {
+           return get(Bytes.toString(tablename));
+         }
+         
+         @Override
+         public HTableDescriptor get(String tablename)
+-        throws FileNotFoundException, IOException {
++        throws IOException {
+           return createHTableDescriptor();
+         }
+         
+-- 
+1.7.0.4
+

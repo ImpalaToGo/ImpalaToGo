@@ -1,0 +1,50 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;1.&nbsp;Upgrading</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="upgrading.html" title="Chapter&nbsp;1.&nbsp;Upgrading"><link rel="next" href="upgrade0.92.html" title="1.2.&nbsp;Upgrading from 0.90.x to 0.92.x"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;1.&nbsp;Upgrading</th></tr><tr><td width="20%" align="left">&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="upgrade0.92.html">Next</a></td></tr></table><hr></div><div class="chapter" title="Chapter&nbsp;1.&nbsp;Upgrading"><div class="titlepage"><div><div><h2 class="title"><a name="upgrading"></a>Chapter&nbsp;1.&nbsp;Upgrading</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="upgrading.html#upgrade0.90">1.1. Upgrading to HBase 0.90.x from 0.20.x or 0.89.x</a></span></dt><dt><span class="section"><a href="upgrade0.92.html">1.2. Upgrading from 0.90.x to 0.92.x</a></span></dt><dd><dl><dt><span class="section"><a href="upgrade0.92.html#d3522e85">1.2.1. You can&#8217;t go back!
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e99">1.2.2. MSLAB is ON by default
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e124">1.2.3. Distributed splitting is on by default
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e129">1.2.4. Memory accounting is different now
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e138">1.2.5. On the Hadoop version to use
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e150">1.2.6. HBase 0.92.0 ships with ZooKeeper 3.4.2
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e155">1.2.7. Online alter is off by default
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e162">1.2.8. WebUI
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e167">1.2.9. Security tarball
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e172">1.2.10. Experimental off-heap cache
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e177">1.2.11. Changes in HBase replication
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e182">1.2.12. RegionServer now aborts if OOME
+</a></span></dt><dt><span class="section"><a href="upgrade0.92.html#d3522e187">1.2.13. HFile V2 and the &#8220;Bigger, Fewer&#8221; Tendency
+</a></span></dt></dl></dd></dl></div><p>
+        Review <a class="xref" href="">???</a>, in particular the section on Hadoop version.
+    </p><div class="section" title="1.1.&nbsp;Upgrading to HBase 0.90.x from 0.20.x or 0.89.x"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="upgrade0.90"></a>1.1.&nbsp;Upgrading to HBase 0.90.x from 0.20.x or 0.89.x</h2></div></div></div><p>This version of 0.90.x HBase can be started on data written by
+              HBase 0.20.x or HBase 0.89.x.  There is no need of a migration step.
+              HBase 0.89.x and 0.90.x does write out the name of region directories
+              differently -- it names them with a md5 hash of the region name rather
+              than a jenkins hash -- so this means that once started, there is no
+              going back to HBase 0.20.x.
+          </p><p>
+             Be sure to remove the <code class="filename">hbase-default.xml</code> from
+             your <code class="filename">conf</code>
+             directory on upgrade.  A 0.20.x version of this file will have
+             sub-optimal configurations for 0.90.x HBase.  The
+             <code class="filename">hbase-default.xml</code> file is now bundled into the
+             HBase jar and read from there.  If you would like to review
+             the content of this file, see it in the src tree at
+             <code class="filename">src/main/resources/hbase-default.xml</code> or
+             see <a class="xref" href="">???</a>.
+          </p><p>
+            Finally, if upgrading from 0.20.x, check your 
+            <code class="varname">.META.</code> schema in the shell.  In the past we would
+            recommend that users run with a 16kb
+            <code class="varname">MEMSTORE_FLUSHSIZE</code>.
+            Run <code class="code">hbase&gt; scan '-ROOT-'</code> in the shell. This will output
+            the current <code class="varname">.META.</code> schema.  Check
+            <code class="varname">MEMSTORE_FLUSHSIZE</code> size.  Is it 16kb (16384)?  If so, you will
+            need to change this (The 'normal'/default value is 64MB (67108864)).
+            Run the script <code class="filename">bin/set_meta_memstore_size.rb</code>.
+            This will make the necessary edit to your <code class="varname">.META.</code> schema.
+            Failure to run this change will make for a slow cluster <sup>[<a name="d3522e53" href="#ftn.d3522e53" class="footnote">1</a>]</sup>
+            .
+
+          </p></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a id="ftn.d3522e53" href="#d3522e53" class="para">1</a>] </sup>
+            See <a class="link" href="https://issues.apache.org/jira/browse/HBASE-3499" target="_top">HBASE-3499 Users upgrading to 0.90.0 need to have their .META. table updated with the right MEMSTORE_SIZE</a>
+            </p></div></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left">&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="upgrade0.92.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right" valign="top">&nbsp;1.2.&nbsp;Upgrading from 0.90.x to 0.92.x</td></tr></table></div></body></html>

@@ -1,0 +1,50 @@
+From 2f8bbe413397fcffb792d8a4934b9df0c2923cbc Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Sun, 14 Oct 2012 16:58:01 -0600
+Subject: [PATCH 003/196] CDH-4562 Overriding/setting HBase build revision tag.
+
+Reason: Improvement
+Author: Himanshu Vashishtha
+---
+ pom.xml            |    2 ++
+ src/saveVersion.sh |    4 ++++
+ 2 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 5ffbe56..675e2f6 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -859,6 +859,7 @@
+ 
+                 <exec executable="sh">
+                   <arg line="${basedir}/src/saveVersion.sh ${project.version} ${generated.sources}/java"/>
++                  <env key="HBASE_REVISION" value="${cloudera.hash}" />
+                 </exec>
+               </target>
+             </configuration>
+@@ -1034,6 +1035,7 @@
+     <thrift.version>0.8.0</thrift.version>
+     <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
+     <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
++    <cloudera.hash></cloudera.hash>
+ 
+     <package.prefix>/usr</package.prefix>
+     <package.conf.dir>/etc/hbase</package.conf.dir>
+diff --git a/src/saveVersion.sh b/src/saveVersion.sh
+index baae4e2..6704b64 100755
+--- a/src/saveVersion.sh
++++ b/src/saveVersion.sh
+@@ -36,6 +36,10 @@ else
+   revision="Unknown"
+   url="file://$cwd"
+ fi
++
++#allow override of revision using environment variable
++revision=${HBASE_REVISION:-$revision}
++
+ mkdir -p "$outputDirectory/org/apache/hadoop/hbase"
+ cat >"$outputDirectory/org/apache/hadoop/hbase/package-info.java" <<EOF
+ /*
+-- 
+1.7.0.4
+

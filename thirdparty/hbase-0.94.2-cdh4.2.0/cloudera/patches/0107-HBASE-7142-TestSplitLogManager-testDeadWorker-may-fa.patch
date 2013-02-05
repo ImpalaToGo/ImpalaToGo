@@ -1,0 +1,30 @@
+From 56af50168f5cdcb2efa571cb9f684958aa551a26 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Thu, 27 Dec 2012 11:51:08 -0700
+Subject: [PATCH 107/196] HBASE-7142 TestSplitLogManager#testDeadWorker may fail because of hard limit on the TimeoutMonitor's timeout period
+ Reason: Test
+ Author: Himanshu Vashishtha
+ Ref: CDH-8966
+
+---
+ .../hadoop/hbase/master/TestSplitLogManager.java   |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java b/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
+index b8712fa..ef5f698 100644
+--- a/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
++++ b/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
+@@ -430,8 +430,8 @@ public class TestSplitLogManager {
+     ZKUtil.setData(zkw, tasknode, TaskState.TASK_OWNED.get("worker1"));
+     waitForCounter(tot_mgr_heartbeat, 0, 1, 1000);
+     slm.handleDeadWorker("worker1");
+-    waitForCounter(tot_mgr_resubmit, 0, 1, 1000);
+-    waitForCounter(tot_mgr_resubmit_dead_server_task, 0, 1, 1000);
++    waitForCounter(tot_mgr_resubmit, 0, 1, 3000);
++    waitForCounter(tot_mgr_resubmit_dead_server_task, 0, 1, 3000);
+ 
+     int version1 = ZKUtil.checkExists(zkw, tasknode);
+     assertTrue(version1 > version);
+-- 
+1.7.0.4
+

@@ -1,0 +1,40 @@
+From b7087c990ab1d0b097a3c43408147b7f33899c05 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 19 Dec 2012 22:27:37 +0000
+Subject: [PATCH 094/196] HBSE-7535 [shell] have list and list_snapshot return jruby string arrays
+
+Reason: Improvement
+Author: Jonathan Hsieh
+Ref: CDH-9551
+---
+ src/main/ruby/shell/commands/list.rb           |    1 +
+ src/main/ruby/shell/commands/list_snapshots.rb |    1 +
+ 2 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/src/main/ruby/shell/commands/list.rb b/src/main/ruby/shell/commands/list.rb
+index 592fb5e..3558bd5 100644
+--- a/src/main/ruby/shell/commands/list.rb
++++ b/src/main/ruby/shell/commands/list.rb
+@@ -42,6 +42,7 @@ EOF
+         end
+ 
+         formatter.footer(now, list.size)
++        return list
+       end
+     end
+   end
+diff --git a/src/main/ruby/shell/commands/list_snapshots.rb b/src/main/ruby/shell/commands/list_snapshots.rb
+index 6e4e88a..9513518 100644
+--- a/src/main/ruby/shell/commands/list_snapshots.rb
++++ b/src/main/ruby/shell/commands/list_snapshots.rb
+@@ -45,6 +45,7 @@ EOF
+         end
+ 
+         formatter.footer(now, list.size)
++        return list.map { |s| s.getName() }
+       end
+     end
+   end
+-- 
+1.7.0.4
+

@@ -1,0 +1,30 @@
+From 32144193ebe7b7eb5a157566775cdad8faad53c5 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Thu, 20 Dec 2012 11:27:47 -0700
+Subject: [PATCH 098/196] Fixes the compile error with java update < 27
+ Reason: Compile error fix
+ Author: Himanshu Vashishtha
+ Ref: CDH-9593
+
+---
+ .../impl/TestExceptionOrchestrator.java            |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/server/errorhandling/impl/TestExceptionOrchestrator.java b/src/test/java/org/apache/hadoop/hbase/server/errorhandling/impl/TestExceptionOrchestrator.java
+index 573e39b..cd755cb 100644
+--- a/src/test/java/org/apache/hadoop/hbase/server/errorhandling/impl/TestExceptionOrchestrator.java
++++ b/src/test/java/org/apache/hadoop/hbase/server/errorhandling/impl/TestExceptionOrchestrator.java
+@@ -39,8 +39,8 @@ public class TestExceptionOrchestrator {
+   @Test
+   public void testErrorPropagation() {
+ 
+-    ExceptionListener listener1 = Mockito.mock(ExceptionListener.class);
+-    ExceptionListener listener2 = Mockito.mock(ExceptionListener.class);
++    ExceptionListener<Exception> listener1 = Mockito.mock(ExceptionListener.class);
++    ExceptionListener<Exception> listener2 = Mockito.mock(ExceptionListener.class);
+ 
+     ExceptionOrchestrator<Exception> orchestrator = new ExceptionOrchestrator<Exception>();
+ 
+-- 
+1.7.0.4
+

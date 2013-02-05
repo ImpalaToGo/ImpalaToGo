@@ -1,0 +1,66 @@
+From 5bb1265f0eb3af2404b336106de6269f590e6ff2 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Sat, 29 Dec 2012 19:13:14 +0000
+Subject: [PATCH 114/196] HBASE-7352 clone operation from HBaseAdmin can hang forever
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   24 +++++++++++++++-----
+ 1 files changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index d90e763..581684e 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -678,7 +678,21 @@ public class HBaseAdmin implements Abortable, Closeable {
+     enableTableAsync(tableName);
+ 
+     // Wait until all regions are enabled
++    waitUntilTableIsEnabled(tableName);
++
++    LOG.info("Enabled table " + Bytes.toString(tableName));
++  }
++
++  /**
++   * Wait for the table to be enabled.
++   * If enabling the table exceeds the retry period, an exception is thrown.
++   * @param tableName name of the table
++   * @throws IOException if a remote or network exception occurs or
++   *    table is not enabled after the retries period.
++   */
++  private void waitUntilTableIsEnabled(final byte[] tableName) throws IOException {
+     boolean enabled = false;
++    long start = EnvironmentEdgeManager.currentTimeMillis();
+     for (int tries = 0; tries < (this.numRetries * this.retryLongerMultiplier); tries++) {
+       enabled = isTableEnabled(tableName);
+       if (enabled) {
+@@ -699,10 +713,10 @@ public class HBaseAdmin implements Abortable, Closeable {
+       }
+     }
+     if (!enabled) {
+-      throw new IOException("Unable to enable table " +
+-        Bytes.toString(tableName));
++      long msec = EnvironmentEdgeManager.currentTimeMillis() - start;
++      throw new IOException("Table '" + Bytes.toString(tableName) +
++        "' not yet enabled, after " + msec + "ms.");
+     }
+-    LOG.info("Enabled table " + Bytes.toString(tableName));
+   }
+ 
+   public void enableTableAsync(final String tableName)
+@@ -2175,9 +2189,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+       throw new TableExistsException("Table '" + tableName + " already exists");
+     }
+     internalRestoreSnapshot(snapshotName, tableName);
+-    for (int tries = 0; !isTableEnabled(tableName); ++tries) {
+-      Thread.sleep(this.pause);
+-    }
++    waitUntilTableIsEnabled(Bytes.toBytes(tableName));
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

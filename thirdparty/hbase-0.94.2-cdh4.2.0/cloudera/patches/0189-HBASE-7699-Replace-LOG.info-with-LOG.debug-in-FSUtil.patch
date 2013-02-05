@@ -1,0 +1,37 @@
+From 8634806636040470b73a601488d297adc87866d3 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Mon, 28 Jan 2013 19:12:18 -0800
+Subject: [PATCH 189/196] HBASE-7699 Replace LOG.info() with LOG.debug() in FSUtils.listStatus()
+
+Reason: Snapshots Debug
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../java/org/apache/hadoop/hbase/util/FSUtils.java |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java b/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+index 03806f0..6e62939 100644
+--- a/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
++++ b/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+@@ -220,7 +220,7 @@ public abstract class FSUtils {
+     try {
+       fs.close();
+     } catch (Exception e) {
+-        LOG.error("file system close failed: ", e);
++      LOG.error("file system close failed: ", e);
+     }
+     IOException io = new IOException("File system is not available");
+     io.initCause(exception);
+@@ -1180,7 +1180,7 @@ public abstract class FSUtils {
+       status = filter == null ? fs.listStatus(dir) : fs.listStatus(dir, filter);
+     } catch (FileNotFoundException fnfe) {
+       // if directory doesn't exist, return null
+-      LOG.info(dir + " doesn't exist");
++      LOG.debug(dir + " doesn't exist");
+     }
+     if (status == null || status.length < 1) return null;
+     return status;
+-- 
+1.7.0.4
+

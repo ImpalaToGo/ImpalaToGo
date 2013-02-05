@@ -1,0 +1,28 @@
+From 4a2a36d3a1e518ab69f6cdd523fd89e12a3c748f Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Tue, 11 Dec 2012 14:25:17 -0700
+Subject: [PATCH 060/196] HBASE-6528  Raise the wait time for TestSplitLogWorker#testAcquireTaskAtStartup to reduce the failure probability
+ Reason: Test Failure
+ Author: ShiXing
+ Ref: CDH-9423
+
+---
+ .../hbase/regionserver/TestSplitLogWorker.java     |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java b/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
+index 26b9865..2611ca0 100644
+--- a/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
++++ b/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
+@@ -139,7 +139,7 @@ public class TestSplitLogWorker {
+       "rs", neverEndingTask);
+     slw.start();
+     try {
+-      waitForCounter(tot_wkr_task_acquired, 0, 1, 100);
++      waitForCounter(tot_wkr_task_acquired, 0, 1, 1000);
+       assertTrue(TaskState.TASK_OWNED.equals(ZKUtil.getData(zkw,
+         ZKSplitLog.getEncodedNodeName(zkw, "tatas")), "rs"));
+     } finally {
+-- 
+1.7.0.4
+

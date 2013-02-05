@@ -1,0 +1,39 @@
+From 5faebe9ef80ab965291db20e7eaab0243b78e477 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Thu, 25 Oct 2012 16:56:36 -0600
+Subject: [PATCH 023/196] HBASE-6305  TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds.
+ Reason:Test
+ Ref:CDH-8726
+ Author: Himanshu Vashishtha
+
+---
+ .../apache/hadoop/hbase/TestLocalHBaseCluster.java |    6 +++++-
+ 1 files changed, 5 insertions(+), 1 deletions(-)
+
+diff --git a/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java b/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
+index f4ef1cd..56ca5ec 100644
+--- a/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
++++ b/src/test/java/org/apache/hadoop/hbase/TestLocalHBaseCluster.java
+@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
+ import java.io.IOException;
+ 
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+@@ -44,7 +45,10 @@ public class TestLocalHBaseCluster {
+   @Test
+   public void testLocalHBaseCluster() throws Exception {
+     Configuration conf = TEST_UTIL.getConfiguration();
+-    conf.set(HConstants.HBASE_DIR, TEST_UTIL.getDataTestDir("hbase.rootdir").toString());
++    String scheme = FileSystem.getDefaultUri(conf).getScheme();
++    if (scheme == null) scheme = "";
++    conf.set(HConstants.HBASE_DIR, scheme + "://"
++        + TEST_UTIL.getDataTestDir("hbase.rootdir").toString());
+     MiniZooKeeperCluster zkCluster = TEST_UTIL.startMiniZKCluster();
+     conf.set(HConstants.ZOOKEEPER_CLIENT_PORT, Integer.toString(zkCluster.getClientPort()));
+     LocalHBaseCluster cluster = new LocalHBaseCluster(conf, 1, 1, MyHMaster.class,
+-- 
+1.7.0.4
+

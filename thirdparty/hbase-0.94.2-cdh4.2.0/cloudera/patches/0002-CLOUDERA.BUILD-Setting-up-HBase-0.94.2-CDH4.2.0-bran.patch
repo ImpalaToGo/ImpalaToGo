@@ -1,0 +1,93 @@
+From 480beee37fd06b25cc7e27a8175c9c9aa2d41e68 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Fri, 12 Oct 2012 17:28:50 -0600
+Subject: [PATCH 002/196] CLOUDERA.BUILD Setting up HBase-0.94.2 CDH4.2.0 branch
+
+---
+ pom.xml |   36 ++++++++++++++++++++++++++++--------
+ 1 files changed, 28 insertions(+), 8 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 2f98d04..5ffbe56 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,16 +27,16 @@
+    -->
+ 
+   <parent>
+-    <groupId>org.apache</groupId>
+-    <artifactId>apache</artifactId>
+-    <version>8</version>
++    <groupId>com.cloudera.cdh</groupId>
++    <artifactId>cdh-root</artifactId>
++    <version>4.2.0-SNAPSHOT</version>
+     <relativePath></relativePath><!-- no parent resolution -->
+   </parent>
+ 
+   <groupId>org.apache.hbase</groupId>
+   <artifactId>hbase</artifactId>
+   <packaging>jar</packaging>
+-  <version>0.94.2</version>
++  <version>0.94.2-cdh4.2.0-SNAPSHOT</version>
+   <name>HBase</name>
+   <description>
+     HBase is the &amp;lt;a href="http://hadoop.apache.org"&amp;rt;Hadoop&lt;/a&amp;rt; database. Use it when you need
+@@ -248,6 +248,26 @@
+ 
+   <repositories>
+     <repository>
++      <id>cdh.repo</id>
++      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
++      <name>Cloudera Repositories</name>
++      <snapshots>
++        <enabled>false</enabled>
++      </snapshots>
++    </repository>
++    
++    <repository>
++      <id>cdh.snapshots.repo</id>
++      <url>https://repository.cloudera.com/artifactory/libs-snapshot-local</url>
++      <name>Cloudera Snapshots Repository</name>
++      <snapshots>
++        <enabled>true</enabled>
++      </snapshots>
++      <releases>
++        <enabled>false</enabled>
++      </releases>
++    </repository>
++    <repository>
+       <id>apache release</id>
+       <url>https://repository.apache.org/content/repositories/releases/</url>
+     </repository>
+@@ -1012,8 +1032,8 @@
+     <protobuf.version>2.4.0a</protobuf.version>
+     <stax-api.version>1.0.1</stax-api.version>
+     <thrift.version>0.8.0</thrift.version>
+-    <zookeeper.version>3.4.3</zookeeper.version>
+-    <hadoop-snappy.version>0.0.1-SNAPSHOT</hadoop-snappy.version>
++    <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
++    <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
+ 
+     <package.prefix>/usr</package.prefix>
+     <package.conf.dir>/etc/hbase</package.conf.dir>
+@@ -1888,7 +1908,7 @@
+         </property>
+       </activation>
+       <properties>
+-        <hadoop.version>0.23.3</hadoop.version>
++        <hadoop.version>${cdh.hadoop.version}</hadoop.version>
+         <slf4j.version>1.6.1</slf4j.version>
+       </properties>
+       <dependencies>
+@@ -2052,7 +2072,7 @@
+         </property>
+       </activation>
+       <properties>
+-        <hadoop.version>2.0.0-alpha</hadoop.version>
++        <hadoop.version>${cdh.hadoop.version}</hadoop.version> <!-- looks like to be changed -->
+         <slf4j.version>1.6.1</slf4j.version>
+       </properties>
+       <dependencies>
+-- 
+1.7.0.4
+

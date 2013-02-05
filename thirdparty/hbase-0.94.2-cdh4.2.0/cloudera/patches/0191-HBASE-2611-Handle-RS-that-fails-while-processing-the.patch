@@ -1,0 +1,129 @@
+From 553c29b2f41c1dcb4778d262dda3bd88681a2e94 Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Tue, 29 Jan 2013 14:40:33 -0700
+Subject: [PATCH 191/196] HBASE-2611 Handle RS that fails while processing the failure of another one
+
+Reason: Bug
+Author: Himanshu Vashishtha
+Ref: CDH-6055
+---
+ .../hbase/replication/ReplicationZookeeper.java    |   53 ++++++++++++++++++++
+ .../regionserver/ReplicationSourceManager.java     |   23 ++++++---
+ 2 files changed, 69 insertions(+), 7 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java b/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
+index 0e73431..f23c31c 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/ReplicationZookeeper.java
+@@ -46,6 +46,7 @@ import org.apache.hadoop.hbase.zookeeper.ZKUtil;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperListener;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperNodeTracker;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
++import org.apache.hadoop.hbase.zookeeper.ZKUtil.ZKUtilOp;
+ import org.apache.zookeeper.KeeperException;
+ import org.apache.zookeeper.KeeperException.ConnectionLossException;
+ import org.apache.zookeeper.KeeperException.SessionExpiredException;
+@@ -659,6 +660,58 @@ public class ReplicationZookeeper {
+   }
+ 
+   /**
++   * It "atomically" copies all the hlogs queues from another region server and returns them all
++   * sorted per peer cluster (appended with the dead server's znode).
++   * @param znode
++   * @return HLog queues sorted per peer cluster
++   */
++  public SortedMap<String, SortedSet<String>> copyQueuesFromRSUsingMulti(String znode) {
++    SortedMap<String, SortedSet<String>> queues = new TreeMap<String, SortedSet<String>>();
++    String deadRSZnodePath = ZKUtil.joinZNode(rsZNode, znode);// hbase/replication/rs/deadrs
++    List<String> peerIdsToProcess = null;
++    List<ZKUtilOp> listOfOps = new ArrayList<ZKUtil.ZKUtilOp>();
++    try {
++      peerIdsToProcess = ZKUtil.listChildrenNoWatch(this.zookeeper, deadRSZnodePath);
++      if (peerIdsToProcess == null) return null; // node already processed
++      for (String peerId : peerIdsToProcess) {
++        String newPeerId = peerId + "-" + znode;
++        String newPeerZnode = ZKUtil.joinZNode(this.rsServerNameZnode, newPeerId);
++        // check the logs queue for the old peer cluster
++        String oldClusterZnode = ZKUtil.joinZNode(deadRSZnodePath, peerId);
++        List<String> hlogs = ZKUtil.listChildrenNoWatch(this.zookeeper, oldClusterZnode);
++        if (hlogs == null || hlogs.size() == 0) continue; // empty log queue.
++        // create the new cluster znode
++        SortedSet<String> logQueue = new TreeSet<String>();
++        queues.put(newPeerId, logQueue);
++        ZKUtilOp op = ZKUtilOp.createAndFailSilent(newPeerZnode, HConstants.EMPTY_BYTE_ARRAY);
++        listOfOps.add(op);
++        // get the offset of the logs and set it to new znodes
++        for (String hlog : hlogs) {
++          String oldHlogZnode = ZKUtil.joinZNode(oldClusterZnode, hlog);
++          byte[] logOffset = ZKUtil.getData(this.zookeeper, oldHlogZnode);
++          LOG.debug("Creating " + hlog + " with data " + Bytes.toString(logOffset));
++          String newLogZnode = ZKUtil.joinZNode(newPeerZnode, hlog);
++          listOfOps.add(ZKUtilOp.createAndFailSilent(newLogZnode, logOffset));
++          // add ops for deleting
++          listOfOps.add(ZKUtilOp.deleteNodeFailSilent(oldHlogZnode));
++          logQueue.add(hlog);
++        }
++        // add delete op for peer
++        listOfOps.add(ZKUtilOp.deleteNodeFailSilent(oldClusterZnode));
++      }
++      // add delete op for dead rs
++      listOfOps.add(ZKUtilOp.deleteNodeFailSilent(deadRSZnodePath));
++      LOG.debug(" The multi list size is: " + listOfOps.size());
++      ZKUtil.multiOrSequential(this.zookeeper, listOfOps, false);
++      LOG.info("Atomically moved the dead regionserver logs. ");
++    } catch (KeeperException e) {
++      // Multi call failed; it looks like some other regionserver took away the logs.
++      LOG.warn("Got exception in copyQueuesFromRSUsingMulti: ", e);
++    }
++    return queues;
++  }
++
++  /**
+    * This methods copies all the hlogs queues from another region server
+    * and returns them all sorted per peer cluster (appended with the dead
+    * server's znode)
+diff --git a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
+index c89de9a..bc022c7 100644
+--- a/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
+@@ -40,6 +40,7 @@ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.Stoppable;
+ import org.apache.hadoop.hbase.replication.ReplicationZookeeper;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperListener;
+@@ -576,14 +577,22 @@ public class ReplicationSourceManager {
+         LOG.info("Not transferring queue since we are shutting down");
+         return;
+       }
+-      if (!zkHelper.lockOtherRS(rsZnode)) {
+-        return;
++      SortedMap<String, SortedSet<String>> newQueues = null;
++
++      // check whether there is multi support. If yes, use it.
++      if (conf.getBoolean(HConstants.ZOOKEEPER_USEMULTI, true)) {
++        LOG.info("Atomically moving " + rsZnode + "'s hlogs to my queue");
++        newQueues = zkHelper.copyQueuesFromRSUsingMulti(rsZnode);
++      } else {
++        LOG.info("Moving " + rsZnode + "'s hlogs to my queue");
++        if (!zkHelper.lockOtherRS(rsZnode)) {
++          return;
++        }
++        newQueues = zkHelper.copyQueuesFromRS(rsZnode);
++        zkHelper.deleteRsQueues(rsZnode);
+       }
+-      LOG.info("Moving " + rsZnode + "'s hlogs to my queue");
+-      SortedMap<String, SortedSet<String>> newQueues =
+-          zkHelper.copyQueuesFromRS(rsZnode);
+-      zkHelper.deleteRsQueues(rsZnode);
+-      if (newQueues == null || newQueues.size() == 0) {
++      // process of copying over the failed queue is completed.
++      if (newQueues.size() == 0) {
+         return;
+       }
+ 
+-- 
+1.7.0.4
+

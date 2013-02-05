@@ -1,0 +1,149 @@
+From 28424c710ba0d11eba9a4016a6385e2763f5de6b Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 28 Dec 2012 17:27:20 +0000
+Subject: [PATCH 108/196] HBASE-7439 HFileLink should not use the configuration from the Filesystem
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../java/org/apache/hadoop/hbase/io/HFileLink.java |   13 ---------
+ .../hadoop/hbase/regionserver/StoreFile.java       |   27 +++-----------------
+ .../hadoop/hbase/regionserver/TestStoreFile.java   |   13 ++++++---
+ 3 files changed, 12 insertions(+), 41 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+index d33e44b..dd7f770 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+@@ -135,19 +135,6 @@ public class HFileLink extends FileLink {
+    * or a path to the archived file like: /hbase/archive/table/region/cf/hfile
+    *
+    * @param fs {@link FileSystem} on which to check the HFileLink
+-   * @param path HFileLink path
+-   * @return Referenced path (original path or archived path)
+-   * @throws IOException on unexpected error.
+-   */
+-  public static Path getReferencedPath(FileSystem fs, final Path path) throws IOException {
+-    return getReferencedPath(fs.getConf(), fs, path);
+-  }
+-
+-  /**
+-   * The returned path can be the "original" file path like: /hbase/table/region/cf/hfile
+-   * or a path to the archived file like: /hbase/archive/table/region/cf/hfile
+-   *
+-   * @param fs {@link FileSystem} on which to check the HFileLink
+    * @param conf {@link Configuration} from which to extract specific archive locations
+    * @param path HFileLink path
+    * @return Referenced path (original path or archived path)
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java b/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
+index 9586abb..7947987 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
+@@ -157,6 +157,8 @@ public class StoreFile extends SchemaConfigured {
+   // If this storefile is a link to another, this is the link instance.
+   private HFileLink link;
+ 
++  private Configuration conf;
++
+   // Block cache configuration and reference.
+   private final CacheConfig cacheConf;
+ 
+@@ -259,6 +261,7 @@ public class StoreFile extends SchemaConfigured {
+       throws IOException {
+     this.fs = fs;
+     this.path = p;
++    this.conf = conf;
+     this.cacheConf = cacheConf;
+     this.dataBlockEncoder =
+         dataBlockEncoder == null ? NoOpDataBlockEncoder.INSTANCE
+@@ -514,28 +517,6 @@ public class StoreFile extends SchemaConfigured {
+   }
+ 
+   /**
+-   * helper function to compute HDFS blocks distribution of a given file.
+-   * For reference file, it is an estimate
+-   * @param fs  The FileSystem
+-   * @param p  The path of the file
+-   * @return HDFS blocks distribution
+-   */
+-  static public HDFSBlocksDistribution computeHDFSBlockDistribution(
+-    FileSystem fs, Path p) throws IOException {
+-    if (isReference(p)) {
+-      Reference reference = Reference.read(fs, p);
+-      Path referencePath = getReferredToFile(p);
+-      return computeRefFileHDFSBlockDistribution(fs, reference, referencePath);
+-    } else {
+-      if (HFileLink.isHFileLink(p)) p = HFileLink.getReferencedPath(fs, p);
+-      FileStatus status = fs.getFileStatus(p);
+-      long length = status.getLen();
+-      return FSUtils.computeHDFSBlocksDistribution(fs, status, 0, length);
+-    }
+-  }
+-
+-
+-  /**
+    * compute HDFS block distribution, for reference file, it is an estimate
+    */
+   private void computeHDFSBlockDistribution() throws IOException {
+@@ -590,7 +571,7 @@ public class StoreFile extends SchemaConfigured {
+         this.reference = Reference.read(fs, this.path);
+         this.referencePath = getReferredToLink(this.path);
+         LOG.debug("Reference file "+ path + " referred to " + referencePath + "!");
+-        link = new HFileLink(fs.getConf(), referencePath);
++        link = new HFileLink(conf, referencePath);
+         this.reader = new HalfStoreFileReader(this.fs, this.referencePath, link,
+             this.cacheConf, this.reference,
+             dataBlockEncoder.getEncodingInCache());
+diff --git a/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFile.java b/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFile.java
+index 187d840..83d1a5e 100644
+--- a/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFile.java
++++ b/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFile.java
+@@ -245,10 +245,13 @@ public class TestStoreFile extends HBaseTestCase {
+    */
+   public void testReferenceToHFileLink() throws IOException {
+     final String columnFamily = "f";
++
++    Path rootDir = FSUtils.getRootDir(conf);
++
+     String tablename = "_original-evil-name"; // adding legal table name chars to verify regex handles it.
+     HRegionInfo hri = new HRegionInfo(Bytes.toBytes(tablename));
+     // store dir = <root>/<tablename>/<rgn>/<cf>
+-    Path storedir = new Path(new Path(FSUtils.getRootDir(conf),
++    Path storedir = new Path(new Path(rootDir,
+       new Path(hri.getTableNameAsString(), hri.getEncodedName())), columnFamily);
+ 
+     // Make a store file and write data to it. <root>/<tablename>/<rgn>/<cf>/<file>
+@@ -262,7 +265,7 @@ public class TestStoreFile extends HBaseTestCase {
+ 
+     // create link to store file. <root>/clone/region/<cf>/<hfile>-<region>-<table>
+     String target = "clone";
+-    Path dstPath = new Path(FSUtils.getRootDir(conf), new Path(new Path(target, "region"), columnFamily));
++    Path dstPath = new Path(rootDir, new Path(new Path(target, "region"), columnFamily));
+     HFileLink.create(conf, this.fs, dstPath, hri, storeFilePath.getName());
+     Path linkFilePath = new Path(dstPath,
+                   HFileLink.createHFileLinkName(hri, storeFilePath.getName()));
+@@ -270,9 +273,9 @@ public class TestStoreFile extends HBaseTestCase {
+     // create splits of the link.
+     // <root>/clone/splitA/<cf>/<reftohfilelink>,
+     // <root>/clone/splitB/<cf>/<reftohfilelink>
+-    Path splitDirA = new Path(new Path(FSUtils.getRootDir(conf),
++    Path splitDirA = new Path(new Path(rootDir,
+         new Path(target, "splitA")), columnFamily);
+-    Path splitDirB = new Path(new Path(FSUtils.getRootDir(conf),
++    Path splitDirB = new Path(new Path(rootDir,
+         new Path(target, "splitB")), columnFamily);
+     StoreFile f = new StoreFile(fs, linkFilePath, conf, cacheConf, BloomType.NONE,
+         NoOpDataBlockEncoder.INSTANCE);
+@@ -281,7 +284,7 @@ public class TestStoreFile extends HBaseTestCase {
+     Path pathB = StoreFile.split(fs, splitDirB, f, splitRow, Range.bottom); // bottom
+ 
+     // OK test the thing
+-    FSUtils.logFileSystemState(fs, FSUtils.getRootDir(conf), LOG);
++    FSUtils.logFileSystemState(fs, rootDir, LOG);
+ 
+     // There is a case where a file with the hfilelink pattern is actually a daughter
+     // reference to a hfile link.  This code in StoreFile that handles this case.
+-- 
+1.7.0.4
+

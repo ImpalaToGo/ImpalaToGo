@@ -1,0 +1,300 @@
+From a2d0340c24c33b78d86b2f030595225cfd495d5d Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 16 Jan 2013 11:55:11 -0800
+Subject: [PATCH 161/196] HBASE-7583 Fixes and cleanups
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../apache/hadoop/hbase/backup/HFileArchiver.java  |    7 +----
+ .../java/org/apache/hadoop/hbase/io/HFileLink.java |    2 +-
+ .../hadoop/hbase/master/MasterFileSystem.java      |    2 +-
+ .../hbase/master/handler/DeleteTableHandler.java   |    3 +-
+ .../master/snapshot/CloneSnapshotHandler.java      |    4 +-
+ .../snapshot/DisabledTableSnapshotHandler.java     |    2 +-
+ .../master/snapshot/MasterSnapshotVerifier.java    |    2 +-
+ .../master/snapshot/RestoreSnapshotHandler.java    |    4 +-
+ .../hbase/master/snapshot/SnapshotManager.java     |   26 ++++++++++++-------
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |    8 +++---
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |   21 ++++++++++++++++
+ 11 files changed, 53 insertions(+), 28 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+index 8797476..1bd6843 100644
+--- a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
++++ b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+@@ -70,14 +70,12 @@ public class HFileArchiver {
+   public static void archiveRegion(Configuration conf, FileSystem fs, HRegionInfo info)
+       throws IOException {
+     Path rootDir = FSUtils.getRootDir(conf);
+-    archiveRegion(conf, fs, rootDir, HTableDescriptor.getTableDir(rootDir, info.getTableName()),
++    archiveRegion(fs, rootDir, HTableDescriptor.getTableDir(rootDir, info.getTableName()),
+       HRegion.getRegionDir(rootDir, info));
+   }
+ 
+-
+   /**
+    * Remove an entire region from the table directory via archiving the region's hfiles.
+-   * @param conf the configuration to use
+    * @param fs {@link FileSystem} from which to remove the region
+    * @param rootdir {@link Path} to the root directory where hbase files are stored (for building
+    *          the archive path)
+@@ -87,8 +85,7 @@ public class HFileArchiver {
+    *         operations could not complete.
+    * @throws IOException if the request cannot be completed
+    */
+-  public static boolean archiveRegion(Configuration conf, FileSystem fs,
+-      Path rootdir, Path tableDir, Path regionDir)
++  public static boolean archiveRegion(FileSystem fs, Path rootdir, Path tableDir, Path regionDir)
+       throws IOException {
+     if (LOG.isDebugEnabled()) {
+       LOG.debug("ARCHIVING region " + regionDir.toString());
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+index edf8c49..b09ded9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+@@ -111,7 +111,7 @@ public class HFileLink extends FileLink {
+     this.tempPath = new Path(new Path(rootDir, HConstants.HBASE_TEMP_DIRECTORY), hfilePath);
+     this.originPath = new Path(rootDir, hfilePath);
+     this.archivePath = new Path(archiveDir, hfilePath);
+-    setLocations(originPath, archivePath);
++    setLocations(originPath, tempPath, archivePath);
+   }
+ 
+   /**
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/MasterFileSystem.java b/src/main/java/org/apache/hadoop/hbase/master/MasterFileSystem.java
+index 1cfb0bc..4c95162 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/MasterFileSystem.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/MasterFileSystem.java
+@@ -409,7 +409,7 @@ public class MasterFileSystem {
+       // if not the cleaner will take care of them.
+       for (Path tabledir: FSUtils.getTableDirs(fs, tmpdir)) {
+         for (Path regiondir: FSUtils.getRegionDirs(fs, tabledir)) {
+-          HFileArchiver.archiveRegion(c, fs, this.rootdir, tabledir, regiondir);
++          HFileArchiver.archiveRegion(fs, this.rootdir, tabledir, regiondir);
+         }
+       }
+       if (!fs.delete(tmpdir, true)) {
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java b/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
+index f014e05..db1ea61 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
+@@ -88,9 +88,10 @@ public class DeleteTableHandler extends TableEventHandler {
+     FileSystem fs = mfs.getFileSystem();
+     for (HRegionInfo hri: regions) {
+       LOG.debug("Deleting region " + hri.getRegionNameAsString() + " from FS");
+-      HFileArchiver.archiveRegion(masterServices.getConfiguration(), fs, mfs.getRootDir(),
++      HFileArchiver.archiveRegion(fs, mfs.getRootDir(),
+           tempTableDir, new Path(tempTableDir, hri.getEncodedName()));
+     }
++
+     // 7. Delete table from FS (temp directory)
+     fs.delete(tempTableDir, true);
+   }
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
+index b938427..00aa282 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
+@@ -99,9 +99,9 @@ public class CloneSnapshotHandler extends CreateTableHandler implements Snapshot
+       RestoreSnapshotHelper.RestoreMetaChanges metaChanges = restoreHelper.restoreHdfsRegions();
+ 
+       // Clone operation should not have stuff to restore or remove
+-      Preconditions.checkArgument(metaChanges.getRegionsToRestore() == null,
++      Preconditions.checkArgument(!metaChanges.hasRegionsToRestore(),
+           "A clone should not have regions to restore");
+-      Preconditions.checkArgument(metaChanges.getRegionsToRemove() == null,
++      Preconditions.checkArgument(!metaChanges.hasRegionsToRemove(),
+           "A clone should not have regions to remove");
+ 
+       // At this point the clone is complete. Next step is enabling the table.
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+index 8460c3b..2c3e7ce 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+@@ -107,7 +107,7 @@ public class DisabledTableSnapshotHandler extends TakeSnapshotHandler {
+       }
+ 
+       // 3. write the table info to disk
+-      LOG.info("Starting to copy tableinfo for offline snapshot:\n" + snapshot);
++      LOG.info("Starting to copy tableinfo for offline snapshot: " + SnapshotDescriptionUtils.toString(snapshot));
+       TableInfoCopyTask tableInfo = new TableInfoCopyTask(this.monitor, snapshot, fs,
+           FSUtils.getRootDir(conf));
+       tableInfo.call();
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+index 5f00023..34652fa 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+@@ -220,7 +220,7 @@ public final class MasterSnapshotVerifier {
+         Path archived = new Path(archivedCfDir, fileName);
+         if (!fs.exists(file) && !file.equals(archived)) {
+           throw new CorruptedSnapshotException("Can't find hfile: " + hfile.getPath()
+-              + " in the real (" + archivedCfDir + ") or archive (" + archivedCfDir
++              + " in the real (" + realCfDir + ") or archive (" + archivedCfDir
+               + ") directory for the primary table.", snapshot);
+         }
+       }
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
+index 79c6cf0..a9e6ee1 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
+@@ -108,8 +108,8 @@ public class RestoreSnapshotHandler extends TableEventHandler implements Snapsho
+ 
+       // 3. Applies changes to .META.
+       hris.clear();
+-      hris.addAll(metaChanges.getRegionsToAdd());
+-      hris.addAll(metaChanges.getRegionsToRestore());
++      if (metaChanges.hasRegionsToAdd()) hris.addAll(metaChanges.getRegionsToAdd());
++      if (metaChanges.hasRegionsToRestore()) hris.addAll(metaChanges.getRegionsToRestore());
+       List<HRegionInfo> hrisToRemove = metaChanges.getRegionsToRemove();
+       MetaEditor.mutateRegions(catalogTracker, hrisToRemove, hris);
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
+index 8fddc3f..b938ff2 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
+@@ -427,10 +427,11 @@ public class SnapshotManager implements Stoppable {
+       try {
+         if (this.master.getMasterFileSystem().getFileSystem().delete(workingDir, true)) {
+           LOG.warn("Couldn't delete working directory (" + workingDir + " for snapshot:"
+-              + snapshot);
++              + SnapshotDescriptionUtils.toString(snapshot));
+         }
+       } catch (IOException e1) {
+-        LOG.warn("Couldn't delete working directory (" + workingDir + " for snapshot:" + snapshot);
++        LOG.warn("Couldn't delete working directory (" + workingDir + " for snapshot:" +
++            SnapshotDescriptionUtils.toString(snapshot));
+       }
+       // fail the snapshot
+       throw new SnapshotCreationException("Could not build snapshot handler", e, snapshot);
+@@ -494,7 +495,7 @@ public class SnapshotManager implements Stoppable {
+     else if (assignmentMgr.getZKTable().isDisabledTable(snapshot.getTable())) {
+       LOG.debug("Table is disabled, running snapshot entirely on master.");
+       snapshotDisabledTable(snapshot);
+-      LOG.debug("Started snapshot: " + snapshot);
++      LOG.debug("Started snapshot: " + SnapshotDescriptionUtils.toString(snapshot));
+     } else {
+       LOG.error("Can't snapshot table '" + snapshot.getTable()
+           + "', isn't open or closed, we don't know what to do!");
+@@ -534,11 +535,12 @@ public class SnapshotManager implements Stoppable {
+       Path workingDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(snapshot, rootDir);
+       try {
+         if (this.master.getMasterFileSystem().getFileSystem().delete(workingDir, true)) {
+-          LOG.error("Couldn't delete working directory (" + workingDir + " for snapshot:"
+-              + snapshot);
++          LOG.error("Couldn't delete working directory (" + workingDir + " for snapshot:" +
++              SnapshotDescriptionUtils.toString(snapshot));
+         }
+       } catch (IOException e1) {
+-        LOG.error("Couldn't delete working directory (" + workingDir + " for snapshot:" + snapshot);
++        LOG.error("Couldn't delete working directory (" + workingDir + " for snapshot:" +
++            SnapshotDescriptionUtils.toString(snapshot));
+       }
+       // fail the snapshot
+       throw new SnapshotCreationException("Could not build snapshot handler", e, snapshot);
+@@ -612,7 +614,8 @@ public class SnapshotManager implements Stoppable {
+       this.executorService.submit(handler);
+       restoreHandlers.put(tableName, handler);
+     } catch (Exception e) {
+-      String msg = "Couldn't clone the snapshot=" + snapshot + " on table=" + tableName;
++      String msg = "Couldn't clone the snapshot=" + SnapshotDescriptionUtils.toString(snapshot) +
++        " on table=" + tableName;
+       LOG.error(msg, e);
+       throw new RestoreSnapshotException(msg, e);
+     }
+@@ -702,7 +705,8 @@ public class SnapshotManager implements Stoppable {
+       this.executorService.submit(handler);
+       restoreHandlers.put(hTableDescriptor.getNameAsString(), handler);
+     } catch (Exception e) {
+-      String msg = "Couldn't restore the snapshot=" + snapshot + " on table=" + tableName;
++      String msg = "Couldn't restore the snapshot=" + SnapshotDescriptionUtils.toString(snapshot)  +
++          " on table=" + tableName;
+       LOG.error(msg, e);
+       throw new RestoreSnapshotException(msg, e);
+     }
+@@ -751,12 +755,14 @@ public class SnapshotManager implements Stoppable {
+ 
+     // check to see if we are done
+     if (sentinel.isFinished()) {
+-      LOG.debug("Restore snapshot=" + snapshot + " has completed. Notifying the client.");
++      LOG.debug("Restore snapshot=" + SnapshotDescriptionUtils.toString(snapshot) +
++          " has completed. Notifying the client.");
+       return false;
+     }
+ 
+     if (LOG.isDebugEnabled()) {
+-      LOG.debug("Sentinel is not yet finished with restoring snapshot=" + snapshot);
++      LOG.debug("Sentinel is not yet finished with restoring snapshot=" +
++          SnapshotDescriptionUtils.toString(snapshot));
+     }
+     return true;
+   }
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 5eb8990..4ccd4d2 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -4248,11 +4248,11 @@ public class HRegion implements HeapSize { // , Writable{
+     }
+ 
+     // delete out the 'A' region
+-    HFileArchiver.archiveRegion(a.getConf(), fs,
+-      FSUtils.getRootDir(a.getConf()), a.getTableDir(), a.getRegionDir());
++    HFileArchiver.archiveRegion(fs, FSUtils.getRootDir(a.getConf()),
++        a.getTableDir(), a.getRegionDir());
+     // delete out the 'B' region
+-    HFileArchiver.archiveRegion(a.getConf(), fs,
+-      FSUtils.getRootDir(b.getConf()), b.getTableDir(), b.getRegionDir());
++    HFileArchiver.archiveRegion(fs, FSUtils.getRootDir(b.getConf()),
++        b.getTableDir(), b.getRegionDir());
+ 
+     LOG.info("merge completed. New region is " + dstRegion);
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index 01ce1f0..35851b9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -198,6 +198,13 @@ public class RestoreSnapshotHelper {
+     private List<HRegionInfo> regionsToAdd = null;
+ 
+     /**
++     * @return true if there're new regions
++     */
++    public boolean hasRegionsToAdd() {
++      return this.regionsToAdd != null && this.regionsToAdd.size() > 0;
++    }
++
++    /**
+      * Returns the list of new regions added during the on-disk restore.
+      * The caller is responsible to add the regions to META.
+      * e.g MetaEditor.addRegionsToMeta(...)
+@@ -208,6 +215,13 @@ public class RestoreSnapshotHelper {
+     }
+ 
+     /**
++     * @return true if there're regions to restore
++     */
++    public boolean hasRegionsToRestore() {
++      return this.regionsToRestore != null && this.regionsToRestore.size() > 0;
++    }
++
++    /**
+      * Returns the list of 'restored regions' during the on-disk restore.
+      * The caller is responsible to add the regions to META if not present.
+      * @return the list of regions restored
+@@ -217,6 +231,13 @@ public class RestoreSnapshotHelper {
+     }
+ 
+     /**
++     * @return true if there're regions to remove
++     */
++    public boolean hasRegionsToRemove() {
++      return this.regionsToRemove != null && this.regionsToRemove.size() > 0;
++    }
++
++    /**
+      * Returns the list of regions removed during the on-disk restore.
+      * The caller is responsible to remove the regions from META.
+      * e.g. MetaEditor.deleteRegions(...)
+-- 
+1.7.0.4
+

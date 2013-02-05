@@ -1,0 +1,54 @@
+From caea1e2633002d7c0658862ee492d1c18cf37b5b Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Sat, 29 Dec 2012 12:13:01 +0000
+Subject: [PATCH 113/196] HBASE-7400 ExportSnapshot mapper closes the FileSystem
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   21 +-------------------
+ 1 files changed, 1 insertions(+), 20 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index 898c021..e1a844c 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -136,25 +136,6 @@ public final class ExportSnapshot extends Configured implements Tool {
+     }
+ 
+     @Override
+-    public void cleanup(Context context) {
+-      if (outputFs != null) {
+-        try {
+-          outputFs.close();
+-        } catch (IOException e) {
+-          LOG.error("Error closing output FileSystem", e);
+-        }
+-      }
+-
+-      if (inputFs != null) {
+-        try {
+-          inputFs.close();
+-        } catch (IOException e) {
+-          LOG.error("Error closing input FileSystem", e);
+-        }
+-      }
+-    }
+-
+-    @Override
+     public void map(Text key, NullWritable value, Context context)
+         throws InterruptedException, IOException {
+       Path inputPath = new Path(key.toString());
+@@ -622,7 +603,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+     Configuration conf = getConf();
+     Path inputRoot = FSUtils.getRootDir(conf);
+     FileSystem inputFs = FileSystem.get(conf);
+-    FileSystem outputFs = FileSystem.get(outputRoot.toUri(), new Configuration());
++    FileSystem outputFs = FileSystem.get(outputRoot.toUri(), conf);
+ 
+     Path snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, inputRoot);
+     Path snapshotTmpDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(snapshotName, outputRoot);
+-- 
+1.7.0.4
+

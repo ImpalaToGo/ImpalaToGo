@@ -1,0 +1,275 @@
+From 4f2ee9db1424f21dcf9ce36726e5b2ce070c473a Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 4 Jan 2013 14:26:27 -0800
+Subject: [PATCH 125/196] HBASE-7484 Fix Restore with schema changes
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |   62 +++++++++++-----
+ .../apache/hadoop/hbase/HBaseTestingUtility.java   |   14 ++++
+ .../client/TestRestoreSnapshotFromClient.java      |   78 ++++++++++++++++++++
+ 3 files changed, 135 insertions(+), 19 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index d0155e4..ffa727e 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -205,35 +205,59 @@ public class RestoreSnapshotHelper {
+     Path snapshotRegionDir = new Path(snapshotDir, regionInfo.getEncodedName());
+     Map<String, List<String>> snapshotFiles =
+                 SnapshotReferenceUtil.getRegionHFileReferences(fs, snapshotRegionDir);
+-
+     Path regionDir = new Path(tableDir, regionInfo.getEncodedName());
+     String tableName = tableDesc.getNameAsString();
+ 
+-    for (Map.Entry<String, List<String>> familyEntry: snapshotFiles.entrySet()) {
+-      byte[] family = Bytes.toBytes(familyEntry.getKey());
+-      Path familyDir = new Path(regionDir, familyEntry.getKey());
++    // Restore families present in the table
++    for (Path familyDir: FSUtils.getFamilyDirs(fs, regionDir)) {
++      byte[] family = Bytes.toBytes(familyDir.getName());
+       Set<String> familyFiles = getTableRegionFamilyFiles(familyDir);
++      List<String> snapshotFamilyFiles = snapshotFiles.remove(familyDir.getName());
++      if (snapshotFamilyFiles != null) {
++        List<String> hfilesToAdd = new LinkedList<String>();
++        for (String hfileName: snapshotFamilyFiles) {
++          if (familyFiles.contains(hfileName)) {
++            // HFile already present
++            familyFiles.remove(hfileName);
++          } else {
++            // HFile missing
++            hfilesToAdd.add(hfileName);
++          }
++        }
+ 
+-      List<String> hfilesToAdd = new LinkedList<String>();
+-      for (String hfileName: familyEntry.getValue()) {
+-        if (familyFiles.contains(hfileName)) {
+-          // HFile already present
+-          familyFiles.remove(hfileName);
+-        } else {
+-          // HFile missing
+-          hfilesToAdd.add(hfileName);
++        // Restore Missing files
++        for (String hfileName: hfilesToAdd) {
++          LOG.trace("Adding HFileLink " + hfileName +
++            " to region=" + regionInfo.getEncodedName() + " table=" + tableName);
++          restoreStoreFile(familyDir, regionInfo, hfileName);
+         }
++
++        // Remove hfiles not present in the snapshot
++        for (String hfileName: familyFiles) {
++          Path hfile = new Path(familyDir, hfileName);
++          LOG.trace("Removing hfile=" + hfile +
++            " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
++          HFileArchiver.archiveStoreFile(fs, regionInfo, conf, tableDir, family, hfile);
++        }
++      } else {
++        // Family doesn't exists in the snapshot
++        LOG.trace("Removing family=" + Bytes.toString(family) +
++          " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
++        HFileArchiver.archiveFamily(fs, conf, regionInfo, tableDir, family);
++        fs.delete(familyDir, true);
+       }
++    }
+ 
+-      // Remove hfiles not present in the snapshot
+-      for (String hfileName: familyFiles) {
+-        Path hfile = new Path(familyDir, hfileName);
+-        LOG.trace("Removing hfile=" + hfile + " from table=" + tableName);
+-        HFileArchiver.archiveStoreFile(fs, regionInfo, conf, tableDir, family, hfile);
++    // Add families not present in the table
++    for (Map.Entry<String, List<String>> familyEntry: snapshotFiles.entrySet()) {
++      byte[] family = Bytes.toBytes(familyEntry.getKey());
++      Path familyDir = new Path(regionDir, familyEntry.getKey());
++      if (!fs.mkdirs(familyDir)) {
++        throw new IOException("Unable to create familyDir=" + familyDir);
+       }
+ 
+-      // Restore Missing files
+-      for (String hfileName: hfilesToAdd) {
++      List<String> hfilesToAdd = new LinkedList<String>();
++      for (String hfileName: familyEntry.getValue()) {
+         LOG.trace("Adding HFileLink " + hfileName + " to table=" + tableName);
+         restoreStoreFile(familyDir, regionInfo, hfileName);
+       }
+diff --git a/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java b/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+index 4af5d67..e5232f8 100644
+--- a/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
++++ b/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+@@ -1066,6 +1066,20 @@ public class HBaseTestingUtility {
+     return count;
+   }
+ 
++  public int countRows(final HTable table, final byte[]... families) throws IOException {
++    Scan scan = new Scan();
++    for (byte[] family: families) {
++      scan.addFamily(family);
++    }
++    ResultScanner results = table.getScanner(scan);
++    int count = 0;
++    for (@SuppressWarnings("unused") Result res : results) {
++      count++;
++    }
++    results.close();
++    return count;
++  }
++
+   /**
+    * Return an md5 digest of the entire contents of a table.
+    */
+diff --git a/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java b/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
+index 794e5a6..514fbe7 100644
+--- a/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
++++ b/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
+@@ -20,9 +20,12 @@ package org.apache.hadoop.hbase.client;
+ import static org.junit.Assert.assertArrayEquals;
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
++import java.util.HashSet;
+ import java.util.List;
++import java.util.Set;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -37,10 +40,12 @@ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.LargeTests;
+ import org.apache.hadoop.hbase.master.HMaster;
++import org.apache.hadoop.hbase.master.MasterFileSystem;
+ import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.regionserver.NoSuchColumnFamilyException;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDoesNotExistException;
+ import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
+@@ -62,6 +67,7 @@ public class TestRestoreSnapshotFromClient {
+ 
+   private final byte[] FAMILY = Bytes.toBytes("cf");
+ 
++  private byte[] emptySnapshot;
+   private byte[] snapshotName0;
+   private byte[] snapshotName1;
+   private byte[] snapshotName2;
+@@ -99,13 +105,22 @@ public class TestRestoreSnapshotFromClient {
+ 
+     long tid = System.currentTimeMillis();
+     tableName = Bytes.toBytes("testtb-" + tid);
++    emptySnapshot = Bytes.toBytes("emptySnaptb-" + tid);
+     snapshotName0 = Bytes.toBytes("snaptb0-" + tid);
+     snapshotName1 = Bytes.toBytes("snaptb1-" + tid);
+     snapshotName2 = Bytes.toBytes("snaptb2-" + tid);
+ 
+     // create Table and disable it
+     createTable(tableName, FAMILY);
++    admin.disableTable(tableName);
++
++    // take an empty snapshot
++    admin.snapshot(emptySnapshot, tableName);
++
+     HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++
++    // enable table and insert data
++    admin.enableTable(tableName);
+     loadData(table, 500, FAMILY);
+     snapshot0Rows = TEST_UTIL.countRows(table);
+     admin.disableTable(tableName);
+@@ -149,6 +164,13 @@ public class TestRestoreSnapshotFromClient {
+     table = new HTable(TEST_UTIL.getConfiguration(), tableName);
+     assertEquals(snapshot0Rows, TEST_UTIL.countRows(table));
+ 
++    // Restore from emptySnapshot
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(emptySnapshot);
++    admin.enableTable(tableName);
++    table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    assertEquals(0, TEST_UTIL.countRows(table));
++
+     // Restore from snapshot-1
+     admin.disableTable(tableName);
+     admin.restoreSnapshot(snapshotName1);
+@@ -157,6 +179,49 @@ public class TestRestoreSnapshotFromClient {
+     assertEquals(snapshot1Rows, TEST_UTIL.countRows(table));
+   }
+ 
++  @Test
++  public void testRestoreSchemaChange() throws IOException {
++    byte[] TEST_FAMILY2 = Bytes.toBytes("cf2");
++
++    // Add one column family and put some data in it
++    admin.disableTable(tableName);
++    admin.addColumn(tableName, new HColumnDescriptor(TEST_FAMILY2));
++    admin.enableTable(tableName);
++    HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    loadData(table, 500, TEST_FAMILY2);
++    long snapshot2Rows = snapshot1Rows + 500;
++    assertEquals(snapshot2Rows, TEST_UTIL.countRows(table));
++    assertEquals(500, TEST_UTIL.countRows(table, TEST_FAMILY2));
++
++    // Take a snapshot
++    admin.disableTable(tableName);
++    admin.snapshot(snapshotName2, tableName);
++
++    // Restore the snapshot (without the cf)
++    admin.restoreSnapshot(snapshotName0);
++    admin.enableTable(tableName);
++    table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    try {
++      TEST_UTIL.countRows(table, TEST_FAMILY2);
++      fail("family '" + Bytes.toString(TEST_FAMILY2) + "' should not exists");
++    } catch (NoSuchColumnFamilyException e) {
++      // expected
++    }
++    assertEquals(snapshot0Rows, TEST_UTIL.countRows(table));
++    Set<String> fsFamilies = getFamiliesFromFS(tableName);
++    assertEquals(1, fsFamilies.size());
++
++    // Restore back the snapshot (with the cf)
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName2);
++    admin.enableTable(tableName);
++    table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    assertEquals(500, TEST_UTIL.countRows(table, TEST_FAMILY2));
++    assertEquals(snapshot2Rows, TEST_UTIL.countRows(table));
++    fsFamilies = getFamiliesFromFS(tableName);
++    assertEquals(2, fsFamilies.size());
++  }
++
+   @Test(expected=SnapshotDoesNotExistException.class)
+   public void testCloneNonExistentSnapshot() throws IOException, InterruptedException {
+     String snapshotName = "random-snapshot-" + System.currentTimeMillis();
+@@ -169,6 +234,7 @@ public class TestRestoreSnapshotFromClient {
+     byte[] clonedTableName = Bytes.toBytes("clonedtb-" + System.currentTimeMillis());
+     testCloneSnapshot(clonedTableName, snapshotName0, snapshot0Rows);
+     testCloneSnapshot(clonedTableName, snapshotName1, snapshot1Rows);
++    testCloneSnapshot(clonedTableName, emptySnapshot, 0);
+   }
+ 
+   private void testCloneSnapshot(final byte[] tableName, final byte[] snapshotName,
+@@ -298,4 +364,16 @@ public class TestRestoreSnapshotFromClient {
+   private void waitCleanerRun() throws InterruptedException {
+     TEST_UTIL.getMiniHBaseCluster().getMaster().getHFileCleaner().choreForTesting();
+   }
++
++  private Set<String> getFamiliesFromFS(final byte[] tableName) throws IOException {
++    MasterFileSystem mfs = TEST_UTIL.getMiniHBaseCluster().getMaster().getMasterFileSystem();
++    Set<String> families = new HashSet<String>();
++    Path tableDir = HTableDescriptor.getTableDir(mfs.getRootDir(), tableName);
++    for (Path regionDir: FSUtils.getRegionDirs(mfs.getFileSystem(), tableDir)) {
++      for (Path familyDir: FSUtils.getFamilyDirs(mfs.getFileSystem(), regionDir)) {
++        families.add(familyDir.getName());
++      }
++    }
++    return families;
++  }
+ }
+-- 
+1.7.0.4
+

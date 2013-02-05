@@ -1,0 +1,30 @@
+From 393de616387749e34ec1063abcba47f5c8acd8fd Mon Sep 17 00:00:00 2001
+From: Himanshu <himanshu@cloudera.com>
+Date: Mon, 14 Jan 2013 11:24:24 -0700
+Subject: [PATCH 143/196] HBASE-7550  Synchronization problem in AssignmentManager
+ Reason: Bug
+ Author: Lars H
+ Ref: CDH-9797
+
+---
+ .../hadoop/hbase/master/AssignmentManager.java     |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index 924ec60..421904f 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -1144,7 +1144,9 @@ public class AssignmentManager extends ZooKeeperListener {
+         } else if (rs.isSplitting()) {
+           LOG.debug("Ephemeral node deleted.  Found in SPLITTING state. " + "Removing from RIT "
+               + rs.getRegion());
+-          this.regionsInTransition.remove(regionName);
++          synchronized(this.regionsInTransition) {
++            this.regionsInTransition.remove(regionName);
++          }
+         } else {
+           LOG.debug("The znode of region " + regionInfo.getRegionNameAsString()
+               + " has been deleted.");
+-- 
+1.7.0.4
+

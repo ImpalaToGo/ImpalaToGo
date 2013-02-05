@@ -1,0 +1,20 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>11.13.&nbsp;HBase and Hadoop version issues</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="book.html" title="Apache HBase Reference Guide"><link rel="up" href="trouble.html" title="Chapter&nbsp;11.&nbsp;Troubleshooting and Debugging HBase"><link rel="prev" href="trouble.ec2.html" title="11.12.&nbsp;Amazon EC2"><link rel="next" href="ops_mgt.html" title="Chapter&nbsp;12.&nbsp;HBase Operational Management"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">11.13.&nbsp;HBase and Hadoop version issues</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="trouble.ec2.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;11.&nbsp;Troubleshooting and Debugging HBase</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="ops_mgt.html">Next</a></td></tr></table><hr></div><div class="section" title="11.13.&nbsp;HBase and Hadoop version issues"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="trouble.versions"></a>11.13.&nbsp;HBase and Hadoop version issues</h2></div></div></div><div class="section" title="11.13.1.&nbsp;NoClassDefFoundError when trying to run 0.90.x on hadoop-0.20.205.x (or hadoop-1.0.x)"><div class="titlepage"><div><div><h3 class="title"><a name="trouble.versions.205"></a>11.13.1.&nbsp;<code class="code">NoClassDefFoundError</code> when trying to run 0.90.x on hadoop-0.20.205.x (or hadoop-1.0.x)</h3></div></div></div><p>HBase 0.90.x does not ship with hadoop-0.20.205.x, etc.  To make it run, you need to replace the hadoop
+             jars that HBase shipped with in its <code class="filename">lib</code> directory with those of the Hadoop you want to
+             run HBase on.  If even after replacing Hadoop jars you get the below exception:
+</p><pre class="programlisting">
+sv4r6s38: Exception in thread "main" java.lang.NoClassDefFoundError: org/apache/commons/configuration/Configuration
+sv4r6s38:       at org.apache.hadoop.metrics2.lib.DefaultMetricsSystem.&lt;init&gt;(DefaultMetricsSystem.java:37)
+sv4r6s38:       at org.apache.hadoop.metrics2.lib.DefaultMetricsSystem.&lt;clinit&gt;(DefaultMetricsSystem.java:34)
+sv4r6s38:       at org.apache.hadoop.security.UgiInstrumentation.create(UgiInstrumentation.java:51)
+sv4r6s38:       at org.apache.hadoop.security.UserGroupInformation.initialize(UserGroupInformation.java:209)
+sv4r6s38:       at org.apache.hadoop.security.UserGroupInformation.ensureInitialized(UserGroupInformation.java:177)
+sv4r6s38:       at org.apache.hadoop.security.UserGroupInformation.isSecurityEnabled(UserGroupInformation.java:229)
+sv4r6s38:       at org.apache.hadoop.security.KerberosName.&lt;clinit&gt;(KerberosName.java:83)
+sv4r6s38:       at org.apache.hadoop.security.UserGroupInformation.initialize(UserGroupInformation.java:202)
+sv4r6s38:       at org.apache.hadoop.security.UserGroupInformation.ensureInitialized(UserGroupInformation.java:177)
+</pre><p>
+you need to copy under <code class="filename">hbase/lib</code>, the <code class="filename">commons-configuration-X.jar</code> you find
+in your Hadoop's <code class="filename">lib</code> directory.  That should fix the above complaint.
+</p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="trouble.ec2.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="trouble.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="ops_mgt.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">11.12.&nbsp;Amazon EC2&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;12.&nbsp;HBase Operational Management</td></tr></table></div></body></html>

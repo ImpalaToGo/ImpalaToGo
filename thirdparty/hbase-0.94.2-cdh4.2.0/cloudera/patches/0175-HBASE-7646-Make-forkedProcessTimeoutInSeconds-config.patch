@@ -1,0 +1,38 @@
+From 493083df46a730d6736a204d754db5d6f0703c8b Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Tue, 22 Jan 2013 20:04:08 +0000
+Subject: [PATCH 175/196] HBASE-7646 Make forkedProcessTimeoutInSeconds configurable
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: KITCHEN-3098
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1437132 13f79535-47bb-0310-9956-ffa450edef68
+---
+ pom.xml |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 509b6f3..588afd4 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -395,7 +395,7 @@
+           </dependencies>
+ 
+           <configuration>
+-            <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>
++            <forkedProcessTimeoutInSeconds>${surefire.timeout}</forkedProcessTimeoutInSeconds>
+             <argLine>-enableassertions -Xmx1900m
+               -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true</argLine>
+             <redirectTestOutputToFile>${test.output.tofile}</redirectTestOutputToFile>
+@@ -1048,6 +1048,7 @@
+     <surefire.firstPartGroups>org.apache.hadoop.hbase.SmallTests</surefire.firstPartGroups>
+     <surefire.secondPartGroups>org.apache.hadoop.hbase.MediumTests</surefire.secondPartGroups>
+     <test.output.tofile>true</test.output.tofile>
++    <surefire.timeout>900</surefire.timeout>
+     <!-- For flaky tests exclusion -->
+     <test.exclude></test.exclude>
+     <test.exclude.pattern>**/${test.exclude}.java</test.exclude.pattern>
+-- 
+1.7.0.4
+

@@ -1,0 +1,99 @@
+From f741357c42e19db2b8a9f29bf9a681568991fa91 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 15 Jan 2013 10:22:18 -0800
+Subject: [PATCH 149/196] HBASE-7501 Introduce MetaEditor method that both adds and deletes rows in .META. table
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-9551
+---
+ .../apache/hadoop/hbase/catalog/MetaEditor.java    |   52 ++++++++++++++++++++
+ 1 files changed, 52 insertions(+), 0 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/catalog/MetaEditor.java b/src/main/java/org/apache/hadoop/hbase/catalog/MetaEditor.java
+index 9537a60..8c7b8cf 100644
+--- a/src/main/java/org/apache/hadoop/hbase/catalog/MetaEditor.java
++++ b/src/main/java/org/apache/hadoop/hbase/catalog/MetaEditor.java
+@@ -18,6 +18,7 @@
+ package org.apache.hadoop.hbase.catalog;
+ 
+ import java.io.IOException;
++import java.io.InterruptedIOException;
+ import java.net.ConnectException;
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -30,6 +31,7 @@ import org.apache.hadoop.hbase.NotAllMetaRegionsOnlineException;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Mutation;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.util.Bytes;
+@@ -135,6 +137,26 @@ public class MetaEditor {
+   }
+ 
+   /**
++   * Execute the passed <code>mutations</code> against <code>.META.</code> table.
++   * @param ct CatalogTracker on whose back we will ride the edit.
++   * @param mutations Puts and Deletes to execute on .META.
++   * @throws IOException
++   */
++  static void mutateMetaTable(final CatalogTracker ct, final List<Mutation> mutations)
++      throws IOException {
++    HTable t = MetaReader.getMetaHTable(ct);
++    try {
++      t.batch(mutations);
++    } catch (InterruptedException e) {
++      InterruptedIOException ie = new InterruptedIOException(e.getMessage());
++      ie.initCause(e);
++      throw ie;
++    } finally {
++      t.close();
++    }
++  }
++
++  /**
+    * Adds a META row for the specified new region.
+    * @param regionInfo region information
+    * @throws IOException if problem connecting or updating meta
+@@ -277,6 +299,36 @@ public class MetaEditor {
+   }
+ 
+   /**
++   * Adds and Removes the specified regions from .META.
++   * @param catalogTracker
++   * @param regionsToRemove list of regions to be deleted from META
++   * @param regionsToAdd list of regions to be added to META
++   * @throws IOException
++   */
++  public static void mutateRegions(CatalogTracker catalogTracker,
++      final List<HRegionInfo> regionsToRemove, final List<HRegionInfo> regionsToAdd)
++      throws IOException {
++    List<Mutation> mutation = new ArrayList<Mutation>();
++    if (regionsToRemove != null) {
++      for (HRegionInfo hri: regionsToRemove) {
++        mutation.add(new Delete(hri.getRegionName()));
++      }
++    }
++    if (regionsToAdd != null) {
++      for (HRegionInfo hri: regionsToAdd) {
++        mutation.add(makePutFromRegionInfo(hri));
++      }
++    }
++    mutateMetaTable(catalogTracker, mutation);
++    if (regionsToRemove != null && regionsToRemove.size() > 0) {
++      LOG.debug("Deleted from META, regions: " + regionsToRemove);
++    }
++    if (regionsToAdd != null && regionsToAdd.size() > 0) {
++      LOG.debug("Add to META, regions: " + regionsToAdd);
++    }
++  }
++
++  /**
+    * Deletes daughters references in offlined split parent.
+    * @param catalogTracker
+    * @param parent Parent row we're to remove daughter reference from
+-- 
+1.7.0.4
+

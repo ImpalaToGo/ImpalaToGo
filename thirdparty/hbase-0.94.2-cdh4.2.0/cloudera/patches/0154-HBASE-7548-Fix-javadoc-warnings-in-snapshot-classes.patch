@@ -1,0 +1,400 @@
+From cb57a65e71fed83654c6105591816b93870f6076 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 15 Jan 2013 12:52:03 -0800
+Subject: [PATCH 154/196] HBASE-7548 Fix javadoc warnings in snapshot classes
+
+Reason: Snapshots
+Author: Ted Yu
+Ref: CDH-9551
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   22 --------------------
+ .../hbase/errorhandling/ForeignException.java      |    2 +-
+ .../errorhandling/ForeignExceptionListener.java    |    3 +-
+ .../errorhandling/TimeoutExceptionInjector.java    |    1 -
+ .../java/org/apache/hadoop/hbase/io/HLogLink.java  |    4 +-
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    4 +--
+ .../snapshot/DisabledTableSnapshotHandler.java     |    1 -
+ .../master/snapshot/MasterSnapshotVerifier.java    |    2 -
+ .../apache/hadoop/hbase/procedure/Procedure.java   |    8 ++++--
+ .../hbase/procedure/ProcedureCoordinator.java      |    1 -
+ .../hbase/procedure/ProcedureCoordinatorRpcs.java  |    2 +-
+ .../hadoop/hbase/procedure/ProcedureMember.java    |    4 +-
+ .../hadoop/hbase/procedure/Subprocedure.java       |   10 +++++---
+ .../hbase/procedure/SubprocedureFactory.java       |    2 +-
+ .../procedure/ZKProcedureCoordinatorRpcs.java      |    2 +-
+ .../hadoop/hbase/procedure/ZKProcedureUtil.java    |    4 +-
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |    9 ++-----
+ .../snapshot/RegionServerSnapshotManager.java      |    4 +--
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |    1 -
+ .../hbase/snapshot/SnapshotReferenceUtil.java      |    1 -
+ 20 files changed, 27 insertions(+), 60 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index 17d4fa1..54cc0ce 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -1964,28 +1964,6 @@ public class HBaseAdmin implements Abortable, Closeable {
+    * Snapshot names follow the same naming constraints as tables in HBase. See
+    * {@link HTableDescriptor#isLegalTableName(byte[])}.
+    * <p>
+-   * Generally, you should <b>not</b> use this, but instead just take a {@link Type#TIMESTAMP
+-   * Timestamp-consistentSnapshot} with {@link #snapshot(byte[], byte[])} or
+-   * {@link #snapshot(String, String)}, which creates a timestamp-based snapshot, causing minimal
+-   * interference with running cluster.
+-   * <p>
+-   * However, this method can be used to launch a {@link Type#GLOBAL GlobalSnapshot}. Note that a
+-   * {@link Type#GLOBAL GlobalSnapshot}will <b>block all writes to the table</b> while taking the
+-   * snapshot. This occurs so a single stable state can be achieved across all servers hosting the
+-   * table - this is beyond the consistency constraints placed on an HBase table. This type of
+-   * snapshot has two main implications:
+-   * <ul>
+-   * <li>all writes to the table will block while taking the snapshot</li>
+-   * <li>the probability of success decreases with increasing cluster size and is not recommended
+-   * for clusters much greater than 500 nodes</li>
+-   * </ul>
+-   * Together, the two above considerations mean to get a snapshot with any real load on your
+-   * system, you will likely have multiple attempts and will suffer notable performance degradation,
+-   * for a large cluster.
+-   * <p>
+-   * This can be suitable for a smaller cluster, but comes with the above caveats - user beware (you
+-   * should really consider if you can get by with just using timestamp-consistent snapshots via
+-   * {@link #snapshot(byte[], byte[])}) or {@link #snapshot(String, String)}.
+    * @param snapshotName name to give the snapshot on the filesystem. Must be unique from all other
+    * snapshots stored on the cluster
+    * @param tableName name of the table to snapshot
+diff --git a/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignException.java b/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignException.java
+index ca2feb5..06cd529 100644
+--- a/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignException.java
++++ b/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignException.java
+@@ -148,7 +148,7 @@ public class ForeignException extends IOException {
+   /**
+    * Converts an ForeignException to a array of bytes.
+    * @param source the name of the external exception source
+-   * @param ee the "local" external exception (local)
++   * @param t the "local" external exception (local)
+    * @return protobuf serialized version of ForeignThreadException
+    */
+   public static byte[] serialize(String source, Throwable t) {
+diff --git a/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignExceptionListener.java b/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignExceptionListener.java
+index 61832a6..014da53 100644
+--- a/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignExceptionListener.java
++++ b/src/main/java/org/apache/hadoop/hbase/errorhandling/ForeignExceptionListener.java
+@@ -34,8 +34,7 @@ public interface ForeignExceptionListener {
+    * Receive a ForeignException.
+    * <p>
+    * Implementers must ensure that this method is thread-safe.
+-   * @param message reason for the error
+-   * @param e exception causing the error.  Implementations must accept and handle null here.
++   * @param e exception causing the error. Implementations must accept and handle null here.
+    */
+   public void receive(ForeignException e);
+ }
+\ No newline at end of file
+diff --git a/src/main/java/org/apache/hadoop/hbase/errorhandling/TimeoutExceptionInjector.java b/src/main/java/org/apache/hadoop/hbase/errorhandling/TimeoutExceptionInjector.java
+index 25a1566..9f40cbf 100644
+--- a/src/main/java/org/apache/hadoop/hbase/errorhandling/TimeoutExceptionInjector.java
++++ b/src/main/java/org/apache/hadoop/hbase/errorhandling/TimeoutExceptionInjector.java
+@@ -50,7 +50,6 @@ public class TimeoutExceptionInjector {
+    * @param listener listener to notify if the process times out
+    * @param maxTime max allowed running time for the process. Timer starts on calls to
+    *          {@link #start()}
+-   * @param info information about the process to pass along if the timer expires
+    */
+   public TimeoutExceptionInjector(final ForeignExceptionListener listener, final long maxTime) {
+     this.maxTime = maxTime;
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/HLogLink.java b/src/main/java/org/apache/hadoop/hbase/io/HLogLink.java
+index 91627ac..8feb8cb 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/HLogLink.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/HLogLink.java
+@@ -49,7 +49,7 @@ public class HLogLink extends FileLink {
+   }
+ 
+   /**
+-   * @param rootdir Path to the root directory where hbase files are stored
++   * @param rootDir Path to the root directory where hbase files are stored
+    * @param serverName Region Server owner of the log
+    * @param logName WAL file name
+    */
+@@ -61,7 +61,7 @@ public class HLogLink extends FileLink {
+ 
+   /**
+    * @param originPath Path to the wal in the log directory
+-   * @param archiveDir Path to the wal in the archived log directory
++   * @param archivePath Path to the wal in the archived log directory
+    */
+   public HLogLink(final Path originPath, final Path archivePath) {
+     setLocations(originPath, archivePath);
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index db159a5..31b6ab9 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -1908,8 +1908,6 @@ Server {
+ 
+   /**
+    * Execute Delete Snapshot operation.
+-   * @returns DeleteSnapshotResponse (a protobuf wrapped void) if the snapshot existed and was
+-   * deleted properly.
+    * @throws ServiceException wrapping SnapshotDoesNotExistException if specified snapshot did not
+    * exist.
+    */
+@@ -1926,7 +1924,7 @@ Server {
+ 
+   /**
+    * Checks if the specified snapshot is done.
+-   * @returns true if the snapshot is in file system ready to use,
++   * @return true if the snapshot is in file system ready to use,
+    * false if the snapshot is in the process of completing
+    * @throws ServiceException wrapping UnknownSnapshotException if invalid snapshot, or
+    * a wrapped HBaseSnapshotException with progress failure reason.
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+index 030d809..403e0ab 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+@@ -55,7 +55,6 @@ public class DisabledTableSnapshotHandler extends TakeSnapshotHandler {
+ 
+   /**
+    * @param snapshot descriptor of the snapshot to take
+-   * @param server parent server
+    * @param masterServices master services provider
+    * @throws IOException on unexpected error
+    */
+diff --git a/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java b/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+index 707e2c5..5f00023 100644
+--- a/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
++++ b/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+@@ -71,8 +71,6 @@ import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+  * <li>All the hfiles are present (either in .archive directory in the region)</li>
+  * <li>All recovered.edits files are present (by name) and have the correct file size</li>
+  * </ul>
+- * <li>HLogs for each server running the snapshot have been referenced.  (In the design for
+- * in the {@link Type#GLOBAL} or {@link Type#LOGROLL} online snapshots</li>
+  * </ol>
+  */
+ @InterfaceAudience.Private
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java b/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
+index af8f06d..2442fdc 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/Procedure.java
+@@ -62,7 +62,8 @@ import com.google.common.collect.Lists;
+  * amounts of time if one of the participants fails or takes a really long time (e.g. GC pause).
+  * <p>
+  * Users should generally not directly create or subclass instances of this.  They are created
+- * for them implicitly via {@link ProcedureCoordinator#startProcedure(String, byte[], List)}}
++ * for them implicitly via {@link ProcedureCoordinator#startProcedure(ForeignExceptionDispatcher,
++ * String, byte[], List)}}
+  */
+ @InterfaceAudience.Public
+ @InterfaceStability.Evolving
+@@ -142,7 +143,8 @@ public class Procedure implements Callable<Void>, ForeignExceptionListener {
+    * Create a procedure.
+    *
+    * Users should generally not directly create instances of this.  They are created them
+-   * implicitly via {@link ProcedureCoordinator#createProcedure(String, byte[], List)}}
++   * implicitly via {@link ProcedureCoordinator#createProcedure(ForeignExceptionDispatcher,
++   * String, byte[], List)}}
+    *
+    * @param coord coordinator to call back to for general errors (e.g.
+    *          {@link ProcedureCoordinator#rpcConnectionFailure(String, IOException)}).
+@@ -257,7 +259,7 @@ public class Procedure implements Callable<Void>, ForeignExceptionListener {
+   }
+ 
+   /**
+-   * Sends a message to members that all {@link Subprocedure#inBarrier} calls have completed.
++   * Sends a message to members that all {@link Subprocedure#insideBarrier} calls have completed.
+    * After this executes, the coordinator can assume that any state resources about this barrier
+    * procedure state has been released.
+    */
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
+index f87b2c4..e6d6fbe 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinator.java
+@@ -66,7 +66,6 @@ public class ProcedureCoordinator {
+    * constructor.
+    *
+    * @param rpcs
+-   * @param factory Builder for building Procedures
+    * @param pool Used for executing procedures.
+    */
+   public ProcedureCoordinator(ProcedureCoordinatorRpcs rpcs, ThreadPoolExecutor pool) {
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinatorRpcs.java b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinatorRpcs.java
+index d918d50..209c671 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinatorRpcs.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureCoordinatorRpcs.java
+@@ -68,7 +68,7 @@ public interface ProcedureCoordinatorRpcs extends Closeable {
+    * Notify members that all members have acquired their parts of the barrier and that they can
+    * now execute under the global barrier.
+    *
+-   * Must come after calling {@link #sendGlobalBarrierAcquire(String, byte[], List)}
++   * Must come after calling {@link #sendGlobalBarrierAcquire(Procedure, byte[], List)}
+    *
+    * @param procName name of the procedure to start
+    * @param members members to tell we have reached in-barrier phase
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureMember.java b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureMember.java
+index 6db44a7..16575c5 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureMember.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ProcedureMember.java
+@@ -95,7 +95,7 @@ public class ProcedureMember implements Closeable {
+    * sent here)
+    * @param opName
+    * @param data
+-   * @return
++   * @return subprocedure
+    */
+   public Subprocedure createSubprocedure(String opName, byte[] data) {
+     return builder.buildSubprocedure(opName, data);
+@@ -214,7 +214,7 @@ public class ProcedureMember implements Closeable {
+   /**
+    * Send abort to the specified procedure
+    * @param procName name of the procedure to about
+-   * @param reason serialized information about the abort
++   * @param ee exception information about the abort
+    */
+   public void receiveAbortProcedure(String procName, ForeignException ee) {
+     // if we know about the procedure, notify it
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java b/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
+index 8e50409..9f2c504 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/Subprocedure.java
+@@ -42,8 +42,8 @@ import org.apache.hadoop.hbase.errorhandling.TimeoutExceptionInjector;
+  * Latches are use too block its progress and trigger continuations when barrier conditions are
+  * met.
+  *
+- * Exceptions that make it out from calls to {@link #acquireBarrier()} or {@link #insideBarrier()}
+- * get converted into {@link ExternalExceptions}, which will get propagated to the
++ * Exception that makes it out of calls to {@link #acquireBarrier()} or {@link #insideBarrier()}
++ * gets converted into {@link ForeignException}, which will get propagated to the
+  * {@link ProcedureCoordinator}.
+  *
+  * There is a category of procedure (ex: online-snapshots), and a user-specified instance-specific
+@@ -144,11 +144,13 @@ abstract public class Subprocedure implements Callable<Void> {
+    * This would normally be executed by the ProcedureMemeber when a acquire message comes from the
+    * coordinator.  Rpcs are used to spend message back to the coordinator after different phases
+    * are executed.  Any exceptions caught during the execution (except for InterrupedException) get
+-   * converted and propagated to coordinator via {@link ProcedureMemberRpcs#sendAbort(Exception)}.
++   * converted and propagated to coordinator via {@link ProcedureMemberRpcs#sendMemberAborted(
++   * Subprocedure, ForeignException)}.
+    */
+   @SuppressWarnings("finally")
+   final public Void call() {
+-    LOG.debug("Starting subprocedure '" + barrierName + "' with timeout " + executionTimeoutTimer.getMaxTime() + "ms");
++    LOG.debug("Starting subprocedure '" + barrierName + "' with timeout " +
++        executionTimeoutTimer.getMaxTime() + "ms");
+     // start the execution timeout timer
+     executionTimeoutTimer.start();
+ 
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/SubprocedureFactory.java b/src/main/java/org/apache/hadoop/hbase/procedure/SubprocedureFactory.java
+index d20f39e..0b94c89 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/SubprocedureFactory.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/SubprocedureFactory.java
+@@ -21,7 +21,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.classification.InterfaceStability;
+ 
+ /**
+- * Task builder to build instances of a {@link ProcedureMember}'s {@link Subporocedure}s.
++ * Task builder to build instances of a {@link ProcedureMember}'s {@link Subprocedure}s.
+  */
+ @InterfaceAudience.Public
+ @InterfaceStability.Evolving
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureCoordinatorRpcs.java b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureCoordinatorRpcs.java
+index 6e319ee..9132bbe 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureCoordinatorRpcs.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureCoordinatorRpcs.java
+@@ -49,7 +49,7 @@ public class ZKProcedureCoordinatorRpcs implements ProcedureCoordinatorRpcs {
+ 
+   /**
+    * @param watcher zookeeper watcher. Owned by <tt>this</tt> and closed via {@link #close()}
+-   * @param procedureType procedure type name is a category for when there are multiple kinds of
++   * @param procedureClass procedure type name is a category for when there are multiple kinds of
+    *    procedures.-- this becomes a znode so be aware of the naming restrictions
+    * @param coordName name of the node running the coordinator
+    * @throws KeeperException if an unexpected zk error occurs
+diff --git a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureUtil.java b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureUtil.java
+index bec9170..88fd118 100644
+--- a/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureUtil.java
++++ b/src/main/java/org/apache/hadoop/hbase/procedure/ZKProcedureUtil.java
+@@ -69,8 +69,8 @@ public abstract class ZKProcedureUtil
+   /**
+    * Top-level watcher/controller for procedures across the cluster.
+    * <p>
+-   * On instantiation, this ensures the procedure znodes exists.  This however requires calling
+-   * {@link #start} to start monitoring for running procedures.
++   * On instantiation, this ensures the procedure znodes exist.  This however requires the passed in
++   *  watcher has been started.
+    * @param watcher watcher for the cluster ZK. Owned by <tt>this</tt> and closed via
+    *          {@link #close()}
+    * @param procDescription name of the znode describing the procedure to run
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index bb0764b..5eb8990 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -2485,18 +2485,15 @@ public class HRegion implements HeapSize { // , Writable{
+   /**
+    * Complete taking the snapshot on the region. Writes the region info and adds references to the
+    * working snapshot directory.
+-   * @param desc snapshot being completed
+-   * @param exnSnare ForeignExceptionSnare that captures external exections in case we need to
+-   *   bail out.  This is allowed to be null and will just be ignored in that case.
+-   * @throws IOException if there is an external or internal error causing the snapshot to fail
+    *
+    * TODO for api consistency, consider adding another version with no {@link ForeignExceptionSnare}
+    * arg.  (In the future other cancellable HRegion methods could eventually add a
+    * {@link ForeignExceptionSnare}, or we could do something fancier).
+    *
+    * @param desc snasphot description object
+-   * @param exnSnaprethe snare that used for reporting and checking for ForeignExceptions
+-   * @throws IOException thrown if ther are network or file system exceptions.
++   * @param exnSnare ForeignExceptionSnare that captures external exeptions in case we need to
++   *   bail out.  This is allowed to be null and will just be ignored in that case.
++   * @throws IOException if there is an external or internal error causing the snapshot to fail
+    */
+   public void addRegionToSnapshot(SnapshotDescription desc,
+       ForeignExceptionSnare exnSnare) throws IOException {
+diff --git a/src/main/java/org/apache/hadoop/hbase/regionserver/snapshot/RegionServerSnapshotManager.java b/src/main/java/org/apache/hadoop/hbase/regionserver/snapshot/RegionServerSnapshotManager.java
+index 723c97c..6317017 100644
+--- a/src/main/java/org/apache/hadoop/hbase/regionserver/snapshot/RegionServerSnapshotManager.java
++++ b/src/main/java/org/apache/hadoop/hbase/regionserver/snapshot/RegionServerSnapshotManager.java
+@@ -66,7 +66,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
+  * <p>
+  * On startup, requires {@link #start()} to be called.
+  * <p>
+- * On shutdown, requires {@link #close()} to be called
++ * On shutdown, requires {@link #stop(boolean)} to be called
+  */
+ @InterfaceAudience.Private
+ @InterfaceStability.Unstable
+@@ -115,8 +115,6 @@ public class RegionServerSnapshotManager {
+ 
+   /**
+    * Create a default snapshot handler - uses a zookeeper based cohort controller.
+-   * @param conf configuration to use for extracting information like thread pool properties and
+-   *          frequency to check for errors (wake frequency).
+    * @param rss region server running the handler
+    * @throws KeeperException if the zookeeper cluster cannot be reached
+    */
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index e7bebe9..01ce1f0 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -551,7 +551,6 @@ public class RestoreSnapshotHelper {
+   /**
+    * Create a new table descriptor cloning the snapshot table schema.
+    *
+-   * @param admin
+    * @param snapshotTableDescriptor
+    * @param tableName
+    * @return cloned table descriptor
+diff --git a/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java b/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+index b45a53b..eee2057 100644
+--- a/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
++++ b/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+@@ -211,7 +211,6 @@ public final class SnapshotReferenceUtil {
+    *
+    * @param fs {@link FileSystem}
+    * @param snapshotDir {@link Path} to the Snapshot directory
+-   * @param visitor callback object to get the log files
+    * @throws IOException if an error occurred while scanning the directory
+    * @return the names of hfiles in the specified snaphot
+    */
+-- 
+1.7.0.4
+

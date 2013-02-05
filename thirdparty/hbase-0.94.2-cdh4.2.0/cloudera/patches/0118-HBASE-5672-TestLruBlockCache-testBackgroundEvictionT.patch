@@ -1,0 +1,124 @@
+From 388a88ea57d364fc8908ed4e1d77e8f4408c44d3 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 2 Jan 2013 11:59:25 -0800
+Subject: [PATCH 118/196] HBASE-5672 TestLruBlockCache#testBackgroundEvictionThread fails occasionally
+
+Reason: Test Failure
+Author: Chunhui Shen
+Ref: CDH-9645
+---
+ .../hadoop/hbase/io/hfile/LruBlockCache.java       |   16 +++++++++++++++-
+ .../hadoop/hbase/io/hfile/TestLruBlockCache.java   |   17 +++++++++++++----
+ 2 files changed, 28 insertions(+), 5 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/io/hfile/LruBlockCache.java b/src/main/java/org/apache/hadoop/hbase/io/hfile/LruBlockCache.java
+index d47ad1b..e98f0f5 100644
+--- a/src/main/java/org/apache/hadoop/hbase/io/hfile/LruBlockCache.java
++++ b/src/main/java/org/apache/hadoop/hbase/io/hfile/LruBlockCache.java
+@@ -573,15 +573,21 @@ public class LruBlockCache implements BlockCache, HeapSize {
+     return this.stats.getEvictedCount();
+   }
+ 
++  EvictionThread getEvictionThread() {
++    return this.evictionThread;
++  }
++
+   /*
+    * Eviction thread.  Sits in waiting state until an eviction is triggered
+    * when the cache size grows above the acceptable level.<p>
+    *
+    * Thread is triggered into action by {@link LruBlockCache#runEviction()}
+    */
+-  private static class EvictionThread extends HasThread {
++  static class EvictionThread extends HasThread {
+     private WeakReference<LruBlockCache> cache;
+     private boolean go = true;
++    // flag set after enter the run method, used for test
++    private boolean enteringRun = false;
+ 
+     public EvictionThread(LruBlockCache cache) {
+       super(Thread.currentThread().getName() + ".LruBlockCache.EvictionThread");
+@@ -591,6 +597,7 @@ public class LruBlockCache implements BlockCache, HeapSize {
+ 
+     @Override
+     public void run() {
++      enteringRun = true;
+       while (this.go) {
+         synchronized(this) {
+           try {
+@@ -613,6 +620,13 @@ public class LruBlockCache implements BlockCache, HeapSize {
+       this.go = false;
+       interrupt();
+     }
++
++    /**
++     * Used for the test.
++     */
++    boolean isEnteringRun() {
++      return this.enteringRun;
++    }
+   }
+ 
+   /*
+diff --git a/src/test/java/org/apache/hadoop/hbase/io/hfile/TestLruBlockCache.java b/src/test/java/org/apache/hadoop/hbase/io/hfile/TestLruBlockCache.java
+index 4e4b990..f5949aa 100644
+--- a/src/test/java/org/apache/hadoop/hbase/io/hfile/TestLruBlockCache.java
++++ b/src/test/java/org/apache/hadoop/hbase/io/hfile/TestLruBlockCache.java
+@@ -19,6 +19,9 @@
+  */
+ package org.apache.hadoop.hbase.io.hfile;
+ 
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
+ import java.nio.ByteBuffer;
+ import java.util.Collection;
+ import java.util.Map;
+@@ -26,19 +29,18 @@ import java.util.Random;
+ 
+ import org.apache.hadoop.hbase.MediumTests;
+ import org.apache.hadoop.hbase.io.HeapSize;
++import org.apache.hadoop.hbase.io.hfile.LruBlockCache.EvictionThread;
+ import org.apache.hadoop.hbase.regionserver.metrics.SchemaMetrics;
+ import org.apache.hadoop.hbase.regionserver.metrics.TestSchemaMetrics;
+ import org.apache.hadoop.hbase.util.ClassSize;
+ import org.junit.After;
+ import org.junit.Before;
+ import org.junit.Test;
++import org.junit.experimental.categories.Category;
+ import org.junit.runner.RunWith;
+ import org.junit.runners.Parameterized;
+ import org.junit.runners.Parameterized.Parameters;
+ 
+-import org.junit.experimental.categories.Category;
+-import static org.junit.Assert.*;
+-
+ /**
+  * Tests the concurrent LruBlockCache.<p>
+  *
+@@ -73,7 +75,6 @@ public class TestLruBlockCache {
+ 
+   @Test
+   public void testBackgroundEvictionThread() throws Exception {
+-
+     long maxSize = 100000;
+     long blockSize = calculateBlockSizeDefault(maxSize, 9); // room for 9, will evict
+ 
+@@ -81,6 +82,14 @@ public class TestLruBlockCache {
+ 
+     CachedItem [] blocks = generateFixedBlocks(10, blockSize, "block");
+ 
++    EvictionThread evictionThread = cache.getEvictionThread();
++    assertTrue(evictionThread != null);
++
++    // Make sure eviction thread has entered run method
++    while (!evictionThread.isEnteringRun()) {
++      Thread.sleep(1);
++    }
++
+     // Add all the blocks
+     for (CachedItem block : blocks) {
+       cache.cacheBlock(block.cacheKey, block);
+-- 
+1.7.0.4
+

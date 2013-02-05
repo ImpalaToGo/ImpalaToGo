@@ -1,0 +1,37 @@
+From 77946fde4adaea629427ffc0544a61324ec1fe0c Mon Sep 17 00:00:00 2001
+From: Lars Hofhansl <larsh@apache.org>
+Date: Tue, 13 Nov 2012 19:25:31 +0000
+Subject: [PATCH 036/196] HBASE-4913 Addendum: Fix TestShell
+
+Reason: Bug
+Author: Lars Hofhansl
+Ref: CDH-7570
+---
+ src/main/ruby/hbase/admin.rb |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/ruby/hbase/admin.rb b/src/main/ruby/hbase/admin.rb
+index 4cf6963..85367bf 100644
+--- a/src/main/ruby/hbase/admin.rb
++++ b/src/main/ruby/hbase/admin.rb
+@@ -51,7 +51,7 @@ module Hbase
+ 
+     #----------------------------------------------------------------------------------------------
+     # Requests a table or region or column family compaction
+-    def compact(table_or_region_name, family)
++    def compact(table_or_region_name, family = nil)
+       if family == nil
+         @admin.compact(table_or_region_name)
+       else
+@@ -62,7 +62,7 @@ module Hbase
+ 
+     #----------------------------------------------------------------------------------------------
+     # Requests a table or region or column family major compaction
+-    def major_compact(table_or_region_name, family)
++    def major_compact(table_or_region_name, family = nil)
+       if family == nil
+         @admin.majorCompact(table_or_region_name)
+       else
+-- 
+1.7.0.4
+
