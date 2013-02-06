@@ -20,7 +20,7 @@
 
 #if defined(_WIN32)
 #define _CRT_SECURE_NO_WARNINGS // Disable deprecation warning in VS2005
-#else 
+#else
 #ifdef __linux__
 #define _XOPEN_SOURCE 600     // For flockfile() on Linux
 #endif
@@ -183,6 +183,7 @@ typedef struct DIR {
 
 #include <pwd.h>
 #include <unistd.h>
+
 #include <dirent.h>
 #if !defined(NO_SSL_DL) && !defined(NO_SSL)
 #include <dlfcn.h>
@@ -215,6 +216,8 @@ typedef int SOCKET;
 #define WINCDECL
 
 #endif // End of Windows and UNIX specific includes
+
+#include <poll.h>
 
 #include "mongoose.h"
 
@@ -1430,17 +1433,19 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
 // reading, must give up and close the connection and exit serving thread.
 static int wait_until_socket_is_readable(struct mg_connection *conn) {
   int result;
-  struct timeval tv;
-  fd_set set;
-
+  // Can't use select() because conn->client.sock can easily be larger
+  // than FD_SETSIZE, the maximum file descriptor number that can be
+  // put in an fd_set. poll() is the right choice, particularly
+  // because we're only watching one file descriptor.
+  struct pollfd pfd;
+  pfd.fd = conn->client.sock;
+  pfd.events = POLLIN | POLLPRI;
   do {
-    tv.tv_sec = 0;
-    tv.tv_usec = 300 * 1000;
-    FD_ZERO(&set);
-    FD_SET(conn->client.sock, &set);
-    result = select(conn->client.sock + 1, &set, NULL, NULL, &tv);
+    result = poll(&pfd, 1, 300);
   } while ((result == 0 || (result < 0 && ERRNO == EINTR)) &&
            conn->ctx->stop_flag == 0);
+
+  if (pfd.revents & POLLERR) return 0;
 
   return conn->ctx->stop_flag || result < 0 ? 0 : 1;
 }
@@ -4185,7 +4190,7 @@ static int load_dll(struct mg_context *ctx, const char *dll_name,
 static int set_ssl_option(struct mg_context *ctx) {
   int i, size;
   const char *pem;
-  
+
   // If PEM file is not specified, skip SSL initialization.
   if ((pem = ctx->config[SSL_CERTIFICATE]) == NULL) {
     return 1;
@@ -4210,7 +4215,7 @@ static int set_ssl_option(struct mg_context *ctx) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
     return 0;
   }
-  
+
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
   if (call_user(fc(ctx), MG_INIT_SSL) == NULL &&
