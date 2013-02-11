@@ -120,6 +120,11 @@ struct OneField {
   1: EmptyStruct field
 }
 
+union TUnion {
+  1: string string_field;
+  2: i32 i32_field;
+}
+
 service ThriftTest
 {
   /**
@@ -282,6 +287,13 @@ service ThriftTest
    * @param i32 secondsToSleep - the number of seconds to sleep
    */
   oneway void testOneway(1:i32 secondsToSleep)
+  
+  /**
+   * Prints 'testUnion("{%s}")'
+   * @param TUnion thing - input TUnion
+   * @return TUnion - returns the TUnion 'thing'
+   */
+  TUnion testUnion(1: TUnion thing)
 }
 
 service SecondService

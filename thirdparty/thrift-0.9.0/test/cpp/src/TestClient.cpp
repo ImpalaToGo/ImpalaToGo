@@ -288,6 +288,7 @@ int main(int argc, char** argv) {
     printf(" = %"PRId64"\n", i64);
     if (i64 != -34359738368LL)
         failCount++;
+
     /**
      * DOUBLE TEST
      */
@@ -295,6 +296,18 @@ int main(int argc, char** argv) {
     double dub = testClient.testDouble(-5.2098523);
     printf(" = %f\n", dub);
     if ((dub - (-5.2098523)) > 0.001)
+        failCount++;
+
+    /**
+     * UNION TEST
+     */
+    printf("testUnion()");
+    TUnion u1;
+    u1.__set_i32_field(123);
+    u1.__set_string_field("abc");
+    TUnion u2;
+    testClient.testUnion(u2, u1);
+    if (u1 != u2)
         failCount++;
 
     /**

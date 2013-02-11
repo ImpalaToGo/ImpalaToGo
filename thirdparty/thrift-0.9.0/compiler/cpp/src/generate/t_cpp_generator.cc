@@ -943,9 +943,16 @@ void t_cpp_generator::generate_struct_definition(ofstream& out,
     out << " val) {" << endl << indent() <<
       indent() << (*m_iter)->get_name() << " = val;" << endl;
 
-    // assume all fields are required except optional fields.
-    // for optional fields change __isset.name to true
-    bool is_optional = (*m_iter)->get_req() == t_field::T_OPTIONAL;
+    // Clear default constructor to clear __isset flags if it is a union.
+    if (tstruct->is_union()) {
+      out <<
+        indent() <<
+        indent() << "__isset = _" << tstruct->get_name() << "__isset();" << endl;
+    }
+
+    // all non-required fields has "__isset.name".
+    // change __isset.name to true
+    bool is_optional = (*m_iter)->get_req() != t_field::T_REQUIRED;
     if (is_optional) {
       out <<
         indent() <<
@@ -966,7 +973,8 @@ void t_cpp_generator::generate_struct_definition(ofstream& out,
     for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
       // Most existing Thrift code does not use isset or optional/required,
       // so we treat "default" fields as required.
-      if ((*m_iter)->get_req() != t_field::T_OPTIONAL) {
+      // For union, "default" fields are treated as optional.
+      if (!tstruct->is_union() && (*m_iter)->get_req() != t_field::T_OPTIONAL) {
         out <<
           indent() << "if (!(" << (*m_iter)->get_name()
                    << " == rhs." << (*m_iter)->get_name() << "))" << endl <<
@@ -1377,13 +1385,16 @@ void t_cpp_generator::generate_struct_writer(ofstream& out,
   indent_up();
 
   out <<
-    indent() << "uint32_t xfer = 0;" << endl;
+    indent() << "uint32_t xfer = 0;" << endl <<
+    indent() << "uint32_t fcnt = 0;" << endl;
 
   indent(out) <<
     "xfer += oprot->writeStructBegin(\"" << name << "\");" << endl;
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
-    bool check_if_set = (*f_iter)->get_req() == t_field::T_OPTIONAL ||
+    // Check __isset for union fields, exception fields and option fields.
+    bool check_if_set = tstruct->is_union() ||
+                        (*f_iter)->get_req() == t_field::T_OPTIONAL ||
                         (*f_iter)->get_type()->is_xception();
     if (check_if_set) {
       out << endl << indent() << "if (this->__isset." << (*f_iter)->get_name() << ") {" << endl;
@@ -1391,6 +1402,9 @@ void t_cpp_generator::generate_struct_writer(ofstream& out,
     } else {
       out << endl;
     }
+
+    out <<
+      indent() << "++fcnt;" << endl;
 
     // Write field header
     out <<
@@ -1414,6 +1428,15 @@ void t_cpp_generator::generate_struct_writer(ofstream& out,
   }
 
   out << endl;
+
+  if (tstruct->is_union()) {
+    // Union must have one set value.
+    out <<
+      indent() << "if (fcnt != 1) {" << endl <<
+      indent() << "    throw ::apache::thrift::TException(" <<
+      "\"Union must have one set value.\");" << endl <<
+      indent() << "}" << endl;
+  }
 
   // Write the struct map
   out <<

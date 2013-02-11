@@ -125,6 +125,25 @@ public class TestClient {
         } catch (TApplicationException tax) {
           tax.printStackTrace();
         }
+        
+        /**
+         * UNION TEST
+         */
+        System.out.print("testUnion(string_field=abc)");
+        TUnion myunion = new TUnion();
+        myunion.setI32_field(123);
+        myunion.setString_field("abc");
+        TUnion res = testClient.testUnion(myunion);
+        System.out.print(" = \"" + res + "\"\n");
+        if (res.isSetI32_field()) {
+          System.out.println("FAILURE - i32_field is set\n");
+        }
+        if (!res.isSetString_field()) {
+          System.out.println("FAILURE - string_field is not set\n");
+        }
+        if (!res.getString_field().equals("abc")) {
+          System.out.println("FAILURE - unexpected string_field:" + res.getString_field() + "\n");
+        }
 
         /**
          * STRING TEST
@@ -449,8 +468,7 @@ public class TestClient {
                              Long.toString(onewayElapsedMillis) +
                              "ms");
         }
-
-
+        
         long stop = System.nanoTime();
         long tot = stop-start;
 

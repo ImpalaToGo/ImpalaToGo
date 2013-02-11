@@ -68,6 +68,11 @@ void validate_field_value(t_field* field, t_const_value* cv);
 bool validate_throws(t_struct* throws);
 
 /**
+ * Check members of an union
+ */
+void validate_union(t_struct* tunion);
+
+/**
  * Converts a string filename into a thrift program name
  */
 std::string program_name(std::string filename);
