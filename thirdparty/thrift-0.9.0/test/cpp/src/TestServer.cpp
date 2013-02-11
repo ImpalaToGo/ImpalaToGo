@@ -135,6 +135,18 @@ class TestHandler : public ThriftTestIf {
     out = thing;
   }
 
+  void testUnion(TUnion &out, const TUnion &thing) {
+    printf("testUnion({");
+    if (thing.__isset.string_field) {
+      printf("string_field=%s", thing.string_field.c_str());
+    }
+    if (thing.__isset.i32_field) {
+      printf("i32_field=%d", thing.i32_field);
+    }
+    printf("})\n");
+    out = thing;
+  }
+
   void testSet(set<int32_t> &out, const set<int32_t> &thing) {
     printf("testSet({");
     set<int32_t>::const_iterator s_iter;
@@ -415,6 +427,12 @@ public:
   virtual void testStringMap(std::tr1::function<void(std::map<std::string, std::string>  const& _return)> cob, const std::map<std::string, std::string> & thing) {
     std::map<std::string, std::string> res;
     _delegate->testStringMap(res, thing);
+    cob(res);
+  }
+
+  virtual void testUnion(std::tr1::function<void(TUnion  const& _return)> cob, const TUnion & thing) {
+    TUnion res;
+    _delegate->testUnion(res, thing);
     cob(res);
   }
 

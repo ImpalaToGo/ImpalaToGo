@@ -21,6 +21,19 @@
 #include <cmath>
 #include "gen-cpp/DebugProtoTest_types.h"
 #include <thrift/protocol/TDebugProtocol.h>
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/transport/TBufferTransports.h>
+
+using namespace apache::thrift;
+using namespace apache::thrift::transport;
+using namespace apache::thrift::protocol;
+
+template <typename Struct1, typename Struct2>
+void write_to_read(const Struct1 & w, Struct2 & r) {
+  TBinaryProtocol protocol(boost::shared_ptr<TTransport>(new TMemoryBuffer));
+  w.write(&protocol);
+  r.read(&protocol);
+}
 
 int main() {
   using std::cout;
@@ -100,6 +113,36 @@ int main() {
 
   cout << apache::thrift::ThriftDebugString(hm) << endl << endl;
 
+  // Union Test
+  TestUnion u1, u2;
+  u1.__set_i32_field(1);
+  u1.__set_string_field("abc");
+  write_to_read(u1, u2);
+  assert(u2.__isset.string_field);
+  assert(!u2.__isset.i32_field);
+  assert(strncmp(u2.string_field.c_str(), "abc", 3) == 0);
+
+  // Union test - setting more than one field will cause exception
+  bool has_exception = false;
+  try {
+    TestUnion u3, u4;
+    u3.__isset.i32_field = true;
+    u3.__isset.string_field = true;
+    write_to_read(u3, u4);
+  } catch (TException& exn) {
+    has_exception = true;
+  }
+  assert(has_exception);
+
+  // Union test - not setting any field will cause exception
+  has_exception = false;
+  try {
+    TestUnion u3, u4;
+    write_to_read(u3, u4);
+  } catch (TException& exn) {
+    has_exception = true;
+  }
+  assert(has_exception);
 
   return 0;
 }

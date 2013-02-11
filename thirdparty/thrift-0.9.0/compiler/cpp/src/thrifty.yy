@@ -748,6 +748,9 @@ Struct:
         $$->annotations_ = $7->annotations_;
         delete $7;
       }
+      if ($1 == struct_is_union) {
+        validate_union($$);
+      }
     }
     
 XsdAll:

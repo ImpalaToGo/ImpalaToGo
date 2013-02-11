@@ -47,6 +47,7 @@ import thrift.test.Xception;
 import thrift.test.Xception2;
 import thrift.test.Xtruct;
 import thrift.test.Xtruct2;
+import thrift.test.TUnion;
 
 public abstract class ServerTestBase extends TestCase {
 
@@ -273,6 +274,13 @@ public abstract class ServerTestBase extends TestCase {
         throw new RuntimeException(ie);
       }
     }
+    
+    public TUnion testUnion(TUnion thing) {
+      System.out.print("testUnion(" + thing + ")\n");
+      TUnion result = thing;
+      return result;
+    }
+
   } // class TestHandler
 
   private static final List<TProtocolFactory> PROTOCOLS = Arrays.asList(

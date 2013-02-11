@@ -61,7 +61,6 @@ void write_to_read(const Struct1 & w, Struct2 & r) {
   r.read(&protocol);
 }
 
-
 int main() {
 
   cout << "This old school struct should have three fields." << endl;

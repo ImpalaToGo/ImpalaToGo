@@ -862,6 +862,19 @@ bool validate_throws(t_struct* throws) {
 }
 
 /**
+ * Check that all the elements of an union block are not REQUIRED.
+ */
+void validate_union(t_struct* tunion) {
+  const vector<t_field*>& fields = tunion->get_members();
+  vector<t_field*>::const_iterator f_iter;
+  for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
+      throw "Union field " + (*f_iter)->get_name() + " must not be required";
+    }
+  }
+}
+
+/**
  * Parses a program
  */
 void parse(t_program* program, t_program* parent_program) {
