@@ -16,19 +16,19 @@
 
 # run buildall.sh -help to see options
 
-root=`dirname "$0"`
-root=`cd "$root"; pwd`
+ROOT=`dirname "$0"`
+ROOT=`cd "$ROOT"; pwd`
 
-export IMPALA_HOME=$root
-. "$root"/bin/impala-config.sh
+export IMPALA_HOME=$ROOT
+. "$ROOT"/bin/impala-config.sh
 
-clean_action=1
-testdata_action=1
-tests_action=1
-
+CLEAN_ACTION=1
+TESTDATA_ACTION=1
+TESTS_ACTION=1
 FORMAT_CLUSTER=1
 TARGET_BUILD_TYPE=Debug
 EXPLORATION_STRATEGY=core
+SNAPSHOT_FILE=
 
 # Exit on reference to uninitialized variable
 set -u
@@ -36,15 +36,22 @@ set -u
 # parse command line options
 for ARG in $*
 do
+  # Interpret this argument as a snapshot file name
+  if [ "$SNAPSHOT_FILE" = "UNDEFINED" ]; then
+    SNAPSHOT_FILE="$ARG"
+    continue;
+  fi
+
   case "$ARG" in
     -noclean)
-      clean_action=0
+      CLEAN_ACTION=0
       ;;
     -notestdata)
-      testdata_action=0
+      TESTDATA_ACTION=0
+      FORMAT_CLUSTER=0
       ;;
     -skiptests)
-      tests_action=0
+      TESTS_ACTION=0
       ;;
     -noformat)
       FORMAT_CLUSTER=0
@@ -61,13 +68,15 @@ do
     -testexhaustive)
       EXPLORATION_STRATEGY=exhaustive
       ;;
+    -snapshot_file)
+      SNAPSHOT_FILE="UNDEFINED"
+      ;;
     -help|*)
       echo "buildall.sh [-noclean] [-notestdata] [-noformat] [-codecoverage]"\
            "[-skiptests] [-testexhaustive]"
       echo "[-noclean] : omits cleaning all packages before building"
       echo "[-notestdata] : omits recreating the metastore and loading test data"
-      echo "[-noformat] : prevents the minicluster from formatting its data directories,"\
-           "and skips the data load step"
+      echo "[-noformat] : prevents formatting the minicluster and metastore db"
       echo "[-codecoverage] : build with 'gcov' code coverage instrumentation at the"\
            "cost of performance"
       echo "[-skiptests] : skips execution of all tests"
@@ -75,12 +84,21 @@ do
            "test execution time)"
       echo "[-testexhaustive] : run tests in 'exhaustive' mode (significantly increases"\
            "test execution time)"
+      echo "[-snapshot_file <file name>] : load test data from a snapshot file"
       exit 1
       ;;
   esac
 done
 
-# Sanity check that thirdparty is built. 
+if [ "$SNAPSHOT_FILE" = "UNDEFINED" ]; then
+  echo "-snapshot_file flag requires a snapshot filename argument"
+  exit 1
+elif [ "$SNAPSHOT_FILE" != "" ] &&  [ ! -e $SNAPSHOT_FILE ]; then
+  echo "Snapshot file: ${SNAPSHOT_FILE} does not exist."
+  exit 1
+fi
+
+# Sanity check that thirdparty is built.
 if [ ! -e $IMPALA_HOME/thirdparty/gflags-${IMPALA_GFLAGS_VERSION}/libgflags.la ]
 then
   echo "Couldn't find thirdparty build files.  Building thirdparty."
@@ -96,7 +114,7 @@ else
 fi
 
 # option to clean everything first
-if [ $clean_action -eq 1 ]
+if [ $CLEAN_ACTION -eq 1 ]
 then
   # clean selected files from the root
   rm -f CMakeCache.txt
@@ -161,10 +179,9 @@ mvn dependency:copy-dependencies
 # classes.
 mvn package -DskipTests=true
 
-if [ $tests_action -eq 1 ]
+if [ $TESTS_ACTION -eq 1 ]
 then
-    # Run backend tests
-    ${IMPALA_HOME}/bin/run-backend-tests.sh
+    ${IMPALA_HOME}/bin/run-all-tests.sh -e $EXPLORATION_STRATEGY
 fi
 
 # Build the shell tarball
