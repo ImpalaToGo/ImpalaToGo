@@ -1,7 +1,7 @@
 From 3f5a734e4f267e1adfbe3b1c28dedd57e5b20a03 Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Fri, 18 Jan 2013 16:00:27 -0800
-Subject: [PATCH 32/48] CLOUDERA-BUILD CDH-9879:Hive unit test related to job diagnostics are failing on MR1
+Subject: [PATCH 32/67] CLOUDERA-BUILD CDH-9879:Hive unit test related to job diagnostics are failing on MR1
 
 ---
  .../apache/hadoop/hive/shims/Hadoop23Shims.java    |   36 ++++++++++++++------

@@ -97,21 +97,18 @@ public class PlainSaslHelper {
   private static class SQLPlainProcessorFactory extends TProcessorFactory {
     private final ThriftCLIService service;
     private final HiveConf conf;
-    private final boolean doAsEnabled;
 
     public SQLPlainProcessorFactory(ThriftCLIService service) {
       super(null);
       this.service = service;
       this.conf = service.getHiveConf();
-      this.doAsEnabled = conf.getBoolVar(HiveConf.ConfVars.HIVE_SERVER2_KERBEROS_IMPERSONATION);
     }
 
     // Note that we do not do this in KerberosSaslHelper because we get the ipaddress differently in case of Sasl.
     @Override
     public TProcessor getProcessor(TTransport trans) {
       // Note that we do not wrap the processor for kerberos. And handle it a bit differently.
-      TProcessor baseProcessor = new TSetIpAddressProcessor<Iface>(service);
-      return doAsEnabled ? new TUGIContainingProcessor(baseProcessor, conf) : baseProcessor;
+      return new TSetIpAddressProcessor<Iface>(service);
     }
   }
 

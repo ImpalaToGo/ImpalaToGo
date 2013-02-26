@@ -1,7 +1,7 @@
 From d5b041589df0ddc47e84641d759235b746cf3334 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Fri, 25 Jan 2013 16:03:35 -0800
-Subject: [PATCH 40/48] CDH-9969. HiveServer2 doesn't return remote username for non-kerberos SASL connection
+Subject: [PATCH 40/67] CDH-9969. HiveServer2 doesn't return remote username for non-kerberos SASL connection
 
 ---
  ql/src/java/org/apache/hadoop/hive/ql/Driver.java  |    6 ++-

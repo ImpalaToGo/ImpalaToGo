@@ -17,6 +17,8 @@
  */
 package org.apache.hive.service.auth;
 
+import java.io.IOException;
+
 import javax.security.auth.login.LoginException;
 
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -113,4 +115,19 @@ public class HiveAuthFactory {
   public String getIpAddress() {
     return saslServer != null ? saslServer.getRemoteAddress().toString() : null;
   }
+
+  /* perform kerberos login using the hadoop shim API if the configuration is available */
+  public static void loginFromKeytab(HiveConf hiveConf) throws IOException {
+    String principal = hiveConf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_PRINCIPAL);
+    String keyTabFile = hiveConf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_KEYTAB);
+    if (principal.isEmpty() && keyTabFile.isEmpty()) {
+      // no security configuration available
+      return;
+    } else if (!principal.isEmpty() && !keyTabFile.isEmpty()) {
+      ShimLoader.getHadoopShims().loginUserFromKeytab(principal, keyTabFile);
+    } else {
+      throw new IOException ("HiveServer2 kerberos principal or keytab is not correctly configured");
+    }
+  }
+
 }

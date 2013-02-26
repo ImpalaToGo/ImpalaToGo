@@ -1,7 +1,7 @@
 From b48ad701f5a17a4c3050f697d999025fb2058acc Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Mon, 14 Jan 2013 01:56:58 -0800
-Subject: [PATCH 25/48] CLOUDERA-BUILD CDH-9794: Fix local mode settings for MR1 and MR2
+Subject: [PATCH 25/67] CLOUDERA-BUILD CDH-9794: Fix local mode settings for MR1 and MR2
 
 ---
  build-common.xml                                   |    8 +++-

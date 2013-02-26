@@ -1,7 +1,7 @@
 From f77adc7cdde11854388f0e5b1f439cfdded3888c Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Thu, 21 Jun 2012 10:06:31 -0700
-Subject: [PATCH 06/48] CLOUDERA-BUILD. Fixes for local mode tests
+Subject: [PATCH 06/67] CLOUDERA-BUILD. Fixes for local mode tests
 
 Reason: Bug
 Author: Zhenxiao Luo

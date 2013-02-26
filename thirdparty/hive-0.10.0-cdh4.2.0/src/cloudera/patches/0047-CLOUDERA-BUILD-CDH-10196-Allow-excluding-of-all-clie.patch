@@ -1,7 +1,7 @@
 From ee980c1d48dafb7f204d2c8f5f51e0e6795db73c Mon Sep 17 00:00:00 2001
 From: Brock Noland <brock@apache.org>
 Date: Wed, 30 Jan 2013 13:13:13 -0600
-Subject: [PATCH 47/48] CLOUDERA-BUILD: CDH-10196: Allow excluding of all client positive tests in hive build
+Subject: [PATCH 47/67] CLOUDERA-BUILD: CDH-10196: Allow excluding of all client positive tests in hive build
 
 ---
  ql/build.xml |   34 +++++++++++++++++++++-------------

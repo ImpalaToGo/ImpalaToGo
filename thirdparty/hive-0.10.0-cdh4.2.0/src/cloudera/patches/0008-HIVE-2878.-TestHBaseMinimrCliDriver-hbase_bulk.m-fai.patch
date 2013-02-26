@@ -1,7 +1,7 @@
 From 98d80370e79d0b8f95a821cc974d43a983a79e8c Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Wed, 27 Jun 2012 14:31:14 -0700
-Subject: [PATCH 08/48] HIVE-2878. TestHBaseMinimrCliDriver hbase_bulk.m fails on 0.23
+Subject: [PATCH 08/67] HIVE-2878. TestHBaseMinimrCliDriver hbase_bulk.m fails on 0.23
 
 Reason: Bug
 Author: Carl Steinbach

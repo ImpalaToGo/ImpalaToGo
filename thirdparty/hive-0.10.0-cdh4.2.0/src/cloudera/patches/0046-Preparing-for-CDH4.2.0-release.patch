@@ -1,7 +1,7 @@
 From eab517445fcc79caf9a7fc1ce3a26ef1a25ac4d2 Mon Sep 17 00:00:00 2001
 From: Jenkins slave <kitchen-build@cloudera.com>
 Date: Wed, 30 Jan 2013 10:28:41 -0800
-Subject: [PATCH 46/48] Preparing for CDH4.2.0 release
+Subject: [PATCH 46/67] Preparing for CDH4.2.0 release
 
 ---
  build.properties                                   |    2 +-

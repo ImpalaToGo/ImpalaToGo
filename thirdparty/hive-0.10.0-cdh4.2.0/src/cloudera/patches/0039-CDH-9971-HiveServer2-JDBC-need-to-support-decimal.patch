@@ -1,7 +1,7 @@
 From 44ae2b004d74f7c092975bc9d805251a9df4ed35 Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Fri, 25 Jan 2013 12:06:46 -0800
-Subject: [PATCH 39/48] CDH-9971:HiveServer2 JDBC need to support decimal
+Subject: [PATCH 39/67] CDH-9971:HiveServer2 JDBC need to support decimal
 
 ---
  eclipse-templates/.classpath                       |   61 ++++++++-----------

@@ -1,7 +1,7 @@
 From b57b6b7375edcbf54713c4900a3d48e1a76bd00a Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Wed, 30 Jan 2013 14:13:28 -0800
-Subject: [PATCH 48/48] CDH-10037. Support Cancel in Hive JDBC driver
+Subject: [PATCH 48/67] CDH-10037. Support Cancel in Hive JDBC driver
 
 ---
  .../java/org/apache/hive/jdbc/HiveStatement.java   |   17 ++++++++++++++++-

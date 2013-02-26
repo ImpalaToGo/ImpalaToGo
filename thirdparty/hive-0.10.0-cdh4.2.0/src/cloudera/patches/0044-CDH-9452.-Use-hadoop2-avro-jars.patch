@@ -1,7 +1,7 @@
 From f20aea5f7378f990fab291346395459234f66c2e Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Tue, 29 Jan 2013 12:16:25 -0800
-Subject: [PATCH 44/48] CDH-9452. Use hadoop2 avro jars
+Subject: [PATCH 44/67] CDH-9452. Use hadoop2 avro jars
 
 ---
  common/ivy.xml |    3 ++-

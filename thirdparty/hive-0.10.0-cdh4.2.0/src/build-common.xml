@@ -493,11 +493,21 @@
         <echo message="Test Classpath: ${hadoop.testcp}"/>
       </then>
     </if>
+    <!-- Set jvm args to noop if unset -->
+    <if>
+      <not>
+        <isset property="test.junit.jvmargs" />
+      </not>
+      <then>
+        <property name="test.junit.jvmargs" value="-server" />
+      </then>
+    </if>
     <junit showoutput="${test.output}" printsummary="yes" haltonfailure="no"
            fork="yes" maxmemory="${test.junit.maxmemory}" dir="${basedir}" timeout="${test.junit.timeout}"
            errorProperty="tests.failed" failureProperty="tests.failed" filtertrace="off">
       <jvmarg value="-XX:+HeapDumpOnOutOfMemoryError"/>
       <jvmarg value="-XX:HeapDumpPath=${hive.root}"/>
+      <jvmarg value="${test.junit.jvmargs}"/>
       <env key="LANG" value="${test.lang}"/>
       <env key="HIVE_HADOOP_TEST_CLASSPATH" value="${hadoop.testcp}"/>
       <env key="HADOOP_HOME" value="${hadoop.root}"/>

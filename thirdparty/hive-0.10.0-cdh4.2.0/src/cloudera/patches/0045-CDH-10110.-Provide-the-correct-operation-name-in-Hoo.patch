@@ -1,7 +1,7 @@
 From 7d438d5a7ced5fec2438b6bb9e6dfbc64f1be7a3 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Tue, 29 Jan 2013 19:30:19 -0800
-Subject: [PATCH 45/48] CDH-10110. Provide the correct operation name in HookContext
+Subject: [PATCH 45/67] CDH-10110. Provide the correct operation name in HookContext
 
 ---
  ql/src/java/org/apache/hadoop/hive/ql/Driver.java  |    3 ++-

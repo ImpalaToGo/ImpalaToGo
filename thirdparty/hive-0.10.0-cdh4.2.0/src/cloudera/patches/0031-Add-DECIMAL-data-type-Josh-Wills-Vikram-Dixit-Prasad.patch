@@ -1,7 +1,7 @@
 From 30fc7bdbd7ba618caa405e98e9f68f331e5629e9 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Wed, 16 Jan 2013 23:04:24 +0000
-Subject: [PATCH 31/48] Add DECIMAL data type (Josh Wills, Vikram Dixit, Prasad Mujumdar, Mark Grover and Gunther Hagleitner via cws)
+Subject: [PATCH 31/67] Add DECIMAL data type (Josh Wills, Vikram Dixit, Prasad Mujumdar, Mark Grover and Gunther Hagleitner via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1434468 13f79535-47bb-0310-9956-ffa450edef68
 ---

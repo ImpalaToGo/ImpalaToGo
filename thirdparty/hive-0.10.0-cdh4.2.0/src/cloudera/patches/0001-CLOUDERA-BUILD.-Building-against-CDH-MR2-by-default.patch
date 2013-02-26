@@ -1,7 +1,7 @@
 From 8e9fd434f74e7eb293b3a99e89900452373b8319 Mon Sep 17 00:00:00 2001
 From: Arvind Prabhakar <arvind@cloudera.com>
 Date: Wed, 26 Dec 2012 20:49:27 -0800
-Subject: [PATCH 01/48] CLOUDERA-BUILD. Building against CDH MR2 by default.
+Subject: [PATCH 01/67] CLOUDERA-BUILD. Building against CDH MR2 by default.
 
 ---
  build-common.xml                                   |   28 +++

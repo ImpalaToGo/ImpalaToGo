@@ -1,7 +1,7 @@
 From faad66b9eb238e66388861415a2dfa1046f3c78b Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Wed, 23 Jan 2013 00:14:56 -0800
-Subject: [PATCH 37/48] CDH-9158: User-impersonation for HiveServer2
+Subject: [PATCH 37/67] CDH-9158: User-impersonation for HiveServer2
 
 ---
  .../java/org/apache/hadoop/hive/conf/HiveConf.java |    7 +-

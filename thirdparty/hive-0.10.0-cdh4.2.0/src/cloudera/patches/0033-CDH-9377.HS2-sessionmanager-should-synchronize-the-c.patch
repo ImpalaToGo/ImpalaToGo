@@ -1,7 +1,7 @@
 From d431deeb0ba31187fec7261c1cbde067e5e93581 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Fri, 18 Jan 2013 15:53:21 -0800
-Subject: [PATCH 33/48] CDH-9377.HS2 sessionmanager should synchronize the call to insert/remove session objects from session hash map
+Subject: [PATCH 33/67] CDH-9377.HS2 sessionmanager should synchronize the call to insert/remove session objects from session hash map
 
 ---
  .../hive/service/cli/session/SessionManager.java   |   16 ++++++++++++----

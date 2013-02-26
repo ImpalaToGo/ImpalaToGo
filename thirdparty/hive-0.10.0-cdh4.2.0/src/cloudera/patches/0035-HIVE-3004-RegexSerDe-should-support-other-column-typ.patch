@@ -1,7 +1,7 @@
 From f5796732699f6c35d9cfb3f2c31b8596947b3670 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Tue, 15 Jan 2013 07:01:30 +0000
-Subject: [PATCH 35/48] HIVE-3004 : RegexSerDe should support other column types in addition to STRING (Shreepadma Venugoplan via Ashutosh Chauhan)
+Subject: [PATCH 35/67] HIVE-3004 : RegexSerDe should support other column types in addition to STRING (Shreepadma Venugoplan via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1433297 13f79535-47bb-0310-9956-ffa450edef68
 ---

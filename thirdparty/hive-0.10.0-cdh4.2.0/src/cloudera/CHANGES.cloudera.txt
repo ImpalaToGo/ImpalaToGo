@@ -1,3 +1,125 @@
+commit c5b4c9828c32288009b9389eb4338ef4e1ab2c4a
+Author: Jarek Jarcec Cecho <jarcec@apache.org>
+Date:   Thu Feb 14 23:13:22 2013 -0800
+
+    HIVE-4024: Derby metastore update script will fail when upgrading from 0.9.0 to 0.10.0
+
+commit cb38cfcc2fc13dcbc314ed9b3e742e6db6c9121a
+Author: Jarek Jarcec Cecho <jarcec@cloudera.com>
+Date:   Thu Feb 14 14:08:54 2013 -0800
+
+    HIVE-4021 PostgreSQL upgrade scripts are creating column with incorrect name
+
+commit 06de3d200a14c7094d371a01d22f11ca2d0129dd
+Author: Brock Noland <brock@apache.org>
+Date:   Thu Feb 14 11:11:30 2013 -0600
+
+    CDH-10463: Execute all statement operation from session context and setup correct proxy session for impersonation support
+
+commit 257b7532c7e9eb0f83d1ac4226d2c197a32c2ae5
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Sun Dec 9 09:40:38 2012 +0000
+
+    HIVE-3231 : msck repair should find partitions already containing data files (Keegan Mosley via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1418863 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 011c7bb2f3326d4cd4793566b1fbd25c395a131c
+Author: Brock Noland <brock@apache.org>
+Date:   Mon Feb 11 10:58:57 2013 -0600
+
+    CDH-10390: Hive MR2 Tests fail randomly due to race with LocalJobRunner
+
+commit 00a63d6c91eab7b76dcab0d0c6dac28dcdad219a
+Author: Brock Noland <brock@apache.org>
+Date:   Mon Feb 11 06:41:25 2013 -0600
+
+    HIVE-3179: HBase Handler doesn't handle NULLs properly
+
+commit 04919b0f0d3276824db288c6989295de10483fcc
+Author: Jarek Jarcec Cecho <jarcec@apache.org>
+Date:   Fri Feb 8 20:01:23 2013 -0800
+
+    CDH-10369: Port HIVE-3995, HIVE-3998 and HIVE-3999 to CDH 4.2.0 - metastore upgrade scripts
+
+commit 88b3d32d097a6c47b8968df47737e2e52c9330f9
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Mon Feb 4 12:14:32 2013 -0800
+
+    CDH-10285: HiveServer2 secure impersonation issues when used with secure remote metastore
+
+commit dbda5a4d15efc1f327f7d441e030ecb0a259c637
+Author: Brock Noland <brock@apache.org>
+Date:   Thu Feb 7 12:36:28 2013 -0600
+
+    CDH-10338: Hive Shim isLocal check is wrong
+
+commit b20c5b53c1606ab7401085ec81db404a3d8da6f5
+Author: Brock Noland <brock@apache.org>
+Date:   Thu Feb 7 12:35:22 2013 -0600
+
+    Revert "CDH-10338: Hive Shim isLocal check is wrong"
+    
+    This reverts commit d1ae27039578340133a290eefa7891523fafd984.
+
+commit d1ae27039578340133a290eefa7891523fafd984
+Author: Brock Noland <brock@apache.org>
+Date:   Thu Feb 7 10:56:19 2013 -0600
+
+    CDH-10338: Hive Shim isLocal check is wrong
+
+commit 3576becdd026e2ccba148ac6c7375428fb69fd44
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Tue Feb 5 13:05:15 2013 -0800
+
+    CDH-8578:  Secured HiveServer2 logs-in after connecting to HiveMetaStore. Fails if HMS is also kerberized. Additional patch to support _HOST alias
+
+commit 537a156f924a9f539db2b5db468aa060239100c7
+Author: Shreepadma Venugopalan <shreepadma@cloudera.com>
+Date:   Tue Feb 5 13:50:11 2013 -0800
+
+    CDH-10278. Fix username when authentication is kerberos
+
+commit e4eb5bd4bee0b4b179e3e5c477be58a60842074e
+Author: Brock Noland <brock@apache.org>
+Date:   Tue Feb 5 15:59:14 2013 -0600
+
+    CDH-10280: Change default value for hive-site.xml in CDH to set 'hive.warehouse.subdir.inherit.perms=true'
+
+commit 46bac278306871cc48fb8449643d99872df9dbd5
+Author: Shreepadma Venugopalan <shreepadma@cloudera.com>
+Date:   Tue Feb 5 13:21:52 2013 -0800
+
+    Revert "CDH-10278. fix user name when authentication is kerberos"
+    
+    This reverts commit cbb3f286fa96786c47d6117a48d4f52d132af4db.
+
+commit cbb3f286fa96786c47d6117a48d4f52d132af4db
+Author: Shreepadma Venugopalan <shreepadma@cloudera.com>
+Date:   Mon Feb 4 16:02:15 2013 -0800
+
+    CDH-10278. fix user name when authentication is kerberos
+
+commit d437ce27872db8f7f003b3ca3c78a168c7e190f8
+Author: Ashutosh Chauhan <hashutosh@apache.org>
+Date:   Sun Feb 3 03:15:20 2013 +0000
+
+    HIVE-3977 : Hive 0.10 postgres schema script is broken (Johnny Zhang via Ashutosh Chauhan)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1441853 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 748c4046a57e150cecbc6561eb8ef225b1027181
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Mon Feb 4 09:28:37 2013 -0800
+
+    CDH-8578:  Secured HiveServer2 logs-in after connecting to HiveMetaStore. Fails if HMS is also kerberized
+
+commit b5a95f8735ffc18a4a6973f5096602836f7bf69b
+Author: Brock Noland <brock@apache.org>
+Date:   Thu Jan 31 14:46:08 2013 -0600
+
+    CDH-10242: Allow setting of JVM args for Hive Unit tests
+
 commit b57b6b7375edcbf54713c4900a3d48e1a76bd00a
 Author: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date:   Wed Jan 30 14:13:28 2013 -0800

@@ -1,7 +1,7 @@
 From 0dd04c6424344d6bb148024fbe6bd9f963a00ab5 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Tue, 8 Jan 2013 18:42:10 -0800
-Subject: [PATCH 17/48] CDH-9733. Make checks tighter while parsing hive.stats.ndv.error
+Subject: [PATCH 17/67] CDH-9733. Make checks tighter while parsing hive.stats.ndv.error
 
 ---
  .../hive/ql/parse/ColumnStatsSemanticAnalyzer.java |   30 ++++++++++++++++++--

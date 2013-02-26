@@ -1,7 +1,7 @@
 From ef65a0837e17d19b2ffb224fa7f1a2e805273194 Mon Sep 17 00:00:00 2001
 From: Harsh J <harsh@cloudera.com>
 Date: Tue, 22 Jan 2013 22:54:43 +0530
-Subject: [PATCH 34/48] CDH-9161. Pluggable authentication handler for HiveServer2.
+Subject: [PATCH 34/67] CDH-9161. Pluggable authentication handler for HiveServer2.
 
 Description: Provide config to allow users to hook in their own
 authentication handlers for HiveServer2.

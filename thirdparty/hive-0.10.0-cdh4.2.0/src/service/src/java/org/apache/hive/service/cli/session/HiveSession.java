@@ -18,261 +18,154 @@
 
 package org.apache.hive.service.cli.session;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.hive.service.cli.FetchOrientation;
 import org.apache.hive.service.cli.GetInfoType;
 import org.apache.hive.service.cli.GetInfoValue;
 import org.apache.hive.service.cli.HiveSQLException;
 import org.apache.hive.service.cli.OperationHandle;
+import org.apache.hive.service.cli.RowSet;
 import org.apache.hive.service.cli.SessionHandle;
-import org.apache.hive.service.cli.operation.ExecuteStatementOperation;
-import org.apache.hive.service.cli.operation.GetCatalogsOperation;
-import org.apache.hive.service.cli.operation.GetColumnsOperation;
-import org.apache.hive.service.cli.operation.GetFunctionsOperation;
-import org.apache.hive.service.cli.operation.GetSchemasOperation;
-import org.apache.hive.service.cli.operation.GetTableTypesOperation;
-import org.apache.hive.service.cli.operation.GetTypeInfoOperation;
-import org.apache.hive.service.cli.operation.MetadataOperation;
+import org.apache.hive.service.cli.TableSchema;
 import org.apache.hive.service.cli.operation.OperationManager;
 
-/**
- * HiveSession.
- *
- */
-public class HiveSession {
+public interface HiveSession {
+  /**
+   * Set the session manager for the session
+   * @param sessionManager
+   */
+  public void setSessionManager(SessionManager sessionManager);
 
-  private final SessionHandle sessionHandle = new SessionHandle();
-  private final String username;
-  private final String password;
-  private final Map<String, String> sessionConf = new HashMap<String, String>();
-  private final HiveConf hiveConf = new HiveConf();
-  private final SessionState sessionState;
+  /**
+   * Set operation manager for the session
+   * @param operationManager
+   */
+  public void setOperationManager(OperationManager operationManager);
 
-  private static final String FETCH_WORK_SERDE_CLASS =
-      "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe";
+  public SessionHandle getSessionHandle();
 
-  private SessionManager sessionManager;
-  private OperationManager operationManager;
-  private IMetaStoreClient metastoreClient = null;
-  private String ipAddress;
+  public String getUsername();
 
-  public HiveSession(String username, String password, Map<String, String> sessionConf, String ipAddress) {
-    this.username = username;
-    this.password = password;
-    this.ipAddress = ipAddress;
+  public String getPassword();
 
-    if (sessionConf != null) {
-      sessionConf.putAll(sessionConf);
-    }
+  public HiveConf getHiveConf();
 
-    sessionState = new SessionState(hiveConf);
-  }
+  public IMetaStoreClient getMetaStoreClient() throws HiveSQLException;
 
-  private SessionManager getSessionManager() {
-    return sessionManager;
-  }
+  /**
+   * getInfo operation handler
+   * @param getInfoType
+   * @return
+   * @throws HiveSQLException
+   */
+  public GetInfoValue getInfo(GetInfoType getInfoType) throws HiveSQLException;
 
-  public void setSessionManager(SessionManager sessionManager) {
-    this.sessionManager = sessionManager;
-  }
+  /**
+   * execute operation handler
+   * @param statement
+   * @param confOverlay
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle executeStatement(String statement,
+      Map<String, String> confOverlay) throws HiveSQLException;
 
-  private OperationManager getOperationManager() {
-    return operationManager;
-  }
+  /**
+   * getTypeInfo operation handler
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle getTypeInfo() throws HiveSQLException;
 
-  public void setOperationManager(OperationManager operationManager) {
-    this.operationManager = operationManager;
-  }
+  /**
+   * getCatalogs operation handler
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle getCatalogs() throws HiveSQLException;
 
-  private synchronized void acquire() {
-    SessionState.start(sessionState);
-  }
-
-  private synchronized void release() {
-    assert sessionState != null;
-    // no need to release sessionState...
-  }
-
-  public SessionHandle getSessionHandle() {
-    return sessionHandle;
-  }
-
-  public String getUsername() {
-    return username;
-  }
-
-  public String getPassword() {
-    return password;
-  }
-
-  public HiveConf getHiveConf() {
-    hiveConf.setVar(HiveConf.ConfVars.HIVEFETCHOUTPUTSERDE, FETCH_WORK_SERDE_CLASS);
-    return hiveConf;
-  }
-
-  public IMetaStoreClient getMetaStoreClient() throws HiveSQLException {
-    if (metastoreClient == null) {
-      try {
-        metastoreClient = new HiveMetaStoreClient(getHiveConf());
-      } catch (MetaException e) {
-        throw new HiveSQLException(e);
-      }
-    }
-    return metastoreClient;
-  }
-
-  public GetInfoValue getInfo(GetInfoType getInfoType)
-      throws HiveSQLException {
-    acquire();
-    try {
-      switch (getInfoType) {
-      case CLI_SERVER_NAME:
-        return new GetInfoValue("Hive");
-      case CLI_DBMS_NAME:
-        return new GetInfoValue("Apache Hive");
-      case CLI_DBMS_VER:
-        return new GetInfoValue("0.10.0");
-      case CLI_MAX_COLUMN_NAME_LEN:
-        return new GetInfoValue(128);
-      case CLI_MAX_SCHEMA_NAME_LEN:
-        return new GetInfoValue(128);
-      case CLI_MAX_TABLE_NAME_LEN:
-        return new GetInfoValue(128);
-      case CLI_TXN_CAPABLE:
-      default:
-        throw new HiveSQLException("Unrecognized GetInfoType value: " + getInfoType.toString());
-      }
-    } finally {
-      release();
-    }
-  }
-
-  public OperationHandle executeStatement(String statement, Map<String, String> confOverlay)
-      throws HiveSQLException {
-    acquire();
-    try {
-      ExecuteStatementOperation operation = getOperationManager()
-          .newExecuteStatementOperation(this, statement, confOverlay);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
-
-  public OperationHandle getTypeInfo()
-      throws HiveSQLException {
-    acquire();
-    try {
-      GetTypeInfoOperation operation = getOperationManager().newGetTypeInfoOperation(this);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
-
-  public OperationHandle getCatalogs()
-      throws HiveSQLException {
-    acquire();
-    try {
-      GetCatalogsOperation operation = getOperationManager().newGetCatalogsOperation(this);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
-
+  /**
+   * getSchemas operation handler
+   * @param catalogName
+   * @param schemaName
+   * @return
+   * @throws HiveSQLException
+   */
   public OperationHandle getSchemas(String catalogName, String schemaName)
-      throws HiveSQLException {
-      acquire();
-    try {
-      GetSchemasOperation operation =
-          getOperationManager().newGetSchemasOperation(this, catalogName, schemaName);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
+      throws HiveSQLException;
 
-  public OperationHandle getTables(String catalogName, String schemaName, String tableName,
-      List<String> tableTypes)
-      throws HiveSQLException {
-      acquire();
-    try {
-      MetadataOperation operation =
-          getOperationManager().newGetTablesOperation(this, catalogName, schemaName, tableName, tableTypes);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
+  /**
+   * getTables operation handler
+   * @param catalogName
+   * @param schemaName
+   * @param tableName
+   * @param tableTypes
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle getTables(String catalogName, String schemaName,
+      String tableName, List<String> tableTypes) throws HiveSQLException;
 
-  public OperationHandle getTableTypes()
-      throws HiveSQLException {
-      acquire();
-    try {
-      GetTableTypesOperation operation = getOperationManager().newGetTableTypesOperation(this);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
+  /**
+   * getTableTypes operation handler
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle getTableTypes() throws HiveSQLException ;
 
+  /**
+   * getColumns operation handler
+   * @param catalogName
+   * @param schemaName
+   * @param tableName
+   * @param columnName
+   * @return
+   * @throws HiveSQLException
+   */
   public OperationHandle getColumns(String catalogName, String schemaName,
-      String tableName, String columnName)  throws HiveSQLException {
-    acquire();
-    try {
-    GetColumnsOperation operation = getOperationManager().newGetColumnsOperation(this,
-        catalogName, schemaName, tableName, columnName);
-    operation.run();
-    return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
+      String tableName, String columnName)  throws HiveSQLException;
 
-  public OperationHandle getFunctions(String catalogName, String schemaName, String functionName)
-      throws HiveSQLException {
-    acquire();
-    try {
-      GetFunctionsOperation operation = getOperationManager()
-          .newGetFunctionsOperation(this, catalogName, schemaName, functionName);
-      operation.run();
-      return operation.getHandle();
-    } finally {
-      release();
-    }
-  }
+  /**
+   * getFunctions operation handler
+   * @param catalogName
+   * @param schemaName
+   * @param functionName
+   * @return
+   * @throws HiveSQLException
+   */
+  public OperationHandle getFunctions(String catalogName, String schemaName,
+      String functionName) throws HiveSQLException;
 
-  public void close() throws HiveSQLException {
-    return;
-  }
+  /**
+   * close the session
+   * @throws HiveSQLException
+   */
+  public void close() throws HiveSQLException;
 
-  public SessionState getSessionState() {
-    return sessionState;
-  }
+  public void cancelOperation(OperationHandle opHandle) throws HiveSQLException;
 
-  public String getIpAddress() {
-    return ipAddress;
-  }
+  public void closeOperation(OperationHandle opHandle) throws HiveSQLException;
 
-  public String setIpAddress(String ipAddress) {
-    return this.ipAddress = ipAddress;
-  }
+  public TableSchema getResultSetMetadata(OperationHandle opHandle)
+      throws HiveSQLException;
 
-  public String getUserName() {
-    return username;
-  }
+  public RowSet fetchResults(OperationHandle opHandle, FetchOrientation orientation, long maxRows)
+      throws HiveSQLException;
+
+  public RowSet fetchResults(OperationHandle opHandle) throws HiveSQLException;
+
+  public SessionState getSessionState();
+
+  public String getIpAddress();
+
+  public String setIpAddress(String ipAddress);
+
+  public String getUserName();
+
+  public void setUserName(String userName);
 }

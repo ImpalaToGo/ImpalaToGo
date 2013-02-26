@@ -550,6 +550,7 @@ import static org.apache.hadoop.fs.CommonConfigurationKeys.HADOOP_SECURITY_AUTHE
            if (useProxy) {
              clientUgi = UserGroupInformation.createProxyUser(
                endUser, UserGroupInformation.getLoginUser());
+             remoteUser.set(clientUgi.getShortUserName());
              return clientUgi.doAs(new PrivilegedExceptionAction<Boolean>() {
                  public Boolean run() {
                    try {

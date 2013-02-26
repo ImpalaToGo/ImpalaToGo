@@ -64,9 +64,21 @@ public class SessionManager extends CompositeService {
     super.stop();
   }
 
-  public SessionHandle openSession(String username, String password, Map<String, String> sessionConf) {
-    HiveSession session = new HiveSession(threadLocalUserName.get(), password, sessionConf,
-                                threadLocalIpAddress.get());
+  public SessionHandle openSession(String username, String password, Map<String, String> sessionConf,
+          boolean withImpersonation, String delegationToken) throws HiveSQLException {
+    HiveSession session;
+    if (username == null) {
+      username = threadLocalUserName.get();
+    }
+
+    if (withImpersonation) {
+          HiveSessionImplwithUGI hiveSessionUgi = new HiveSessionImplwithUGI(username, password, sessionConf,
+              threadLocalIpAddress.get(), delegationToken);
+          session = (HiveSession)HiveSessionProxy.getProxy(hiveSessionUgi, hiveSessionUgi.getSessionUgi());
+          hiveSessionUgi.setProxySession(session);
+    } else {
+      session = new HiveSessionImpl(username, password, sessionConf, threadLocalIpAddress.get());
+    }
 
     session.setSessionManager(this);
     session.setOperationManager(operationManager);

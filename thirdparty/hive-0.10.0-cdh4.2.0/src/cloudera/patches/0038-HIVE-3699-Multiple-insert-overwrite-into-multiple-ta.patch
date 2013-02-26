@@ -1,7 +1,7 @@
 From f0ea7fcad4299050dd0c3bf665413e8200df3f16 Mon Sep 17 00:00:00 2001
 From: Namit Jain <namit@apache.org>
 Date: Sat, 19 Jan 2013 03:54:17 +0000
-Subject: [PATCH 38/48] HIVE-3699 Multiple insert overwrite into multiple tables query stores same results
+Subject: [PATCH 38/67] HIVE-3699 Multiple insert overwrite into multiple tables query stores same results
  in all tables (Navis via namit)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1435484 13f79535-47bb-0310-9956-ffa450edef68

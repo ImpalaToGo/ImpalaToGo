@@ -226,6 +226,12 @@ public interface HadoopShims {
   public boolean isSecureShimImpl();
 
   /**
+   * Return true if the hadoop configuration has security enabled
+   * @return
+   */
+  public boolean isSecurityEnabled();
+
+  /**
    * Get the string form of the token given a token signature.
    * The signature is used as the value of the "service" field in the token for lookup.
    * Ref: AbstractDelegationTokenSelector in Hadoop. If there exists such a token
@@ -241,6 +247,16 @@ public interface HadoopShims {
    * @throws IOException
    */
   String getTokenStrForm(String tokenSignature) throws IOException;
+
+  /**
+   * Add a delegation token to the given ugi
+   * @param ugi
+   * @param tokenStr
+   * @param tokenService
+   * @throws IOException
+   */
+  void setTokenStr(UserGroupInformation ugi, String tokenStr, String tokenService)
+    throws IOException;
 
 
   enum JobTrackerState { INITIALIZING, RUNNING };
@@ -288,6 +304,19 @@ public interface HadoopShims {
    * @return
    */
   public String getJobLauncherHttpAddress(Configuration conf);
+
+ /**
+  *  Perform kerberos login using the given principal and keytab
+ * @throws IOException
+  */
+  public void loginUserFromKeytab(String principal, String keytabFile) throws IOException;
+
+  /**
+   * Create the proxy ugi for the given userid
+   * @param userName
+   * @return
+   */
+  UserGroupInformation createProxyUser(String userName) throws IOException;
 
   /**
    * InputSplitShim.
@@ -349,4 +378,5 @@ public interface HadoopShims {
     RecordReader getRecordReader(JobConf job, InputSplitShim split, Reporter reporter,
         Class<RecordReader<K, V>> rrClass) throws IOException;
   }
+
 }

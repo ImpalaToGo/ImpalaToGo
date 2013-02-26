@@ -1,7 +1,7 @@
 From d5e549f2fc26bc8df3f1276404846f0d66309e76 Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <carl@cloudera.com>
 Date: Mon, 23 Jul 2012 14:02:25 -0700
-Subject: [PATCH 09/48] CLOUDERA-BUILD. Hive should depend on datanucleus-core-2.0.3 JAR with fix for NUCCORE-689
+Subject: [PATCH 09/67] CLOUDERA-BUILD. Hive should depend on datanucleus-core-2.0.3 JAR with fix for NUCCORE-689
 
 Reason: Bug
 Author: Carl Steinbach

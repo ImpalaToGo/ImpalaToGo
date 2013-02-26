@@ -1,7 +1,7 @@
 From e107317d7f6d85b0f339ac9c745688455782d6e2 Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Mon, 18 Jun 2012 18:40:37 -0700
-Subject: [PATCH 03/48] CLOUDERA-BUILD. Set hive.archive.har.parentdir.settable=true in HiveConf
+Subject: [PATCH 03/67] CLOUDERA-BUILD. Set hive.archive.har.parentdir.settable=true in HiveConf
 
 Reason: Bug
 Author: Carl Steinbach

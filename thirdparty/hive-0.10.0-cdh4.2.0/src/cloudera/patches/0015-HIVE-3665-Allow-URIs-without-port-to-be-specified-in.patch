@@ -1,7 +1,7 @@
 From 7349809bd6d2a6e8ece14b777ee799967154bcf0 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Wed, 28 Nov 2012 02:44:58 +0000
-Subject: [PATCH 15/48] HIVE-3665: Allow URIs without port to be specified in metatool (Shreepadma via Ashutosh Chauhan)
+Subject: [PATCH 15/67] HIVE-3665: Allow URIs without port to be specified in metatool (Shreepadma via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1414512 13f79535-47bb-0310-9956-ffa450edef68
 ---

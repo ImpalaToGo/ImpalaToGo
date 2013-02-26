@@ -1,7 +1,7 @@
 From 8c8e4ea5a3ecbcbf8d479c18be9d853c7044a610 Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Fri, 25 Jan 2013 17:36:34 -0800
-Subject: [PATCH 41/48] CLOUDERA-BUILD: CDH-8784 Include HiveServer2 python bindings in the distribution
+Subject: [PATCH 41/67] CLOUDERA-BUILD: CDH-8784 Include HiveServer2 python bindings in the distribution
 
 ---
  build.xml |    3 +++

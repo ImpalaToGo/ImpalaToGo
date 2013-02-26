@@ -1,7 +1,7 @@
 From 8883d40301791dc2b20246e16c5f1c5cbb6a605d Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Wed, 16 Jan 2013 16:08:27 -0800
-Subject: [PATCH 30/48] CDH-9868. initialize log4j logging in HS2
+Subject: [PATCH 30/67] CDH-9868. initialize log4j logging in HS2
 
 ---
  .../apache/hive/service/server/HiveServer2.java    |   11 +++++++++++

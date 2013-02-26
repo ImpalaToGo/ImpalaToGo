@@ -1,7 +1,7 @@
 From 1e39628cf189db531e319c31ceb23c3c3cb0505f Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Thu, 10 Jan 2013 15:07:26 -0800
-Subject: [PATCH 22/48] CDH-9602. restrict number of bit vectors from Hive CLI, to prevent out of Java heap memory
+Subject: [PATCH 22/67] CDH-9602. restrict number of bit vectors from Hive CLI, to prevent out of Java heap memory
 
 ---
  .../ql/udf/generic/GenericUDAFComputeStats.java    |   13 +++++++++++++

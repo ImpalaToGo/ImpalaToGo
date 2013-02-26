@@ -123,7 +123,7 @@ public class OperationManager extends AbstractService {
     return operation;
   }
 
-  private synchronized Operation getOperation(OperationHandle operationHandle) throws HiveSQLException {
+  public synchronized Operation getOperation(OperationHandle operationHandle) throws HiveSQLException {
     Operation operation = handleToOperation.get(operationHandle);
     if (operation == null) {
       throw new HiveSQLException("Invalid OperationHandle: " + operationHandle);

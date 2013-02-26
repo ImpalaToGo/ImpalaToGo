@@ -1,7 +1,7 @@
 From b5938954b519e1368c77c7b9ae2c45c521266a78 Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Tue, 15 Jan 2013 01:55:43 -0800
-Subject: [PATCH 27/48] CLOUDERA-BUILD CDH-9680: Disable tests that currently fail on trunk
+Subject: [PATCH 27/67] CLOUDERA-BUILD CDH-9680: Disable tests that currently fail on trunk
 
 ---
  build-common.xml |    3 +--

@@ -23,12 +23,12 @@ import java.util.Set;
 
 import org.apache.hadoop.hive.ql.exec.FunctionInfo;
 import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
+import org.apache.hive.service.cli.CLIServiceUtils;
 import org.apache.hive.service.cli.FetchOrientation;
 import org.apache.hive.service.cli.HiveSQLException;
 import org.apache.hive.service.cli.OperationState;
 import org.apache.hive.service.cli.OperationType;
 import org.apache.hive.service.cli.RowSet;
-import org.apache.hive.service.cli.CLIServiceUtils;
 import org.apache.hive.service.cli.TableSchema;
 import org.apache.hive.service.cli.Type;
 import org.apache.hive.service.cli.session.HiveSession;

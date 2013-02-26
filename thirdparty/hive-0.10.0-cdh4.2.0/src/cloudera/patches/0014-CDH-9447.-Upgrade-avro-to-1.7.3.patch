@@ -1,7 +1,7 @@
 From b83f098bf2dff2196de3bd89ea34ae3831f1ded8 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Tue, 8 Jan 2013 14:20:07 -0800
-Subject: [PATCH 14/48] CDH-9447. Upgrade avro to 1.7.3
+Subject: [PATCH 14/67] CDH-9447. Upgrade avro to 1.7.3
 
 ---
  common/ivy.xml               |    6 ++++--

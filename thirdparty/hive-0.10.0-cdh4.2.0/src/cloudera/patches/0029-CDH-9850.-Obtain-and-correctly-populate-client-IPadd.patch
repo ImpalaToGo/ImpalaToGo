@@ -1,7 +1,7 @@
 From add84419ae40b0d84a542074664358a4642e84db Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Wed, 16 Jan 2013 14:40:26 -0800
-Subject: [PATCH 29/48] CDH-9850. Obtain and correctly populate client IPaddress in HS2
+Subject: [PATCH 29/67] CDH-9850. Obtain and correctly populate client IPaddress in HS2
 
 ---
  ql/src/java/org/apache/hadoop/hive/ql/Driver.java  |   12 +++-

@@ -1,7 +1,7 @@
 From 22b7a205cdd4ecff17b6dd547c132a564d4367a5 Mon Sep 17 00:00:00 2001
 From: Kevin Wilfong <kevinwilfong@apache.org>
 Date: Fri, 14 Dec 2012 23:28:04 +0000
-Subject: [PATCH 43/48] HIVE-3766. Enable adding hooks to hive meta store init. (Jean Xu via kevinwilfong)
+Subject: [PATCH 43/67] HIVE-3766. Enable adding hooks to hive meta store init. (Jean Xu via kevinwilfong)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1422146 13f79535-47bb-0310-9956-ffa450edef68
 ---

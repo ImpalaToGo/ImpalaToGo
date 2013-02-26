@@ -1,7 +1,7 @@
 From 72b91075ab37aae99cf92fd02eaf921501d3db0f Mon Sep 17 00:00:00 2001
 From: Andrew Bayer <andrew@cloudera.com>
 Date: Tue, 28 Aug 2012 12:11:55 -0700
-Subject: [PATCH 12/48] CDH-7622. Update Hive POMs to use same dependencies as upstream
+Subject: [PATCH 12/67] CDH-7622. Update Hive POMs to use same dependencies as upstream
 
 ---
  cloudera/maven-packaging/hive-builtins/pom.xml     |   13 +++++++

@@ -21,7 +21,6 @@ import java.io.IOException;
 
 import javax.security.sasl.SaslException;
 
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge.Server;
@@ -47,8 +46,7 @@ public class KerberosSaslHelper {
     @Override
     public TProcessor getProcessor(TTransport trans) {
       TProcessor sqlProcessor = new TCLIService.Processor<Iface>(service);
-      return service.getHiveConf().getBoolVar(HiveConf.ConfVars.HIVE_SERVER2_KERBEROS_IMPERSONATION) ?
-          saslServer.wrapProcessor(sqlProcessor) : saslServer.wrapNonAssumingProcessor(sqlProcessor);
+      return saslServer.wrapNonAssumingProcessor(sqlProcessor);
     }
   }
 

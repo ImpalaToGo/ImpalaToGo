@@ -1,7 +1,7 @@
 From 153d1df752bf294a0f8e569e5bc4b01aef1dc9ee Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Thu, 10 Jan 2013 11:12:12 -0800
-Subject: [PATCH 18/48] CDH-7653. WARNING: org.apache.hadoop.metrics.jvm.EventCounter is deprecated
+Subject: [PATCH 18/67] CDH-7653. WARNING: org.apache.hadoop.metrics.jvm.EventCounter is deprecated
 
 ---
  common/src/java/conf/hive-log4j.properties |    2 +-

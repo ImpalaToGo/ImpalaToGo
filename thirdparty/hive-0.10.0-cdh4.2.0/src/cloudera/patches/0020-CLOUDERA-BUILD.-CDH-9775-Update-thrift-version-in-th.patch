@@ -1,7 +1,7 @@
 From c338fc647cae6de25f557f97803ee35ba6fb91ca Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Fri, 11 Jan 2013 10:52:44 -0800
-Subject: [PATCH 20/48] CLOUDERA-BUILD. CDH-9775: Update thrift version in the cloudera pom
+Subject: [PATCH 20/67] CLOUDERA-BUILD. CDH-9775: Update thrift version in the cloudera pom
 
 ---
  cloudera/maven-packaging/pom.xml |    2 +-

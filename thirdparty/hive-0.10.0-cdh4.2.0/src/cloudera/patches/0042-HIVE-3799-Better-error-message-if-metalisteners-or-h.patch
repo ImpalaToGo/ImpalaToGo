@@ -1,7 +1,7 @@
 From a4904c3cee110a57d1fd0afab5d188b8f6c54a23 Mon Sep 17 00:00:00 2001
 From: Ashutosh Chauhan <hashutosh@apache.org>
 Date: Sun, 27 Jan 2013 18:50:49 +0000
-Subject: [PATCH 42/48] HIVE-3799 : Better error message if metalisteners or hookContext cannot be loaded/instantiated (Navis via Ashutosh Chauhan)
+Subject: [PATCH 42/67] HIVE-3799 : Better error message if metalisteners or hookContext cannot be loaded/instantiated (Navis via Ashutosh Chauhan)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1439138 13f79535-47bb-0310-9956-ffa450edef68
 ---

@@ -1,7 +1,7 @@
 From 27a93a84ab5b958011496e2914b3cd7c383cd12f Mon Sep 17 00:00:00 2001
 From: Carl Steinbach <cws@apache.org>
 Date: Thu, 29 Nov 2012 04:50:04 +0000
-Subject: [PATCH 13/48] HIVE-3709. Stop storing default ConfVars in temp file (Kevin Wilfong via cws)
+Subject: [PATCH 13/67] HIVE-3709. Stop storing default ConfVars in temp file (Kevin Wilfong via cws)
 
 git-svn-id: https://svn.apache.org/repos/asf/hive/trunk@1415038 13f79535-47bb-0310-9956-ffa450edef68
 ---

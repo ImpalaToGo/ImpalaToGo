@@ -1,7 +1,7 @@
 From 6742423c1a329e8eb805f8db483831ea51ee4fbd Mon Sep 17 00:00:00 2001
 From: Zhenxiao Luo <zhenxiao@cloudera.com>
 Date: Wed, 20 Jun 2012 11:48:33 -0700
-Subject: [PATCH 05/48] HIVE-2860. TestNegativeCliDriver autolocal1.q fails on 0.23
+Subject: [PATCH 05/67] HIVE-2860. TestNegativeCliDriver autolocal1.q fails on 0.23
 
 Reason: Bug
 Author: Carl Steinbach

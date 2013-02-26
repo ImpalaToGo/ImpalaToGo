@@ -1,7 +1,7 @@
 From 731947e10febc58f4d7ab3f36bd891d0460daa70 Mon Sep 17 00:00:00 2001
 From: Shreepadma Venugopalan <shreepadma@cloudera.com>
 Date: Wed, 16 Jan 2013 13:17:34 -0800
-Subject: [PATCH 28/48] CDH-9836. Backport HIVE-2439: Upgrade antlr version to 3.4
+Subject: [PATCH 28/67] CDH-9836. Backport HIVE-2439: Upgrade antlr version to 3.4
 
 ---
  ivy/libraries.properties                           |    4 +-

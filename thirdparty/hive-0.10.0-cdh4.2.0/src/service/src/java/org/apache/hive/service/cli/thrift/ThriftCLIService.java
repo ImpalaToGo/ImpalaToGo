@@ -75,6 +75,7 @@ public class ThriftCLIService extends AbstractService implements TCLIService.Ifa
   private int maxWorkerThreads;
 
 
+
   public ThriftCLIService(CLIService cliService) {
     super("ThriftCLIService");
     this.cliService = cliService;
@@ -118,8 +119,21 @@ public class ThriftCLIService extends AbstractService implements TCLIService.Ifa
       } else {
         userName = req.getUsername();
       }
-      SessionHandle sessionHandle = cliService
-          .openSession(userName, req.getPassword(), req.getConfiguration());
+      SessionHandle sessionHandle = null;
+      if (cliService.getHiveConf().
+          getBoolVar(HiveConf.ConfVars.HIVE_SERVER2_KERBEROS_IMPERSONATION)) {
+        String delegationTokenStr = null;
+        try {
+          delegationTokenStr = cliService.getDelegationTokenFromMetaStore(userName);
+        } catch (UnsupportedOperationException e) {
+          // The delegation token is not applicable in the given deployment mode
+        }
+        sessionHandle = cliService.openSessionWithImpersonation(userName, req.getPassword(),
+              req.getConfiguration(), delegationTokenStr);
+      } else {
+        sessionHandle = cliService.openSession(userName, req.getPassword(),
+              req.getConfiguration());
+      }
       // Cannot break the b/w compatibility of API to accept ipAddress as another parameter in
       // openSession call. Hence making this call
       if (ipAddress != null) {

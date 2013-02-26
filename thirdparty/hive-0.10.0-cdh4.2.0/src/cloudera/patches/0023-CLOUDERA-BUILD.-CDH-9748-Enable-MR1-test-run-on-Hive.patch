@@ -1,7 +1,7 @@
 From 5203ed4e5f8efa74877cc0502c293e68e776285f Mon Sep 17 00:00:00 2001
 From: Prasad Mujumdar <prasadm@cloudera.com>
 Date: Sat, 12 Jan 2013 09:52:54 -0800
-Subject: [PATCH 23/48] CLOUDERA-BUILD. CDH-9748: Enable MR1 test run on Hive 0.10 branch. Set test hadoop options using test.rev property
+Subject: [PATCH 23/67] CLOUDERA-BUILD. CDH-9748: Enable MR1 test run on Hive 0.10 branch. Set test hadoop options using test.rev property
 
 ---
  build-common.xml |    6 +++---

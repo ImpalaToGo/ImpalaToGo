@@ -157,6 +157,16 @@ public class HiveConf extends Configuration {
   };
 
   /**
+   * The conf variables that depends on current user
+   */
+  public static final HiveConf.ConfVars[] userVars = {
+    HiveConf.ConfVars.SCRATCHDIR,
+    HiveConf.ConfVars.LOCALSCRATCHDIR,
+    HiveConf.ConfVars.DOWNLOADED_RESOURCES_DIR,
+    HiveConf.ConfVars.HIVEHISTORYFILELOC
+  };
+
+  /**
    * ConfVars.
    *
    * These are the default configuration properties for Hive. Each HiveConf
@@ -658,7 +668,7 @@ public class HiveConf extends Configuration {
     // Whether to delete the scratchdir while startup
     HIVE_START_CLEANUP_SCRATCHDIR("hive.start.cleanup.scratchdir", false),
     HIVE_INSERT_INTO_MULTILEVEL_DIRS("hive.insert.into.multilevel.dirs", false),
-    HIVE_WAREHOUSE_SUBDIR_INHERIT_PERMS("hive.warehouse.subdir.inherit.perms", false),
+    HIVE_WAREHOUSE_SUBDIR_INHERIT_PERMS("hive.warehouse.subdir.inherit.perms", true),
     // whether insert into external tables is allowed
     HIVE_INSERT_INTO_EXTERNAL_TABLES("hive.insert.into.external.tables", true),
 
