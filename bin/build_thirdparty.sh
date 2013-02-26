@@ -125,3 +125,17 @@ fi
 cd $IMPALA_HOME/thirdparty/avro-${IMPALA_AVRO_VERSION}/lang/c++
 cmake -G "Unix Makefiles"
 make -j4
+
+# Build Hadoop
+HADOOP_DIR=$IMPALA_HOME/thirdparty/hadoop-${IMPALA_HADOOP_VERSION}
+cd ${HADOOP_DIR}/src
+mvn clean install -Pnative -Pdist -DskipTests=true \
+    -Dbundle.snappy=true -Drequire.snappy=true \
+    -Dsnappy.prefix=$IMPALA_HOME/thirdparty/snappy-${IMPALA_SNAPPY_VERSION}/build/lib \
+    -Dsnappy.lib=$IMPALA_HOME/thirdparty/snappy-${IMPALA_SNAPPY_VERSION}/build/lib \
+    -Dsnappy.include=$IMPALA_HOME/thirdparty/snappy-${IMPALA_SNAPPY_VERSION}
+
+# Copy the native libraries to the correct location
+rm -f ${HADOOP_DIR}/lib/native/*
+cp -a -f ${HADOOP_DIR}/src/hadoop-dist/target/hadoop-${IMPALA_HADOOP_VERSION}/lib/native/* \
+    ${HADOOP_DIR}/lib/native
