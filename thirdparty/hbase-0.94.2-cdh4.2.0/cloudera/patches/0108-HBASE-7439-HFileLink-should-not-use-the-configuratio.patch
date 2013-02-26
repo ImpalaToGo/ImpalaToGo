@@ -1,7 +1,7 @@
 From 28424c710ba0d11eba9a4016a6385e2763f5de6b Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 28 Dec 2012 17:27:20 +0000
-Subject: [PATCH 108/196] HBASE-7439 HFileLink should not use the configuration from the Filesystem
+Subject: [PATCH 108/202] HBASE-7439 HFileLink should not use the configuration from the Filesystem
 
 Reason: Snapshots
 Author: Matteo Bertozzi

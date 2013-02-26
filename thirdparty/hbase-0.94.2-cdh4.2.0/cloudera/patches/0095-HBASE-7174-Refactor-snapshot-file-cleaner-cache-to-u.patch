@@ -1,7 +1,7 @@
 From 8352997f731d716520293ab590dfaa2b6be9e430 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:28:10 +0000
-Subject: [PATCH 095/196] HBASE-7174 Refactor snapshot file cleaner cache to use Snapshot
+Subject: [PATCH 095/202] HBASE-7174 Refactor snapshot file cleaner cache to use Snapshot
 
 Reason: Snapshots
 Author: Matteo Bertozzi

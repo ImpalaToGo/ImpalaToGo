@@ -1,7 +1,7 @@
 From f9e23d5b90d1e1504bcf495d6cd37140317be217 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 8 Jan 2013 22:21:16 -0800
-Subject: [PATCH 136/196] HBASE-7518 Move AuthResult out of AccessController
+Subject: [PATCH 136/202] HBASE-7518 Move AuthResult out of AccessController
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1430631 13f79535-47bb-0310-9956-ffa450edef68
 

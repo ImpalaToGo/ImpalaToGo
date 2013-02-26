@@ -1,7 +1,7 @@
 From 1c92f3de0219ce0f4ecf743d9e5648e0ac1987a1 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Wed, 19 Dec 2012 18:01:35 +0000
-Subject: [PATCH 080/196] HBASE-7199 hbck should check lingering reference hfile and have option to sideline them automatically
+Subject: [PATCH 080/202] HBASE-7199 hbck should check lingering reference hfile and have option to sideline them automatically
 
 Reason: Improvement
 Author: Jimmy Xiang

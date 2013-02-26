@@ -1,7 +1,7 @@
 From 4bbf41e036a37407b9980828a055c4cb1e75540c Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 8 Nov 2012 17:08:33 -0700
-Subject: [PATCH 031/196] HBASE-5257 Allow INCLUDE_AND_NEXT_COL in filters and use it in ColumnPaginationFilter
+Subject: [PATCH 031/202] HBASE-5257 Allow INCLUDE_AND_NEXT_COL in filters and use it in ColumnPaginationFilter
  Author: Varun Sharma
  Ref: CDH-8888
  Reason: Client ask

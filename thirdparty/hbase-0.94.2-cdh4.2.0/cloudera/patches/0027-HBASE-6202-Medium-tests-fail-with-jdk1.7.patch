@@ -1,7 +1,7 @@
 From 6529a822e051050f0f917e50c3844575d15dd12d Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Mon, 5 Nov 2012 21:00:13 -0800
-Subject: [PATCH 027/196] HBASE-6202 Medium tests fail with jdk1.7
+Subject: [PATCH 027/202] HBASE-6202 Medium tests fail with jdk1.7
 
 Reason: Bug
 Author: Jimmy Xiang

@@ -1,7 +1,7 @@
 From 734c61e812a1700ba7790d67f127f9fa051a1e54 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 17 Jan 2013 18:30:51 -0800
-Subject: [PATCH 164/196] HBASE-7596 Redundant FSTableDescriptor update
+Subject: [PATCH 164/202] HBASE-7596 Redundant FSTableDescriptor update
 
 Reason: Bug
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From c32d308cf5ec9b6ae7d6aed7a1eee50d16ee8add Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 30 Jan 2013 16:42:24 -0800
-Subject: [PATCH 195/196] HBASE-7684 NullPointerException in SecureClient when Call is cleaned up due to RPC timeout
+Subject: [PATCH 195/202] HBASE-7684 NullPointerException in SecureClient when Call is cleaned up due to RPC timeout
 
 Reason: Bug
 Author: cuijianwei

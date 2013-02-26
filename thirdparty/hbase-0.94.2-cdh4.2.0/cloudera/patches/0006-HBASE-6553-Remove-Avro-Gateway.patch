@@ -1,7 +1,7 @@
 From 75f5325cfe15711b8d1f45ec133731f4f7ef286c Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:18:10 -0600
-Subject: [PATCH 006/196] HBASE-6553 Remove Avro Gateway
+Subject: [PATCH 006/202] HBASE-6553 Remove Avro Gateway
 
 Reason: Supportability
 Author: Elliott Clark

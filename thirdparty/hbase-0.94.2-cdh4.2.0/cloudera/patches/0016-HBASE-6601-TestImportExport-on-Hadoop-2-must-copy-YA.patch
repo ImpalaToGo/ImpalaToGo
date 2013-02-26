@@ -1,7 +1,7 @@
 From 7f0ec75e5481d11c73b800de54c182160714fe30 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 19 Oct 2012 14:16:54 -0600
-Subject: [PATCH 016/196] HBASE-6601 TestImportExport on Hadoop 2 must copy YARN configuration vars
+Subject: [PATCH 016/202] HBASE-6601 TestImportExport on Hadoop 2 must copy YARN configuration vars
 
 Author: Scott Forman
 Reason: Test

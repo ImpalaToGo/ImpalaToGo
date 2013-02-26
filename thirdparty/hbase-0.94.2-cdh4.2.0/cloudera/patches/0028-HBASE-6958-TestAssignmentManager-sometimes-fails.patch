@@ -1,7 +1,7 @@
 From 3d08c2f2c1911e6ecc6cfa6e25c4d5786125ce12 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Tue, 6 Nov 2012 13:17:06 -0800
-Subject: [PATCH 028/196] HBASE-6958 TestAssignmentManager sometimes fails
+Subject: [PATCH 028/202] HBASE-6958 TestAssignmentManager sometimes fails
 
 Reason: Test
 Author: Jimmy Xiang

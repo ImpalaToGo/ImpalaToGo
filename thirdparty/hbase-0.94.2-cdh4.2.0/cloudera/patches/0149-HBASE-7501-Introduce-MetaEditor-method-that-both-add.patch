@@ -1,7 +1,7 @@
 From f741357c42e19db2b8a9f29bf9a681568991fa91 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 10:22:18 -0800
-Subject: [PATCH 149/196] HBASE-7501 Introduce MetaEditor method that both adds and deletes rows in .META. table
+Subject: [PATCH 149/202] HBASE-7501 Introduce MetaEditor method that both adds and deletes rows in .META. table
 
 Reason: Snapshots
 Author: Matteo Bertozzi

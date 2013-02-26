@@ -1,7 +1,7 @@
 From 757d12d21a06e0a51b403989e38950b013076116 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Mon, 17 Dec 2012 15:05:22 -0700
-Subject: [PATCH 067/196] HBASE-7016 port HBASE-6518 'Bytes.toBytesBinary() incorrect trailing backslash escape' to 0.94
+Subject: [PATCH 067/202] HBASE-7016 port HBASE-6518 'Bytes.toBytesBinary() incorrect trailing backslash escape' to 0.94
  Reason: Bug
  Author: Sergey Shelukhin
  Ref: CDH-9521

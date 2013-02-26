@@ -1,7 +1,7 @@
 From a2d0340c24c33b78d86b2f030595225cfd495d5d Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 16 Jan 2013 11:55:11 -0800
-Subject: [PATCH 161/196] HBASE-7583 Fixes and cleanups
+Subject: [PATCH 161/202] HBASE-7583 Fixes and cleanups
 
 Reason: Snapshots
 Author: Matteo Bertozzi

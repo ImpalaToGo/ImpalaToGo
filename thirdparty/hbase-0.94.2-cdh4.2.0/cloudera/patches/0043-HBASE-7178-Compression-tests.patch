@@ -1,7 +1,7 @@
 From 22a64fb365dc96d9066a9bbe8b793b347d03bf6b Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 20 Nov 2012 11:11:34 +0100
-Subject: [PATCH 043/196] HBASE-7178 Compression tests
+Subject: [PATCH 043/202] HBASE-7178 Compression tests
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1410496 13f79535-47bb-0310-9956-ffa450edef68
 

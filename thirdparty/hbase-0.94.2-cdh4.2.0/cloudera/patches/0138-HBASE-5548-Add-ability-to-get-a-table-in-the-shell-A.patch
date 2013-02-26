@@ -1,7 +1,7 @@
 From e9b15a9d51112eb2f32e83eed70fa8d2035cc1bd Mon Sep 17 00:00:00 2001
 From: Michael Stack <stack@apache.org>
 Date: Tue, 1 May 2012 18:04:07 +0000
-Subject: [PATCH 138/196] HBASE-5548 Add ability to get a table in the shell; ADDENDUM
+Subject: [PATCH 138/202] HBASE-5548 Add ability to get a table in the shell; ADDENDUM
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1332766 13f79535-47bb-0310-9956-ffa450edef68
 

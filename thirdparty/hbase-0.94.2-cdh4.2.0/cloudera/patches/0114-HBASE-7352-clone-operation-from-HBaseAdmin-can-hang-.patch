@@ -1,7 +1,7 @@
 From 5bb1265f0eb3af2404b336106de6269f590e6ff2 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 29 Dec 2012 19:13:14 +0000
-Subject: [PATCH 114/196] HBASE-7352 clone operation from HBaseAdmin can hang forever
+Subject: [PATCH 114/202] HBASE-7352 clone operation from HBaseAdmin can hang forever
 
 Reason: Snapshots
 Author: Matteo Bertozzi

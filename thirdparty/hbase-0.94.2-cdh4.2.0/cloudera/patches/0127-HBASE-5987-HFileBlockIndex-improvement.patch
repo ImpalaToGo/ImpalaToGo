@@ -1,7 +1,7 @@
 From 949769c3196c7beb6e983ced7b64074a0b49b67a Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 6 Jan 2013 13:06:13 -0700
-Subject: [PATCH 127/196] HBASE-5987  HFileBlockIndex improvement
+Subject: [PATCH 127/202] HBASE-5987  HFileBlockIndex improvement
  Author: Liyin Tang
  Reason: Performance
  Ref: CDH-9521

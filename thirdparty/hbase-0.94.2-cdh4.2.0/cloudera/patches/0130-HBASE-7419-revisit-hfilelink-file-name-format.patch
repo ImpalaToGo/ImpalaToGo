@@ -1,7 +1,7 @@
 From 2c690a0db1567359f89b35db9f47952a41f1ecd7 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 7 Jan 2013 09:48:34 -0800
-Subject: [PATCH 130/196] HBASE-7419 revisit hfilelink file name format
+Subject: [PATCH 130/202] HBASE-7419 revisit hfilelink file name format
 
 Reason: Snapshots
 Author: Matteo Bertozzi

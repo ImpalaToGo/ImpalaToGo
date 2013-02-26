@@ -1,7 +1,7 @@
 From 9207d1d8500a9e69ae2554b4b82eb0d7a92bd63c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 4 Jan 2013 10:36:06 -0800
-Subject: [PATCH 124/196] HBASE-7496 TestZKProcedure fails interrmittently.
+Subject: [PATCH 124/202] HBASE-7496 TestZKProcedure fails interrmittently.
 
 Reason: Snapshots
 Author: Jonathan Hsieh

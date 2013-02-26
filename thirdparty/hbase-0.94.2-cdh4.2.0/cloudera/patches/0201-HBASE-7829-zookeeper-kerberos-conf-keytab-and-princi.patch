@@ -1,0 +1,28 @@
+From 01a0031f3f3449221130f431633917934993f47e Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 12 Feb 2013 11:12:59 +0000
+Subject: [PATCH 201/202] HBASE-7829 zookeeper kerberos conf keytab and principal parameters interchanged
+
+Reason: Bug
+Author: Francis Liu
+Ref: CDH-5601
+---
+ .../org/apache/hadoop/hbase/zookeeper/ZKUtil.java  |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
+index 124525d..33d910b 100644
+--- a/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
++++ b/src/main/java/org/apache/hadoop/hbase/zookeeper/ZKUtil.java
+@@ -210,7 +210,7 @@ public class ZKUtil {
+     // If keyTab is not specified use the Ticket Cache.
+     // and set the zookeeper login context name.
+     JaasConfiguration jaasConf = new JaasConfiguration(loginContextName,
+-      keytabFilename, principalName);
++        principalName, keytabFilename);
+     javax.security.auth.login.Configuration.setConfiguration(jaasConf);
+     System.setProperty(loginContextProperty, loginContextName);
+   }
+-- 
+1.7.0.4
+

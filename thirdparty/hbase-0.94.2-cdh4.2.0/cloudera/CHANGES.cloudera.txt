@@ -1,3 +1,63 @@
+commit 5ef5d442c17b1148340400cb0a925340ced92937
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Feb 12 11:09:10 2013 +0000
+
+    HBASE-6972 HBase Shell deleteall should not require column to be defined (addendum)
+    
+    Reason: Bug
+    Author: Ricky Saltzer
+    Ref: CDH-10398
+
+commit 01a0031f3f3449221130f431633917934993f47e
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Feb 12 11:12:59 2013 +0000
+
+    HBASE-7829 zookeeper kerberos conf keytab and principal parameters interchanged
+    
+    Reason: Bug
+    Author: Francis Liu
+    Ref: CDH-5601
+
+commit 42f8d701b4268db05f0945e40fa151afb3bed687
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Feb 8 16:51:53 2013 +0000
+
+    HBASE-7788 Fix flakey TestRestore*SnapshotFromClient#testCloneSnapshot
+    
+    Reason: Snapshots
+    Author: Jonathan Hsieh
+    Ref: CDH-10223
+
+commit 364ac38b55ce12228e577e764fcc43e441dd93be
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Fri Feb 8 14:02:03 2013 +0000
+
+    HBASE-7795 Race in the Restore Archiving
+    
+    Reason: Snapshots
+    Author: Matteo Bertozzi
+    Ref: CDH-10223
+
+commit 8f354b5f2ece2c2f281288c6460545799d5018b1
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Feb 7 15:10:55 2013 +0000
+
+    Compatibility issue CDH 4.1/4.2 missing HTable constructors
+    
+    Reason: Compatibility
+    Author: Matteo Bertozzi
+    Ref: CDH-10221
+
+commit 644d9cd540c2bb8e9dadb026c1c61b0600b19669
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Thu Jan 31 11:23:47 2013 -0800
+
+    HBASE-7730 HBaseAdmin#synchronousBalanceSwitch is not compatible with 0.92
+    
+    Reason: Compatibility
+    Author: Jimmy Xiang
+    Ref: CDH-10212
+
 commit bdb08a0f1b533dd6b578d141a2d6abf25f329b87
 Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date:   Wed Jan 30 16:42:46 2013 -0800

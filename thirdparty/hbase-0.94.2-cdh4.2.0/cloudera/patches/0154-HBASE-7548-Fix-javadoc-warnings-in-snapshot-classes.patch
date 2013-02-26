@@ -1,7 +1,7 @@
 From cb57a65e71fed83654c6105591816b93870f6076 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:52:03 -0800
-Subject: [PATCH 154/196] HBASE-7548 Fix javadoc warnings in snapshot classes
+Subject: [PATCH 154/202] HBASE-7548 Fix javadoc warnings in snapshot classes
 
 Reason: Snapshots
 Author: Ted Yu

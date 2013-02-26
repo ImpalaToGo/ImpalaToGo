@@ -1,7 +1,7 @@
 From 553c29b2f41c1dcb4778d262dda3bd88681a2e94 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 29 Jan 2013 14:40:33 -0700
-Subject: [PATCH 191/196] HBASE-2611 Handle RS that fails while processing the failure of another one
+Subject: [PATCH 191/202] HBASE-2611 Handle RS that fails while processing the failure of another one
 
 Reason: Bug
 Author: Himanshu Vashishtha

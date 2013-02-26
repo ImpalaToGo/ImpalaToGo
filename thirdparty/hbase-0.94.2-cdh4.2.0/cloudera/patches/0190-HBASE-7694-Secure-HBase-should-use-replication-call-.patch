@@ -1,7 +1,7 @@
 From d6c98692451a962f6a0463590cee968f6082c155 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 29 Jan 2013 14:30:22 -0700
-Subject: [PATCH 190/196] HBASE-7694 Secure HBase should use replication call queue
+Subject: [PATCH 190/202] HBASE-7694 Secure HBase should use replication call queue
 
 Reason: Bug
 Author: Jieshan Bean

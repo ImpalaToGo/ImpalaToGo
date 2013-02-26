@@ -1,7 +1,7 @@
 From 32144193ebe7b7eb5a157566775cdad8faad53c5 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 20 Dec 2012 11:27:47 -0700
-Subject: [PATCH 098/196] Fixes the compile error with java update < 27
+Subject: [PATCH 098/202] Fixes the compile error with java update < 27
  Reason: Compile error fix
  Author: Himanshu Vashishtha
  Ref: CDH-9593

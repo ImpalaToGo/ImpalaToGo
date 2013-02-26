@@ -1,7 +1,7 @@
 From f284bee8d2320d7b5fa573dcd6d5501948a5482f Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:53:09 -0600
-Subject: [PATCH 013/196] HBASE-4391 Add ability to start RS as root and call mlockall
+Subject: [PATCH 013/202] HBASE-4391 Add ability to start RS as root and call mlockall
 
 Reason: Improvement
 Author: Matteo Bertozzi

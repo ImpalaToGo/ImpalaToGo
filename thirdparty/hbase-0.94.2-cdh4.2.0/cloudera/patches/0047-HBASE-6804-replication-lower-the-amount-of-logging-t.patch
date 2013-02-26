@@ -1,7 +1,7 @@
 From 549a1018be620c0d26f6c7705e483cad4e24963c Mon Sep 17 00:00:00 2001
 From: Jean-Daniel Cryans <jdcryans@cloudera.com>
 Date: Mon, 3 Dec 2012 16:11:23 -0800
-Subject: [PATCH 047/196] HBASE-6804  [replication] lower the amount of logging to a more human-readable level
+Subject: [PATCH 047/202] HBASE-6804  [replication] lower the amount of logging to a more human-readable level
 
 Reason: Improvement
 Author: Jean-Daniel Cryans

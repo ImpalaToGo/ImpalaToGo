@@ -1,7 +1,7 @@
 From 35c49f6dcf6c7855790dcd2add33247387be072a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 26 Dec 2012 15:17:15 +0000
-Subject: [PATCH 105/196] HBASE-7436 Improve stack trace info dumped by ForeignExceptionSnare#rethrowException
+Subject: [PATCH 105/202] HBASE-7436 Improve stack trace info dumped by ForeignExceptionSnare#rethrowException
 
 Reason: Snapshots
 Author: Jonathan Hsieh

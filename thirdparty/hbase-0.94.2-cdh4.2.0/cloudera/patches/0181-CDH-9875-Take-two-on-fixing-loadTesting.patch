@@ -1,7 +1,7 @@
 From f162c0bdb7ce87013c77df562d5e0e1e52a39ecc Mon Sep 17 00:00:00 2001
 From: Jean-Daniel Cryans <jdcryans@cloudera.com>
 Date: Thu, 24 Jan 2013 13:07:55 -0800
-Subject: [PATCH 181/196] CDH-9875  Take two on fixing loadTesting
+Subject: [PATCH 181/202] CDH-9875  Take two on fixing loadTesting
 
 ---
  .../hbase/replication/TestReplicationBase.java     |    2 +-

@@ -1,7 +1,7 @@
 From e5ad0ae31c76191088111c3362a08a3995fd2e49 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Mon, 19 Nov 2012 15:03:45 -0800
-Subject: [PATCH 042/196] HBASE-7038 Port HBASE-5970 Improve the AssignmentManager#updateTimer and speed up handling opened event to 0.94
+Subject: [PATCH 042/202] HBASE-7038 Port HBASE-5970 Improve the AssignmentManager#updateTimer and speed up handling opened event to 0.94
 
 Reason: MTTR Improvement
 Author: Sergey Shelukhin

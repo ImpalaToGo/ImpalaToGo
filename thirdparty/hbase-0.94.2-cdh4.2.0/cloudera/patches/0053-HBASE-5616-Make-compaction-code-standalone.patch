@@ -1,7 +1,7 @@
 From 0f0cad3b6203eb50b326c3a3ad9de646c1017b37 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 7 Dec 2012 16:56:29 +0000
-Subject: [PATCH 053/196] HBASE-5616 Make compaction code standalone
+Subject: [PATCH 053/202] HBASE-5616 Make compaction code standalone
 
 Reason: Improvement
 Author: Michael Stack

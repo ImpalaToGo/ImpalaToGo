@@ -1,7 +1,7 @@
 From faca6b191c16cda8772e77720d5dc027c8e4a63b Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 10 Oct 2012 14:56:41 -0700
-Subject: [PATCH 044/196] HBASE-6963 unable to run hbck on a secure cluster
+Subject: [PATCH 044/202] HBASE-6963 unable to run hbck on a secure cluster
 
 Reason: Bug
 Author: Jimmy Xiang

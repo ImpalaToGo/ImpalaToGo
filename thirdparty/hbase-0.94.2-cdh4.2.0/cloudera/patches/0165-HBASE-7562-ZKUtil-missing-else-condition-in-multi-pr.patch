@@ -1,7 +1,7 @@
 From cc4b01165f4e91f69b4c5732570a46bd13ac7061 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 18 Jan 2013 14:10:36 -0700
-Subject: [PATCH 165/196] HBASE-7562  ZKUtil: missing "else condition" in multi processing
+Subject: [PATCH 165/202] HBASE-7562  ZKUtil: missing "else condition" in multi processing
 
 Reason: Bug
 Author: Himanshu Vashishtha

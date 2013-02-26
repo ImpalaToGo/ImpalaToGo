@@ -1,7 +1,7 @@
 From 921810c92d53bfb5c9af596ee1cbce800b94de19 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 7 Jan 2013 20:21:12 -0800
-Subject: [PATCH 134/196] HBASE-7214 CleanerChore logs too much, so much so it obscures all else that is going on
+Subject: [PATCH 134/202] HBASE-7214 CleanerChore logs too much, so much so it obscures all else that is going on
 
 Reason: Snapshots
 Author: Jesse Yates

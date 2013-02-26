@@ -1,7 +1,7 @@
 From 570b0e4c58a42360158510e6049a4096738fc11c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 3 Jan 2013 14:50:59 -0800
-Subject: [PATCH 121/196] HBASE-7212 Globally Barriered Procedure Mechanism
+Subject: [PATCH 121/202] HBASE-7212 Globally Barriered Procedure Mechanism
 
 Reason: Snapshots
 Author: Jonathan Hsieh

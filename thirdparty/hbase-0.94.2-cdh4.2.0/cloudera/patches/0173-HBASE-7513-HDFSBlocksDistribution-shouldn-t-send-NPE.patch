@@ -1,7 +1,7 @@
 From 7abd3968f99c2e3f2fad523e85c669eb7ef70152 Mon Sep 17 00:00:00 2001
 From: Elliott Neil Clark <eclark@apache.org>
 Date: Tue, 8 Jan 2013 22:36:29 +0000
-Subject: [PATCH 173/196] HBASE-7513 HDFSBlocksDistribution shouldn't send NPEs when something goes wrong
+Subject: [PATCH 173/202] HBASE-7513 HDFSBlocksDistribution shouldn't send NPEs when something goes wrong
 
 Reason: Bug
 Author: Elliott Clark

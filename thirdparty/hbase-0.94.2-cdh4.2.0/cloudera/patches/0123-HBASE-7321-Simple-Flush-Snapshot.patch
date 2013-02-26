@@ -1,7 +1,7 @@
 From 24200970adbab92e9f632733bfb2b76e998553ff Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 3 Jan 2013 22:15:43 -0800
-Subject: [PATCH 123/196] HBASE-7321 Simple Flush Snapshot
+Subject: [PATCH 123/202] HBASE-7321 Simple Flush Snapshot
 
 Reason: Snapshots
 Author: Jonathan Hsieh

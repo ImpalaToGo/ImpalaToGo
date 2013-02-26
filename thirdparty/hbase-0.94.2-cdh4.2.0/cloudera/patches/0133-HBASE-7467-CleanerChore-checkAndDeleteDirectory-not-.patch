@@ -1,7 +1,7 @@
 From 7dd6646e97f2f62c20adc6beeed317b6ba26f383 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 7 Jan 2013 20:15:03 -0800
-Subject: [PATCH 133/196] HBASE-7467 CleanerChore checkAndDeleteDirectory not deleting empty directories
+Subject: [PATCH 133/202] HBASE-7467 CleanerChore checkAndDeleteDirectory not deleting empty directories
 
 Reason: Snapshots
 Author: Jean-Marc Spaggiari

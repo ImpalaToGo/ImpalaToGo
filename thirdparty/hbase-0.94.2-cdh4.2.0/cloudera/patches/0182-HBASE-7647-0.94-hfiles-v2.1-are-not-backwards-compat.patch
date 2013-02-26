@@ -1,7 +1,7 @@
 From 2235f018fcccb2f52fa6595f623152a2c437753d Mon Sep 17 00:00:00 2001
 From: Elliott Neil Clark <eclark@apache.org>
 Date: Thu, 24 Jan 2013 20:45:56 +0000
-Subject: [PATCH 182/196] HBASE-7647 0.94 hfiles v2.1 are not backwards compatible with HFilev2.0
+Subject: [PATCH 182/202] HBASE-7647 0.94 hfiles v2.1 are not backwards compatible with HFilev2.0
 
 Reason: Bug
 Author: Elliott Clark

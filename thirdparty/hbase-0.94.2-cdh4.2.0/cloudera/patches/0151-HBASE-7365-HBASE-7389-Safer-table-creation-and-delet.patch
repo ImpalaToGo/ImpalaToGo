@@ -1,7 +1,7 @@
 From 641e698a55e5aedd37a35097e1e10698711a93eb Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:08:51 -0800
-Subject: [PATCH 151/196] HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
+Subject: [PATCH 151/202] HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
 
 Reason: Snapshots
 Author: Matteo Bertozzi

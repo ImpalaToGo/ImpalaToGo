@@ -1,7 +1,7 @@
 From 65c6584dee002ad4a066d3ee1bba5c8604590668 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 14 Nov 2012 00:03:57 +0100
-Subject: [PATCH 037/196] HBASE-5934 Add the ability for Performance Evaluation to set the table compression
+Subject: [PATCH 037/202] HBASE-5934 Add the ability for Performance Evaluation to set the table compression
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1353290 13f79535-47bb-0310-9956-ffa450edef68
 

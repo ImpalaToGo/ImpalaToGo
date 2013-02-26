@@ -1,7 +1,7 @@
 From 670efcc02d7d79e223e6e530a346c6f38eaee7fa Mon Sep 17 00:00:00 2001
 From: Lars Hofhansl <larsh@apache.org>
 Date: Wed, 31 Oct 2012 22:04:34 +0000
-Subject: [PATCH 072/196] HBASE-7051 CheckAndPut should properly read MVCC
+Subject: [PATCH 072/202] HBASE-7051 CheckAndPut should properly read MVCC
 
 Reason: Bug
 Author: Lars Hofhansl

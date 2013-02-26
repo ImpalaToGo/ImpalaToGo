@@ -1,7 +1,7 @@
 From f8d7b6d6c2da3d4a5a425ddbcecf99ae4b3e1ed6 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 9 Jan 2013 16:56:13 -0800
-Subject: [PATCH 140/196] HBASE-7526 create table does not log the table name in audit log
+Subject: [PATCH 140/202] HBASE-7526 create table does not log the table name in audit log
 
 Reason: Improvement
 Author: Matteo Bertozzi

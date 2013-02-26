@@ -1,7 +1,7 @@
 From b79e8702a7d95b859f0ff85c191721fd541f04f8 Mon Sep 17 00:00:00 2001
 From: Elliott Neil Clark <eclark@apache.org>
 Date: Tue, 30 Oct 2012 20:58:45 +0000
-Subject: [PATCH 030/196] HBASE-7073 OperationMetrics needs to cache the value of hbase.metrics.exposeOperationTimes
+Subject: [PATCH 030/202] HBASE-7073 OperationMetrics needs to cache the value of hbase.metrics.exposeOperationTimes
 
 Reason: Bug
 Author: Elliott Neil Clark <eclark@apache.org>

@@ -1,7 +1,7 @@
 From 347a4f31de0c2cd6c831f790c9cab62ff48ee170 Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Thu, 24 Jan 2013 15:01:07 -0800
-Subject: [PATCH 184/196] HBASE-7651 RegionServerSnapshotManager fails with CancellationException if previous snapshot fails in per region task
+Subject: [PATCH 184/202] HBASE-7651 RegionServerSnapshotManager fails with CancellationException if previous snapshot fails in per region task
 
 Reason: Snapshots
 Author: Jonathan Hsieh

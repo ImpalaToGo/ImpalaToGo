@@ -1,7 +1,7 @@
 From 7fdb3a62a51ede9cacadaea20c92c7c2ecb238af Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 13 Dec 2012 14:27:51 -0700
-Subject: [PATCH 062/196] HBASE-7343 Fix flaky condition for TestDrainingServer
+Subject: [PATCH 062/202] HBASE-7343 Fix flaky condition for TestDrainingServer
  Reason: Test
  Author: Himanshu Vashishtha
  Ref: CDH-7341

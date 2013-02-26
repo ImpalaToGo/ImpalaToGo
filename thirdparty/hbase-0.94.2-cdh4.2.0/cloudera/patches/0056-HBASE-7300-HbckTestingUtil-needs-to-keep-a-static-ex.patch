@@ -1,7 +1,7 @@
 From e4bca69d735e13ac75e9749eb739b6c070c7ad6d Mon Sep 17 00:00:00 2001
 From: Jean-Daniel Cryans <jdcryans@apache.org>
 Date: Sat, 8 Dec 2012 00:46:56 +0000
-Subject: [PATCH 056/196] HBASE-7300  HbckTestingUtil needs to keep a static executor to lower the number of threads used
+Subject: [PATCH 056/202] HBASE-7300  HbckTestingUtil needs to keep a static executor to lower the number of threads used
 
 Reason: Improvement
 Author: Jean-Daniel Cryans

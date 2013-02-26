@@ -1,7 +1,7 @@
 From c92b249c87f08f4c0e540288095421f10eb3a62b Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Mon, 21 Jan 2013 16:19:15 -0700
-Subject: [PATCH 174/196] CDH-9975 Updating thrift to 0.9.0
+Subject: [PATCH 174/202] CDH-9975 Updating thrift to 0.9.0
 
 ---
  pom.xml                                            |    2 +-

@@ -1,7 +1,7 @@
 From a960c3e5dd1f9b736cd93f89b5d200d073d80861 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 29 Dec 2012 11:30:04 +0000
-Subject: [PATCH 112/196] HBASE-7207 Consolidate snapshot related classes into fewer packages
+Subject: [PATCH 112/202] HBASE-7207 Consolidate snapshot related classes into fewer packages
 
 Reason: Snapshots
 Author: Jonathan Hsieh

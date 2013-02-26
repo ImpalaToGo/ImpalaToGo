@@ -1,7 +1,7 @@
 From 1717629191e90a69b0f90a53cc6b7f85fafe4986 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 2 Jan 2013 09:34:22 -0800
-Subject: [PATCH 117/196] HBASE-7354 Snapshot Info/Debug Tool
+Subject: [PATCH 117/202] HBASE-7354 Snapshot Info/Debug Tool
 
 Reason: Snapshots
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From 34a2af0b3132a49e4819b8894662c8eee0d1f5aa Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 30 Jan 2013 13:07:33 -0800
-Subject: [PATCH 194/196] HBASE-7720 Improve logging messages of failed snapshot attempts.
+Subject: [PATCH 194/202] HBASE-7720 Improve logging messages of failed snapshot attempts.
 
 Reason: Snapshots
 Author: Jonathan Hsieh

@@ -1,7 +1,7 @@
 From 2ff1e098e69fc3a7500a717c1c3c2ffd14c31402 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:38:25 -0600
-Subject: [PATCH 008/196] HBASE-6606 Test for reconnecting with HBaseAdmin using unmanaged HConnection
+Subject: [PATCH 008/202] HBASE-6606 Test for reconnecting with HBaseAdmin using unmanaged HConnection
 
 Reason: Supportability
 Author: Gregory Chanan

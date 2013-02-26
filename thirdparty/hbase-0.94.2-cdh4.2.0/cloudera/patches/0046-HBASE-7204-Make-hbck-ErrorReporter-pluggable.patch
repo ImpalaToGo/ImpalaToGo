@@ -1,7 +1,7 @@
 From 83a5197ba8ca873073dab6662a59e2454cc854e3 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Thu, 29 Nov 2012 15:56:54 -0800
-Subject: [PATCH 046/196] HBASE-7204 Make hbck ErrorReporter pluggable
+Subject: [PATCH 046/202] HBASE-7204 Make hbck ErrorReporter pluggable
 
 Reason: Improvement
 Author: Jimmy Xiang

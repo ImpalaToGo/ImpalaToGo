@@ -1,7 +1,7 @@
 From 79f76df6268485c6ad182cdc303d3ee981b4b86b Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 14 Dec 2012 15:51:03 -0700
-Subject: [PATCH 063/196] HBASE-6826: Fix TestFromClientSide Failures
+Subject: [PATCH 063/202] HBASE-6826: Fix TestFromClientSide Failures
  Reason: Test
  Author: Enis
  Ref: CDH-9513

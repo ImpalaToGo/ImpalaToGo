@@ -1,0 +1,35 @@
+From 364ac38b55ce12228e577e764fcc43e441dd93be Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 8 Feb 2013 14:02:03 +0000
+Subject: [PATCH 199/202] HBASE-7795 Race in the Restore Archiving
+
+Reason: Snapshots
+Author: Matteo Bertozzi
+Ref: CDH-10223
+---
+ .../apache/hadoop/hbase/backup/HFileArchiver.java  |    9 ++++++++-
+ 1 files changed, 8 insertions(+), 1 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+index 66d7481..6083328 100644
+--- a/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
++++ b/src/main/java/org/apache/hadoop/hbase/backup/HFileArchiver.java
+@@ -255,7 +255,14 @@ public class HFileArchiver {
+           + Bytes.toString(family) + ", deleting compacted files instead.");
+     }
+ 
+-    fs.rename(storeFile, new Path(storeArchiveDir, storeFile.getName()));
++    // do the actual archive
++    long start = EnvironmentEdgeManager.currentTimeMillis();
++    File file = new FileablePath(fs, storeFile);
++    if (!resolveAndArchiveFile(storeArchiveDir, file, Long.toString(start))) {
++      throw new IOException("Failed to archive/delete the file for region:"
++          + regionInfo.getRegionNameAsString() + ", family:" + Bytes.toString(family)
++          + " into " + storeArchiveDir + ". Something is probably awry on the filesystem.");
++    }
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

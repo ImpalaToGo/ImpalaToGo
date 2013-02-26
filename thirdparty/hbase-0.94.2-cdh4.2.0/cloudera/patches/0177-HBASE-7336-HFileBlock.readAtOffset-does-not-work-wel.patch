@@ -1,7 +1,7 @@
 From 7a4ca9f8ebd4db8eb704494335597371b1174da0 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Wed, 23 Jan 2013 10:35:15 -0800
-Subject: [PATCH 177/196] HBASE-7336: HFileBlock.readAtOffset does not work well with multiple threads
+Subject: [PATCH 177/202] HBASE-7336: HFileBlock.readAtOffset does not work well with multiple threads
 
 Reason: Improvement
 Author: Lars Hofhansl

@@ -1,7 +1,7 @@
 From 4102802f49d5d3285dc227a965eea07858ff6b5e Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:29:52 -0600
-Subject: [PATCH 007/196] HBASE-6604 Bump log4j to 1.2.17
+Subject: [PATCH 007/202] HBASE-6604 Bump log4j to 1.2.17
 
 Reason: Dependency Harmonization
 Author: Jonathan Hsieh

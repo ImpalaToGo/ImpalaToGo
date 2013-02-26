@@ -1,7 +1,7 @@
 From 4272b15f0478b165e2869fe262c47c78080bf074 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Mon, 26 Nov 2012 19:40:31 +0000
-Subject: [PATCH 045/196] HBASE-7190 Add an option to hbck to check only meta and assignment
+Subject: [PATCH 045/202] HBASE-7190 Add an option to hbck to check only meta and assignment
 
 Reason: Improvement
 Author: Jimmy Xiang

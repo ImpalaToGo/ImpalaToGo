@@ -1,7 +1,7 @@
 From b376648d9121c73fd18155cf7998f7b99136117d Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:26:29 +0000
-Subject: [PATCH 092/196] HBASE-6802 Export Snapshot
+Subject: [PATCH 092/202] HBASE-6802 Export Snapshot
 
 Reason: Snapshots
 Author: Matteo Bertozzi

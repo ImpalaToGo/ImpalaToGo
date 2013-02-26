@@ -1,7 +1,7 @@
 From e49405df6159122cfda2d8234963fe5b65c765e0 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Wed, 23 Jan 2013 16:22:58 +0000
-Subject: [PATCH 176/196] HBASE-7648 TestAcidGuarantees.testMixedAtomicity hangs sometimes
+Subject: [PATCH 176/202] HBASE-7648 TestAcidGuarantees.testMixedAtomicity hangs sometimes
 
 Reason: Test
 Author: Jimmy Xiang

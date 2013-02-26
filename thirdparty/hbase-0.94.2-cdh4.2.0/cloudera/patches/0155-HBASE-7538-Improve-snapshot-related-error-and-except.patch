@@ -1,7 +1,7 @@
 From 4fab99fe4cd9bd24f9b65507096d2077e70b6ba4 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:57:37 -0800
-Subject: [PATCH 155/196] HBASE-7538 Improve snapshot related error and exception messages
+Subject: [PATCH 155/202] HBASE-7538 Improve snapshot related error and exception messages
 
 Reason: Snapshots
 Author: Jonathan Hsieh

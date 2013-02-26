@@ -1,7 +1,7 @@
 From 38d82de2e9b9ae3ddbe0e405c834195c01043e16 Mon Sep 17 00:00:00 2001
 From: Jean-Daniel Cryans <jdcryans@cloudera.com>
 Date: Fri, 18 Jan 2013 16:23:16 -0800
-Subject: [PATCH 168/196] HBASE-7545  [replication] Break out TestReplication into manageable classes
+Subject: [PATCH 168/202] HBASE-7545  [replication] Break out TestReplication into manageable classes
 
 Reason: Improvement
 Author: Jean-Daniel Cryans

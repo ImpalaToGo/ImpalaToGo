@@ -1,7 +1,7 @@
 From 786604c71f85c9ad6e5ccb2eb10e5eaec8ada0ec Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 23 Jan 2013 10:47:12 -0800
-Subject: [PATCH 178/196] HBASE-7622 Add table descriptor verification after snapshot restore
+Subject: [PATCH 178/202] HBASE-7622 Add table descriptor verification after snapshot restore
 
 Reason: Snapshots
 Author: Matteo Bertozzi

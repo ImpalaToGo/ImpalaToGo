@@ -1,7 +1,7 @@
 From 30e6f680aff2c8494218210b3e38d180ff53ab67 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 21 Dec 2012 14:24:08 -0700
-Subject: [PATCH 101/196] HBASE-7422 MasterFS doesn't set scheme for internal FileSystem
+Subject: [PATCH 101/202] HBASE-7422 MasterFS doesn't set scheme for internal FileSystem
  Reason: Test
  Author: Himanshu Vashishtha
  Ref: CDH-9572

@@ -1,7 +1,7 @@
 From b8a51b05424cc924c3533c2df1f6f50809c0a0bf Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Fri, 19 Oct 2012 21:40:19 -0700
-Subject: [PATCH 017/196] HBASE-6858 Fix the incorrect BADVERSION checking in the recoverable zookeeper
+Subject: [PATCH 017/202] HBASE-6858 Fix the incorrect BADVERSION checking in the recoverable zookeeper
 
 Reason: Bug
 Author: Jimmy Xiang

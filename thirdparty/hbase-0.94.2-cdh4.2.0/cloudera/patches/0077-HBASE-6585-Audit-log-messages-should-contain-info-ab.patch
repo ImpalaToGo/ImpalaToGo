@@ -1,7 +1,7 @@
 From 6c9a0dc10c586bd66c8a68e6ae391571875b4a5c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 17:53:01 +0000
-Subject: [PATCH 077/196] HBASE-6585 Audit log messages should contain info about the higher level operation being executed
+Subject: [PATCH 077/202] HBASE-6585 Audit log messages should contain info about the higher level operation being executed
 
 Reason: Improvement
 Author: Matteo Bertozzi

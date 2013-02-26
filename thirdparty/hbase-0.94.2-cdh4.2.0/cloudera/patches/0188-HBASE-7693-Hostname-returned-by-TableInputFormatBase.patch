@@ -1,7 +1,7 @@
 From 751150061682f303f967a974c61614bb0d9999ff Mon Sep 17 00:00:00 2001
 From: Lars Hofhansl <larsh@apache.org>
 Date: Mon, 28 Jan 2013 18:43:26 +0000
-Subject: [PATCH 188/196] HBASE-7693 Hostname returned by TableInputFormatBase.reverseDNS contains trailing period (Robert Dyer)
+Subject: [PATCH 188/202] HBASE-7693 Hostname returned by TableInputFormatBase.reverseDNS contains trailing period (Robert Dyer)
 
 Reason: Performance
 Author: Robert Dyer

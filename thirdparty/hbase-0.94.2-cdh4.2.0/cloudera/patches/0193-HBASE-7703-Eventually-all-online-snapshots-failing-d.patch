@@ -1,7 +1,7 @@
 From 1b6b95899551aa10a758da4b3a908074dda22048 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 30 Jan 2013 12:58:29 -0800
-Subject: [PATCH 193/196] HBASE-7703 Eventually all online snapshots failing due to Timeout at same regionserver.
+Subject: [PATCH 193/202] HBASE-7703 Eventually all online snapshots failing due to Timeout at same regionserver.
 
 Reason: Snapshots
 Author: Jonathan Hsieh

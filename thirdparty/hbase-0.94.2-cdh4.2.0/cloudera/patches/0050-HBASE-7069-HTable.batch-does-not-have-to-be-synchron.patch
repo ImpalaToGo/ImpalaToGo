@@ -1,7 +1,7 @@
 From c135a57d447f86971928777e776d4ea43d6a5c96 Mon Sep 17 00:00:00 2001
 From: David S. Wang <dsw@cloudera.com>
 Date: Thu, 6 Dec 2012 09:41:45 -0800
-Subject: [PATCH 050/196] HBASE-7069 HTable.batch does not have to be synchronized
+Subject: [PATCH 050/202] HBASE-7069 HTable.batch does not have to be synchronized
 
 Reason: Bug
 Author: Lars Hofhansl

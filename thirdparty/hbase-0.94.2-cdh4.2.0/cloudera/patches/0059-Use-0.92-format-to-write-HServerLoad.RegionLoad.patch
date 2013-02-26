@@ -1,7 +1,7 @@
 From 9d8485a8fbd824d9a4054b5017f6c0477c554907 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 11 Dec 2012 09:54:18 +0000
-Subject: [PATCH 059/196] Use 0.92 format to write HServerLoad.RegionLoad
+Subject: [PATCH 059/202] Use 0.92 format to write HServerLoad.RegionLoad
 
 Reason: Compatibility
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From 28ec42139cf4d3c821495ce5186907ffd8a01e49 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 18:13:17 +0000
-Subject: [PATCH 079/196] HBASE-7283 Backport HBASE-6564 + HBASE-7202 to 0.94
+Subject: [PATCH 079/202] HBASE-7283 Backport HBASE-6564 + HBASE-7202 to 0.94
 
 Reason: Improvement
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From ca3e723ad243a937b62e9b9cc404ec81aad53b37 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 29 Dec 2012 10:55:30 +0000
-Subject: [PATCH 110/196] HBASE-7452 Change ForeignExceptionListener#receive(String, FE)  to only be #receive(FE)
+Subject: [PATCH 110/202] HBASE-7452 Change ForeignExceptionListener#receive(String, FE)  to only be #receive(FE)
 
 Reason: Snapshots
 Author: Jonathan Hsieh

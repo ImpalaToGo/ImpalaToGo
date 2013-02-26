@@ -1,7 +1,7 @@
 From 4d4128124aaa893fdc5243d98a624eb719d8d4aa Mon Sep 17 00:00:00 2001
 From: Alexander Alten-Lorenz <alexander@cloudera.com>
 Date: Tue, 15 Jan 2013 12:09:50 +0100
-Subject: [PATCH 171/196] HBASE-6694. Test scanner batching in export job feature HBASE-6372
+Subject: [PATCH 171/202] HBASE-6694. Test scanner batching in export job feature HBASE-6372
 
 Description: This issue is about adding a test of HBASE-6372. We should also have numbers for the improvement that HBASE-6372 brings.
 Reason: Customer request

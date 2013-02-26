@@ -1,7 +1,7 @@
 From 11b338066af37bc101107b417a758860b9e02287 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@apache.org>
 Date: Wed, 31 Oct 2012 22:18:50 +0000
-Subject: [PATCH 025/196] HBASE-6904 In the HBase shell, an error is thrown that states replication-related znodes already exist
+Subject: [PATCH 025/202] HBASE-6904 In the HBase shell, an error is thrown that states replication-related znodes already exist
 
 Reason: Bug
 Author: Gregory Chanan

@@ -1,7 +1,7 @@
 From e15f3c4e08f78ee3816ce3d555d3a73eb5f5cddb Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 7 Nov 2012 09:13:57 -0800
-Subject: [PATCH 029/196] HBASE-7113 TestGzipFilter is flaky with jdk1.7
+Subject: [PATCH 029/202] HBASE-7113 TestGzipFilter is flaky with jdk1.7
 
 Reason: Test
 Author: Jimmy Xiang

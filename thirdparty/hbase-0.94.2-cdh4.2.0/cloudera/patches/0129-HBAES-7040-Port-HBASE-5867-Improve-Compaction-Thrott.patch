@@ -1,7 +1,7 @@
 From 046256f227bfec61968cd0329adfb90d06483110 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Mon, 7 Jan 2013 13:38:10 -0700
-Subject: [PATCH 129/196] HBAES-7040 Port HBASE-5867 Improve Compaction Throttle Default to 0.94
+Subject: [PATCH 129/202] HBAES-7040 Port HBASE-5867 Improve Compaction Throttle Default to 0.94
 
 Author: Sergey
 Reason: Improvement

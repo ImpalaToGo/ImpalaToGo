@@ -1,7 +1,7 @@
 From 374b0dfd4c25829e3d5bce7c08ed60ec4a3bf99e Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 18 Dec 2012 18:24:57 -0700
-Subject: [PATCH 081/196] HBASE-6852 SchemaMetrics.updateOnCacheHit costs too much while full scanning a table with all of its fields
+Subject: [PATCH 081/202] HBASE-6852 SchemaMetrics.updateOnCacheHit costs too much while full scanning a table with all of its fields
  Reason: Performance
  Author: Cheng Hao
  Ref: CDH-9521

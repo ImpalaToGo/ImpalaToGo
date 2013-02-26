@@ -1,7 +1,7 @@
 From 02a21c4fa7e87e23966b2f2b0a0192ae2c9e28f5 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 11:53:01 -0800
-Subject: [PATCH 150/196] HBASE-6459 Improve speed of table creation
+Subject: [PATCH 150/202] HBASE-6459 Improve speed of table creation
 
 Reason: Improvement
 Author: Zhou Wenjian

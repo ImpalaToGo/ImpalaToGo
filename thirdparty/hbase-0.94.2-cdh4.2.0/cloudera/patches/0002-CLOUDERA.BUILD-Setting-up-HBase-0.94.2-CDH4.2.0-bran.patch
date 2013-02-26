@@ -1,7 +1,7 @@
 From 480beee37fd06b25cc7e27a8175c9c9aa2d41e68 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Fri, 12 Oct 2012 17:28:50 -0600
-Subject: [PATCH 002/196] CLOUDERA.BUILD Setting up HBase-0.94.2 CDH4.2.0 branch
+Subject: [PATCH 002/202] CLOUDERA.BUILD Setting up HBase-0.94.2 CDH4.2.0 branch
 
 ---
  pom.xml |   36 ++++++++++++++++++++++++++++--------

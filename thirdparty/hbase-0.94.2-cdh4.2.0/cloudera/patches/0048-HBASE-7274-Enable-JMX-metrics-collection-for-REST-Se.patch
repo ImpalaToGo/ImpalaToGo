@@ -1,7 +1,7 @@
 From 1c818adca5e06fe27b5ddef80ff6ceaa396feaeb Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 5 Dec 2012 09:20:18 -0800
-Subject: [PATCH 048/196] HBASE-7274 Enable JMX metrics collection for REST Server
+Subject: [PATCH 048/202] HBASE-7274 Enable JMX metrics collection for REST Server
 
 Reason: Improvement
 Author: Jimmy Xiang

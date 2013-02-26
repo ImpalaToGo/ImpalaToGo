@@ -1,7 +1,7 @@
 From 442578ccc70521c7a684eb419cc9b50af5105ffb Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:43:13 -0600
-Subject: [PATCH 010/196] HBASE-6689 HRegion.increment comment nits
+Subject: [PATCH 010/202] HBASE-6689 HRegion.increment comment nits
 
 Reason: Supportability
 Author: Gregory Chanan

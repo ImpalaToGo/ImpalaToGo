@@ -1,7 +1,7 @@
 From 4fa5df5eeffcdb6de31f0eaf95cef74031ecf8bd Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Sun, 30 Dec 2012 23:34:27 -0800
-Subject: [PATCH 139/196] HBASE-7523 Snapshot attempt with the name of a previously taken snapshot fails sometimes.
+Subject: [PATCH 139/202] HBASE-7523 Snapshot attempt with the name of a previously taken snapshot fails sometimes.
 
 Reason: Snapshots
 Author: Jonathan Hsieh

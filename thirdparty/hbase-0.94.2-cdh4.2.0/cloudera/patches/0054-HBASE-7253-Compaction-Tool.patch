@@ -1,7 +1,7 @@
 From a2de49f28be0ccc3d7d7235c0ead3dd19167af9f Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 7 Dec 2012 16:56:56 +0000
-Subject: [PATCH 054/196] HBASE-7253 Compaction Tool
+Subject: [PATCH 054/202] HBASE-7253 Compaction Tool
 
 Reason: Improvement
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From e52671bfbcfda7b55527a4dd3217e4b0383c3d93 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 17:26:46 -0800
-Subject: [PATCH 157/196] HBASE-6622 TestUpgradeFromHFileV1ToEncoding#testUpgrade fails in trunk
+Subject: [PATCH 157/202] HBASE-6622 TestUpgradeFromHFileV1ToEncoding#testUpgrade fails in trunk
 
 Reason: Test failure
 Author: Ted Yu

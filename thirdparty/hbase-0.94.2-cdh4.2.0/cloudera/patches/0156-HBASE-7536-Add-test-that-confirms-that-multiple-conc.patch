@@ -1,7 +1,7 @@
 From a1d60b82de01f50934b8c61d62c88dcd2407aadc Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:59:40 -0800
-Subject: [PATCH 156/196] HBASE-7536 Add test that confirms that multiple concurrent snapshot requests are rejected
+Subject: [PATCH 156/202] HBASE-7536 Add test that confirms that multiple concurrent snapshot requests are rejected
 
 Reason: Snapshots
 Author: Jonathan Hsieh

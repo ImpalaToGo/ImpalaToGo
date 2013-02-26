@@ -22,6 +22,7 @@ package org.apache.hadoop.hbase.client;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -73,8 +74,6 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.util.StringUtils;
 
-import com.google.protobuf.ServiceException;
-
 /**
  * Provides an interface to manage HBase database table metadata + general
  * administrative functions.  Use HBaseAdmin to create, drop, list, enable and
@@ -96,6 +95,8 @@ public class HBaseAdmin implements Abortable, Closeable {
   // want to wait a long time.
   private final int retryLongerMultiplier;
   private boolean aborted;
+
+  private static volatile boolean synchronousBalanceSwitchSupported = true;
 
   /**
    * Constructor
@@ -686,7 +687,7 @@ public class HBaseAdmin implements Abortable, Closeable {
   }
 
   /**
-   * Wait for the table to be enabled.
+   * Wait for the table to be enabled and available
    * If enabling the table exceeds the retry period, an exception is thrown.
    * @param tableName name of the table
    * @throws IOException if a remote or network exception occurs or
@@ -696,7 +697,7 @@ public class HBaseAdmin implements Abortable, Closeable {
     boolean enabled = false;
     long start = EnvironmentEdgeManager.currentTimeMillis();
     for (int tries = 0; tries < (this.numRetries * this.retryLongerMultiplier); tries++) {
-      enabled = isTableEnabled(tableName);
+      enabled = isTableEnabled(tableName) && isTableAvailable(tableName);
       if (enabled) {
         break;
       }
@@ -1498,10 +1499,21 @@ public class HBaseAdmin implements Abortable, Closeable {
    */
   public boolean setBalancerRunning(final boolean on, final boolean synchronous)
   throws MasterNotRunningException, ZooKeeperConnectionException {
-    if (synchronous == false) {
-      return balanceSwitch(on);
+    if (synchronous && synchronousBalanceSwitchSupported) {
+      try {
+        return getMaster().synchronousBalanceSwitch(on);
+      } catch (UndeclaredThrowableException ute) {
+        String error = ute.getCause().getMessage();
+        if (error != null && error.matches(
+            "(?s).+NoSuchMethodException:.+synchronousBalanceSwitch.+")) {
+          LOG.info("HMaster doesn't support synchronousBalanceSwitch");
+          synchronousBalanceSwitchSupported = false;
+        } else {
+          throw ute;
+        }
+      }
     }
-    return getMaster().synchronousBalanceSwitch(on);
+    return balanceSwitch(on);
   }
 
   /**
@@ -2191,7 +2203,8 @@ public class HBaseAdmin implements Abortable, Closeable {
 
   /**
    * Execute Restore/Clone snapshot and wait for the server to complete (blocking).
-   *
+   * To check if the cloned table exists, use {@link #isTableAvailable} -- it is not safe to
+   * create an HTable instance to this table before it is available.
    * @param snapshot snapshot to restore
    * @param tableName table name to restore the snapshot on
    * @throws IOException if a remote or network exception occurs

@@ -1,7 +1,7 @@
 From d98f2590576dc5b928df38adedb604a9486f4d53 Mon Sep 17 00:00:00 2001
 From: Ramkrishna S. Vasudevan <ramkrishna@apache.org>
 Date: Wed, 10 Oct 2012 17:52:09 +0000
-Subject: [PATCH 001/196] HBASE-6853 IllegalArgument Exception is thrown when an empty region is spliitted(Ram) : Addendum for testcase failure
+Subject: [PATCH 001/202] HBASE-6853 IllegalArgument Exception is thrown when an empty region is spliitted(Ram) : Addendum for testcase failure
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.94@1396708 13f79535-47bb-0310-9956-ffa450edef68
 ---

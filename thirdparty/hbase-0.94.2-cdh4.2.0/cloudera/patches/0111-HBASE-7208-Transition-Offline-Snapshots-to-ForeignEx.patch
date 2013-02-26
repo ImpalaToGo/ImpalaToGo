@@ -1,7 +1,7 @@
 From 1947136d10991fa3cf4f89d6435c9c408bc6223b Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 29 Dec 2012 11:19:09 +0000
-Subject: [PATCH 111/196] HBASE-7208 Transition Offline Snapshots to ForeignExceptions and Refactor for merge
+Subject: [PATCH 111/202] HBASE-7208 Transition Offline Snapshots to ForeignExceptions and Refactor for merge
 
 Reason: Snapshots
 Author: Jonathan Hsieh

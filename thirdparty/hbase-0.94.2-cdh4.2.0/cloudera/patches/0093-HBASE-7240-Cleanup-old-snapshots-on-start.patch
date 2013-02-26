@@ -1,7 +1,7 @@
 From 513b4ef3b1bea4c0e6ba1f1c4b9348a4c4ff51d3 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:27:07 +0000
-Subject: [PATCH 093/196] HBASE-7240 Cleanup old snapshots on start
+Subject: [PATCH 093/202] HBASE-7240 Cleanup old snapshots on start
 
 Reason: Snapshots
 Author: Jesse Yates

@@ -1,7 +1,7 @@
 From 4383e417e75044c19835b58bf93738846a80a32c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 24 Dec 2012 09:40:33 +0000
-Subject: [PATCH 103/196] HBASE-7206 ForeignException framework v2 (simplifies and replaces HBASE-6571)
+Subject: [PATCH 103/202] HBASE-7206 ForeignException framework v2 (simplifies and replaces HBASE-6571)
 
 Reason: Snapshots
 Author: Jonathan Hsieh

@@ -1,7 +1,7 @@
 From 6a882497a493f83d551282e25dd9f374b9abe2d0 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 20:58:17 +0000
-Subject: [PATCH 085/196] HBASE-6571 Generic multi-thread/cross-process error handling framework
+Subject: [PATCH 085/202] HBASE-6571 Generic multi-thread/cross-process error handling framework
 
 Reason: Snapshots
 Author: Jesse Yates

@@ -1,7 +1,7 @@
 From 80fb4a8d1a391676ea145ba0d5efe6a6e88e0a04 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 16 Jan 2013 09:29:45 -0800
-Subject: [PATCH 158/196] HBASE-7560 TestCompactionState failures
+Subject: [PATCH 158/202] HBASE-7560 TestCompactionState failures
 
 Reason: Test failure
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From 191d4660c4f811740eb27704ec8dbc2712b7cff2 Mon Sep 17 00:00:00 2001
 From: Andrew Kyle Purtell <apurtell@apache.org>
 Date: Sat, 15 Dec 2012 17:34:32 +0000
-Subject: [PATCH 082/196] HBASE-7197. Add multi get to RemoteHTable (Elliott Clark)
+Subject: [PATCH 082/202] HBASE-7197. Add multi get to RemoteHTable (Elliott Clark)
 
 Reason: Feature
 Author: Elliott Clark

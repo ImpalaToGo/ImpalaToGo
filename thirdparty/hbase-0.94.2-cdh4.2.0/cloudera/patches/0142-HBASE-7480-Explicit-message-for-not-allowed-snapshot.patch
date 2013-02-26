@@ -1,7 +1,7 @@
 From 02f4e2d6a29ce1654440f44cbf3c1b1563651226 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 11 Jan 2013 10:23:12 -0800
-Subject: [PATCH 142/196] HBASE-7480 Explicit message for not allowed snapshot on meta tables
+Subject: [PATCH 142/202] HBASE-7480 Explicit message for not allowed snapshot on meta tables
 
 Reason: Snapshots
 Author: Matteo Bertozzi

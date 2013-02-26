@@ -1,7 +1,7 @@
 From 153120319940b57ecd3ad53ae1317a2e6d3ae39a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:05:23 +0000
-Subject: [PATCH 090/196] HBASE-6777 Snapshot Restore Interface
+Subject: [PATCH 090/202] HBASE-6777 Snapshot Restore Interface
 
 Reason: Snapshots
 Author: Matteo Bertozzi

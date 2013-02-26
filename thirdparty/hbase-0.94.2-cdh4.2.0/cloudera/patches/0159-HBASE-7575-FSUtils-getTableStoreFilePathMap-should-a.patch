@@ -1,7 +1,7 @@
 From edeab6f62bb5af54169aaa9d89f4f951a35a5b89 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Wed, 16 Jan 2013 16:26:11 +0000
-Subject: [PATCH 159/196] HBASE-7575 FSUtils#getTableStoreFilePathMap should all ignore non-table folders
+Subject: [PATCH 159/202] HBASE-7575 FSUtils#getTableStoreFilePathMap should all ignore non-table folders
 
 Reason: Bug
 Author: Jimmy Xiang

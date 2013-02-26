@@ -1,7 +1,7 @@
 From 5bc9877430854d190eae55ff3fe1ad7f67274f84 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 28 Jan 2013 10:43:39 -0800
-Subject: [PATCH 187/196] HBASE-7689 CloneTableHandler notify completion too early
+Subject: [PATCH 187/202] HBASE-7689 CloneTableHandler notify completion too early
 
 Reason: Snapshots
 Author: Matteo Bertozzi

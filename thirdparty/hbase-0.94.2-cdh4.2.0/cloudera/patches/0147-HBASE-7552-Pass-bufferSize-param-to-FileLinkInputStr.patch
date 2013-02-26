@@ -1,7 +1,7 @@
 From c1c24795b31d47cfe97e80072df4dd148c63e41b Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 09:20:39 -0800
-Subject: [PATCH 147/196] HBASE-7552 Pass bufferSize param to FileLinkInputStream constructor within FileLink.open method, and remove unnecessary import packages.
+Subject: [PATCH 147/202] HBASE-7552 Pass bufferSize param to FileLinkInputStream constructor within FileLink.open method, and remove unnecessary import packages.
 
 Reason: Snapshots
 Author: Julian Zhou

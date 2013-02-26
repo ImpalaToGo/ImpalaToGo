@@ -1,7 +1,7 @@
 From 84be4d48abee1fdffec58f7377ea739dee9bd781 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 24 Jan 2013 10:44:24 -0800
-Subject: [PATCH 180/196] HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
+Subject: [PATCH 180/202] HBASE-7365/HBASE-7389 Safer table creation and deletion using .tmp dir
 
 Reason: Test Failure (Fix admin semantic)
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From d91be8887608d7aa5ff0cc8b0f4bee538beeff67 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@apache.org>
 Date: Wed, 24 Oct 2012 01:10:48 +0000
-Subject: [PATCH 020/196] HBASE-7018 Fix and Improve TableDescriptor caching for bulk assignment
+Subject: [PATCH 020/202] HBASE-7018 Fix and Improve TableDescriptor caching for bulk assignment
 
 Reason: Bug
 Ref: CDH-8672

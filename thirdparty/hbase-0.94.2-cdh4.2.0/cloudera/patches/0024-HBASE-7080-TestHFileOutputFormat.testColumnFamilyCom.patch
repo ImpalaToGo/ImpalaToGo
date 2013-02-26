@@ -1,7 +1,7 @@
 From d4311dc1de4e324195cb8977bb7e6fe946cfce2b Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Wed, 31 Oct 2012 11:19:53 -0700
-Subject: [PATCH 024/196] HBASE-7080 TestHFileOutputFormat.testColumnFamilyCompression failing due to UnsatisfiedLinkError
+Subject: [PATCH 024/202] HBASE-7080 TestHFileOutputFormat.testColumnFamilyCompression failing due to UnsatisfiedLinkError
 
 Reason: Test
 Author: Jimmy Xiang

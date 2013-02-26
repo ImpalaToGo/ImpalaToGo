@@ -1,7 +1,7 @@
 From a8d60fa201987d3bd3ca6fb9d6260f48e5e9ba22 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 24 Dec 2012 09:42:48 +0000
-Subject: [PATCH 104/196] HBASE-7430 TestSnapshotDescriptionUtils break compaction/scanner tests (EnvironmentEdge issue)
+Subject: [PATCH 104/202] HBASE-7430 TestSnapshotDescriptionUtils break compaction/scanner tests (EnvironmentEdge issue)
 
 Reason: Snapshots
 Author: Matteo Bertozzi

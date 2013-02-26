@@ -1,7 +1,7 @@
 From 2e5ab9bc94a13a77961348f088edde865c1ff940 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 16 Jan 2013 17:30:22 -0800
-Subject: [PATCH 162/196] HBASE-7592 HConnectionManager.getHTableDescriptor() compares too much
+Subject: [PATCH 162/202] HBASE-7592 HConnectionManager.getHTableDescriptor() compares too much
 
 Reason: Improvement
 Author: Matteo Bertozzi

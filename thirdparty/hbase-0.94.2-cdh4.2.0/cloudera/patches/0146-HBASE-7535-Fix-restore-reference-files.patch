@@ -1,7 +1,7 @@
 From dafd9a32329a47e8a72de77dc869d6dd793dc68f Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 09:08:43 -0800
-Subject: [PATCH 146/196] HBASE-7535 Fix restore reference files
+Subject: [PATCH 146/202] HBASE-7535 Fix restore reference files
 
 Reason: Snapshots
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From 77946fde4adaea629427ffc0544a61324ec1fe0c Mon Sep 17 00:00:00 2001
 From: Lars Hofhansl <larsh@apache.org>
 Date: Tue, 13 Nov 2012 19:25:31 +0000
-Subject: [PATCH 036/196] HBASE-4913 Addendum: Fix TestShell
+Subject: [PATCH 036/202] HBASE-4913 Addendum: Fix TestShell
 
 Reason: Bug
 Author: Lars Hofhansl

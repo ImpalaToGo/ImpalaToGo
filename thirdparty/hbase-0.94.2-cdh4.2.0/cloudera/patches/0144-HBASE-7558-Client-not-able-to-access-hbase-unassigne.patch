@@ -1,7 +1,7 @@
 From 07c90db23619bd0281d713f7b97752eb76afccb6 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 14 Jan 2013 16:56:22 -0800
-Subject: [PATCH 144/196] HBASE-7558 Client not able to access /hbase/unassigned in secure cluster
+Subject: [PATCH 144/202] HBASE-7558 Client not able to access /hbase/unassigned in secure cluster
 
 Reason: Bug
 Author: Matteo Bertozzi

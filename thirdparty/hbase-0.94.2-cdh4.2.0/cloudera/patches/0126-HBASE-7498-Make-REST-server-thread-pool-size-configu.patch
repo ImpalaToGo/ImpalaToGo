@@ -1,7 +1,7 @@
 From 070b891313e37704074bb729f1908375a8c89d29 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Fri, 4 Jan 2013 14:48:05 -0800
-Subject: [PATCH 126/196] HBASE-7498 Make REST server thread pool size configurable
+Subject: [PATCH 126/202] HBASE-7498 Make REST server thread pool size configurable
 
 Reason: Improvement
 Author: Jimmy Xiang

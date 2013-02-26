@@ -1,7 +1,7 @@
 From 56af50168f5cdcb2efa571cb9f684958aa551a26 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 27 Dec 2012 11:51:08 -0700
-Subject: [PATCH 107/196] HBASE-7142 TestSplitLogManager#testDeadWorker may fail because of hard limit on the TimeoutMonitor's timeout period
+Subject: [PATCH 107/202] HBASE-7142 TestSplitLogManager#testDeadWorker may fail because of hard limit on the TimeoutMonitor's timeout period
  Reason: Test
  Author: Himanshu Vashishtha
  Ref: CDH-8966

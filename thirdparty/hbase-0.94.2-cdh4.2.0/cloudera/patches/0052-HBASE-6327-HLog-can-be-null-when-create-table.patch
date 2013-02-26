@@ -1,7 +1,7 @@
 From 86e5c26bbd1a9a69acd524e8e9310846fffaa2b3 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 7 Dec 2012 16:26:15 +0000
-Subject: [PATCH 052/196] HBASE-6327 HLog can be null when create table
+Subject: [PATCH 052/202] HBASE-6327 HLog can be null when create table
 
 Reason: Bug
 Author: Shi Xing

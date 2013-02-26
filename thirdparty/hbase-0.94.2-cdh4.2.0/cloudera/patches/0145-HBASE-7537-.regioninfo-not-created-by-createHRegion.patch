@@ -1,7 +1,7 @@
 From 1bd3eb82db703399299fb6a066b27d96d654909f Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 09:05:23 -0800
-Subject: [PATCH 145/196] HBASE-7537 .regioninfo not created by createHRegion()
+Subject: [PATCH 145/202] HBASE-7537 .regioninfo not created by createHRegion()
 
 Reason: Bug
 Author: Matteo Bertozzi

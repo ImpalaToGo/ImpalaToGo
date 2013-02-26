@@ -1,7 +1,7 @@
 From bdb08a0f1b533dd6b578d141a2d6abf25f329b87 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 30 Jan 2013 16:42:46 -0800
-Subject: [PATCH 196/196] HBASE-7685 Closing socket connection can't be removed from SecureClient
+Subject: [PATCH 196/202] HBASE-7685 Closing socket connection can't be removed from SecureClient
 
 Reason: Bug
 Author: cuijianwei

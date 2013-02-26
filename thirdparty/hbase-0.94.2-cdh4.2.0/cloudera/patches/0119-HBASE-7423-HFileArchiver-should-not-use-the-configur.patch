@@ -1,7 +1,7 @@
 From 0d4c4e2c552b95718a6c5b0349d1b7c877d0922a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 2 Jan 2013 12:33:13 -0800
-Subject: [PATCH 119/196] HBASE-7423 HFileArchiver should not use the configuration from the Filesystem
+Subject: [PATCH 119/202] HBASE-7423 HFileArchiver should not use the configuration from the Filesystem
 
 Reason: Snapshots
 Author: Enis Soztutar

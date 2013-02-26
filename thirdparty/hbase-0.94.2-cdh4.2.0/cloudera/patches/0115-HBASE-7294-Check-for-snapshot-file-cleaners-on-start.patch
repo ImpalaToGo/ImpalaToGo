@@ -1,7 +1,7 @@
 From a8967f3904fc913b31feca93d2d023eafe8c7d77 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Sat, 29 Dec 2012 19:19:54 +0000
-Subject: [PATCH 115/196] HBASE-7294 Check for snapshot file cleaners on start
+Subject: [PATCH 115/202] HBASE-7294 Check for snapshot file cleaners on start
 
 Reason: Snapshots
 Author: Matteo Bertozzi

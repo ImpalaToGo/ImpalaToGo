@@ -1,7 +1,7 @@
 From 0af3bc8624cd9070759bccf5d5ca5118f36f8e29 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Tue, 18 Dec 2012 12:26:45 -0800
-Subject: [PATCH 071/196] CDH-8548 Turn 92/94 compatibility mode on by default in CDH4.2
+Subject: [PATCH 071/202] CDH-8548 Turn 92/94 compatibility mode on by default in CDH4.2
 
 Reason: Compatibility
 Author: Gregory Chanan

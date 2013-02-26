@@ -1,7 +1,7 @@
 From b8020515661b421019e789b34aec71a99abae93a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:12:04 +0000
-Subject: [PATCH 091/196] HBASE-6230 Clone/Restore Snapshots
+Subject: [PATCH 091/202] HBASE-6230 Clone/Restore Snapshots
 
 Reason: Snapshots
 Author: Matteo Bertozzi

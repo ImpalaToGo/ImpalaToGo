@@ -1,7 +1,7 @@
 From f1b3a296ee3ce1580cc368a609391b094a9d0dec Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 17 Jan 2013 11:57:13 -0800
-Subject: [PATCH 163/196] HBASE-7604 Remove duplicated code from HFileLink
+Subject: [PATCH 163/202] HBASE-7604 Remove duplicated code from HFileLink
 
 Reason: Snapshots
 Author: Matteo Bertozzi

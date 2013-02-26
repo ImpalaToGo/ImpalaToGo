@@ -1,7 +1,7 @@
 From 4a2a36d3a1e518ab69f6cdd523fd89e12a3c748f Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 11 Dec 2012 14:25:17 -0700
-Subject: [PATCH 060/196] HBASE-6528  Raise the wait time for TestSplitLogWorker#testAcquireTaskAtStartup to reduce the failure probability
+Subject: [PATCH 060/202] HBASE-6528  Raise the wait time for TestSplitLogWorker#testAcquireTaskAtStartup to reduce the failure probability
  Reason: Test Failure
  Author: ShiXing
  Ref: CDH-9423

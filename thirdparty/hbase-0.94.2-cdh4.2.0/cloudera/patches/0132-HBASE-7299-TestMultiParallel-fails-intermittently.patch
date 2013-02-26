@@ -1,7 +1,7 @@
 From bdb3cf1b4fd0de65c05891d39b9175599d9b2318 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 7 Jan 2013 15:00:22 -0800
-Subject: [PATCH 132/196] HBASE-7299 TestMultiParallel fails intermittently
+Subject: [PATCH 132/202] HBASE-7299 TestMultiParallel fails intermittently
 
 Reason: Test Failure
 Author: Matteo Bertozzi

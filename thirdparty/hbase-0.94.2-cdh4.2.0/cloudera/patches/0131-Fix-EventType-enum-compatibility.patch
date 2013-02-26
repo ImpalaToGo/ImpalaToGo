@@ -1,7 +1,7 @@
 From 39f7ef455f0824feee6714b7c22aa16962cc9f8a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 7 Jan 2013 13:55:01 -0800
-Subject: [PATCH 131/196] Fix EventType enum compatibility
+Subject: [PATCH 131/202] Fix EventType enum compatibility
 
 Reason: Rolling upgrade failure
 Author: Matteo Bertozzi

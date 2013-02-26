@@ -1,7 +1,7 @@
 From 3b0a93aa90a302c4df77826c92ea6f3f32aba706 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:46:49 +0000
-Subject: [PATCH 096/196] HBASE-7367 Snapshot coprocessor and ACL security
+Subject: [PATCH 096/202] HBASE-7367 Snapshot coprocessor and ACL security
 
 Reason: Snapshots
 Author: Matteo Bertozzi

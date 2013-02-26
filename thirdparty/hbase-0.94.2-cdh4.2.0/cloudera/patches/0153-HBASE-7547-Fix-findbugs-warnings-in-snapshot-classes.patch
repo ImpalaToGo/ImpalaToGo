@@ -1,7 +1,7 @@
 From b2a3107050c46cd54fcfce2d674089130f8eecbe Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:47:10 -0800
-Subject: [PATCH 153/196] HBASE-7547 Fix findbugs warnings in snapshot classes
+Subject: [PATCH 153/202] HBASE-7547 Fix findbugs warnings in snapshot classes
 
 Reason: Snapshots
 Author: Ted Yu

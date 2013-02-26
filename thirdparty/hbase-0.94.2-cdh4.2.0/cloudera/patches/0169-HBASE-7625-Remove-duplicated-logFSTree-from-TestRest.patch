@@ -1,7 +1,7 @@
 From 969172f5a1cc892c794aac6596582e5c12c7cad2 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 18 Jan 2013 19:20:19 -0800
-Subject: [PATCH 169/196] HBASE-7625 Remove duplicated logFSTree() from TestRestoreFlushSnapshotFromClient
+Subject: [PATCH 169/202] HBASE-7625 Remove duplicated logFSTree() from TestRestoreFlushSnapshotFromClient
 
 Reason: Snapshots
 Author: Matteo Bertozzi

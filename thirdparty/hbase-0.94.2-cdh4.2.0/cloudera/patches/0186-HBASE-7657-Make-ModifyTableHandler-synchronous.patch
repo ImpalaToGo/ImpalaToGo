@@ -1,7 +1,7 @@
 From 3f00f4d27818ffdb4e7d661849779291199eb218 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 24 Jan 2013 18:49:50 -0800
-Subject: [PATCH 186/196] HBASE-7657 Make ModifyTableHandler synchronous
+Subject: [PATCH 186/202] HBASE-7657 Make ModifyTableHandler synchronous
 
 Reason: Bug
 Author: Himanshu Vashishtha

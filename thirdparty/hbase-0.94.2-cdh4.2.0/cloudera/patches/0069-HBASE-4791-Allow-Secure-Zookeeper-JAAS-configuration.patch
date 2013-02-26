@@ -1,7 +1,7 @@
 From 0c2207c71ae5fd640989c5607b93d43c0f1a7c74 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 18 Dec 2012 15:07:30 +0000
-Subject: [PATCH 069/196] HBASE-4791 Allow Secure Zookeeper JAAS configuration to be programmatically set (rather than only by reading JAAS configuration file)
+Subject: [PATCH 069/202] HBASE-4791 Allow Secure Zookeeper JAAS configuration to be programmatically set (rather than only by reading JAAS configuration file)
 
 Reason: Improvement
 Author: Matteo Bertozzi

@@ -1,7 +1,7 @@
 From 3e7e4f2a154dd02fd9409bce3e95b67f62b8b97b Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Mon, 17 Dec 2012 11:44:27 -0700
-Subject: [PATCH 065/196] HBASE-6700 [replication] empty znodes created during queue failovers aren't deleted
+Subject: [PATCH 065/202] HBASE-6700 [replication] empty znodes created during queue failovers aren't deleted
  Reason: Bug
  Author: Terry Zhang
  Ref: CDH-9521

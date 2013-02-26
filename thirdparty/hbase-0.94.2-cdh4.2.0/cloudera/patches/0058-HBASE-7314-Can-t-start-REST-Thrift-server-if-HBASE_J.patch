@@ -1,7 +1,7 @@
 From 41df5319156f66daf1689f82d3bdde4090671ad8 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Tue, 11 Dec 2012 00:57:31 +0000
-Subject: [PATCH 058/196] HBASE-7314 Can't start REST/Thrift server if HBASE_JMX_OPTS not set
+Subject: [PATCH 058/202] HBASE-7314 Can't start REST/Thrift server if HBASE_JMX_OPTS not set
 
 Reason: Bug
 Author: Jimmy Xiang

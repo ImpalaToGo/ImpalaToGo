@@ -1,7 +1,7 @@
 From 29cef68d200856ded31240c4a9a527fcde13de04 Mon Sep 17 00:00:00 2001
 From: Jean-Daniel Cryans <jdcryans@cloudera.com>
 Date: Thu, 10 Jan 2013 15:52:00 -0800
-Subject: [PATCH 141/196] HBASE-5778  Fix HLog compression's incompatibilities
+Subject: [PATCH 141/202] HBASE-5778  Fix HLog compression's incompatibilities
  HBASE-7530  [replication] Work around HDFS-4380 else we get NPEs
  HBASE-7531  [replication] NPE in SequenceFileLogReader because
              ReplicationSource doesn't nullify the reader

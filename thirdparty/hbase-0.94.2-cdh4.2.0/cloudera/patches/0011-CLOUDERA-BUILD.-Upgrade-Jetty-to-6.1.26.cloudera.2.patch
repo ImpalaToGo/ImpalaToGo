@@ -1,7 +1,7 @@
 From fd99bd85f5820cb6ef962e028684c3ffdcb46d16 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:44:51 -0600
-Subject: [PATCH 011/196] CLOUDERA-BUILD. Upgrade Jetty to 6.1.26.cloudera.2.
+Subject: [PATCH 011/202] CLOUDERA-BUILD. Upgrade Jetty to 6.1.26.cloudera.2.
 
 This version of Jetty has been found to be much more
 reliable in the context of MapReduce, so should be used

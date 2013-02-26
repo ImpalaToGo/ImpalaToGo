@@ -1,7 +1,7 @@
 From 55e6383933755097973918c77c536a6c0dbe2a36 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:02:12 +0000
-Subject: [PATCH 089/196] HBASE-6865 Snapshot File Cleaners
+Subject: [PATCH 089/202] HBASE-6865 Snapshot File Cleaners
 
 Reason: Snapshots
 Author: Jesse Yates

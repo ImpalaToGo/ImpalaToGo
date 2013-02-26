@@ -1,7 +1,7 @@
 From 570bdd2e30426e8087f534f8d9cceea747b07ca2 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 14 Nov 2012 10:52:49 +0100
-Subject: [PATCH 038/196] HBASE-7156 Add Data Block Encoding and -D opts to Performance Evaluation
+Subject: [PATCH 038/202] HBASE-7156 Add Data Block Encoding and -D opts to Performance Evaluation
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1408986 13f79535-47bb-0310-9956-ffa450edef68
 

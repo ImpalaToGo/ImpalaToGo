@@ -1,7 +1,7 @@
 From 8ba412311c4031e028ed6ac03abe52413a18c98a Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 15 Jan 2013 12:25:04 -0800
-Subject: [PATCH 152/196] HBASE-7360 snapshot 0.94 backport, add takeSnasphotAsync
+Subject: [PATCH 152/202] HBASE-7360 snapshot 0.94 backport, add takeSnasphotAsync
 
 Reason: Snapshots
 Author: Jonathan Hsieh

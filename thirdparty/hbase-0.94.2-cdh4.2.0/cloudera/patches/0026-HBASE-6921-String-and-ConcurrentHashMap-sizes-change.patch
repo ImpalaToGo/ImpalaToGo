@@ -1,7 +1,7 @@
 From 61081c100ab0cc228867b42983be2189337a0091 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Mon, 5 Nov 2012 15:28:34 -0800
-Subject: [PATCH 026/196] HBASE-6921 String and ConcurrentHashMap sizes change on jdk7; makes TestHeapSize fail
+Subject: [PATCH 026/202] HBASE-6921 String and ConcurrentHashMap sizes change on jdk7; makes TestHeapSize fail
 
 Reason: Bug
 Author: Michael Stack

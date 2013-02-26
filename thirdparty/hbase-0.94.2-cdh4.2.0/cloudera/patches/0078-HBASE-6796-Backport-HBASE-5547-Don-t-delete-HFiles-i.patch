@@ -1,7 +1,7 @@
 From 2fcce75acbdb11b0e6117f710a5f842f9686b2a3 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 18:11:40 +0000
-Subject: [PATCH 078/196] HBASE-6796 Backport HBASE-5547, Don't delete HFiles in backup mode.
+Subject: [PATCH 078/202] HBASE-6796 Backport HBASE-5547, Don't delete HFiles in backup mode.
 
 Reason: Snapshots
 Author: Jesse Yates

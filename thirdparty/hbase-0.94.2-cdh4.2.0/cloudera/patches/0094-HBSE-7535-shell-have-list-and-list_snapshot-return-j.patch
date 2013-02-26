@@ -1,7 +1,7 @@
 From b7087c990ab1d0b097a3c43408147b7f33899c05 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 22:27:37 +0000
-Subject: [PATCH 094/196] HBSE-7535 [shell] have list and list_snapshot return jruby string arrays
+Subject: [PATCH 094/202] HBSE-7535 [shell] have list and list_snapshot return jruby string arrays
 
 Reason: Improvement
 Author: Jonathan Hsieh

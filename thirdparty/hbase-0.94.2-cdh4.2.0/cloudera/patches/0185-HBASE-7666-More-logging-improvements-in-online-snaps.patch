@@ -1,7 +1,7 @@
 From 2c2ff6579c49e61968778c9138187f8bbf268ef9 Mon Sep 17 00:00:00 2001
 From: Jonathan M Hsieh <jon@cloudera.com>
 Date: Thu, 24 Jan 2013 15:09:07 -0800
-Subject: [PATCH 185/196] HBASE-7666 More logging improvements in online snapshots code
+Subject: [PATCH 185/202] HBASE-7666 More logging improvements in online snapshots code
 
 Reason: Snapshots
 Author: Jonathan Hsieh

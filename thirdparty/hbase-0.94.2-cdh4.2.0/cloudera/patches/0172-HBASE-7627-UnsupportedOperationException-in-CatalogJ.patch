@@ -1,7 +1,7 @@
 From 95c4de170a1817b898dcde25e788e77c65771586 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Mon, 21 Jan 2013 08:00:15 -0800
-Subject: [PATCH 172/196] HBASE-7627 UnsupportedOperationException in CatalogJanitor thread
+Subject: [PATCH 172/202] HBASE-7627 UnsupportedOperationException in CatalogJanitor thread
 
 Reason: Snapshots
 Author: Jonathan Hsieh

@@ -1,0 +1,47 @@
+From 42f8d701b4268db05f0945e40fa151afb3bed687 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 8 Feb 2013 16:51:53 +0000
+Subject: [PATCH 200/202] HBASE-7788 Fix flakey TestRestore*SnapshotFromClient#testCloneSnapshot
+
+Reason: Snapshots
+Author: Jonathan Hsieh
+Ref: CDH-10223
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |    7 ++++---
+ 1 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index 071c1bf..74cd1c0 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -687,7 +687,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+   }
+ 
+   /**
+-   * Wait for the table to be enabled.
++   * Wait for the table to be enabled and available
+    * If enabling the table exceeds the retry period, an exception is thrown.
+    * @param tableName name of the table
+    * @throws IOException if a remote or network exception occurs or
+@@ -697,7 +697,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+     boolean enabled = false;
+     long start = EnvironmentEdgeManager.currentTimeMillis();
+     for (int tries = 0; tries < (this.numRetries * this.retryLongerMultiplier); tries++) {
+-      enabled = isTableEnabled(tableName);
++      enabled = isTableEnabled(tableName) && isTableAvailable(tableName);
+       if (enabled) {
+         break;
+       }
+@@ -2203,7 +2203,8 @@ public class HBaseAdmin implements Abortable, Closeable {
+ 
+   /**
+    * Execute Restore/Clone snapshot and wait for the server to complete (blocking).
+-   *
++   * To check if the cloned table exists, use {@link #isTableAvailable} -- it is not safe to
++   * create an HTable instance to this table before it is available.
+    * @param snapshot snapshot to restore
+    * @param tableName table name to restore the snapshot on
+    * @throws IOException if a remote or network exception occurs
+-- 
+1.7.0.4
+

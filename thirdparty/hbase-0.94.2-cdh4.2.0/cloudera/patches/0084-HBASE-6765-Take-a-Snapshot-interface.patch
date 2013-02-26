@@ -1,7 +1,7 @@
 From 183760db5bad8afade04e5896289221bb0183bcd Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 20:56:51 +0000
-Subject: [PATCH 084/196] HBASE-6765 Take a Snapshot interface
+Subject: [PATCH 084/202] HBASE-6765 Take a Snapshot interface
 
 Reason: Snapshots
 Author: Jesse Yates

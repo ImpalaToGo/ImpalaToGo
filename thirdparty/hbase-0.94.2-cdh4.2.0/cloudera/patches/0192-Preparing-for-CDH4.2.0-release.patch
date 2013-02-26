@@ -1,7 +1,7 @@
 From e3cdde01221b4d670b4fc8053efae0b741d3f2d4 Mon Sep 17 00:00:00 2001
 From: Jenkins slave <kitchen-build@cloudera.com>
 Date: Wed, 30 Jan 2013 10:28:41 -0800
-Subject: [PATCH 192/196] Preparing for CDH4.2.0 release
+Subject: [PATCH 192/202] Preparing for CDH4.2.0 release
 
 ---
  pom.xml |    4 ++--

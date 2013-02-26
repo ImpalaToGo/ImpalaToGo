@@ -1,7 +1,7 @@
 From 5851c69a0dd21d49c1c6bd3628403877cc762fd1 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Wed, 16 Jan 2013 12:15:11 -0700
-Subject: [PATCH 160/196] HBASE-7172 TestSplitLogManager.testVanishingTaskZNode() fails when run individually and is flaky
+Subject: [PATCH 160/202] HBASE-7172 TestSplitLogManager.testVanishingTaskZNode() fails when run individually and is flaky
 
 Reason: Bug
 Author: Enis Soztutar

@@ -1,7 +1,7 @@
 From c6ecd1207e2f2924233ba52581b739874a0cdabe Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Tue, 18 Dec 2012 12:52:24 -0800
-Subject: [PATCH 075/196] HBASE-6775 Use ZK.multi when available for HBASE-6710 0.92/0.94 compatibility fix
+Subject: [PATCH 075/202] HBASE-6775 Use ZK.multi when available for HBASE-6710 0.92/0.94 compatibility fix
 
 Reason: Supportability
 Author: Gregory Chanan

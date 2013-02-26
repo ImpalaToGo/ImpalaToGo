@@ -1,7 +1,7 @@
 From 131c821a7b2253cd98c55fe203cef5bf6be0b361 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Tue, 18 Dec 2012 14:08:18 -0800
-Subject: [PATCH 076/196] CDH-9549 Enable ZK.multi by default for HBASE in CDH4.2
+Subject: [PATCH 076/202] CDH-9549 Enable ZK.multi by default for HBASE in CDH4.2
 
 ---
  .../org/apache/hadoop/hbase/zookeeper/ZKUtil.java  |    5 ++++-

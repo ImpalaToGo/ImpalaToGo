@@ -1,7 +1,7 @@
 From 6f3160189de3c0589c525e359c0958c669250b36 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Mon, 17 Dec 2012 12:33:54 -0700
-Subject: [PATCH 066/196] HBASE-7017  Backport "[replication] The replication-executor should make sure the file that it is replicating is closed before declaring success on that file" to 0.94
+Subject: [PATCH 066/202] HBASE-7017  Backport "[replication] The replication-executor should make sure the file that it is replicating is closed before declaring success on that file" to 0.94
  Reason: Bug
  Author: Devaraj
  Ref: CDH-9521

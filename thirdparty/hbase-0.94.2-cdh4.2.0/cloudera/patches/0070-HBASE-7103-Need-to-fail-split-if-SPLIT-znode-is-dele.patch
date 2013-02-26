@@ -1,7 +1,7 @@
 From 5ac7e2ebe37b96752dd4066d75886caf028aa506 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Tue, 18 Dec 2012 10:46:41 -0700
-Subject: [PATCH 070/196] HBASE-7103 Need to fail split if SPLIT znode is deleted even before the split is completed.
+Subject: [PATCH 070/202] HBASE-7103 Need to fail split if SPLIT znode is deleted even before the split is completed.
  Reason: Bug
  Author: Ram
  Ref: CDH-9521

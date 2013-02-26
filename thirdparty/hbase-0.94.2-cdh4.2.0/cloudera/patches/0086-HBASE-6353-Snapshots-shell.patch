@@ -1,7 +1,7 @@
 From 35de84abde830e865d68c45fd66045e922b21e3d Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 20:59:03 +0000
-Subject: [PATCH 086/196] HBASE-6353 Snapshots shell
+Subject: [PATCH 086/202] HBASE-6353 Snapshots shell
 
 Reason: Snapshots
 Author: Matteo Bertozzi

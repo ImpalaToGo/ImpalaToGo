@@ -1,7 +1,7 @@
 From b3a973ad2cd090dd5d001fa5f6558904c5fce330 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 13 Dec 2012 14:23:32 -0700
-Subject: [PATCH 061/196] HBASE-7338 Fix flaky condition for org.apache.hadoop.hbase.TestRegionRebalancing.testRebalanceOnRegionServerNumberChange
+Subject: [PATCH 061/202] HBASE-7338 Fix flaky condition for org.apache.hadoop.hbase.TestRegionRebalancing.testRebalanceOnRegionServerNumberChange
  Reason: Test
  Author: Himanshu Vashishtha
  Ref: CDH-9181

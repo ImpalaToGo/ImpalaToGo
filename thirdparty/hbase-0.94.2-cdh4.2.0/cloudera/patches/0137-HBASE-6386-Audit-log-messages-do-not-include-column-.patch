@@ -1,7 +1,7 @@
 From f8465c05e93c9ca20aab4196202da8691712c8ca Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Tue, 8 Jan 2013 22:56:34 -0800
-Subject: [PATCH 137/196] HBASE-6386 Audit log messages do not include column family / qualifier information consistently
+Subject: [PATCH 137/202] HBASE-6386 Audit log messages do not include column family / qualifier information consistently
 
 git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1430631 13f79535-47bb-0310-9956-ffa450edef68
 

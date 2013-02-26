@@ -1,7 +1,7 @@
 From 41f187465a4bc13307a46ed7a237bc929fc3b59b Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@apache.org>
 Date: Tue, 18 Dec 2012 21:27:53 +0000
-Subject: [PATCH 074/196] HBASE-7377 Clean up TestHBase7051
+Subject: [PATCH 074/202] HBASE-7377 Clean up TestHBase7051
 
 Reason: Supportability
 Author: Gregory Chanan

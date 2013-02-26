@@ -1,7 +1,7 @@
 From b180ab320e65618fe36495e2078ff008e1ca1975 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@cloudera.com>
 Date: Fri, 19 Oct 2012 21:54:15 -0700
-Subject: [PATCH 018/196] HBASE-6979 recovered.edits file should not break distributed log splitting
+Subject: [PATCH 018/202] HBASE-6979 recovered.edits file should not break distributed log splitting
 
 Reason: Improvement
 Author: Jimmy Xiang

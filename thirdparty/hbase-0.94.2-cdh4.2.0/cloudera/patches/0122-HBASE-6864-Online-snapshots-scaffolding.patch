@@ -1,7 +1,7 @@
 From 58841f56596467ea5b9c52c51393c33dd926f8a9 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 3 Jan 2013 22:05:55 -0800
-Subject: [PATCH 122/196] HBASE-6864 Online snapshots scaffolding
+Subject: [PATCH 122/202] HBASE-6864 Online snapshots scaffolding
 
 Reason: Snapshots
 Author: Jonathan Hsieh

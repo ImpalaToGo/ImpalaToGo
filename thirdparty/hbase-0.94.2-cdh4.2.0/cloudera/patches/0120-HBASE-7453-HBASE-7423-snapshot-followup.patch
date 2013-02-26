@@ -1,7 +1,7 @@
 From aad4b00e13a8b5afdfda69e98863951409370c11 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 2 Jan 2013 13:34:08 -0800
-Subject: [PATCH 120/196] HBASE-7453 HBASE-7423 snapshot followup
+Subject: [PATCH 120/202] HBASE-7453 HBASE-7423 snapshot followup
 
 Reason: Snapshots
 Author: Matteo Bertozzi

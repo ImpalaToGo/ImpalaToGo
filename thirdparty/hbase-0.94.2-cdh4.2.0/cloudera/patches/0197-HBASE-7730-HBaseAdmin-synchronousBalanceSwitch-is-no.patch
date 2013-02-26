@@ -1,0 +1,70 @@
+From 644d9cd540c2bb8e9dadb026c1c61b0600b19669 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Thu, 31 Jan 2013 11:23:47 -0800
+Subject: [PATCH 197/202] HBASE-7730 HBaseAdmin#synchronousBalanceSwitch is not compatible with 0.92
+
+Reason: Compatibility
+Author: Jimmy Xiang
+Ref: CDH-10212
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   22 +++++++++++++++----
+ 1 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index b6c4671..071c1bf 100644
+--- a/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -22,6 +22,7 @@ package org.apache.hadoop.hbase.client;
+ import java.io.Closeable;
+ import java.io.IOException;
+ import java.io.InterruptedIOException;
++import java.lang.reflect.UndeclaredThrowableException;
+ import java.net.SocketTimeoutException;
+ import java.util.Arrays;
+ import java.util.LinkedList;
+@@ -73,8 +74,6 @@ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.ipc.RemoteException;
+ import org.apache.hadoop.util.StringUtils;
+ 
+-import com.google.protobuf.ServiceException;
+-
+ /**
+  * Provides an interface to manage HBase database table metadata + general
+  * administrative functions.  Use HBaseAdmin to create, drop, list, enable and
+@@ -97,6 +96,8 @@ public class HBaseAdmin implements Abortable, Closeable {
+   private final int retryLongerMultiplier;
+   private boolean aborted;
+ 
++  private static volatile boolean synchronousBalanceSwitchSupported = true;
++
+   /**
+    * Constructor
+    *
+@@ -1498,10 +1499,21 @@ public class HBaseAdmin implements Abortable, Closeable {
+    */
+   public boolean setBalancerRunning(final boolean on, final boolean synchronous)
+   throws MasterNotRunningException, ZooKeeperConnectionException {
+-    if (synchronous == false) {
+-      return balanceSwitch(on);
++    if (synchronous && synchronousBalanceSwitchSupported) {
++      try {
++        return getMaster().synchronousBalanceSwitch(on);
++      } catch (UndeclaredThrowableException ute) {
++        String error = ute.getCause().getMessage();
++        if (error != null && error.matches(
++            "(?s).+NoSuchMethodException:.+synchronousBalanceSwitch.+")) {
++          LOG.info("HMaster doesn't support synchronousBalanceSwitch");
++          synchronousBalanceSwitchSupported = false;
++        } else {
++          throw ute;
++        }
++      }
+     }
+-    return getMaster().synchronousBalanceSwitch(on);
++    return balanceSwitch(on);
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

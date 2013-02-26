@@ -1,7 +1,7 @@
 From 24da9747e837e8886971061a189e78887f6ae74c Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Thu, 20 Dec 2012 00:32:36 +0000
-Subject: [PATCH 097/196] HBASE-7311 Add snapshot information to hbase master webui
+Subject: [PATCH 097/202] HBASE-7311 Add snapshot information to hbase master webui
 
 Reason: Snapshots
 Author: Matteo Bertozzi

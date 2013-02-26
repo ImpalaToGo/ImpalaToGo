@@ -1,7 +1,7 @@
 From 54795e302a037d32c2da7dd20d8c981041aa3304 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 19 Dec 2012 21:56:05 +0000
-Subject: [PATCH 088/196] HBASE-6836 Offline snapshots
+Subject: [PATCH 088/202] HBASE-6836 Offline snapshots
 
 Reason: Snapshots
 Author: Jesse Yates

@@ -1,7 +1,7 @@
 From 5faebe9ef80ab965291db20e7eaab0243b78e477 Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Thu, 25 Oct 2012 16:56:36 -0600
-Subject: [PATCH 023/196] HBASE-6305  TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds.
+Subject: [PATCH 023/202] HBASE-6305  TestLocalHBaseCluster hangs with hadoop 2.0/0.23 builds.
  Reason:Test
  Ref:CDH-8726
  Author: Himanshu Vashishtha

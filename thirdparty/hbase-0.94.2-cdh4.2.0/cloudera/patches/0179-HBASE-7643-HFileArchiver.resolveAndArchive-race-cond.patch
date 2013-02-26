@@ -1,7 +1,7 @@
 From ab379cb33a9fa0cac3ba73048b57035ff1a1ee93 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Wed, 23 Jan 2013 11:07:03 -0800
-Subject: [PATCH 179/196] HBASE-7643 HFileArchiver.resolveAndArchive() race condition may lead to snapshot data loss
+Subject: [PATCH 179/202] HBASE-7643 HFileArchiver.resolveAndArchive() race condition may lead to snapshot data loss
 
 Reason: Snapshots
 Author: Matteo Bertozzi

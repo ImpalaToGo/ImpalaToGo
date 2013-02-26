@@ -1,7 +1,7 @@
 From dc138376295affe507cde71178a5f20c9066691d Mon Sep 17 00:00:00 2001
 From: Himanshu <himanshu@cloudera.com>
 Date: Sun, 14 Oct 2012 17:07:04 -0600
-Subject: [PATCH 005/196] HBASE-5740 Compaction interruption may be due to balancing
+Subject: [PATCH 005/202] HBASE-5740 Compaction interruption may be due to balancing
 
 Reason: Bug
 Author: Michael Stack, Jimmy Xiang

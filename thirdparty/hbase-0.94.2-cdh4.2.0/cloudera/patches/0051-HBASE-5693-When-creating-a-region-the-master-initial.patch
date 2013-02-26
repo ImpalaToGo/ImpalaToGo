@@ -1,7 +1,7 @@
 From 29059ea928733fd33739b9917edfd6775aa8c414 Mon Sep 17 00:00:00 2001
 From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
 Date: Fri, 7 Dec 2012 16:13:53 +0000
-Subject: [PATCH 051/196] HBASE-5693 When creating a region, the master initializes it and creates a memstore within the master server
+Subject: [PATCH 051/202] HBASE-5693 When creating a region, the master initializes it and creates a memstore within the master server
 
 Reason: Improvement
 Author: Nicolas Liochon

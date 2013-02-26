@@ -1,7 +1,7 @@
 From 6bf177cab6ff8143fbe66e8868bd917f867252a8 Mon Sep 17 00:00:00 2001
 From: Jimmy Xiang <jxiang@apache.org>
 Date: Fri, 28 Dec 2012 23:14:31 +0000
-Subject: [PATCH 109/196] HBASE-7412 Fix how HTableDescriptor handles default max file size and flush size
+Subject: [PATCH 109/202] HBASE-7412 Fix how HTableDescriptor handles default max file size and flush size
 
 Reason: Bug
 Author: Jimmy Xiang

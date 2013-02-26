@@ -1,7 +1,7 @@
 From 53350db0e828d6f3935460681512913b68e1decc Mon Sep 17 00:00:00 2001
 From: Elliott Neil Clark <eclark@apache.org>
 Date: Mon, 22 Oct 2012 17:10:08 +0000
-Subject: [PATCH 021/196] HBASE-6951 Allow the master info server to be started in a read only mode.
+Subject: [PATCH 021/202] HBASE-6951 Allow the master info server to be started in a read only mode.
 
 Reason: Improvement
 Author:    Elliott Neil Clark

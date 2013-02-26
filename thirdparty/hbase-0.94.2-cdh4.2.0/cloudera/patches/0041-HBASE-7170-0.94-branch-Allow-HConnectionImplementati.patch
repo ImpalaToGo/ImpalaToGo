@@ -1,7 +1,7 @@
 From 5892790a648023cce1010da2da9a887fd8b608f2 Mon Sep 17 00:00:00 2001
 From: Gregory Chanan <gchanan@cloudera.com>
 Date: Fri, 16 Nov 2012 15:37:50 -0800
-Subject: [PATCH 041/196] HBASE-7170 [0.94 branch] Allow HConnectionImplementation to reconnect to master multiple times
+Subject: [PATCH 041/202] HBASE-7170 [0.94 branch] Allow HConnectionImplementation to reconnect to master multiple times
 
 Reason: Bug
 Author: Gregory Chanan
