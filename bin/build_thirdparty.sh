@@ -17,8 +17,6 @@
 # cleans and rebuilds thirdparty/. The Impala build environment must be set up
 # by bin/impala-config.sh before running this script.
 
-# Exit on non-true return value
-set -e
 # Exit on reference to unitialized variable
 set -u
 
@@ -26,6 +24,8 @@ bin=`dirname "$0"`
 bin=`cd "$bin"; pwd`
 
 . "$bin"/impala-config.sh
+# Exit on non-true return value
+set -e
 
 USE_PIC_LIB_PATH=${PIC_LIB_PATH:-}
 

@@ -46,6 +46,7 @@ then
   echo " Building third-party libraries "
   echo "********************************"
   ${IMPALA_HOME}/bin/build_thirdparty.sh -noclean
+  . bin/impala-config.sh
 fi
 
 echo "******************************"
