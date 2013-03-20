@@ -16,8 +16,11 @@ CMakeFiles
 cmake_install.cmake
 CTestTestfile.cmake
 !CMakeLists.txt
+
+Testing/
 llvm-ir/
 shell/gen-py/
 shell/build/
 tests/results
 hdfs-data/
+avro_schemas/
