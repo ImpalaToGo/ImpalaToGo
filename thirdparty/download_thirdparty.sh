@@ -58,11 +58,6 @@ wget http://mongoose.googlecode.com/files/mongoose-${IMPALA_MONGOOSE_VERSION}.tg
 tar xzf mongoose-${IMPALA_MONGOOSE_VERSION}.tgz
 rm mongoose-${IMPALA_MONGOOSE_VERSION}.tgz
 
-echo "Fetching Apache Hadoop"
-wget http://archive.cloudera.com/cdh4/cdh/4/hadoop-${IMPALA_HADOOP_VERSION}.tar.gz
-tar xzf hadoop-${IMPALA_HADOOP_VERSION}.tar.gz
-rm hadoop-${IMPALA_HADOOP_VERSION}.tar.gz
-
 echo "Fetching Apache Hive"
 wget http://archive.cloudera.com/cdh4/cdh/4/hive-${IMPALA_HIVE_VERSION}.tar.gz
 tar xzf hive-${IMPALA_HIVE_VERSION}.tar.gz
