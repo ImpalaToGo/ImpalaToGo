@@ -239,7 +239,7 @@ string PrettyPrinter::Print(int64_t value, TCounterType::type type) {
 
     case TCounterType::UNIT_PER_SECOND: {
       string unit;
-      double output = GetUnit(value, &unit); 
+      double output = GetUnit(value, &unit);
       if (output == 0) {
         ss << "0";
       } else {
@@ -278,14 +278,14 @@ string PrettyPrinter::Print(int64_t value, TCounterType::type type) {
 
     case TCounterType::BYTES: {
       string unit;
-      double output = GetByteUnit(value, &unit); 
+      double output = GetByteUnit(value, &unit);
       ss << setprecision(PRECISION) << output << " " << unit;
       break;
     }
 
     case TCounterType::BYTES_PER_SECOND: {
       string unit;
-      double output = GetByteUnit(value, &unit); 
+      double output = GetByteUnit(value, &unit);
       ss << setprecision(PRECISION) << output << " " << unit << "/sec";
       break;
     }
@@ -311,24 +311,26 @@ string PrintBatch(RowBatch* batch) {
   return out.str();
 }
 
-string GetBuildVersion() {
+string GetBuildVersion(bool compact) {
   stringstream ss;
-  ss << Version::BUILD_VERSION 
+  ss << Version::BUILD_VERSION
 #ifdef NDEBUG
-     << " RELEASE" 
+     << " RELEASE"
 #else
      << " DEBUG"
 #endif
-     << " (build " << Version::BUILD_HASH 
-     << ")" << endl
-     << "Built on " << Version::BUILD_TIME;
+     << " (build " << Version::BUILD_HASH
+     << ")";
+  if (!compact) {
+    ss << endl << "Built on " << Version::BUILD_TIME;
+  }
   return ss.str();
 }
 
-string GetVersionString() {
+string GetVersionString(bool compact) {
   stringstream ss;
-  ss << google::ProgramInvocationShortName() 
-     << " version " << google::VersionString();
+  ss << google::ProgramInvocationShortName()
+     << " version " << GetBuildVersion(compact);
   return ss.str();
 }
 
