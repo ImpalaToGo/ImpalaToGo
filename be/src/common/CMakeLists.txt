@@ -23,7 +23,6 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_OUTPUT_ROOT_DIRECTORY}/common")
 add_library(Common STATIC
   daemon.cc
   status.cc
-  version.cc
 )
 
 add_library(GlobalFlags STATIC

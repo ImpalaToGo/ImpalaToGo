@@ -2,5 +2,5 @@
 
 build
 generated-sources/**/*
-src/common/version.cc
+src/common/version.h
 
