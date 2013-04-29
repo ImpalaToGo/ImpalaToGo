@@ -10,7 +10,7 @@ all: obj/libre2.a obj/so/libre2.so
 # LDPCRE=-L/usr/local/lib -lpcre
 
 CXX=g++
-CXXFLAGS=-Wall -O3 -g -pthread  # can override
+CXXFLAGS=-Wall -O3 -g -pthread -fPIC  # can override
 RE2_CXXFLAGS=-Wno-sign-compare -c -I. $(CCPCRE)  # required
 LDFLAGS=-pthread
 AR=ar
