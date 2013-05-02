@@ -12,26 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.cloudera.impala.analysis;
+package com.cloudera.impala.catalog;
 
-import com.cloudera.impala.catalog.AuthorizationException;
-import com.cloudera.impala.common.AnalysisException;
 
-public interface ParseNode {
+/**
+ * Thrown when a database cannot be found in the catalog.
+ */
+public class DatabaseNotFoundException extends CatalogException {
+  // Dummy serial ID to satisfy Eclipse
+  private static final long serialVersionUID = -2203080667446640542L;
 
-  /**
-   * Perform semantic analysis of node and all of its children.
-   * Throws exception if any errors found.
-   * @param analyzer
-   * @throws AnalysisException, InternalException
-   */
-  public void analyze(Analyzer analyzer) throws AnalysisException,
-      AuthorizationException;
-
-  /**
-   * @return SQL syntax corresponding to this node.
-   */
-  public String toSql();
-
-  public String debugString();
+  public DatabaseNotFoundException(String s) { super(s); }
 }
