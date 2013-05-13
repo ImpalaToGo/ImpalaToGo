@@ -14,8 +14,9 @@ The rest of this README describes how to build Cloudera Impala from this reposit
     make cmake doxygen.x86_64 glib-devel boost-devel python-devel bzip2-devel svn libevent-devel cyrus-sasl-devel \
     wget git unzip
 
+*Note:* Impala requires Boost 1.4.2 or later.
+
 *Note:* Ubuntu 12.04 (and later) requires the libevent1-dev package to work with Thrift v0.9
-*Note:* Impala requires Boost 1.4.2 or later
 
 ### Install LLVM
 
