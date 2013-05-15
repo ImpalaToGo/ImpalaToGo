@@ -5,9 +5,15 @@ derby.log
 thirdparty
 cscope.files
 cscope.out
+org.eclipse.jdt.core.prefs
+org.eclipse.jdt.ui.prefs
+*benchmark_results.csv*
+load-*-generated.sql
 bin/version.info
 
 pprof.out
+
+TempStatsStore
 
 # CMake:
 Makefile
@@ -16,6 +22,7 @@ CMakeFiles
 cmake_install.cmake
 CTestTestfile.cmake
 !CMakeLists.txt
+
 
 Testing/
 llvm-ir/
