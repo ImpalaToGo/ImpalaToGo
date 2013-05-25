@@ -1,0 +1,2 @@
+FAILED: ParseException line 1:32 cannot recognize input near '.' 'foo' '<EOF>' in expression specification
+

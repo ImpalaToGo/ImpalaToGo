@@ -1,0 +1,24 @@
+PREHOOK: query: DROP VIEW xxx5
+PREHOOK: type: DROPVIEW
+POSTHOOK: query: DROP VIEW xxx5
+POSTHOOK: type: DROPVIEW
+PREHOOK: query: CREATE VIEW xxx5
+PARTITIONED ON (value)
+AS 
+SELECT * FROM src
+PREHOOK: type: CREATEVIEW
+#### A masked pattern was here ####
+POSTHOOK: query: CREATE VIEW xxx5
+PARTITIONED ON (value)
+AS 
+SELECT * FROM src
+POSTHOOK: type: CREATEVIEW
+POSTHOOK: Output: default@xxx5
+#### A masked pattern was here ####
+PREHOOK: query: -- should fail:  LOCATION clause is illegal
+#### A masked pattern was here ####
+PREHOOK: type: ALTERTABLE_ADDPARTS
+PREHOOK: Input: default@src
+PREHOOK: Input: default@xxx5
+FAILED: Error in metadata: LOCATION clause illegal for view partition
+FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask

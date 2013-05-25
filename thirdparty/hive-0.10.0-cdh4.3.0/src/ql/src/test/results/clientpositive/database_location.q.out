@@ -1,0 +1,108 @@
+PREHOOK: query: CREATE DATABASE db1
+PREHOOK: type: CREATEDATABASE
+POSTHOOK: query: CREATE DATABASE db1
+POSTHOOK: type: CREATEDATABASE
+PREHOOK: query: DESCRIBE DATABASE EXTENDED db1
+PREHOOK: type: DESCDATABASE
+POSTHOOK: query: DESCRIBE DATABASE EXTENDED db1
+POSTHOOK: type: DESCDATABASE
+#### A masked pattern was here ####
+PREHOOK: query: USE db1
+PREHOOK: type: SWITCHDATABASE
+POSTHOOK: query: USE db1
+POSTHOOK: type: SWITCHDATABASE
+PREHOOK: query: CREATE TABLE table_db1 (name STRING, value INT)
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE table_db1 (name STRING, value INT)
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: db1@table_db1
+PREHOOK: query: DESCRIBE FORMATTED table_db1
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE FORMATTED table_db1
+POSTHOOK: type: DESCTABLE
+# col_name            	data_type           	comment             
+	 	 
+name                	string              	None                
+value               	int                 	None                
+	 	 
+# Detailed Table Information	 	 
+Database:           	db1                 	 
+#### A masked pattern was here ####
+Protect Mode:       	None                	 
+Retention:          	0                   	 
+#### A masked pattern was here ####
+Table Type:         	MANAGED_TABLE       	 
+Table Parameters:	 	 
+#### A masked pattern was here ####
+	 	 
+# Storage Information	 	 
+SerDe Library:      	org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe	 
+InputFormat:        	org.apache.hadoop.mapred.TextInputFormat	 
+OutputFormat:       	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	 
+Compressed:         	No                  	 
+Num Buckets:        	-1                  	 
+Bucket Columns:     	[]                  	 
+Sort Columns:       	[]                  	 
+Storage Desc Params:	 	 
+	serialization.format	1                   
+PREHOOK: query: SHOW TABLES
+PREHOOK: type: SHOWTABLES
+POSTHOOK: query: SHOW TABLES
+POSTHOOK: type: SHOWTABLES
+table_db1
+PREHOOK: query: CREATE DATABASE db2
+COMMENT 'database 2'
+#### A masked pattern was here ####
+PREHOOK: type: CREATEDATABASE
+POSTHOOK: query: CREATE DATABASE db2
+COMMENT 'database 2'
+#### A masked pattern was here ####
+POSTHOOK: type: CREATEDATABASE
+PREHOOK: query: DESCRIBE DATABASE EXTENDED db2
+PREHOOK: type: DESCDATABASE
+POSTHOOK: query: DESCRIBE DATABASE EXTENDED db2
+POSTHOOK: type: DESCDATABASE
+#### A masked pattern was here ####
+PREHOOK: query: USE db2
+PREHOOK: type: SWITCHDATABASE
+POSTHOOK: query: USE db2
+POSTHOOK: type: SWITCHDATABASE
+PREHOOK: query: CREATE TABLE table_db2 (name STRING, value INT)
+PREHOOK: type: CREATETABLE
+POSTHOOK: query: CREATE TABLE table_db2 (name STRING, value INT)
+POSTHOOK: type: CREATETABLE
+POSTHOOK: Output: db2@table_db2
+PREHOOK: query: DESCRIBE FORMATTED table_db2
+PREHOOK: type: DESCTABLE
+POSTHOOK: query: DESCRIBE FORMATTED table_db2
+POSTHOOK: type: DESCTABLE
+# col_name            	data_type           	comment             
+	 	 
+name                	string              	None                
+value               	int                 	None                
+	 	 
+# Detailed Table Information	 	 
+Database:           	db2                 	 
+#### A masked pattern was here ####
+Protect Mode:       	None                	 
+Retention:          	0                   	 
+#### A masked pattern was here ####
+Table Type:         	MANAGED_TABLE       	 
+Table Parameters:	 	 
+#### A masked pattern was here ####
+	 	 
+# Storage Information	 	 
+SerDe Library:      	org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe	 
+InputFormat:        	org.apache.hadoop.mapred.TextInputFormat	 
+OutputFormat:       	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	 
+Compressed:         	No                  	 
+Num Buckets:        	-1                  	 
+Bucket Columns:     	[]                  	 
+Sort Columns:       	[]                  	 
+Storage Desc Params:	 	 
+	serialization.format	1                   
+PREHOOK: query: SHOW TABLES
+PREHOOK: type: SHOWTABLES
+POSTHOOK: query: SHOW TABLES
+POSTHOOK: type: SHOWTABLES
+table_db2
