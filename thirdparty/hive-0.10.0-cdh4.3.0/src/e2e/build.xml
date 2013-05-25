@@ -1,0 +1,198 @@
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<project name="TestHarnessHiveTests" default="test">
+
+  <property name="hive.dir" value="${basedir}/.."/>
+
+  <property name="tar.name" value="${basedir}/hivetests.tar"/>
+  <property name="tar.dir" value="${basedir}/tar"/>
+  <property name="test.src" value="${basedir}/tests"/>
+  <property name="driver.src" value="${basedir}/drivers"/>
+  <property name="deployer.src" value="${basedir}/deployers"/>
+  <property name="conf.src" value="${basedir}/conf"/>
+  <property name="tool.src" value="${basedir}/tools"/>
+
+  <property name="harness.dir" value="${basedir}"/>
+  <property name="harness.tar" value="${harness.dir}/harness.tar"/>
+
+  <property name="test.location" value="${basedir}/testdist"/>
+  <property name="benchmark.location" value="${test.location}/benchmarks"/>
+
+
+  <!-- Build an archive to use in the tests -->
+  <target name="tar" description="Create tar file with hive modules">
+    <mkdir dir="${tar.dir}"/>
+    <mkdir dir="${tar.dir}/tests"/>
+    <mkdir dir="${tar.dir}/drivers"/>
+    <mkdir dir="${tar.dir}/deployers"/>
+    <mkdir dir="${tar.dir}/conf"/>
+    <mkdir dir="${tar.dir}/libexec"/>
+
+    <copy todir="${tar.dir}/tests">
+        <fileset dir="${test.src}">
+        </fileset>
+    </copy>
+
+    <copy todir="${tar.dir}">
+      <fileset dir="${driver.src}">
+        <exclude name="TestDriverScript.pm"/>
+      </fileset>
+      <fileset dir="${deployer.src}"/>
+    </copy>
+
+
+    <copy todir="${tar.dir}/conf">
+      <fileset dir="${conf.src}"/>
+    </copy>
+
+    <copy todir="${tar.dir}/libexec">
+      <fileset dir="${tool.src}/test"/>
+      <fileset dir="${tool.src}/generate"/>
+    </copy>
+
+    <tar destfile="${tar.name}" basedir="${tar.dir}"/>
+  </target>
+
+  <!-- Check that the necessary properties are setup -->
+  <target name="property-check">
+    <fail message="Please set the property harness.hadoop.home to the path of your hadoop installation"
+      unless="harness.hadoop.home"/>
+  </target>
+
+  <!-- Prep the test area -->
+  <target name="init-test">
+    <mkdir dir="${test.location}"/>
+    <mkdir dir="${benchmark.location}"/>
+
+    <untar src="${tar.name}" dest="${test.location}"/>
+    <untar src="${harness.tar}" dest="${test.location}"/>
+
+    <chmod perm="ugo+x" type="file">
+      <fileset dir="${test.location}/libexec" />
+      <fileset file="${test.location}/test_harness.pl"/>
+    </chmod>
+
+  </target>
+
+
+  <!-- By default this runs in mapred mode on a cluster.  To run it in local
+  mode set -Dharness.exec.mode=local -->
+
+  <target name="test-base" depends="property-check, tar, init-test">
+    <!-- If they have not specified tests to run then null it out -->
+    <property name="tests.to.run" value=""/>
+    <property name="harness.hive.home" value="../../src/build/dist/"/>
+
+    <exec executable="./test_harness.pl" dir="${test.location}" failonerror="true">
+      <env key="HARNESS_ROOT" value="."/>
+      <env key="PH_LOCAL" value="."/>
+      <env key="PH_OUT" value="."/>
+      <env key="PH_ROOT" value="."/>
+      <env key="PH_METASTORE_HOST" value="${harness.metastore.host}"/>
+      <env key="PH_METASTORE_THRIFT" value="${harness.metastore.thrift}"/>
+      <env key="HADOOP_HOME" value="${harness.hadoop.home}"/>
+      <env key="PH_HIVE_HOME" value="${harness.hive.home}"/>
+      <arg line="${tests.to.run}"/>
+      <arg value="${test.location}/tests/nightly.conf"/>
+      <arg value="${test.location}/tests/cmdline.conf"/>
+    </exec>
+  </target>
+
+  <target name="test">
+    <antcall target="test-base">
+      <param name="harness.conf.file" value="${basedir}/conf/default.conf"/>
+    </antcall>
+  </target>
+
+  <target name="test-local">
+    <antcall target="test-base">
+      <param name="harness.conf.file" value="${basedir}/conf/local.conf"/>
+    </antcall>
+  </target>
+
+  <target name="deploy-base" depends="property-check, tar, init-test">
+    <exec executable="./test_harness.pl" dir="${test.location}" failonerror="true">
+      <env key="HARNESS_ROOT" value="."/>
+      <env key="PH_LOCAL" value="."/>
+      <env key="PH_OUT" value="."/>
+      <env key="PH_ROOT" value="."/>
+      <env key="PH_METASTORE_HOST" value="${harness.metastore.host}"/>
+      <env key="PH_METASTORE_THRIFT" value="${harness.metastore.thrift}"/>
+      <env key="PH_LOAD_HIVE_ONLY" value="${harness.load.hive.only}"/>
+      <env key="HADOOP_HOME" value="${harness.hadoop.home}"/>
+      <env key="PH_HIVE_HOME" value="${harness.hive.home}"/>
+
+      <arg value="-deploycfg"/>
+      <arg value="${deploy.conf}"/>
+      <arg value="${deploy.opt}"/>
+      <!-- Give a bogus test so it just does the deployment -->
+      <arg value="-t"/>
+      <arg value="NoSuchTest"/>
+      <arg value="${test.location}/tests/nightly.conf"/>
+    </exec>
+  </target>
+
+  <target name="deploy">
+    <antcall target="deploy-base">
+      <param name="deploy.opt" value="-deploy"/>
+      <param name="deploy.conf"
+        value="${test.location}/conf/existing_deployer.conf"/>
+      <param name="harness.conf.file" value="${basedir}/conf/default.conf"/>
+    </antcall>
+  </target>
+
+  <target name="undeploy">
+    <antcall target="deploy-base">
+      <param name="deploy.opt" value="-undeploy"/>
+      <param name="deploy.conf"
+        value="${test.location}/conf/existing_deployer.conf"/>
+      <param name="harness.conf.file" value="${basedir}/conf/default.conf"/>
+    </antcall>
+  </target>
+
+  <target name="deploy-local">
+    <antcall target="deploy-base">
+      <param name="deploy.opt" value="-deploy"/>
+      <param name="deploy.conf"
+        value="${test.location}/conf/local_deployer.conf"/>
+      <param name="harness.conf.file" value="${basedir}/conf/local.conf"/>
+    </antcall>
+  </target>
+
+  <target name="undeploy-local">
+    <antcall target="deploy-base">
+      <param name="deploy.opt" value="-undeploy"/>
+      <param name="deploy.conf"
+        value="${test.location}/conf/local_deployer.conf"/>
+      <param name="harness.conf.file" value="${basedir}/conf/local.conf"/>
+    </antcall>
+  </target>
+
+  <target name="deploy-test" depends="deploy, test"/>
+
+  <target name="deploy-test-undeploy" depends="deploy, test, undeploy"/>
+
+  <target name="clean">
+    <delete dir="${test.location}"/>
+    <delete file="${tar.name}"/>
+    <delete dir="${tar.dir}"/>
+  </target>
+
+</project>
+
+

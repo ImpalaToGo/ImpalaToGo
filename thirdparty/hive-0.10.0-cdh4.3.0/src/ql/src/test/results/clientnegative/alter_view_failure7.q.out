@@ -1,0 +1,18 @@
+PREHOOK: query: DROP VIEW xxx8
+PREHOOK: type: DROPVIEW
+POSTHOOK: query: DROP VIEW xxx8
+POSTHOOK: type: DROPVIEW
+PREHOOK: query: CREATE VIEW xxx8
+PARTITIONED ON (ds,hr)
+AS 
+SELECT key,ds,hr FROM srcpart
+PREHOOK: type: CREATEVIEW
+#### A masked pattern was here ####
+POSTHOOK: query: CREATE VIEW xxx8
+PARTITIONED ON (ds,hr)
+AS 
+SELECT key,ds,hr FROM srcpart
+POSTHOOK: type: CREATEVIEW
+POSTHOOK: Output: default@xxx8
+#### A masked pattern was here ####
+FAILED: SemanticException table is partitioned but partition spec is not specified or does not fully match table partitioning: {ds=2011-01-01}
