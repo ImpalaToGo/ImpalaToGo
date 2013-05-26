@@ -1,0 +1,194 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1" />
+<title>TestMergeTable xref</title>
+<link type="text/css" rel="stylesheet" href="../../../../../stylesheet.css" />
+</head>
+<body>
+<pre>
+
+<a name="1" href="#1">1</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="2" href="#2">2</a>   <em class="jxr_javadoccomment"> * Copyright 2007 The Apache Software Foundation</em>
+<a name="3" href="#3">3</a>   <em class="jxr_javadoccomment"> *</em>
+<a name="4" href="#4">4</a>   <em class="jxr_javadoccomment"> * Licensed to the Apache Software Foundation (ASF) under one</em>
+<a name="5" href="#5">5</a>   <em class="jxr_javadoccomment"> * or more contributor license agreements.  See the NOTICE file</em>
+<a name="6" href="#6">6</a>   <em class="jxr_javadoccomment"> * distributed with this work for additional information</em>
+<a name="7" href="#7">7</a>   <em class="jxr_javadoccomment"> * regarding copyright ownership.  The ASF licenses this file</em>
+<a name="8" href="#8">8</a>   <em class="jxr_javadoccomment"> * to you under the Apache License, Version 2.0 (the</em>
+<a name="9" href="#9">9</a>   <em class="jxr_javadoccomment"> * "License"); you may not use this file except in compliance</em>
+<a name="10" href="#10">10</a>  <em class="jxr_javadoccomment"> * with the License.  You may obtain a copy of the License at</em>
+<a name="11" href="#11">11</a>  <em class="jxr_javadoccomment"> *</em>
+<a name="12" href="#12">12</a>  <em class="jxr_javadoccomment"> *     <a href="http://www.apache.org/licenses/LICENSE-2.0" target="alexandria_uri">http://www.apache.org/licenses/LICENSE-2.0</a></em>
+<a name="13" href="#13">13</a>  <em class="jxr_javadoccomment"> *</em>
+<a name="14" href="#14">14</a>  <em class="jxr_javadoccomment"> * Unless required by applicable law or agreed to in writing, software</em>
+<a name="15" href="#15">15</a>  <em class="jxr_javadoccomment"> * distributed under the License is distributed on an "AS IS" BASIS,</em>
+<a name="16" href="#16">16</a>  <em class="jxr_javadoccomment"> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</em>
+<a name="17" href="#17">17</a>  <em class="jxr_javadoccomment"> * See the License for the specific language governing permissions and</em>
+<a name="18" href="#18">18</a>  <em class="jxr_javadoccomment"> * limitations under the License.</em>
+<a name="19" href="#19">19</a>  <em class="jxr_javadoccomment"> */</em>
+<a name="20" href="#20">20</a>  <strong class="jxr_keyword">package</strong> org.apache.hadoop.hbase.util;
+<a name="21" href="#21">21</a>  
+<a name="22" href="#22">22</a>  <strong class="jxr_keyword">import</strong> <strong class="jxr_keyword">static</strong> org.junit.Assert.assertTrue;
+<a name="23" href="#23">23</a>  
+<a name="24" href="#24">24</a>  <strong class="jxr_keyword">import</strong> java.io.IOException;
+<a name="25" href="#25">25</a>  <strong class="jxr_keyword">import</strong> java.util.List;
+<a name="26" href="#26">26</a>  
+<a name="27" href="#27">27</a>  <strong class="jxr_keyword">import</strong> org.apache.commons.logging.Log;
+<a name="28" href="#28">28</a>  <strong class="jxr_keyword">import</strong> org.apache.commons.logging.LogFactory;
+<a name="29" href="#29">29</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.conf.Configuration;
+<a name="30" href="#30">30</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.fs.FileSystem;
+<a name="31" href="#31">31</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.fs.Path;
+<a name="32" href="#32">32</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.*;
+<a name="33" href="#33">33</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.catalog.CatalogTracker;
+<a name="34" href="#34">34</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.catalog.MetaReader;
+<a name="35" href="#35">35</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.client.HBaseAdmin;
+<a name="36" href="#36">36</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.client.Put;
+<a name="37" href="#37">37</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.regionserver.HRegion;
+<a name="38" href="#38">38</a>  <strong class="jxr_keyword">import</strong> org.junit.Test;
+<a name="39" href="#39">39</a>  <strong class="jxr_keyword">import</strong> org.junit.experimental.categories.Category;
+<a name="40" href="#40">40</a>  
+<a name="41" href="#41">41</a>  <em class="jxr_javadoccomment">/**</em>
+<a name="42" href="#42">42</a>  <em class="jxr_javadoccomment"> * Tests merging a normal table's regions</em>
+<a name="43" href="#43">43</a>  <em class="jxr_javadoccomment"> */</em>
+<a name="44" href="#44">44</a>  @Category(MediumTests.<strong class="jxr_keyword">class</strong>)
+<a name="45" href="#45">45</a>  <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">class</strong> <a href="../../../../../org/apache/hadoop/hbase/util/TestMergeTable.html">TestMergeTable</a> {
+<a name="46" href="#46">46</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> Log LOG = LogFactory.getLog(TestMergeTable.<strong class="jxr_keyword">class</strong>);
+<a name="47" href="#47">47</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">final</strong> <a href="../../../../../org/apache/hadoop/hbase/HBaseTestingUtility.html">HBaseTestingUtility</a> UTIL = <strong class="jxr_keyword">new</strong> <a href="../../../../../org/apache/hadoop/hbase/HBaseTestingUtility.html">HBaseTestingUtility</a>();
+<a name="48" href="#48">48</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> byte [] COLUMN_NAME = Bytes.toBytes(<span class="jxr_string">"contents"</span>);
+<a name="49" href="#49">49</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> byte [] VALUE;
+<a name="50" href="#50">50</a>    <strong class="jxr_keyword">static</strong> {
+<a name="51" href="#51">51</a>      <em class="jxr_comment">// We will use the same value for the rows as that is not really important here</em>
+<a name="52" href="#52">52</a>      String partialValue = String.valueOf(System.currentTimeMillis());
+<a name="53" href="#53">53</a>      StringBuilder val = <strong class="jxr_keyword">new</strong> StringBuilder();
+<a name="54" href="#54">54</a>      <strong class="jxr_keyword">while</strong> (val.length() &lt; 1024) {
+<a name="55" href="#55">55</a>        val.append(partialValue);
+<a name="56" href="#56">56</a>      }
+<a name="57" href="#57">57</a>      VALUE = Bytes.toBytes(val.toString());
+<a name="58" href="#58">58</a>    }
+<a name="59" href="#59">59</a>  
+<a name="60" href="#60">60</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="61" href="#61">61</a>  <em class="jxr_javadoccomment">   * Test merge.</em>
+<a name="62" href="#62">62</a>  <em class="jxr_javadoccomment">   * Hand-makes regions of a mergeable size and adds the hand-made regions to</em>
+<a name="63" href="#63">63</a>  <em class="jxr_javadoccomment">   * hand-made meta.  The hand-made regions are created offline.  We then start</em>
+<a name="64" href="#64">64</a>  <em class="jxr_javadoccomment">   * up mini cluster, disables the hand-made table and starts in on merging.</em>
+<a name="65" href="#65">65</a>  <em class="jxr_javadoccomment">   * @throws Exception</em>
+<a name="66" href="#66">66</a>  <em class="jxr_javadoccomment">   */</em>
+<a name="67" href="#67">67</a>    @Test (timeout=300000) <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">void</strong> testMergeTable() <strong class="jxr_keyword">throws</strong> Exception {
+<a name="68" href="#68">68</a>      <em class="jxr_comment">// Table we are manually creating offline.</em>
+<a name="69" href="#69">69</a>      HTableDescriptor desc = <strong class="jxr_keyword">new</strong> HTableDescriptor(Bytes.toBytes(<span class="jxr_string">"test"</span>));
+<a name="70" href="#70">70</a>      desc.addFamily(<strong class="jxr_keyword">new</strong> HColumnDescriptor(COLUMN_NAME));
+<a name="71" href="#71">71</a>  
+<a name="72" href="#72">72</a>      <em class="jxr_comment">// Set maximum regionsize down.</em>
+<a name="73" href="#73">73</a>      UTIL.getConfiguration().setLong(HConstants.HREGION_MAX_FILESIZE, 64L * 1024L * 1024L);
+<a name="74" href="#74">74</a>      <em class="jxr_comment">// Make it so we don't split.</em>
+<a name="75" href="#75">75</a>      UTIL.getConfiguration().setInt(<span class="jxr_string">"hbase.regionserver.regionSplitLimit"</span>, 0);
+<a name="76" href="#76">76</a>      <em class="jxr_comment">// Startup hdfs.  Its in here we'll be putting our manually made regions.</em>
+<a name="77" href="#77">77</a>      UTIL.startMiniDFSCluster(1);
+<a name="78" href="#78">78</a>      <em class="jxr_comment">// Create hdfs hbase rootdir.</em>
+<a name="79" href="#79">79</a>      Path rootdir = UTIL.createRootDir();
+<a name="80" href="#80">80</a>      FileSystem fs = FileSystem.get(UTIL.getConfiguration());
+<a name="81" href="#81">81</a>      <strong class="jxr_keyword">if</strong> (fs.exists(rootdir)) {
+<a name="82" href="#82">82</a>        <strong class="jxr_keyword">if</strong> (fs.delete(rootdir, <strong class="jxr_keyword">true</strong>)) {
+<a name="83" href="#83">83</a>          LOG.info(<span class="jxr_string">"Cleaned up existing "</span> + rootdir);
+<a name="84" href="#84">84</a>        }
+<a name="85" href="#85">85</a>      }
+<a name="86" href="#86">86</a>  
+<a name="87" href="#87">87</a>      <em class="jxr_comment">// Now create three data regions: The first is too large to merge since it</em>
+<a name="88" href="#88">88</a>      <em class="jxr_comment">// will be &gt; 64 MB in size. The second two will be smaller and will be</em>
+<a name="89" href="#89">89</a>      <em class="jxr_comment">// selected for merging.</em>
+<a name="90" href="#90">90</a>  
+<a name="91" href="#91">91</a>      <em class="jxr_comment">// To ensure that the first region is larger than 64MB we need to write at</em>
+<a name="92" href="#92">92</a>      <em class="jxr_comment">// least 65536 rows. We will make certain by writing 70000</em>
+<a name="93" href="#93">93</a>      byte [] row_70001 = Bytes.toBytes(<span class="jxr_string">"row_70001"</span>);
+<a name="94" href="#94">94</a>      byte [] row_80001 = Bytes.toBytes(<span class="jxr_string">"row_80001"</span>);
+<a name="95" href="#95">95</a>  
+<a name="96" href="#96">96</a>      <em class="jxr_comment">// Create regions and populate them at same time.  Create the tabledir</em>
+<a name="97" href="#97">97</a>      <em class="jxr_comment">// for them first.</em>
+<a name="98" href="#98">98</a>      FSTableDescriptors.createTableDescriptor(fs, rootdir, desc);
+<a name="99" href="#99">99</a>      HRegion [] regions = {
+<a name="100" href="#100">100</a>       createRegion(desc, <strong class="jxr_keyword">null</strong>, row_70001, 1, 70000, rootdir),
+<a name="101" href="#101">101</a>       createRegion(desc, row_70001, row_80001, 70001, 10000, rootdir),
+<a name="102" href="#102">102</a>       createRegion(desc, row_80001, <strong class="jxr_keyword">null</strong>, 80001, 11000, rootdir)
+<a name="103" href="#103">103</a>     };
+<a name="104" href="#104">104</a> 
+<a name="105" href="#105">105</a>     <em class="jxr_comment">// Now create the root and meta regions and insert the data regions</em>
+<a name="106" href="#106">106</a>     <em class="jxr_comment">// created above into .META.</em>
+<a name="107" href="#107">107</a>     setupROOTAndMeta(rootdir, regions);
+<a name="108" href="#108">108</a>     <strong class="jxr_keyword">try</strong> {
+<a name="109" href="#109">109</a>       LOG.info(<span class="jxr_string">"Starting mini zk cluster"</span>);
+<a name="110" href="#110">110</a>       UTIL.startMiniZKCluster();
+<a name="111" href="#111">111</a>       LOG.info(<span class="jxr_string">"Starting mini hbase cluster"</span>);
+<a name="112" href="#112">112</a>       UTIL.startMiniHBaseCluster(1, 1);
+<a name="113" href="#113">113</a>       Configuration c = <strong class="jxr_keyword">new</strong> Configuration(UTIL.getConfiguration());
+<a name="114" href="#114">114</a>       CatalogTracker ct = <strong class="jxr_keyword">new</strong> CatalogTracker(c);
+<a name="115" href="#115">115</a>       ct.start();
+<a name="116" href="#116">116</a>       List&lt;HRegionInfo&gt; originalTableRegions =
+<a name="117" href="#117">117</a>         MetaReader.getTableRegions(ct, desc.getName());
+<a name="118" href="#118">118</a>       LOG.info(<span class="jxr_string">"originalTableRegions size="</span> + originalTableRegions.size() +
+<a name="119" href="#119">119</a>         <span class="jxr_string">"; "</span> + originalTableRegions);
+<a name="120" href="#120">120</a>       HBaseAdmin admin = <strong class="jxr_keyword">new</strong> HBaseAdmin(<strong class="jxr_keyword">new</strong> Configuration(c));
+<a name="121" href="#121">121</a>       admin.disableTable(desc.getName());
+<a name="122" href="#122">122</a>       HMerge.merge(c, FileSystem.get(c), desc.getName());
+<a name="123" href="#123">123</a>       List&lt;HRegionInfo&gt; postMergeTableRegions =
+<a name="124" href="#124">124</a>         MetaReader.getTableRegions(ct, desc.getName());
+<a name="125" href="#125">125</a>       LOG.info(<span class="jxr_string">"postMergeTableRegions size="</span> + postMergeTableRegions.size() +
+<a name="126" href="#126">126</a>         <span class="jxr_string">"; "</span> + postMergeTableRegions);
+<a name="127" href="#127">127</a>       assertTrue(<span class="jxr_string">"originalTableRegions="</span> + originalTableRegions.size() +
+<a name="128" href="#128">128</a>         <span class="jxr_string">", postMergeTableRegions="</span> + postMergeTableRegions.size(),
+<a name="129" href="#129">129</a>         postMergeTableRegions.size() &lt; originalTableRegions.size());
+<a name="130" href="#130">130</a>       LOG.info(<span class="jxr_string">"Done with merge"</span>);
+<a name="131" href="#131">131</a>     } <strong class="jxr_keyword">finally</strong> {
+<a name="132" href="#132">132</a>       UTIL.shutdownMiniCluster();
+<a name="133" href="#133">133</a>       LOG.info(<span class="jxr_string">"After cluster shutdown"</span>);
+<a name="134" href="#134">134</a>     }
+<a name="135" href="#135">135</a>   }
+<a name="136" href="#136">136</a> 
+<a name="137" href="#137">137</a>   <strong class="jxr_keyword">private</strong> HRegion createRegion(<strong class="jxr_keyword">final</strong> HTableDescriptor desc,
+<a name="138" href="#138">138</a>       byte [] startKey, byte [] endKey, <strong class="jxr_keyword">int</strong> firstRow, <strong class="jxr_keyword">int</strong> nrows, Path rootdir)
+<a name="139" href="#139">139</a>   <strong class="jxr_keyword">throws</strong> IOException {
+<a name="140" href="#140">140</a>     HRegionInfo hri = <strong class="jxr_keyword">new</strong> HRegionInfo(desc.getName(), startKey, endKey);
+<a name="141" href="#141">141</a>     HRegion region = HRegion.createHRegion(hri, rootdir, UTIL.getConfiguration(), desc);
+<a name="142" href="#142">142</a>     LOG.info(<span class="jxr_string">"Created region "</span> + region.getRegionNameAsString());
+<a name="143" href="#143">143</a>     <strong class="jxr_keyword">for</strong>(<strong class="jxr_keyword">int</strong> i = firstRow; i &lt; firstRow + nrows; i++) {
+<a name="144" href="#144">144</a>       Put put = <strong class="jxr_keyword">new</strong> Put(Bytes.toBytes(<span class="jxr_string">"row_"</span> + String.format(<span class="jxr_string">"%1$05d"</span>, i)));
+<a name="145" href="#145">145</a>       put.setWriteToWAL(false);
+<a name="146" href="#146">146</a>       put.add(COLUMN_NAME, <strong class="jxr_keyword">null</strong>,  VALUE);
+<a name="147" href="#147">147</a>       region.put(put);
+<a name="148" href="#148">148</a>       <strong class="jxr_keyword">if</strong> (i % 10000 == 0) {
+<a name="149" href="#149">149</a>         LOG.info(<span class="jxr_string">"Flushing write #"</span> + i);
+<a name="150" href="#150">150</a>         region.flushcache();
+<a name="151" href="#151">151</a>       }
+<a name="152" href="#152">152</a>     }
+<a name="153" href="#153">153</a>     region.close();
+<a name="154" href="#154">154</a>     region.getLog().closeAndDelete();
+<a name="155" href="#155">155</a>     <strong class="jxr_keyword">return</strong> region;
+<a name="156" href="#156">156</a>   }
+<a name="157" href="#157">157</a> 
+<a name="158" href="#158">158</a>   <strong class="jxr_keyword">protected</strong> <strong class="jxr_keyword">void</strong> setupROOTAndMeta(Path rootdir, <strong class="jxr_keyword">final</strong> HRegion [] regions)
+<a name="159" href="#159">159</a>   <strong class="jxr_keyword">throws</strong> IOException {
+<a name="160" href="#160">160</a>     HRegion root =
+<a name="161" href="#161">161</a>       HRegion.createHRegion(HRegionInfo.ROOT_REGIONINFO, rootdir,
+<a name="162" href="#162">162</a>           UTIL.getConfiguration(), HTableDescriptor.ROOT_TABLEDESC);
+<a name="163" href="#163">163</a>     HRegion meta =
+<a name="164" href="#164">164</a>       HRegion.createHRegion(HRegionInfo.FIRST_META_REGIONINFO, rootdir,
+<a name="165" href="#165">165</a>       UTIL.getConfiguration(), HTableDescriptor.META_TABLEDESC);
+<a name="166" href="#166">166</a>     HRegion.addRegionToMETA(root, meta);
+<a name="167" href="#167">167</a>     <strong class="jxr_keyword">for</strong> (HRegion r: regions) {
+<a name="168" href="#168">168</a>       HRegion.addRegionToMETA(meta, r);
+<a name="169" href="#169">169</a>     }
+<a name="170" href="#170">170</a>     meta.close();
+<a name="171" href="#171">171</a>     meta.getLog().closeAndDelete();
+<a name="172" href="#172">172</a>     root.close();
+<a name="173" href="#173">173</a>     root.getLog().closeAndDelete();
+<a name="174" href="#174">174</a>   }
+<a name="175" href="#175">175</a> 
+<a name="176" href="#176">176</a>   @org.junit.Rule
+<a name="177" href="#177">177</a>   <strong class="jxr_keyword">public</strong> org.apache.hadoop.hbase.ResourceCheckerJUnitRule cu =
+<a name="178" href="#178">178</a>     <strong class="jxr_keyword">new</strong> org.apache.hadoop.hbase.ResourceCheckerJUnitRule();
+<a name="179" href="#179">179</a> }
+<a name="180" href="#180">180</a> 
+</pre>
+<hr/><div id="footer">This page was automatically generated by <a href="http://maven.apache.org/">Maven</a></div></body>
+</html>
+
