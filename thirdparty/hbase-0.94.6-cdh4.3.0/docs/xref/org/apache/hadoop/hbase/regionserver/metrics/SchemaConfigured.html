@@ -1,0 +1,283 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1" />
+<title>SchemaConfigured xref</title>
+<link type="text/css" rel="stylesheet" href="../../../../../../stylesheet.css" />
+</head>
+<body>
+<div id="overview"><a href="../../../../../../../apidocs/org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">View Javadoc</a></div><pre>
+
+<a name="1" href="#1">1</a>   <em class="jxr_comment">/*</em>
+<a name="2" href="#2">2</a>   <em class="jxr_comment"> * Licensed to the Apache Software Foundation (ASF) under one</em>
+<a name="3" href="#3">3</a>   <em class="jxr_comment"> * or more contributor license agreements.  See the NOTICE file</em>
+<a name="4" href="#4">4</a>   <em class="jxr_comment"> * distributed with this work for additional information</em>
+<a name="5" href="#5">5</a>   <em class="jxr_comment"> * regarding copyright ownership.  The ASF licenses this file</em>
+<a name="6" href="#6">6</a>   <em class="jxr_comment"> * to you under the Apache License, Version 2.0 (the</em>
+<a name="7" href="#7">7</a>   <em class="jxr_comment"> * "License"); you may not use this file except in compliance</em>
+<a name="8" href="#8">8</a>   <em class="jxr_comment"> * with the License.  You may obtain a copy of the License at</em>
+<a name="9" href="#9">9</a>   <em class="jxr_comment"> *</em>
+<a name="10" href="#10">10</a>  <em class="jxr_comment"> *     <a href="http://www.apache.org/licenses/LICENSE-2.0" target="alexandria_uri">http://www.apache.org/licenses/LICENSE-2.0</a></em>
+<a name="11" href="#11">11</a>  <em class="jxr_comment"> *</em>
+<a name="12" href="#12">12</a>  <em class="jxr_comment"> * Unless required by applicable law or agreed to in writing, software</em>
+<a name="13" href="#13">13</a>  <em class="jxr_comment"> * distributed under the License is distributed on an "AS IS" BASIS,</em>
+<a name="14" href="#14">14</a>  <em class="jxr_comment"> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</em>
+<a name="15" href="#15">15</a>  <em class="jxr_comment"> * See the License for the specific language governing permissions and</em>
+<a name="16" href="#16">16</a>  <em class="jxr_comment"> * limitations under the License.</em>
+<a name="17" href="#17">17</a>  <em class="jxr_comment"> */</em>
+<a name="18" href="#18">18</a>  
+<a name="19" href="#19">19</a>  <strong class="jxr_keyword">package</strong> org.apache.hadoop.hbase.regionserver.metrics;
+<a name="20" href="#20">20</a>  
+<a name="21" href="#21">21</a>  <strong class="jxr_keyword">import</strong> org.apache.commons.logging.Log;
+<a name="22" href="#22">22</a>  <strong class="jxr_keyword">import</strong> org.apache.commons.logging.LogFactory;
+<a name="23" href="#23">23</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.conf.Configuration;
+<a name="24" href="#24">24</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.fs.Path;
+<a name="25" href="#25">25</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.io.HeapSize;
+<a name="26" href="#26">26</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.io.hfile.HFile;
+<a name="27" href="#27">27</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.regionserver.HRegion;
+<a name="28" href="#28">28</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.regionserver.metrics.SchemaMetrics.SchemaAware;
+<a name="29" href="#29">29</a>  <strong class="jxr_keyword">import</strong> org.apache.hadoop.hbase.util.ClassSize;
+<a name="30" href="#30">30</a>  
+<a name="31" href="#31">31</a>  <em class="jxr_javadoccomment">/**</em>
+<a name="32" href="#32">32</a>  <em class="jxr_javadoccomment"> * A base class for objects that are associated with a particular table and</em>
+<a name="33" href="#33">33</a>  <em class="jxr_javadoccomment"> * column family. Provides a way to obtain the schema metrics object.</em>
+<a name="34" href="#34">34</a>  <em class="jxr_javadoccomment"> * &lt;p&gt;</em>
+<a name="35" href="#35">35</a>  <em class="jxr_javadoccomment"> * Due to the variety of things that can be associated with a table/CF, there</em>
+<a name="36" href="#36">36</a>  <em class="jxr_javadoccomment"> * are many ways to initialize this base class, either in the constructor, or</em>
+<a name="37" href="#37">37</a>  <em class="jxr_javadoccomment"> * from another similar object. For example, an HFile reader configures HFile</em>
+<a name="38" href="#38">38</a>  <em class="jxr_javadoccomment"> * blocks it reads with its own table/CF name.</em>
+<a name="39" href="#39">39</a>  <em class="jxr_javadoccomment"> */</em>
+<a name="40" href="#40">40</a>  <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">class</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a> implements HeapSize, <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaMetrics.html">SchemaAware</a> {
+<a name="41" href="#41">41</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> Log LOG = LogFactory.getLog(SchemaConfigured.<strong class="jxr_keyword">class</strong>);
+<a name="42" href="#42">42</a>  
+<a name="43" href="#43">43</a>    <em class="jxr_comment">// These are not final because we set them at runtime e.g. for HFile blocks.</em>
+<a name="44" href="#44">44</a>    <strong class="jxr_keyword">private</strong> String cfName;
+<a name="45" href="#45">45</a>    <strong class="jxr_keyword">private</strong> String tableName;
+<a name="46" href="#46">46</a>  
+<a name="47" href="#47">47</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="48" href="#48">48</a>  <em class="jxr_javadoccomment">   * Schema metrics. Can only be initialized when we know our column family</em>
+<a name="49" href="#49">49</a>  <em class="jxr_javadoccomment">   * name, table name, and have had a chance to take a look at the</em>
+<a name="50" href="#50">50</a>  <em class="jxr_javadoccomment">   * configuration (in {@link SchemaMetrics#configureGlobally(Configuration))</em>
+<a name="51" href="#51">51</a>  <em class="jxr_javadoccomment">   * so we know whether we are using per-table metrics. Therefore, initialized</em>
+<a name="52" href="#52">52</a>  <em class="jxr_javadoccomment">   * lazily. We don't make this volatile because even if a thread sees a stale</em>
+<a name="53" href="#53">53</a>  <em class="jxr_javadoccomment">   * value of null, it will be re-initialized to the same value that other</em>
+<a name="54" href="#54">54</a>  <em class="jxr_javadoccomment">   * threads see.</em>
+<a name="55" href="#55">55</a>  <em class="jxr_javadoccomment">   */</em>
+<a name="56" href="#56">56</a>    <strong class="jxr_keyword">private</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaMetrics.html">SchemaMetrics</a> schemaMetrics;
+<a name="57" href="#57">57</a>  
+<a name="58" href="#58">58</a>    <strong class="jxr_keyword">static</strong> {
+<a name="59" href="#59">59</a>      <strong class="jxr_keyword">if</strong> (ClassSize.OBJECT &lt;= 0 || ClassSize.REFERENCE &lt;= 0) {
+<a name="60" href="#60">60</a>        <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> AssertionError(<span class="jxr_string">"Class sizes are not initialized"</span>);
+<a name="61" href="#61">61</a>      }
+<a name="62" href="#62">62</a>    }
+<a name="63" href="#63">63</a>  
+<a name="64" href="#64">64</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="65" href="#65">65</a>  <em class="jxr_javadoccomment">   * Estimated heap size of this object. We don't count table name and column</em>
+<a name="66" href="#66">66</a>  <em class="jxr_javadoccomment">   * family name characters because these strings are shared among many</em>
+<a name="67" href="#67">67</a>  <em class="jxr_javadoccomment">   * objects. We need unaligned size to reuse this in subclasses.</em>
+<a name="68" href="#68">68</a>  <em class="jxr_javadoccomment">   */</em>
+<a name="69" href="#69">69</a>    <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> SCHEMA_CONFIGURED_UNALIGNED_HEAP_SIZE =
+<a name="70" href="#70">70</a>        ClassSize.OBJECT + 3 * ClassSize.REFERENCE;
+<a name="71" href="#71">71</a>  
+<a name="72" href="#72">72</a>    <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">final</strong> <strong class="jxr_keyword">int</strong> SCHEMA_CONFIGURED_ALIGNED_HEAP_SIZE =
+<a name="73" href="#73">73</a>        ClassSize.align(SCHEMA_CONFIGURED_UNALIGNED_HEAP_SIZE);
+<a name="74" href="#74">74</a>  
+<a name="75" href="#75">75</a>    <em class="jxr_javadoccomment">/**</em><em class="jxr_javadoccomment"> A helper constructor that configures the "use table name" flag. */</em>
+<a name="76" href="#76">76</a>    <strong class="jxr_keyword">private</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(Configuration conf) {
+<a name="77" href="#77">77</a>      SchemaMetrics.configureGlobally(conf);
+<a name="78" href="#78">78</a>      <em class="jxr_comment">// Even though we now know if table-level metrics are used, we can't</em>
+<a name="79" href="#79">79</a>      <em class="jxr_comment">// initialize schemaMetrics yet, because CF and table name are only known</em>
+<a name="80" href="#80">80</a>      <em class="jxr_comment">// to the calling constructor.</em>
+<a name="81" href="#81">81</a>    }
+<a name="82" href="#82">82</a>  
+<a name="83" href="#83">83</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="84" href="#84">84</a>  <em class="jxr_javadoccomment">   * Creates an instance corresponding to an unknown table and column family.</em>
+<a name="85" href="#85">85</a>  <em class="jxr_javadoccomment">   * Used in unit tests. </em>
+<a name="86" href="#86">86</a>  <em class="jxr_javadoccomment">   */</em>
+<a name="87" href="#87">87</a>    <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a> createUnknown() {
+<a name="88" href="#88">88</a>      <strong class="jxr_keyword">return</strong> <strong class="jxr_keyword">new</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(<strong class="jxr_keyword">null</strong>, SchemaMetrics.UNKNOWN,
+<a name="89" href="#89">89</a>          SchemaMetrics.UNKNOWN);
+<a name="90" href="#90">90</a>    }
+<a name="91" href="#91">91</a>  
+<a name="92" href="#92">92</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="93" href="#93">93</a>  <em class="jxr_javadoccomment">   * Default constructor. Only use when column/family name are not known at</em>
+<a name="94" href="#94">94</a>  <em class="jxr_javadoccomment">   * construction (i.e. for HFile blocks).</em>
+<a name="95" href="#95">95</a>  <em class="jxr_javadoccomment">   */</em>
+<a name="96" href="#96">96</a>    <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>() {
+<a name="97" href="#97">97</a>    }
+<a name="98" href="#98">98</a>  
+<a name="99" href="#99">99</a>    <em class="jxr_javadoccomment">/**</em>
+<a name="100" href="#100">100</a> <em class="jxr_javadoccomment">   * Initialize table and column family name from an HFile path. If</em>
+<a name="101" href="#101">101</a> <em class="jxr_javadoccomment">   * configuration is null,</em>
+<a name="102" href="#102">102</a> <em class="jxr_javadoccomment">   * {@link SchemaMetrics#configureGlobally(Configuration)} should have been</em>
+<a name="103" href="#103">103</a> <em class="jxr_javadoccomment">   * called already.</em>
+<a name="104" href="#104">104</a> <em class="jxr_javadoccomment">   */</em>
+<a name="105" href="#105">105</a>   <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(Configuration conf, Path path) {
+<a name="106" href="#106">106</a>     <strong class="jxr_keyword">this</strong>(conf);
+<a name="107" href="#107">107</a> 
+<a name="108" href="#108">108</a>     <strong class="jxr_keyword">if</strong> (path != <strong class="jxr_keyword">null</strong>) {
+<a name="109" href="#109">109</a>       String splits[] = path.toString().split(<span class="jxr_string">"/"</span>);
+<a name="110" href="#110">110</a>       <strong class="jxr_keyword">int</strong> numPathLevels = splits.length;
+<a name="111" href="#111">111</a>       <strong class="jxr_keyword">if</strong> (numPathLevels &gt; 0 &amp;&amp; splits[0].isEmpty()) {
+<a name="112" href="#112">112</a>         <em class="jxr_comment">// This path starts with an '/'.</em>
+<a name="113" href="#113">113</a>         --numPathLevels;
+<a name="114" href="#114">114</a>       }
+<a name="115" href="#115">115</a>       <strong class="jxr_keyword">if</strong> (numPathLevels &lt; HFile.MIN_NUM_HFILE_PATH_LEVELS) {
+<a name="116" href="#116">116</a>         LOG.warn(<span class="jxr_string">"Could not determine table and column family of the HFile "</span>
+<a name="117" href="#117">117</a>             + <span class="jxr_string">"path "</span> + path + <span class="jxr_string">". Expecting at least "</span>
+<a name="118" href="#118">118</a>             + HFile.MIN_NUM_HFILE_PATH_LEVELS + <span class="jxr_string">" path components."</span>);
+<a name="119" href="#119">119</a>         path = <strong class="jxr_keyword">null</strong>;
+<a name="120" href="#120">120</a>       } <strong class="jxr_keyword">else</strong> {
+<a name="121" href="#121">121</a>         cfName = splits[splits.length - 2];
+<a name="122" href="#122">122</a>         <strong class="jxr_keyword">if</strong> (cfName.equals(HRegion.REGION_TEMP_SUBDIR)) {
+<a name="123" href="#123">123</a>           <em class="jxr_comment">// This is probably a compaction or flush output file. We will set</em>
+<a name="124" href="#124">124</a>           <em class="jxr_comment">// the real CF name later.</em>
+<a name="125" href="#125">125</a>           cfName = <strong class="jxr_keyword">null</strong>;
+<a name="126" href="#126">126</a>         } <strong class="jxr_keyword">else</strong> {
+<a name="127" href="#127">127</a>           cfName = cfName.intern();
+<a name="128" href="#128">128</a>         }
+<a name="129" href="#129">129</a>         tableName = splits[splits.length - 4].intern();
+<a name="130" href="#130">130</a>         <strong class="jxr_keyword">return</strong>;
+<a name="131" href="#131">131</a>       }
+<a name="132" href="#132">132</a>     }
+<a name="133" href="#133">133</a> 
+<a name="134" href="#134">134</a>     <em class="jxr_comment">// This might also happen if we were passed an incorrect path.</em>
+<a name="135" href="#135">135</a>     cfName = SchemaMetrics.UNKNOWN;
+<a name="136" href="#136">136</a>     tableName = SchemaMetrics.UNKNOWN;
+<a name="137" href="#137">137</a>   }
+<a name="138" href="#138">138</a> 
+<a name="139" href="#139">139</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="140" href="#140">140</a> <em class="jxr_javadoccomment">   * Used when we know an HFile path to deduce table and CF name from, but do</em>
+<a name="141" href="#141">141</a> <em class="jxr_javadoccomment">   * not have a configuration.</em>
+<a name="142" href="#142">142</a> <em class="jxr_javadoccomment">   * @param path an HFile path</em>
+<a name="143" href="#143">143</a> <em class="jxr_javadoccomment">   */</em>
+<a name="144" href="#144">144</a>   <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(Path path) {
+<a name="145" href="#145">145</a>     <strong class="jxr_keyword">this</strong>(<strong class="jxr_keyword">null</strong>, path);
+<a name="146" href="#146">146</a>   }
+<a name="147" href="#147">147</a> 
+<a name="148" href="#148">148</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="149" href="#149">149</a> <em class="jxr_javadoccomment">   * Used when we know table and column family name. If configuration is null,</em>
+<a name="150" href="#150">150</a> <em class="jxr_javadoccomment">   * {@link SchemaMetrics#configureGlobally(Configuration)} should have been</em>
+<a name="151" href="#151">151</a> <em class="jxr_javadoccomment">   * called already.</em>
+<a name="152" href="#152">152</a> <em class="jxr_javadoccomment">   */</em>
+<a name="153" href="#153">153</a>   <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(Configuration conf, String tableName, String cfName)
+<a name="154" href="#154">154</a>   {
+<a name="155" href="#155">155</a>     <strong class="jxr_keyword">this</strong>(conf);
+<a name="156" href="#156">156</a>     <strong class="jxr_keyword">this</strong>.tableName = tableName != <strong class="jxr_keyword">null</strong> ? tableName.intern() : tableName;
+<a name="157" href="#157">157</a>     <strong class="jxr_keyword">this</strong>.cfName = cfName != <strong class="jxr_keyword">null</strong> ? cfName.intern() : cfName;
+<a name="158" href="#158">158</a>   }
+<a name="159" href="#159">159</a> 
+<a name="160" href="#160">160</a>   <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a>(<a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaMetrics.html">SchemaAware</a> that) {
+<a name="161" href="#161">161</a>     tableName = that.getTableName().intern();
+<a name="162" href="#162">162</a>     cfName = that.getColumnFamilyName().intern();
+<a name="163" href="#163">163</a>     schemaMetrics = that.getSchemaMetrics();
+<a name="164" href="#164">164</a>   }
+<a name="165" href="#165">165</a> 
+<a name="166" href="#166">166</a>   @Override
+<a name="167" href="#167">167</a>   <strong class="jxr_keyword">public</strong> String getTableName() {
+<a name="168" href="#168">168</a>     <strong class="jxr_keyword">return</strong> tableName;
+<a name="169" href="#169">169</a>   }
+<a name="170" href="#170">170</a> 
+<a name="171" href="#171">171</a>   @Override
+<a name="172" href="#172">172</a>   <strong class="jxr_keyword">public</strong> String getColumnFamilyName() {
+<a name="173" href="#173">173</a>     <strong class="jxr_keyword">return</strong> cfName;
+<a name="174" href="#174">174</a>   }
+<a name="175" href="#175">175</a> 
+<a name="176" href="#176">176</a>   @Override
+<a name="177" href="#177">177</a>   <strong class="jxr_keyword">public</strong> <a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaMetrics.html">SchemaMetrics</a> getSchemaMetrics() {
+<a name="178" href="#178">178</a>     <strong class="jxr_keyword">if</strong> (schemaMetrics == <strong class="jxr_keyword">null</strong>) {
+<a name="179" href="#179">179</a>       <strong class="jxr_keyword">if</strong> (tableName == <strong class="jxr_keyword">null</strong> || cfName == <strong class="jxr_keyword">null</strong>) {
+<a name="180" href="#180">180</a>         <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> IllegalStateException(<span class="jxr_string">"Schema metrics requested before "</span> +
+<a name="181" href="#181">181</a>             <span class="jxr_string">"table/CF name initialization: "</span> + schemaConfAsJSON());
+<a name="182" href="#182">182</a>       }
+<a name="183" href="#183">183</a>       schemaMetrics = SchemaMetrics.getInstance(tableName, cfName);
+<a name="184" href="#184">184</a>     }
+<a name="185" href="#185">185</a>     <strong class="jxr_keyword">return</strong> schemaMetrics;
+<a name="186" href="#186">186</a>   }
+<a name="187" href="#187">187</a> 
+<a name="188" href="#188">188</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="189" href="#189">189</a> <em class="jxr_javadoccomment">   * Configures the given object (e.g. an HFile block) with the current table</em>
+<a name="190" href="#190">190</a> <em class="jxr_javadoccomment">   * and column family name, and the associated collection of metrics. Please</em>
+<a name="191" href="#191">191</a> <em class="jxr_javadoccomment">   * note that this method configures the &lt;b&gt;other&lt;/b&gt; object, not &lt;b&gt;this&lt;/b&gt;</em>
+<a name="192" href="#192">192</a> <em class="jxr_javadoccomment">   * object.</em>
+<a name="193" href="#193">193</a> <em class="jxr_javadoccomment">   */</em>
+<a name="194" href="#194">194</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">void</strong> passSchemaMetricsTo(<a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a> target) {
+<a name="195" href="#195">195</a>     <strong class="jxr_keyword">if</strong> (isNull()) {
+<a name="196" href="#196">196</a>       resetSchemaMetricsConf(target);
+<a name="197" href="#197">197</a>       <strong class="jxr_keyword">return</strong>;
+<a name="198" href="#198">198</a>     }
+<a name="199" href="#199">199</a> 
+<a name="200" href="#200">200</a>     <strong class="jxr_keyword">if</strong> (!isSchemaConfigured()) {
+<a name="201" href="#201">201</a>       <em class="jxr_comment">// Cannot configure another object if we are not configured ourselves.</em>
+<a name="202" href="#202">202</a>       <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> IllegalStateException(<span class="jxr_string">"Table name/CF not initialized: "</span> +
+<a name="203" href="#203">203</a>           schemaConfAsJSON());
+<a name="204" href="#204">204</a>     }
+<a name="205" href="#205">205</a> 
+<a name="206" href="#206">206</a>     <strong class="jxr_keyword">if</strong> (conflictingWith(target)) {
+<a name="207" href="#207">207</a>       <em class="jxr_comment">// Make sure we don't try to change table or CF name.</em>
+<a name="208" href="#208">208</a>       <strong class="jxr_keyword">throw</strong> <strong class="jxr_keyword">new</strong> IllegalArgumentException(<span class="jxr_string">"Trying to change table name to \&quot;"</span> +
+<a name="209" href="#209">209</a>           tableName + <span class="jxr_string">"\&quot;, CF name to \&quot;"</span> + cfName + <span class="jxr_string">"\&quot; from "</span> +
+<a name="210" href="#210">210</a>           target.schemaConfAsJSON());
+<a name="211" href="#211">211</a>     }
+<a name="212" href="#212">212</a> 
+<a name="213" href="#213">213</a>     target.tableName = tableName.intern();
+<a name="214" href="#214">214</a>     target.cfName = cfName.intern();
+<a name="215" href="#215">215</a>     target.schemaMetrics = schemaMetrics;
+<a name="216" href="#216">216</a>     target.schemaConfigurationChanged();
+<a name="217" href="#217">217</a>   }
+<a name="218" href="#218">218</a> 
+<a name="219" href="#219">219</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="220" href="#220">220</a> <em class="jxr_javadoccomment">   * Reset schema metrics configuration in this particular instance. Used when</em>
+<a name="221" href="#221">221</a> <em class="jxr_javadoccomment">   * legitimately need to re-initialize the object with another table/CF.</em>
+<a name="222" href="#222">222</a> <em class="jxr_javadoccomment">   * This is a static method because its use is discouraged and reserved for</em>
+<a name="223" href="#223">223</a> <em class="jxr_javadoccomment">   * when it is really necessary (e.g. writing HFiles in a temp direcdtory</em>
+<a name="224" href="#224">224</a> <em class="jxr_javadoccomment">   * on compaction).</em>
+<a name="225" href="#225">225</a> <em class="jxr_javadoccomment">   */</em>
+<a name="226" href="#226">226</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">static</strong> <strong class="jxr_keyword">void</strong> resetSchemaMetricsConf(<a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a> target) {
+<a name="227" href="#227">227</a>     target.tableName = <strong class="jxr_keyword">null</strong>;
+<a name="228" href="#228">228</a>     target.cfName = <strong class="jxr_keyword">null</strong>;
+<a name="229" href="#229">229</a>     target.schemaMetrics = <strong class="jxr_keyword">null</strong>;
+<a name="230" href="#230">230</a>     target.schemaConfigurationChanged();
+<a name="231" href="#231">231</a>   }
+<a name="232" href="#232">232</a> 
+<a name="233" href="#233">233</a>   @Override
+<a name="234" href="#234">234</a>   <strong class="jxr_keyword">public</strong> <strong class="jxr_keyword">long</strong> heapSize() {
+<a name="235" href="#235">235</a>     <strong class="jxr_keyword">return</strong> SCHEMA_CONFIGURED_ALIGNED_HEAP_SIZE;
+<a name="236" href="#236">236</a>   }
+<a name="237" href="#237">237</a> 
+<a name="238" href="#238">238</a>   <strong class="jxr_keyword">public</strong> String schemaConfAsJSON() {
+<a name="239" href="#239">239</a>     <strong class="jxr_keyword">return</strong> <span class="jxr_string">"{\&quot;tableName\&quot;:\&quot;"</span> + tableName + <span class="jxr_string">"\&quot;,\&quot;cfName\&quot;:\&quot;"</span> + cfName
+<a name="240" href="#240">240</a>         + <span class="jxr_string">"\&quot;}"</span>;
+<a name="241" href="#241">241</a>   }
+<a name="242" href="#242">242</a> 
+<a name="243" href="#243">243</a>   <strong class="jxr_keyword">protected</strong> <strong class="jxr_keyword">boolean</strong> isSchemaConfigured() {
+<a name="244" href="#244">244</a>     <strong class="jxr_keyword">return</strong> tableName != <strong class="jxr_keyword">null</strong> &amp;&amp; cfName != <strong class="jxr_keyword">null</strong>;
+<a name="245" href="#245">245</a>   }
+<a name="246" href="#246">246</a> 
+<a name="247" href="#247">247</a>   <strong class="jxr_keyword">private</strong> <strong class="jxr_keyword">boolean</strong> isNull() {
+<a name="248" href="#248">248</a>     <strong class="jxr_keyword">return</strong> tableName == <strong class="jxr_keyword">null</strong> &amp;&amp; cfName == <strong class="jxr_keyword">null</strong> &amp;&amp; schemaMetrics == <strong class="jxr_keyword">null</strong>;
+<a name="249" href="#249">249</a>   }
+<a name="250" href="#250">250</a> 
+<a name="251" href="#251">251</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="252" href="#252">252</a> <em class="jxr_javadoccomment">   * Determines if the current object's table/CF settings are not in conflict</em>
+<a name="253" href="#253">253</a> <em class="jxr_javadoccomment">   * with the other object's table and CF. If the other object's table/CF are</em>
+<a name="254" href="#254">254</a> <em class="jxr_javadoccomment">   * undefined, they are not considered to be in conflict. Used to sanity-check</em>
+<a name="255" href="#255">255</a> <em class="jxr_javadoccomment">   * configuring the other object with this object's table/CF.</em>
+<a name="256" href="#256">256</a> <em class="jxr_javadoccomment">   */</em>
+<a name="257" href="#257">257</a>   <strong class="jxr_keyword">boolean</strong> conflictingWith(<a href="../../../../../../org/apache/hadoop/hbase/regionserver/metrics/SchemaConfigured.html">SchemaConfigured</a> other) {
+<a name="258" href="#258">258</a>     <strong class="jxr_keyword">return</strong> (other.tableName != <strong class="jxr_keyword">null</strong> &amp;&amp; !tableName.equals(other.tableName)) ||
+<a name="259" href="#259">259</a>         (other.cfName != <strong class="jxr_keyword">null</strong> &amp;&amp; !cfName.equals(other.cfName));
+<a name="260" href="#260">260</a>   }
+<a name="261" href="#261">261</a> 
+<a name="262" href="#262">262</a>   <em class="jxr_javadoccomment">/**</em>
+<a name="263" href="#263">263</a> <em class="jxr_javadoccomment">   * A hook method called when schema configuration changes. Can be used to</em>
+<a name="264" href="#264">264</a> <em class="jxr_javadoccomment">   * update schema-aware member fields.</em>
+<a name="265" href="#265">265</a> <em class="jxr_javadoccomment">   */</em>
+<a name="266" href="#266">266</a>   <strong class="jxr_keyword">protected</strong> <strong class="jxr_keyword">void</strong> schemaConfigurationChanged() {
+<a name="267" href="#267">267</a>   }
+<a name="268" href="#268">268</a> 
+<a name="269" href="#269">269</a> }
+</pre>
+<hr/><div id="footer">This page was automatically generated by <a href="http://maven.apache.org/">Maven</a></div></body>
+</html>
+
