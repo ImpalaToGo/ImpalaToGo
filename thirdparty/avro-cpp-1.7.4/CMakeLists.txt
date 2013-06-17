@@ -47,7 +47,8 @@ add_definitions (
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "-Wall")
+    # N.B. added -fPIC for Impala
+    set(CMAKE_CXX_FLAGS "-Wall -fPIC")
 endif ()
 
 
@@ -140,8 +141,7 @@ enable_testing()
 macro (unittest name)
     add_executable (${name} test/${name}.cc)
     target_link_libraries (${name} avrocpp ${Boost_LIBRARIES})
-    add_test (NAME ${name} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${name})
+    add_test (NAME ${name} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${name})
 endmacro (unittest)
 
 unittest (buffertest)
