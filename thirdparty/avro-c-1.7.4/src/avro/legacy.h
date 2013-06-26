@@ -66,7 +66,6 @@ avro_alloc_free_func(void *ptr, size_t sz);
  * constructors do need an explicit schema parameter.
  */
 
-typedef struct avro_obj_t *avro_datum_t;
 avro_datum_t avro_string(const char *str);
 avro_datum_t avro_givestring(const char *str,
 			     avro_free_func_t free);

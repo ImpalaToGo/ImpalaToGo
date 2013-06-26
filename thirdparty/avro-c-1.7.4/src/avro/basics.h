@@ -56,6 +56,9 @@ struct avro_obj_t {
 	volatile int  refcount;
 };
 
+typedef struct avro_obj_t *avro_datum_t;
+typedef struct avro_obj_t *avro_schema_t;
+
 #define avro_classof(obj)     ((obj)->class_type)
 #define is_avro_schema(obj)   (obj && avro_classof(obj) == AVRO_SCHEMA)
 #define is_avro_datum(obj)    (obj && avro_classof(obj) == AVRO_DATUM)

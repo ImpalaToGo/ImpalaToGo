@@ -34,6 +34,65 @@
 
 #define DEFAULT_TABLE_SIZE 32
 
+static int json_t_to_avro_value_helper(
+		const avro_schema_t schema, const json_t *json, avro_datum_t datum)
+{
+	switch (schema->type) {
+		case AVRO_BOOLEAN:
+			check_param(EINVAL, json_is_boolean(json), "JSON boolean");
+			if (avro_boolean_set(datum, json_is_true(json))) return EINVAL;
+			return 0;
+		case AVRO_DOUBLE:
+			check_param(EINVAL, json_is_real(json), "JSON float");
+			if (avro_double_set(datum, json_real_value(json))) return EINVAL;
+			return 0;
+		case AVRO_FLOAT:
+			check_param(EINVAL, json_is_real(json), "JSON float");
+			if (avro_float_set(datum, json_real_value(json))) return EINVAL;
+			return 0;
+		case AVRO_INT32:
+			check_param(EINVAL, json_is_integer(json), "JSON integer");
+			if (avro_int32_set(datum, json_integer_value(json))) return EINVAL;
+			return 0;
+		case AVRO_INT64:
+			check_param(EINVAL, json_is_integer(json), "JSON integer");
+			if (avro_int64_set(datum, json_integer_value(json))) return EINVAL;
+			return 0;
+		case AVRO_NULL:
+			check_param(EINVAL, json_is_null(json), "JSON null");
+			return 0;
+		case AVRO_STRING: {
+			check_param(EINVAL, json_is_string(json), "JSON string");
+			if (avro_string_set(datum, json_string_value(json))) return EINVAL;
+			return 0;
+		}
+		case AVRO_BYTES:
+		case AVRO_ARRAY:
+		case AVRO_ENUM:
+		case AVRO_FIXED:
+		case AVRO_MAP:
+		case AVRO_RECORD:
+		case AVRO_UNION:
+		default:
+			// TODO
+			avro_set_error("json_t_to_avro_value: unimplemented type");
+			return EINVAL;
+	}
+}
+
+static avro_datum_t json_t_to_avro_value(
+		const avro_schema_t schema, const json_t *json)
+{
+	avro_datum_t datum = avro_datum_from_schema(schema);
+	if (datum == NULL) return NULL;
+	int rval = json_t_to_avro_value_helper(schema, json, datum);
+	if (rval) {
+		avro_datum_decref(datum);
+		return NULL;
+	}
+	return datum;
+}
+
 static void avro_schema_init(avro_schema_t schema, avro_type_t type)
 {
 	schema->type = type;
@@ -71,6 +130,7 @@ static int record_free_foreach(int i, struct avro_record_field_t *field,
 
 	avro_str_free(field->name);
 	avro_schema_decref(field->type);
+	avro_datum_decref(field->default_value);
 	avro_freet(struct avro_record_field_t, field);
 	return ST_DELETE;
 }
@@ -518,7 +578,8 @@ avro_schema_enum_symbol_append(const avro_schema_t enum_schema,
 int
 avro_schema_record_field_append(const avro_schema_t record_schema,
 				const char *field_name,
-				const avro_schema_t field_schema)
+				const avro_schema_t field_schema,
+				const avro_datum_t default_value)
 {
 	check_param(EINVAL, is_avro_schema(record_schema), "record schema");
 	check_param(EINVAL, is_avro_record(record_schema), "record schema");
@@ -544,6 +605,7 @@ avro_schema_record_field_append(const avro_schema_t record_schema,
 	new_field->index = record->fields->num_entries;
 	new_field->name = avro_strdup(field_name);
 	new_field->type = avro_schema_incref(field_schema);
+	new_field->default_value = default_value;
 	st_insert(record->fields, record->fields->num_entries,
 		  (st_data_t) new_field);
 	st_insert(record->fields_byname, (st_data_t) new_field->name,
@@ -643,6 +705,17 @@ const char *avro_schema_record_field_name(const avro_schema_t schema, int index)
 	} val;
 	st_lookup(avro_schema_to_record(schema)->fields, index, &val.data);
 	return val.field->name;
+}
+
+avro_datum_t avro_schema_record_field_default(
+    const avro_schema_t schema, int index)
+{
+	union {
+		st_data_t data;
+		struct avro_record_field_t *field;
+	} val;
+	st_lookup(avro_schema_to_record(schema)->fields, index, &val.data);
+	return val.field->default_value;
 }
 
 avro_schema_t avro_schema_record_field_get_by_index
@@ -866,6 +939,7 @@ avro_schema_from_json_t(json_t *json, avro_schema_t *schema,
 				    json_array_get(json_fields, i);
 				json_t *json_field_name;
 				json_t *json_field_type;
+				json_t *json_default_value;
 				avro_schema_t json_field_type_schema;
 				int field_rval;
 
@@ -896,11 +970,30 @@ avro_schema_from_json_t(json_t *json, avro_schema_t *schema,
 					avro_schema_decref(*schema);
 					return field_rval;
 				}
+				json_default_value =
+						json_object_get(json_field, "default");
+				avro_datum_t default_value = NULL;
+				if (json_default_value) {
+					avro_schema_t default_schema = json_field_type_schema;
+					if (json_field_type_schema->type == AVRO_UNION) {
+						// From the spec: "Default values for union fields correspond
+						// to the first schema in the union."
+						default_schema =
+								avro_schema_union_branch(json_field_type_schema, 0);
+					}
+					default_value =
+							json_t_to_avro_value(default_schema, json_default_value);
+					if (default_value == NULL) {
+						avro_schema_decref(*schema);
+						return EINVAL;
+					}
+				}
 				field_rval =
 				    avro_schema_record_field_append(*schema,
 								    json_string_value
 								    (json_field_name),
-								    json_field_type_schema);
+										json_field_type_schema,
+										default_value);
 				avro_schema_decref(json_field_type_schema);
 				if (field_rval != 0) {
 					avro_schema_decref(*schema);
@@ -1167,9 +1260,11 @@ avro_schema_t avro_schema_copy(avro_schema_t schema)
 				st_lookup(record_schema->fields, i, &val.data);
 				avro_schema_t type_copy =
 				    avro_schema_copy(val.field->type);
+				avro_datum_incref(val.field->default_value);
 				avro_schema_record_field_append(new_schema,
 								val.field->name,
-								type_copy);
+								type_copy,
+								val.field->default_value);
 			}
 		}
 		break;

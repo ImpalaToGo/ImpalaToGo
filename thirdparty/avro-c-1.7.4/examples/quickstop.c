@@ -193,9 +193,9 @@ int main(void)
 	first_name_schema = avro_schema_string();
 	phone_schema = avro_schema_string();
 	avro_schema_record_field_append(projection_schema, "First",
-					first_name_schema);
+					first_name_schema, NULL);
 	avro_schema_record_field_append(projection_schema, "Phone",
-					phone_schema);
+					phone_schema, NULL);
 
 	/* Read only the record you're interested in */
 	fprintf(stdout,
