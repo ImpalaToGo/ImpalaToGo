@@ -29,8 +29,6 @@ extern "C" {
 
 #include <avro/basics.h>
 
-typedef struct avro_obj_t *avro_schema_t;
-
 avro_schema_t avro_schema_string(void);
 avro_schema_t avro_schema_bytes(void);
 avro_schema_t avro_schema_int(void);
@@ -44,13 +42,16 @@ avro_schema_t avro_schema_record(const char *name, const char *space);
 avro_schema_t avro_schema_record_field_get(const avro_schema_t
 					   record, const char *field_name);
 const char *avro_schema_record_field_name(const avro_schema_t schema, int index);
+avro_datum_t avro_schema_record_field_default(
+    const avro_schema_t schema, int index);
 int avro_schema_record_field_get_index(const avro_schema_t schema,
 				       const char *field_name);
 avro_schema_t avro_schema_record_field_get_by_index
 (const avro_schema_t record, int index);
 int avro_schema_record_field_append(const avro_schema_t record,
 				    const char *field_name,
-				    const avro_schema_t type);
+				    const avro_schema_t type,
+				    const avro_datum_t default_value);
 size_t avro_schema_record_size(const avro_schema_t record);
 
 avro_schema_t avro_schema_enum(const char *name);

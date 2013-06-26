@@ -353,8 +353,8 @@ static int test_null(void)
 static int test_record(void)
 {
 	avro_schema_t schema = avro_schema_record("person", NULL);
-	avro_schema_record_field_append(schema, "name", avro_schema_string());
-	avro_schema_record_field_append(schema, "age", avro_schema_int());
+	avro_schema_record_field_append(schema, "name", avro_schema_string(), NULL);
+	avro_schema_record_field_append(schema, "age", avro_schema_int(), NULL);
 
 	avro_datum_t datum = avro_record(schema);
 	avro_datum_t name_datum, age_datum;

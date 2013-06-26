@@ -188,8 +188,8 @@ static int test_record(void)
 {
 	avro_schema_t schema = avro_schema_record("person", NULL);
 
-	avro_schema_record_field_append(schema, "name", avro_schema_string());
-	avro_schema_record_field_append(schema, "age", avro_schema_int());
+	avro_schema_record_field_append(schema, "name", avro_schema_string(), NULL);
+	avro_schema_record_field_append(schema, "age", avro_schema_int(), NULL);
 
 	if (avro_schema_record_field_get_index(schema, "name") != 0) {
 		fprintf(stderr, "Incorrect index for \"name\" field\n");

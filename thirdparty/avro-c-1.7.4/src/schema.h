@@ -27,9 +27,7 @@ struct avro_record_field_t {
 	int index;
 	char *name;
 	avro_schema_t type;
-	/*
-	 * TODO: default values 
-	 */
+	avro_datum_t default_value; // can be NULL
 };
 
 struct avro_record_schema_t {
