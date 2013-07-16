@@ -1,0 +1,12 @@
+*.class
+target/
+.classpath
+.project
+.settings
+.metadata
+**/derby.log
+**/TempStatsStore/
+# Package Files #
+*.jar
+*.war
+*.ear
