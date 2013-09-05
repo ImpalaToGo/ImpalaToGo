@@ -22,6 +22,7 @@ ROOT=`cd "$ROOT"; pwd`
 export IMPALA_HOME=$ROOT
 . "$ROOT"/bin/impala-config.sh
 
+CLUSTER_LOG_DIR=$IMPALA_HOME/cluster_logs
 CLEAN_ACTION=1
 TESTDATA_ACTION=1
 TESTS_ACTION=1
@@ -140,6 +141,7 @@ then
   rm -rf target
   rm -f src/test/resources/{core,hbase,hive}-site.xml
   rm -rf generated-sources/*
+  rm -rf ${CLUSTER_LOG_DIR}/*
 
   # clean be
   cd $IMPALA_HOME/be
