@@ -22,16 +22,22 @@ set -e
 . $IMPALA_HOME/bin/set-pythonpath.sh
 EXPLORATION_STRATEGY=core
 
+NUM_ITERATIONS=1
+
 # parse command line options
-while getopts "e:" OPTION
+while getopts "e:n:" OPTION
 do
   case "$OPTION" in
     e)
       EXPLORATION_STRATEGY=$OPTARG
       ;;
+    n)
+      NUM_ITERATIONS=$OPTARG
+      ;;
     ?)
-      echo "run-all-tests.sh [-e <exploration_strategy>]. The default exploration"\
-           "strategy is 'core'."
+      echo "run-all-tests.sh [-e <exploration_strategy>] [-n <num_iters>]"
+      echo "[-e] The exploration strategy to use. Default exploration is 'core'."
+      echo "[-n] The number of times to run the tests. Default is 1."
       exit 1;
       ;;
   esac
