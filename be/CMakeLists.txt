@@ -164,49 +164,31 @@ else()
   set(BUILD_OUTPUT_ROOT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/release/")
 endif()
 
-# This is an ordered list of impala library dependencies. Individual libraries
-# must not specify library dependencies in their own CMakeLists.txt file. 
-# Make sure to specify link libraries in reverse order of dependency
-# (ie, if libA uses symbols from libB, libA must precede libB), otherwise
-# when linking statically the linker won't look for the needed symbols.
-# TODO: is there a better way to specify link dependencies without having to
-# list all included libs for each specific binary? any gcc flags to help with this?
-# multiple alternating includes of Opcode and Exprs libs necessary to get symbols
-# resolve (why?)
-#
-# The order of link libararies matter.
-#  - Util must come before ImpalaThrift
-#  - Exprs & Opcode have a circular dependency (Exprs is included twice)
+# This is a list of impala library dependencies. Individual libraries
+# must not specify library dependencies in their own CMakeLists.txt file.
+# Enclose the impala libraries in -Wl,--start-group and -Wl,--end-group
+# to resolve cyclic dependencies. As long as those flags are given, 
+# the order in which impala libraries are listed below does not matter.
+# Note: The ld documentation discourages auto-resolving cyclic dependencies
+# for performance reasons.
 set (IMPALA_LINK_LIBS
-  TestUtil
-  Service
-  TestUtil
+  -Wl,--start-group
   CodeGen
-  Service
+  Common
   Exec
   Exprs
-  Util
-  Runtime
-  Util
-  Statestore
-  CodeGen
-  Util
-  Common
-  Service
-  Exec
-  Exprs
-  Opcode
-  Exprs
-  Util
-  Runtime
-  Util
-  Common
-  Udf
-  Webserver
   GlobalFlags
-  Opcode
-  ThriftSaslTransport
   ImpalaThrift
+  Opcode
+  Runtime
+  Service
+  Statestore
+  TestUtil
+  ThriftSaslTransport
+  Udf
+  Util
+  Webserver
+  -Wl,--end-group
 # Below are all external dependencies.  They should some after the impala libs.
   ${SNAPPY_STATIC_LIB}
   ${RE2_STATIC_LIB}
@@ -258,6 +240,7 @@ FUNCTION(ADD_BE_TEST TEST_NAME)
   get_filename_component(DIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
   ADD_EXECUTABLE(${TEST_NAME} ${TEST_NAME}.cc)
   TARGET_LINK_LIBRARIES(${TEST_NAME} ${IMPALA_TEST_LINK_LIBS})
+  set(CMAKE_EXE_LINKER_FLAGS "--start-group")
   ADD_TEST(${TEST_NAME} "${BUILD_OUTPUT_ROOT_DIRECTORY}/${DIR_NAME}/${TEST_NAME}")
 ENDFUNCTION()
 
