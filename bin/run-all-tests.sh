@@ -21,7 +21,6 @@ set -u
 set -e
 . $IMPALA_HOME/bin/set-pythonpath.sh
 EXPLORATION_STRATEGY=core
-
 NUM_ITERATIONS=1
 
 # parse command line options
@@ -43,5 +42,10 @@ do
   esac
 done
 
-# Run backend tests
-${IMPALA_HOME}/bin/run-backend-tests.sh
+
+
+for i in $(seq 1 $NUM_ITERATIONS)
+do
+  # Run backend tests
+  ${IMPALA_HOME}/bin/run-backend-tests.sh
+done
