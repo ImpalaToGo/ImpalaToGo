@@ -42,8 +42,6 @@ do
   esac
 done
 
-
-
 for i in $(seq 1 $NUM_ITERATIONS)
 do
   # Run backend tests
