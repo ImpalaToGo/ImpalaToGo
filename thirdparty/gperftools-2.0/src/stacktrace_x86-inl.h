@@ -226,22 +226,34 @@ static void **NextStackFrame(void **old_sp, const void *uc) {
   }
 #endif
 
+  // The max stack frame size we allow when walking the stack. If we find
+  // frames bigger than this, we will bail and stop the stacking walking.
+  // Optimized binaries will play tricks to make the stack unwalkable. This
+  // is a heuristic to protect against those stacks. If we try to walk
+  // an unwalkable stack, we crash following the stack frames.
+  // The smaller we set this value, the more likely to correctly identify
+  // unwalkable stacks but the worse the accuracy of the stack traces.
+  // i.e. setting this to 0 means we never get a stack trace but can never
+  // crash.
+  // TODO: this is an orders of magnitude less than the google default of 100K
+  // for the strict case and 1MB for the general case. We find on our variety
+  // of compiles and libraries, we need a stricter value.
+  static const int MAX_FRAME_SIZE = 10000;
+
   // Check that the transition from frame pointer old_sp to frame
   // pointer new_sp isn't clearly bogus
   if (STRICT_UNWINDING) {
     // With the stack growing downwards, older stack frame must be
     // at a greater address that the current one.
     if (new_sp <= old_sp) return NULL;
-    // Assume stack frames larger than 100,000 bytes are bogus.
-    if ((uintptr_t)new_sp - (uintptr_t)old_sp > 100000) return NULL;
+    if ((uintptr_t)new_sp - (uintptr_t)old_sp > MAX_FRAME_SIZE) return NULL;
   } else {
     // In the non-strict mode, allow discontiguous stack frames.
     // (alternate-signal-stacks for example).
     if (new_sp == old_sp) return NULL;
     if (new_sp > old_sp) {
-      // And allow frames upto about 1MB.
       const uintptr_t delta = (uintptr_t)new_sp - (uintptr_t)old_sp;
-      const uintptr_t acceptable_delta = 1000000;
+      const uintptr_t acceptable_delta = MAX_FRAME_SIZE;
       if (delta > acceptable_delta) {
         return NULL;
       }
