@@ -365,6 +365,8 @@ DECLARE_bool(stop_logging_if_full_disk);
 // better to have compact code for these operations.
 
 #if GOOGLE_STRIP_LOG == 0
+#define COMPACT_GOOGLE_LOG_INFO_v(verbose) @ac_google_namespace@::LogMessage( \
+      __FILE__, __LINE__, @ac_google_namespace@::GLOG_INFO, verbose)
 #define COMPACT_GOOGLE_LOG_INFO @ac_google_namespace@::LogMessage( \
       __FILE__, __LINE__)
 #define LOG_TO_STRING_INFO(message) @ac_google_namespace@::LogMessage( \
@@ -471,6 +473,9 @@ DECLARE_bool(stop_logging_if_full_disk);
 // function of LogMessage which seems to avoid the problem.
 #define LOG(severity) COMPACT_GOOGLE_LOG_ ## severity.stream()
 #define SYSLOG(severity) SYSLOG_ ## severity(0).stream()
+
+// Create a log message with severity "INFO" and the given verbose level.
+#define LOG_v(verbose) (COMPACT_GOOGLE_LOG_INFO_v(verbose)).stream()
 
 @ac_google_start_namespace@
 
@@ -991,7 +996,9 @@ const LogSeverity GLOG_0 = GLOG_ERROR;
 
 // Log only in verbose mode.
 
-#define VLOG(verboselevel) LOG_IF(INFO, VLOG_IS_ON(verboselevel))
+#define VLOG(verboselevel) \
+  !VLOG_IS_ON(verboselevel) ? \
+  (void) 0 : @ac_google_namespace@::LogMessageVoidify() & LOG_v(verboselevel)
 
 #define VLOG_IF(verboselevel, condition) \
   LOG_IF(INFO, (condition) && VLOG_IS_ON(verboselevel))
@@ -1062,33 +1069,37 @@ public:
   // LOG call sites for common cases.
 
   // Used for LOG(INFO): Implied are:
-  // severity = INFO, ctr = 0, send_method = &LogMessage::SendToLog.
+  // severity = INFO, verbosity = 0, ctr = 0, send_method = &LogMessage::SendToLog.
   //
   // Using this constructor instead of the more complex constructor above
   // saves 19 bytes per call site.
   LogMessage(const char* file, int line);
 
   // Used for LOG(severity) where severity != INFO.  Implied
-  // are: ctr = 0, send_method = &LogMessage::SendToLog
+  // are: ctr = 0,  verbosity = 0, send_method = &LogMessage::SendToLog
   //
   // Using this constructor instead of the more complex constructor above
   // saves 17 bytes per call site.
   LogMessage(const char* file, int line, LogSeverity severity);
 
+  // Used by LOG_v(verbosity).  Implied
+  // are: ctr = 0, send_method = &LogMessage::SendToLog
+  LogMessage(const char* file, int line, LogSeverity severity, int verbose);
+
   // Constructor to log this message to a specified sink (if not NULL).
-  // Implied are: ctr = 0, send_method = &LogMessage::SendToSinkAndLog if
+  // Implied are: verbosity = 0, ctr = 0, send_method = &LogMessage::SendToSinkAndLog if
   // also_send_to_log is true, send_method = &LogMessage::SendToSink otherwise.
   LogMessage(const char* file, int line, LogSeverity severity, LogSink* sink,
              bool also_send_to_log);
 
   // Constructor where we also give a vector<string> pointer
   // for storing the messages (if the pointer is not NULL).
-  // Implied are: ctr = 0, send_method = &LogMessage::SaveOrSendToLog.
+  // Implied are: ctr = 0,  verbosity = 0, send_method = &LogMessage::SaveOrSendToLog.
   LogMessage(const char* file, int line, LogSeverity severity,
              std::vector<std::string>* outvec);
 
   // Constructor where we also give a string pointer for storing the
-  // message (if the pointer is not NULL).  Implied are: ctr = 0,
+  // message (if the pointer is not NULL).  Implied are: ctr = 0,  verbosity = 0,
   // send_method = &LogMessage::WriteToStringAndLog.
   LogMessage(const char* file, int line, LogSeverity severity,
              std::string* message);
@@ -1132,7 +1143,7 @@ private:
 
   void SaveOrSendToLog();  // Save to stringvec if provided, else to logs
 
-  void Init(const char* file, int line, LogSeverity severity,
+  void Init(const char* file, int line, LogSeverity severity, int verbosity,
             void (LogMessage::*send_method)());
 
   // Used to fill in crash information during LOG(FATAL) failures.
@@ -1152,6 +1163,7 @@ private:
     LogStream* stream_alloc_;
     LogStream* stream_;
     char severity_;      // What level is this LogMessage logged at?
+    int verbosity_;      // What verbose level is this LogMessage logged at?
     int line_;                 // line number where logging call is.
     void (LogMessage::*send_method_)();  // Call this in destructor to send
     union {  // At most one of these is used: union to keep the size low.
