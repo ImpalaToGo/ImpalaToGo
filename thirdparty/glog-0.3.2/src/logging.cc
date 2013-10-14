@@ -126,6 +126,10 @@ GLOG_DEFINE_int32(logbuflevel, 0,
                   "Buffer log messages logged at this level or lower"
                   " (-1 means don't buffer; 0 means buffer INFO only;"
                   " ...)");
+GLOG_DEFINE_int32(logbufvlevel, 1,
+                  "Buffer log messages logged at this verbose level or above"
+                  " (-1 means don't buffer; 1 means buffer VLOG(1) or above;"
+                  " ...)");
 GLOG_DEFINE_int32(logbufsecs, 30,
                   "Buffer log messages for at most this many seconds");
 GLOG_DEFINE_int32(logemaillevel, 999,
@@ -327,15 +331,15 @@ class LogDestination {
   // iff it's of a high enough severity to deserve it.
   static void MaybeLogToEmail(LogSeverity severity, const char* message,
 			      size_t len);
-  // Take a log message of a particular severity and log it to a file
+  // Take a log message of a particular severity and verbosity and log it to a file
   // iff the base filename is not "" (which means "don't log to me")
-  static void MaybeLogToLogfile(LogSeverity severity,
+  static void MaybeLogToLogfile(LogSeverity severity, int verbosity,
                                 time_t timestamp,
 				const char* message, size_t len);
-  // Take a log message of a particular severity and log it to the file
+  // Take a log message of a particular severity and verbosity and log it to the file
   // for that severity and also for all files with severity less than
   // this severity.
-  static void LogToAllLogfiles(LogSeverity severity,
+  static void LogToAllLogfiles(LogSeverity severity, int verbosity,
                                time_t timestamp,
                                const char* message, size_t len);
 
@@ -547,15 +551,22 @@ inline void LogDestination::MaybeLogToEmail(LogSeverity severity,
 
 
 inline void LogDestination::MaybeLogToLogfile(LogSeverity severity,
+                                              int verbosity,
                                               time_t timestamp,
-					      const char* message,
-					      size_t len) {
-  const bool should_flush = severity > FLAGS_logbuflevel;
+                                              const char* message,
+                                              size_t len) {
+  // Use both logbuflevel and logbufvlevel to determine if the log should be flushed.
+  // For severity != INFO, verbosity is always zero.
+  // For severity == INFO, log message is buffered only if verbosity is less than
+  // FLAGS_logbufvlevel.
+  const bool should_flush = severity > FLAGS_logbuflevel &&
+      verbosity < FLAGS_logbufvlevel;
   LogDestination* destination = log_destination(severity);
   destination->logger_->Write(should_flush, timestamp, message, len);
 }
 
 inline void LogDestination::LogToAllLogfiles(LogSeverity severity,
+                                             int verbosity,
                                              time_t timestamp,
                                              const char* message,
                                              size_t len) {
@@ -564,7 +575,7 @@ inline void LogDestination::LogToAllLogfiles(LogSeverity severity,
     WriteToStderr(message, len);
   else
     for (int i = severity; i >= 0; --i)
-      LogDestination::MaybeLogToLogfile(i, timestamp, message, len);
+      LogDestination::MaybeLogToLogfile(i, verbosity, timestamp, message, len);
 
 }
 
@@ -944,46 +955,51 @@ LogMessage::LogMessageData::~LogMessageData() {
 
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
 		       int ctr, void (LogMessage::*send_method)()) {
-  Init(file, line, severity, send_method);
+  Init(file, line, severity, 0, send_method);
   data_->stream_->set_ctr(ctr);
 }
 
 LogMessage::LogMessage(const char* file, int line,
                        const CheckOpString& result) {
-  Init(file, line, GLOG_FATAL, &LogMessage::SendToLog);
+  Init(file, line, GLOG_FATAL, 0, &LogMessage::SendToLog);
   stream() << "Check failed: " << (*result.str_) << " ";
 }
 
 LogMessage::LogMessage(const char* file, int line) {
-  Init(file, line, GLOG_INFO, &LogMessage::SendToLog);
+  Init(file, line, GLOG_INFO, 0, &LogMessage::SendToLog);
 }
 
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity) {
-  Init(file, line, severity, &LogMessage::SendToLog);
+  Init(file, line, severity, 0, &LogMessage::SendToLog);
+}
+
+LogMessage::LogMessage(const char* file, int line, LogSeverity severity, int verbosity) {
+  Init(file, line, severity, verbosity, &LogMessage::SendToLog);
 }
 
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
                        LogSink* sink, bool also_send_to_log) {
-  Init(file, line, severity, also_send_to_log ? &LogMessage::SendToSinkAndLog :
-                                                &LogMessage::SendToSink);
+  Init(file, line, severity, 0, also_send_to_log ? &LogMessage::SendToSinkAndLog :
+                                                   &LogMessage::SendToSink);
   data_->sink_ = sink;  // override Init()'s setting to NULL
 }
 
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
                        vector<string> *outvec) {
-  Init(file, line, severity, &LogMessage::SaveOrSendToLog);
+  Init(file, line, severity, 0, &LogMessage::SaveOrSendToLog);
   data_->outvec_ = outvec; // override Init()'s setting to NULL
 }
 
 LogMessage::LogMessage(const char* file, int line, LogSeverity severity,
                        string *message) {
-  Init(file, line, severity, &LogMessage::WriteToStringAndLog);
+  Init(file, line, severity, 0, &LogMessage::WriteToStringAndLog);
   data_->message_ = message;  // override Init()'s setting to NULL
 }
 
 void LogMessage::Init(const char* file,
                       int line,
                       LogSeverity severity,
+                      int verbosity,
                       void (LogMessage::*send_method)()) {
   allocated_ = NULL;
   if (severity != GLOG_FATAL || !exit_on_dfatal) {
@@ -1015,6 +1031,7 @@ void LogMessage::Init(const char* file,
   stream().fill('0');
   data_->preserved_errno_ = errno;
   data_->severity_ = severity;
+  data_->verbosity_ = verbosity;
   data_->line_ = line;
   data_->send_method_ = send_method;
   data_->sink_ = NULL;
@@ -1137,7 +1154,7 @@ void ReprintFatalMessage() {
       // Also write to stderr
       WriteToStderr(fatal_message, n);
     }
-    LogDestination::LogToAllLogfiles(GLOG_ERROR, fatal_time, fatal_message, n);
+    LogDestination::LogToAllLogfiles(GLOG_ERROR, 0, fatal_time, fatal_message, n);
   }
 }
 
@@ -1175,7 +1192,8 @@ void LogMessage::SendToLog() EXCLUSIVE_LOCKS_REQUIRED(log_mutex) {
   } else {
 
     // log this message to all log files of severity <= severity_
-    LogDestination::LogToAllLogfiles(data_->severity_, data_->timestamp_,
+    LogDestination::LogToAllLogfiles(data_->severity_, data_->verbosity_,
+                                     data_->timestamp_,
                                      data_->message_text_,
                                      data_->num_chars_to_log_);
 
