@@ -1,0 +1,10 @@
+# $OpenLDAP: pkg/openldap-guide/images/src/README.fonts,v 1.2.2.4 2011/01/04 23:49:41 kurt Exp $
+# Copyright 2007-2011 The OpenLDAP Foundation, All Rights Reserved.
+# COPYING RESTRICTIONS APPLY, see COPYRIGHT.
+#
+# README.fonts 
+#
+
+In dia we use:
+
+sans Normal 1.00 #000000
