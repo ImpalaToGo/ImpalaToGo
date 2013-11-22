@@ -1,0 +1,8 @@
+# $OpenLDAP: pkg/openldap-guide/admin/index.sdf,v 1.7.2.8 2011/01/04 23:49:39 kurt Exp $
+# Copyright 1999-2011 The OpenLDAP Foundation, All Rights Reserved.
+# COPYING RESTRICTIONS APPLY, see COPYRIGHT.
+#
+# index.sdf 
+#
+
+!include "master.sdf"
