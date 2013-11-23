@@ -1,19 +1,40 @@
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS
-  SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../
-  BINARY_ROOT ${CMAKE_CURRENT_BINARY_DIR}/../
-  )
-SET(GUTIL_SRCS ${PROTO_SRCS})
+# Copyright 2012 Cloudera Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS
-  SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../
-  BINARY_ROOT ${CMAKE_CURRENT_BINARY_DIR}/../
-  PROTO_FILES proto/types.proto 
-  )
-SET(GUTIL_SRCS ${GUTIL_SRCS} ${PROTO_SRCS})
+cmake_minimum_required(VERSION 2.6)
 
+# Ignore the code in proto/ for now until needed; otherwise this adds an extra dependency
+# on protoc to the build for no gain.
+
+# PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS
+#   SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../
+#   BINARY_ROOT ${CMAKE_CURRENT_BINARY_DIR}/../
+#   )
+# SET(GUTIL_SRCS ${PROTO_SRCS})
+
+# PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS
+#   SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../
+#   BINARY_ROOT ${CMAKE_CURRENT_BINARY_DIR}/../
+#   PROTO_FILES proto/types.proto
+#   )
+# SET(GUTIL_SRCS ${GUTIL_SRCS} ${PROTO_SRCS})
+
+INCLUDE_DIRECTORIES($ENV{IMPALA_HOME}/thirdparty/)
+INCLUDE_DIRECTORIES(${GLOG_INCLUDE_DIR})
 
 ADD_LIBRARY(gutil
-  ${GUTIL_SRCS}
+#  ${GUTIL_SRCS}
 ./bits.cc
 ./stringprintf.cc
 ./strings/memutil.cc
@@ -42,8 +63,9 @@ ADD_LIBRARY(gutil
 ./hash/city.cc
 ./utf/rune.c
 )
+
 # Disable warnings which trigger a lot in the Google code:
 SET_TARGET_PROPERTIES(gutil PROPERTIES
-  COMPILE_FLAGS "-funsigned-char -Wno-deprecated -Wno-char-subscripts")
+  COMPILE_FLAGS "-funsigned-char -Wno-deprecated -Wno-char-subscripts -fPIC")
 
 SET(GUTIL_LIBS gutil)
