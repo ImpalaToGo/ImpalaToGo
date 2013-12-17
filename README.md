@@ -12,7 +12,7 @@ The rest of this README describes how to build Cloudera Impala from this reposit
 
     sudo yum install boost-test boost-program-options libevent-devel automake libtool flex bison gcc-c++ openssl-devel \
     make cmake doxygen.x86_64 glib-devel boost-devel python-devel bzip2-devel svn libevent-devel cyrus-sasl-devel \
-    wget git unzip
+    wget git unzip openldap-devel db4-devel
 
 *Note:* Impala requires Boost 1.4.2 or later.
 
