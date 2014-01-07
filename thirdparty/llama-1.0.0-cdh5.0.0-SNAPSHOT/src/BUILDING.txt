@@ -1,0 +1,24 @@
+Llama
+
+* Llama Thrift definition
+
+  llama-thrift-api/src/main/thrift/Llama.thrift
+
+* Requirements:
+
+  JDK 1.7+
+  Maven 3.0.4+
+  Thrift compiler 0.9.0
+
+* Build commands:
+
+  Clean                  : mvn clean
+  Compile                : mvn compile
+  Run tests              : mvn test
+  Install in ~/.m2 cache : mvn install
+  Run clover (coverage)  : mvn clean clover2:instrument test clover2:aggregate clover2:clover (1)
+  Create dist TARBALLs   : mvn package -Pdist
+  Create documentation   : mvn site
+  Apache rat check       : mvn apache-rat:check
+  
+  [1: you need a clover license at ${user.home}/.clover.license]

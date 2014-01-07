@@ -1,0 +1,278 @@
+~~ Licensed under the Apache License, Version 2.0 (the "License");
+~~ you may not use this file except in compliance with the License.
+~~ You may obtain a copy of the License at
+~~
+~~ http://www.apache.org/licenses/LICENSE-2.0
+~~
+~~ Unless required by applicable law or agreed to in writing, software
+~~ distributed under the License is distributed on an "AS IS" BASIS,
+~~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~~ See the License for the specific language governing permissions and
+~~ limitations under the License.
+
+  ---
+  Llama, High Level Design
+  ---
+  ---
+  ${maven.build.timestamp}
+
+Llama - Low Latency Application MAster
+
+* Using Hadoop Resources for Low-Latency Processing from Impala
+
+  Llama is a system that mediates resource management between Impala and Hadoop
+  Yarn. Llama enables Impala to reserve, use and release resource allocations
+  without requiring Impala to use Yarn-managed container processes.
+
+%{toc|section=1|fromDepth=3}
+
+** Problem
+
+  Currently Hadoop Yarn expects to manage the lifecycle of the processes its
+  applications run work in. Some frameworks/systems that could benefit from
+  sharing resources with Yarn run work within long-running processes owned by
+  the framework. These processes are not a good fit for Yarn containers because
+  they need to run work on behalf of many users on many queues.  We've been
+  working on how to integrate Impala with Yarn, and we think our ideas might be
+  applicable to other frameworks, Spark for example, as well.
+
+** Solution Space
+
+  There are different ways of integrating long lived services with Yarn. Using
+  a service X as example, the different approaches to integrate service X with
+  yarn can be characterized as follows.
+
+*** Service Level Isolation Outside Yarn
+
+  Carving out (i.e. via Linux cgroups) part of the cluster nodes for service
+  X and part for Yarn. This is better than just sharing the same cluster and
+  hoping for the best.
+
+  This approach is simple and effective, for example, assigning 30% to service
+  X and 70% to Yarn. However, it lacks flexibility as load conditions change.
+  Also, it is not possible to assign a common share to a user or a queue across
+  service X and Yarn.
+
+*** Model Jobs/Queries as Yarn Applications
+
+  Each job submitted to service X results in an individual Yarn application.
+
+  Optimizations such as pooling and reusing Yarn application instances, and
+  reusing containers within a Yarn application can help reducing latency
+  significantly.
+
+  An important benefit of this approach is that resources utilization and
+  distribution is completely managed by Yarn. However, this approach assumes
+  each job submitted to service X is a set of independent processes from
+  service X's job dispatcher.
+
+*** Model a Service as a Yarn Application
+
+  Implementing service X as a Yarn application.
+  With this approach, Yarn's scheduler is responsible for sharing resources
+  among different users and applications. Because service X is a yarn
+  application, resources utilization for service X and other Yarn applications
+  is dynamic based on the load conditions. A drawback for this approach is a
+  service X instance to one scheduler queue. While it is possible to run
+  multiple service X Yarn applications, one per queue, this may not be
+  practical because the different service X instances may have to coordinate
+  among each other and may have to duplicate their resource headroom
+
+  utilization. In addition, as stated in YARN-896, there is significant work to
+  be done for long live services running a Yarn applications.
+
+*** Multiplex Job/Queries requests over a Set of Yarn Queues.
+
+  Making service X use a set of unmanaged Yarn applications to request resources
+  for the different jobs submitted to service X.
+
+  In this scenario, service X manages its processes on its own using resources
+  allocated through Yarn, the resources distribution is completely managed by
+  Yarn. If service X runs its jobs in process, common data structures can be
+  easily shared among different jobs without duplication.  A drawback of this
+  approach is that service X must managed on its own the enforcement of resource
+  utilization per job.
+
+  Our proposal for Impala, Llama, fits this approach.
+
+** Background
+
+  Coexistence of low-latency and batch processing is not an easy problem to
+  solve if the intention is to guarantee appropriate response times, maximize
+  the utilization of hardware resources, ensure fairness and be flexible based
+  on the current load mix.
+
+  Having a mechanism where low-latency and batch processing can get a guaranteed
+  share of the cluster dynamically depending on the current load conditions will
+  lead to better resources utilization and adaptability based on the current
+  usage and demand.
+
+  As Impala and Hadoop share the same hardware, it seemed natural to make Impala
+  acquire and use resources from Hadoop Yarn for executing queries. The benefits
+  of this approach are significant:
+
+    * A single configuration on how cluster resources are shared is used for
+    both low-latency and batch processing.
+
+    * Users and organizations using the cluster get their share regardless of
+    the type of processing they are doing.
+
+    * Unified accounting and monitoring of cluster utilization.
+
+  This kind of integration presents challenges as well. Impala must request
+  resources from Hadoop before executing a query. Impala architecture is
+  significantly different from Hadoop Yarn architecture. While each Hadoop jobs
+  spawn several new processes throughout the cluster, in Impala, all queries run
+  in-process within existing long-running processes.
+
+** Main Drivers
+
+*** Use Yarn Managed Resources from Impala
+
+  In order to share resources of a Hadoop cluster and maximize their utilization
+  base on the current load, Impala should negotiate cluster resource utilization
+  with Yarn Resource Manager using the same mechanisms that other applications
+  (i.e. Map-Reduce) use.
+
+  Using the scheduler in Yarn’s Resource Manager as the ultimate source of truth
+  for scheduling decisions enables leveraging the existing work done in Hadoop
+  regarding scheduling.
+
+*** Very High Throughput of Queries with Low Latency
+
+  Impala is designed to run 1000s of concurrent queries, many of them running
+  with few-seconds (and even sub-second) latencies.
+
+  We conducted some benchmarks to determine how fast Hadoop can start
+  application masters. We ran them using unmanaged application masters (which
+  start significantly faster than managed application masters).
+
+  We found that the first application master created from a client process takes
+  around 900 ms to be ready to submit resource requests. Subsequent application
+  masters created from the same client process take a mean of 20 ms. The
+  application master submission throughput (discarding the first submission)
+  tops at approximately 100 application masters per second.
+
+  While these numbers speak quite well about Hadoop Yarn, because of Impala’s
+  expected query throughput, we could not go with a design that uses one
+  application master per query. Another option considered was having a pool of
+  running application masters checking them in and out to execute queries
+  (conceptually not different from the well known and used connection pooling).
+  Because Impala runs all queries in-process this approach does not bring a
+  performance advantage, and adds the  complexity of managing pools of
+  applications masters that must be checked in and out per query. In addition,
+  a pooled application master could have a set of allocated containers from the
+  previous query. For a new query those allocations may not be relevant due to
+  a mismatch in locality or resource capabilities requirements of a new query.
+
+*** Handle Resource Allocations from Multiple Scheduler Queues
+
+  An Impala query, similar to a Yarn application, is assigned to a particular
+  scheduler queue and all the resources it consumes must be accounted from the
+  corresponding scheduler queue.
+
+  Because Impala may run - concurrently - queries assigned to several different
+  queues, Impala must be able to request resources from multiple scheduler
+  queues. Each Impala daemon may run work on behalf of multiple queries, and
+  thus multiple queues, at the same time.
+
+*** Leverage the Hadoop Cluster’s Free Capacity for Opportunistic Processing
+
+  Typically, Impala will acquire from Hadoop’s scheduler the necessary resources
+  before executing queries. This is especially true when the Hadoop cluster is
+  under load.
+
+  However, when the Hadoop cluster has sufficient idle capacity or the query is
+  deemed lightweight enough, to speed up the query execution, Impala may bypass
+  requesting resources from Hadoop and run the query in nodes of the cluster
+  that have available capacity. This is referred to as opportunistic processing.
+
+  If the resources used for opportunistic processing are claimed by a Hadoop
+  job, Impala will cancel the opportunistic processing for the query and will
+  request the necessary resources through Yarn before attempting to execute the
+  query again.
+
+** High Level Design
+
+  Llama consists of 2 components, an Application Master (Llama AM) and a Node
+  Manager plugin (Llama NM-plugin).
+
+  The Llama AM is a standalone service. There is a single instance serving an
+  Impala deployment. The Llama AM handles Impala resource requests (reserve and
+  release) and delivers notifications regarding Hadoop Yarn resource status
+  changes (allocations, rejections, preemptions, lost nodes) to Impala.
+
+  The Llama NM-plugin is a Yarn auxiliary service that runs in all Yarn
+  NodeManager instances of the cluster. The Llama-NM plugin delivers
+  notifications to the co-located Impala service regarding changes in the
+  availability of resources in the NodeManager such as created, completed,
+  preempted and lost containers as well as the currently available capacity.
+
+** Implementation Highlights
+
+*** API
+
+  Llama provides a Thrift API to reserve and release allocations.
+
+*** Allocating Resources in Multiple Scheduler Queues
+
+  A Yarn application is coordinated by a single Application Master (AM) and
+  associated with a single scheduler queue. This association is fixed at
+  application creation time and it cannot be changed for the lifetime of the
+  Yarn application instance. Llama provides support for allocating resources
+  to multiple queues by internally using a Yarn AM instance per queue.
+
+*** Long Running Application Masters per Scheduler Queue
+
+  Llama AM starts an AM instance per scheduler queue.
+  Even when there are no outstanding reservations or allocations for a
+  particular queue, Llama AM will keep the AM instance for the queue running.
+
+  All reservations/allocations for a particular queue are done via the same AM
+  instance, Llama AM multiplexes all reservations on a per queue basis. Yarn
+  does not have visibility into individual Impala queries, just into the total
+  load requested/used by Impala per queue. Llama AM monitors outstanding
+  requests, allocates capacity, and handles preemption at the queue level.
+
+*** Unmanaged Containers
+
+  When Llama receives an allocation from Yarn, besides notifying Impala about
+  the allocation, it starts a 'dummy' Yarn container. ‘dummy’ container
+  processes sleep forever and do not consume ‘significant’ resources. ‘dummy’
+  containers are used to keep Yarn’s existing container allocation management
+  and reporting intact. Impala must explicitly release its allocations via
+  Llama AM, which will ask the appropriate Node Manager to kill those dummy
+  containers corresponding to the released resources.
+
+  Impala uses the resources out of band from Yarn ensuring the utilization is
+  within the allocated capabilities.
+
+*** Gang Scheduling
+
+  Impala runs a query as a collection of 'query fragments', loosely equivalent
+  to Map-Reduce 'tasks'. Differently from Map-Reduce tasks, which write their
+  output to local disk or HDFS, Impala keeps the query fragments’ intermediate
+  output data in memory. Impala's execution model is heavily pipelined. Impala
+  therefore requires that query fragments run concurrently, unlike the
+  Map-Reduce execution model, which is checkpoint-based. Therefore, Impala must
+  wait until allocations are available at all the nodes needed to run a query
+  before the query starts.
+
+  In other words, Impala needs all its resources at once to process a query.
+  Having a gang scheduling mechanism in place in the resource scheduler means
+  better cluster resource utilization because the scheduler can plan/project
+  when a set of resources will be used as part of a gang reservation.
+
+  Currently, support for gang scheduling in Hadoop is under discussion,
+  YARN-624.
+
+  As a stopgap measure until gang scheduling is supported by Hadoop, Llama
+  implements client side gang scheduling by waiting for all allocations of a
+  gang reservation to be granted before notifying Impala. Llama implements logic
+  to avoid deadlocks (timeout, release, wait, re-reserve) and uses probabilistic
+  fairness for gang reservations.
+
+  Note that client side gang scheduling, like Llama implements, does not drive
+  a better cluster resource utilization but the opposite as allocated resources
+  are withheld by Llama without being utilized. In addition, client side
+  deadlock detection does not scale well beyond a single gang-scheduling AM.

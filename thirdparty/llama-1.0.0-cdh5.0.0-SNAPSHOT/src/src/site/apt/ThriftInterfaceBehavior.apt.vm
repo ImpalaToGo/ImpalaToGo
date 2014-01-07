@@ -1,0 +1,45 @@
+~~ Licensed under the Apache License, Version 2.0 (the "License");
+~~ you may not use this file except in compliance with the License.
+~~ You may obtain a copy of the License at
+~~
+~~ http://www.apache.org/licenses/LICENSE-2.0
+~~
+~~ Unless required by applicable law or agreed to in writing, software
+~~ distributed under the License is distributed on an "AS IS" BASIS,
+~~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~~ See the License for the specific language governing permissions and
+~~ limitations under the License.
+
+  ---
+  Llama, Thrift Interface Behavior
+  ---
+  ---
+  ${maven.build.timestamp}
+
+Llama - Thrift Interface Behavior
+
+* Llama Client Registration Protocol
+
+  When registering a client must present a client-ID <<<UUID>>> and a callback <<<HOST:PORT>>>.
+
+  For a new registration, a new handle <<<UUID>>> will be returned to the client if the registration was successful.
+
+  However, if the client is doing a re-registration (because of a stale Thrift connection, a client restart, a Llama restart, etc) the following protocol must be observed:
+
+*------------------*----------------------*-------------------*------------------*-------------------*
+|<<Client-ID UUID>>|<<Callback HOST:PORT>>|<<Returned handle>>|<<Llama behavior>>|<<Client behavior>>|
+*------------------*----------------------*-------------------*------------------+-------------------+
+|NEW               |NEW                   |NEW                | There is no previous state associated with the handle | There is no previous Llama state associated with the handle |
+*------------------*----------------------*-------------------*------------------+-------------------+
+|NEW               |EXISTING              |NEW                | Previous state with the existing handle is erased | Client should not have a prior Llama state as it provided a new client-ID |
+*------------------*----------------------*-------------------*------------------+-------------------+
+|EXISTING          |NEW                   |<<ERROR>>          | Registration is rejected, existing state associated with the handle remains valid | Client either use a new client-ID with a clean Llama state or provide the same client-ID preserving existing Llama state |
+*------------------*----------------------*-------------------*------------------+-------------------+
+|EXISTING          |EXISTING              |EXISTING           | Existing state associated with the handle remains valid. The client-ID and callback must be associated to the same handle, else it is an ERROR | Client should known have existing Llama state for the handle |
+*------------------*----------------------*-------------------*------------------+-------------------+
+|EXISTING          |EXISTING              |NEW                | There is no previous state associated with the handle | Client should discard all previous Llama state as it is not valid anymore |
+*------------------*----------------------*-------------------*------------------+-------------------+
+
+* Llama Client Notifications
+
+  TBD
