@@ -17,6 +17,11 @@
 # limitations under the License.
 #
 
+if [ "${HADOOP_HOME}x" = "x" ]; then
+  echo "Error: HADOOP_HOME must be set in the environment"
+  exit 1
+fi
+
 # resolve links - $0 may be a softlink
 PRG="${0}"
 
@@ -33,17 +38,17 @@ done
 BASEDIR=`dirname ${PRG}`
 BASEDIR=`cd ${BASEDIR}/..;pwd`
 
-CLASSPATH=""
+#
+# We need this because YARN has the test JAR in a subdir and it is not picked up
+# by the hadoop command line tool
+#
+MINI_LLAMA_CLASSPATH="${MINI_LLAMA_CLASSPATH}:`ls ${HADOOP_HOME}/share/hadoop/yarn/test/hadoop-yarn-server-tests*.jar`"
+
+MINI_LLAMA_CLASSPATH="${MINI_LLAMA_CLASSPATH}:${BASEDIR}/conf"
 for i in "${BASEDIR}/lib/"*.jar; do
-  CLASSPATH="${CLASSPATH}:$i"
+  MINI_LLAMA_CLASSPATH="${MINI_LLAMA_CLASSPATH}:$i"
 done
 
-if test -z ${JAVA_HOME}
-then
-    JAVA_BIN=java
-else
-    JAVA_BIN=${JAVA_HOME}/bin/java
-fi
-
-${JAVA_BIN} ${MINIKDC_OPTS} -cp ${CLASSPATH} \
-  org.apache.hadoop.minikdc.MiniKdc "$@"
+export HADOOP_USER_CLASSPATH_FIRST=true
+export HADOOP_CLASSPATH="${MINI_LLAMA_CLASSPATH}:${HADOOP_CLASSPATH}"
+exec $HADOOP_HOME/bin/hadoop com.cloudera.llama.am.MiniClusterNodeMapper "$@"

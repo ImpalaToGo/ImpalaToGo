@@ -1,11 +1,6 @@
-Llama 1.0.0-cdh5.0.0-SNAPSHOT
+MiniLlama 1.0.0-cdh5.0.0-SNAPSHOT
 
-Llama is a Yarn Application Master that mediates the management and monitoring
-of cluster resources between Impala and Yarn.
-  
-Llama provides a Thrift API for Impala to request and release allocations 
-outside of Yarn-managed container processes.
+MiniLlama runs a Hadoop HDFS/Yarn minicluster and a Llama instance using a
+single command.
 
-For details on how to build Llama refer to the BUILDING.txt file.
-
-For details on how to use Llama please refer to Llama documentation.
+Refer to the Llama documentation for details on how to use MiniLlama.
