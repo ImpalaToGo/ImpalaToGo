@@ -448,7 +448,7 @@ public class HBaseTable extends Table {
    */
   public long getHdfsSize(HRegionInfo info) throws IOException {
     Path tableDir = HTableDescriptor.getTableDir(
-        getRootDir(hbaseConf_), Bytes.toBytes(hbaseTableName_));
+        FSUtils.getRootDir(hbaseConf_), Bytes.toBytes(hbaseTableName_));
     FileSystem fs = tableDir.getFileSystem(hbaseConf_);
     Path regionDir = tableDir.suffix("/" + info.getEncodedName());
     return fs.getContentSummary(regionDir).getLength();
