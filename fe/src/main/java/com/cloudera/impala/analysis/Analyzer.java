@@ -41,6 +41,7 @@ import com.cloudera.impala.common.IdGenerator;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.Pair;
 import com.cloudera.impala.planner.PlanNode;
+import com.cloudera.impala.util.TSessionStateUtil;
 import com.cloudera.impala.thrift.TAccessEvent;
 import com.cloudera.impala.thrift.TCatalogObjectType;
 import com.cloudera.impala.thrift.TQueryContext;
@@ -186,7 +187,7 @@ public class Analyzer {
   public Analyzer(ImpaladCatalog catalog, TQueryContext queryCxt) {
     this.ancestors_ = Lists.newArrayList();
     this.globalState_ = new GlobalState(catalog, queryCxt);
-    user_ = new User(queryCxt.session.user);
+    user_ = new User(TSessionStateUtil.getEffectiveUser(queryCxt.session));
   }
 
   /**
