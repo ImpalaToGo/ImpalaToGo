@@ -23,8 +23,6 @@ import org.apache.hadoop.hive.serde.serdeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import parquet.hive.serde.ParquetHiveSerDe;
-
 import com.cloudera.impala.thrift.CatalogObjectsConstants;
 import com.cloudera.impala.thrift.THdfsCompression;
 import com.google.common.collect.ImmutableList;
@@ -58,7 +56,8 @@ public class HdfsStorageDescriptor {
       "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe", // (seq / text / parquet)
       "org.apache.hadoop.hive.serde2.avro.AvroSerDe", // (avro)
       "org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe", // (rc)
-      ParquetHiveSerDe.class.getName()); // (parquet)
+      "parquet.hive.serde.ParquetHiveSerDe", // (parquet - legacy)
+      "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"); // (parquet)
 
   private final static Logger LOG = LoggerFactory.getLogger(HdfsStorageDescriptor.class);
 
