@@ -1,6 +1,6 @@
 ====
 ---- QUERY
-select udf_test.lower('HelloWorld')
+select substr(udf_test.hive_lower('HelloWorld'), 1, 10)
 ---- RESULTS
 'helloworld'
 ---- TYPES
@@ -56,12 +56,12 @@ select udf_test.hive_lower(NULL)
 ---- TYPES
 STRING
 ---- QUERY
-select udf_test.hive_pi(), udf_test.hive_mod(100, 5) + udf_test.round(3.1),
-udf_test.hive_lower('ABCD'), udf_test.hive_lower('zY')
+select udf_test.hive_pi(), udf_test.hive_mod(100, 5) + udf_test.hive_round(3.1),
+substr(udf_test.hive_lower('ABCD'), 1, 4), substr(udf_test.hive_lower('zY'), 1, 2)
 ---- RESULTS
 3.141592653589793,3,'abcd','zy'
 ---- TYPES
-DOUBLE, BIGINT, STRING, STRING
+DOUBLE, DOUBLE, STRING, STRING
 ====
 ---- QUERY
 select min(udf_test.hive_pi()) from functional.alltypesagg
