@@ -14,13 +14,11 @@
 
 package com.cloudera.impala.catalog;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.lang.ArrayUtils;
-import org.apache.hadoop.fs.BlockLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +33,6 @@ import com.cloudera.impala.thrift.TExpr;
 import com.cloudera.impala.thrift.THdfsFileBlock;
 import com.cloudera.impala.thrift.THdfsFileDesc;
 import com.cloudera.impala.thrift.THdfsPartition;
-import com.cloudera.impala.thrift.TNetworkAddress;
 import com.cloudera.impala.thrift.TTableStats;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
@@ -114,41 +111,23 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
     }
 
     /**
-     * Construct a FileBlock from blockLocation and populate the network address
-     * locations of this block from BlockLocation.getNames(). Does not fill diskIds.
+     * Construct a FileBlock given the start offset (in bytes) of the file associated
+     * with this block, the length of the block (in bytes), and the set of host IDs
+     * that contain replicas of this block. Host IDs are assigned when loading the
+     * block metadata in HdfsTable. Does not fill diskIds.
      */
-    public FileBlock(BlockLocation blockLocation) {
-      Preconditions.checkNotNull(blockLocation);
+    public FileBlock(long offset, long blockLength, List<Integer> replicaHostIdxs) {
+      Preconditions.checkNotNull(replicaHostIdxs);
       fileBlock_ = new THdfsFileBlock();
-      fileBlock_.setOffset(blockLocation.getOffset());
-      fileBlock_.setLength(blockLocation.getLength());
-
-      // result of BlockLocation.getNames(): list of (IP:port) hosting this block
-      String[] blockHostPorts;
-      try {
-        blockHostPorts = blockLocation.getNames();
-      } catch (IOException e) {
-        // this shouldn't happen, getNames() doesn't throw anything
-        String errorMsg = "BlockLocation.getNames() failed:\n" + e.getMessage();
-        LOG.error(errorMsg);
-        throw new IllegalStateException(errorMsg);
-      }
-
-      // network_addresses[i] stores this block on diskId[i]; the BE uses this information
-      // to schedule scan ranges.
-      fileBlock_.network_addresses = Lists.newArrayList();
-      for (int i = 0; i < blockHostPorts.length; ++i) {
-        String[] ip_port = blockHostPorts[i].split(":");
-        Preconditions.checkState(ip_port.length == 2);
-        fileBlock_.network_addresses.add(new TNetworkAddress(ip_port[0],
-            Integer.parseInt(ip_port[1])));
-      }
+      fileBlock_.setOffset(offset);
+      fileBlock_.setLength(blockLength);
+      fileBlock_.setReplica_host_idxs(replicaHostIdxs);
     }
 
     public long getOffset() { return fileBlock_.getOffset(); }
     public long getLength() { return fileBlock_.getLength(); }
-    public List<TNetworkAddress> getNetworkAddresses() {
-      return fileBlock_.getNetwork_addresses();
+    public List<Integer> getReplicaHostIdxs() {
+      return fileBlock_.getReplica_host_idxs();
     }
 
     /**
@@ -158,7 +137,7 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
      */
     public static void setDiskIds(int[] diskIds, THdfsFileBlock fileBlock) {
       Preconditions.checkArgument(
-          diskIds.length == fileBlock.getNetwork_addresses().size());
+          diskIds.length == fileBlock.getReplica_host_idxs().size());
       fileBlock.setDisk_ids(Arrays.asList(ArrayUtils.toObject(diskIds)));
     }
 
