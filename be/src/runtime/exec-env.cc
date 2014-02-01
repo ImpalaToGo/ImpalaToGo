@@ -18,7 +18,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <gflags/gflags.h>
-#include <gutil/strings/substitute.h>
 
 #include "common/logging.h"
 #include "resourcebroker/resource-broker.h"
@@ -48,7 +47,6 @@
 
 using namespace std;
 using namespace boost;
-using namespace strings;
 
 DEFINE_bool(use_statestore, true,
     "Use an external statestore process to manage cluster membership");
@@ -133,8 +131,8 @@ ExecEnv::ExecEnv()
     TNetworkAddress backend_address = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        Substitute("impalad@$0", TNetworkAddressToString(backend_address)),
-        subscriber_address, statestore_address, metrics_.get()));
+        TNetworkAddressToString(backend_address), subscriber_address, statestore_address,
+        metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
         statestore_subscriber_->id(), backend_address, metrics_.get(),
@@ -184,8 +182,8 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
     TNetworkAddress backend_address = MakeNetworkAddress(hostname, backend_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        Substitute("impalad@$0", TNetworkAddressToString(backend_address)),
-        subscriber_address, statestore_address, metrics_.get()));
+        TNetworkAddressToString(backend_address), subscriber_address, statestore_address,
+        metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
         statestore_subscriber_->id(), backend_address, metrics_.get(),

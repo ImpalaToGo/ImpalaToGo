@@ -132,8 +132,8 @@ Status CatalogServer::Start() {
       &CatalogServer::GatherCatalogUpdatesThread, this));
 
   statestore_subscriber_.reset(new StatestoreSubscriber(
-     Substitute("catalog-server@$0", TNetworkAddressToString(server_address)),
-     subscriber_address, statestore_address, metrics_));
+     TNetworkAddressToString(server_address), subscriber_address, statestore_address,
+     metrics_));
 
   StatestoreSubscriber::UpdateCallback cb =
       bind<void>(mem_fn(&CatalogServer::UpdateCatalogTopicCallback), this, _1, _2);
