@@ -44,12 +44,14 @@
     <value>50</value>
     <description>
       Maximum number of threads used by the LlamaAM server uses for serving
-      client requests.
+      client requests. This should be to to the size of the cluster plus a
+      buffer (thrift synch IO requires one thread per connection, we need one
+      connection per impalad node).
     </description>
   </property>
   <property>
     <name>llama.am.server.thrift.transport.timeout.ms</name>
-    <value>3600000</value>
+    <value>60000</value>
     <description>
       Socket time, in milliseconds, used LlamaAM server for all its server and 
       client Thrift connections.
@@ -236,6 +238,9 @@
     <description>
       Queues LlamaAM should connect to at start up. Unlike queues that are
       created in response to a reservation, these queues will never expire.
+      IMPORTANT: all queue names should be canonical queue names, this is
+      prefixed with "root.". This is required because Yarn normalizes queue
+      names to their canonical name.
     </description>
   </property>
 
