@@ -57,6 +57,7 @@ class TestUdfs(ImpalaTestSuite):
     self.run_test_case('QueryTest/load-hive-udfs', vector)
     self.run_test_case('QueryTest/hive-udf', vector)
 
+  @pytest.mark.execute_serially
   def test_libs_with_same_filenames(self, vector):
     # Run with sync_ddl to guarantee "drop function"s are processed by all impalads
     # TODO: this is a temporary fix for IMPALA-795, remove when the real fix goes in
