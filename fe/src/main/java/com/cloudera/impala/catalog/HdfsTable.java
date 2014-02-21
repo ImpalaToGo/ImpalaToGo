@@ -74,6 +74,7 @@ import com.cloudera.impala.thrift.TTable;
 import com.cloudera.impala.thrift.TTableDescriptor;
 import com.cloudera.impala.thrift.TTableType;
 import com.cloudera.impala.util.FSPermissionChecker;
+import com.cloudera.impala.util.MetaStoreUtil;
 import com.cloudera.impala.util.TAccessLevelUtil;
 import com.cloudera.impala.util.TResultRowBuilder;
 import com.google.common.base.Preconditions;
@@ -91,6 +92,9 @@ import com.google.common.collect.Sets;
 public class HdfsTable extends Table {
   // hive's default value for table property 'serialization.null.format'
   private static final String DEFAULT_NULL_COLUMN_VALUE = "\\N";
+
+  // Number of times to retry fetching the partitions from the HMS should an error occur.
+  private final static int NUM_PARTITION_FETCH_RETRIES = 5;;
 
   // string to indicate NULL. set in load() from table properties
   private String nullColumnValue_;
@@ -261,7 +265,10 @@ public class HdfsTable extends Table {
     }
 
     if (SUPPORTS_VOLUME_ID) {
+      LOG.trace("loading disk ids for: " + getFullName() +
+          ". nodes: " + getNumNodes());
       loadDiskIds(blockLocations, fileDescriptors);
+      LOG.trace("completed load of disk ids for: " + getFullName());
     }
   }
 
@@ -313,8 +320,6 @@ public class HdfsTable extends Table {
           FileBlock.setDiskIds(diskIds, blockMd);
         }
       }
-      LOG.debug("loaded disk ids for table " + getFullName() +
-          ". nodes: " + getNumNodes());
       if (unknownDiskIdCount > 0) {
         LOG.warn("unknown disk id count " + unknownDiskIdCount);
       }
@@ -645,8 +650,8 @@ public class HdfsTable extends Table {
 
         String partitionDir = fileStatus.getPath().getParent().toString();
         FileDescriptor fd = null;
-        // Search for a FileDescriptor with the same parition dir and file name. If one is
-        // found, it will be chosen as a candidate to reuse.
+        // Search for a FileDescriptor with the same partition dir and file name. If one
+        // is found, it will be chosen as a candidate to reuse.
         if (oldFileDescMap != null && oldFileDescMap.get(partitionDir) != null) {
           for (FileDescriptor oldFileDesc: oldFileDescMap.get(partitionDir)) {
             if (oldFileDesc.getFileName().equals(fileName)) {
@@ -765,7 +770,8 @@ public class HdfsTable extends Table {
           Lists.newArrayList();
       if (cachedEntry == null || !(cachedEntry instanceof HdfsTable) ||
           cachedEntry.lastDdlTime_ != lastDdlTime_) {
-        msPartitions.addAll(client.listPartitions(db_.getName(), name_, Short.MAX_VALUE));
+        msPartitions.addAll(MetaStoreUtil.fetchAllPartitions(
+            client, db_.getName(), name_, NUM_PARTITION_FETCH_RETRIES));
       } else {
         // The table was already in the metadata cache and it has not been modified.
         Preconditions.checkArgument(cachedEntry instanceof HdfsTable);
@@ -773,6 +779,7 @@ public class HdfsTable extends Table {
         // Set of partition names that have been modified. Partitions in this Set need to
         // be reloaded from the metastore.
         Set<String> modifiedPartitionNames = Sets.newHashSet();
+
         // If these are not the exact same object, look up the set of partition names in
         // the metastore. This is to support the special case of CTAS which creates a
         // "temp" table that doesn't actually exist in the metastore.
@@ -782,7 +789,7 @@ public class HdfsTable extends Table {
           // First get a list of all the partition names for this table from the
           // metastore, this is much faster than listing all the Partition objects.
           modifiedPartitionNames.addAll(
-              client.listPartitionNames(db_.getName(), name_, Short.MAX_VALUE));
+              client.listPartitionNames(db_.getName(), name_, (short) -1));
         }
 
         int totalPartitions = modifiedPartitionNames.size();
@@ -811,8 +818,8 @@ public class HdfsTable extends Table {
         // No need to make the metastore call if no partitions are to be updated.
         if (modifiedPartitionNames.size() > 0) {
           // Now reload the the remaining partitions.
-          msPartitions.addAll(client.getPartitionsByNames(db_.getName(), name_,
-              Lists.newArrayList(modifiedPartitionNames)));
+          msPartitions.addAll(MetaStoreUtil.fetchPartitionsByName(client,
+              Lists.newArrayList(modifiedPartitionNames), db_.getName(), name_));
         }
       }
 
