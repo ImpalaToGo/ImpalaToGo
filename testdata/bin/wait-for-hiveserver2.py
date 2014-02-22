@@ -15,7 +15,8 @@
 #
 # This script waits for the Hive HiveServer2 service to become available by attempting
 # to create a new session until the session creation succeeds, or a timeout is reached.
-# TODO: Consider combining this with wait-for-metastore.py
+# TODO: Consider combining this with wait-for-metastore.py. A TCLIService client
+# can perhaps also talk to the metastore.
 
 import time
 import getpass
@@ -30,13 +31,13 @@ from thrift.protocol import TBinaryProtocol
 parser = OptionParser()
 parser.add_option("--hs2_hostport", dest="hs2_hostport",
                   default="localhost:11050", help="HiveServer2 hostport to wait for.")
-parser.add_option("--use_kerberos", action="store_true", default=False,
-                  help="Indicates whether the cluster is kerberized.")
+parser.add_option("--transport", dest="transport", default="buffered",
+                  help="Transport to use for connecting to HiveServer2. Valid values: "
+                  "'buffered', 'kerberos', 'plain_sasl'.")
 options, args = parser.parse_args()
 
 hs2_host, hs2_port = options.hs2_hostport.split(':')
-hs2_transport = create_transport(use_kerberos=options.use_kerberos, host=hs2_host,
-                                 port=hs2_port, service="hiveserver2")
+hs2_transport = create_transport(hs2_host, hs2_port, "hiveserver2", options.transport)
 protocol = TBinaryProtocol.TBinaryProtocol(hs2_transport)
 hs2_client = TCLIService.Client(protocol)
 
@@ -57,7 +58,9 @@ while time.time() - now < TIMEOUT_SECONDS:
       exit(0)
   except Exception, e:
     print "Waiting for HiveServer2 at %s..." % options.hs2_hostport
-  time.sleep(0.5)
+  finally:
+    hs2_transport.close()
+    time.sleep(0.5)
 
 print "HiveServer2 service failed to start within %s seconds." % TIMEOUT_SECONDS
 exit(1)

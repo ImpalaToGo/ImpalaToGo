@@ -29,13 +29,14 @@ from thrift.protocol import TBinaryProtocol
 parser = OptionParser()
 parser.add_option("--metastore_hostport", dest="metastore_hostport",
                   default="localhost:9083", help="Metastore hostport to wait for.")
-parser.add_option("--use_kerberos", action="store_true", default=False,
-                  help="Indicates whether the cluster is kerberized.")
+parser.add_option("--transport", dest="transport", default="buffered",
+                  help="Transport to use for connecting to HiveServer2. Valid values: "
+                  "'buffered', 'kerberos', 'plain_sasl'.")
 options, args = parser.parse_args()
 
 metastore_host, metastore_port = options.metastore_hostport.split(':')
-hive_transport = create_transport(use_kerberos=options.use_kerberos, host=metastore_host,
-                                  port=metastore_port, service="metastore")
+hive_transport = create_transport(metastore_host, metastore_port, "metastore",
+                                  options.transport)
 protocol = TBinaryProtocol.TBinaryProtocol(hive_transport)
 hive_client = ThriftHiveMetastore.Client(protocol)
 
@@ -51,7 +52,9 @@ while time.time() - now < TIMEOUT_SECONDS:
       exit(0)
   except Exception, e:
     print "Waiting for the Metastore at %s..." % options.metastore_hostport
-  time.sleep(0.5)
+  finally:
+    hive_transport.close()
+    time.sleep(0.5)
 
 print "Metastore service failed to start within %s seconds." % TIMEOUT_SECONDS
 exit(1)
