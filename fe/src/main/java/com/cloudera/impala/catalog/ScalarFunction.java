@@ -96,6 +96,7 @@ public class ScalarFunction extends Function {
     // Operators have a well defined symbol based on the function name and type.
     // Convert Add(TINYINT, TINYINT) --> Add_char_char
     String beFn = Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    boolean usesDecimal = false;
     for (int i = 0; i < argTypes.size(); ++i) {
       switch (argTypes.get(i).getPrimitiveType()) {
         case BOOLEAN:
@@ -126,14 +127,15 @@ public class ScalarFunction extends Function {
           beFn += "_TimestampValue";
           break;
         case DECIMAL:
-          beFn += "_Decimal";
+          beFn += "_decimal";
+          usesDecimal = true;
           break;
         default:
           Preconditions.checkState(false);
       }
     }
-
-    return createBuiltinOperator(name, "ComputeFunctions", beFn, argTypes, retType);
+    String beClass = usesDecimal ? "DecimalOperators" : "ComputeFunctions";
+    return createBuiltinOperator(name, beClass, beFn, argTypes, retType);
   }
 
   /**
