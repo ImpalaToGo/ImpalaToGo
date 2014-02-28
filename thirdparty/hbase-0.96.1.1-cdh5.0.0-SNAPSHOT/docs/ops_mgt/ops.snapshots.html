@@ -1,0 +1,81 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>1.8.&nbsp;HBase Snapshots</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="ops_mgt.html" title="Chapter&nbsp;1.&nbsp;Apache HBase Operational Management"><link rel="up" href="ops_mgt.html" title="Chapter&nbsp;1.&nbsp;Apache HBase Operational Management"><link rel="prev" href="ops.backup.html" title="1.7.&nbsp;HBase Backup"><link rel="next" href="ops.capacity.html" title="1.9.&nbsp;Capacity Planning and Region Sizing"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.8.&nbsp;HBase Snapshots</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="ops.backup.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="ops.capacity.html">Next</a></td></tr></table><hr></div><div class="section" title="1.8.&nbsp;HBase Snapshots"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="ops.snapshots"></a>1.8.&nbsp;HBase Snapshots</h2></div></div></div><p>HBase Snapshots allow you to take a snapshot of a table without too much impact on Region Servers.
+      Snapshot, Clone and restore operations don't involve data copying.
+      Also, Exporting the snapshot to another cluster doesn't have impact on the Region Servers.
+    </p><p>Prior to version 0.94.6, the only way to backup or to clone a table is to use CopyTable/ExportTable,
+      or to copy all the hfiles in HDFS after disabling the table.
+      The disadvantages of these methods are that you can degrade region server performance
+      (Copy/Export Table) or you need to disable the table, that means no reads or writes;
+      and this is usually unacceptable.
+    </p><div class="section" title="1.8.1.&nbsp;Configuration"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.configuration"></a>1.8.1.&nbsp;Configuration</h3></div></div></div><p>To turn on the snapshot support just set the
+        <code class="varname">hbase.snapshot.enabled</code> property to true.
+        (Snapshots are enabled by default in 0.95+ and off by default in 0.94.6+)
+        </p><pre class="programlisting">
+  &lt;property&gt;
+    &lt;name&gt;hbase.snapshot.enabled&lt;/name&gt;
+    &lt;value&gt;true&lt;/value&gt;
+  &lt;/property&gt;
+        </pre><p>
+      </p></div><div class="section" title="1.8.2.&nbsp;Take a Snapshot"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.takeasnapshot"></a>1.8.2.&nbsp;Take a Snapshot</h3></div></div></div><p>You can take a snapshot of a table regardless of whether it is enabled or disabled.
+        The snapshot operation doesn't involve any data copying.
+        </p><pre class="programlisting">
+    $ ./bin/hbase shell
+    hbase&gt; snapshot 'myTable', 'myTableSnapshot-122112'
+        </pre><p>
+      </p></div><div class="section" title="1.8.3.&nbsp;Listing Snapshots"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.list"></a>1.8.3.&nbsp;Listing Snapshots</h3></div></div></div><p>List all snapshots taken (by printing the names and relative information).
+        </p><pre class="programlisting">
+    $ ./bin/hbase shell
+    hbase&gt; list_snapshots
+        </pre><p>
+      </p></div><div class="section" title="1.8.4.&nbsp;Deleting Snapshots"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.delete"></a>1.8.4.&nbsp;Deleting Snapshots</h3></div></div></div><p>You can remove a snapshot, and the files retained for that snapshot will be removed
+        if no longer needed.
+        </p><pre class="programlisting">
+    $ ./bin/hbase shell
+    hbase&gt; delete_snapshot 'myTableSnapshot-122112'
+        </pre><p>
+      </p></div><div class="section" title="1.8.5.&nbsp;Clone a table from snapshot"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.clone"></a>1.8.5.&nbsp;Clone a table from snapshot</h3></div></div></div><p>From a snapshot you can create a new table (clone operation) with the same data
+      that you had when the snapshot was taken.
+      The clone operation, doesn't involve data copies, and a change to the cloned table
+      doesn't impact the snapshot or the original table.
+        </p><pre class="programlisting">
+    $ ./bin/hbase shell
+    hbase&gt; clone_snapshot 'myTableSnapshot-122112', 'myNewTestTable'
+        </pre><p>
+      </p></div><div class="section" title="1.8.6.&nbsp;Restore a snapshot"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.restore"></a>1.8.6.&nbsp;Restore a snapshot</h3></div></div></div><p>The restore operation requires the table to be disabled, and the table will be
+      restored to the state at the time when the snapshot was taken,
+      changing both data and schema if required.
+        </p><pre class="programlisting">
+    $ ./bin/hbase shell
+    hbase&gt; disable 'myTable'
+    hbase&gt; restore_snapshot 'myTableSnapshot-122112'
+        </pre><p>
+      </p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>Since Replication works at log level and snapshots at file-system level,
+      after a restore, the replicas will be in a different state from the master.
+      If you want to use restore, you need to stop replication and redo the bootstrap.
+        </p></div><p>In case of partial data-loss due to misbehaving client, instead of a full restore
+      that requires the table to be disabled, you can clone the table from the snapshot
+      and use a Map-Reduce job to copy the data that you need, from the clone to the main one.
+      </p></div><div class="section" title="1.8.7.&nbsp;Snapshots operations and ACLs"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.acls"></a>1.8.7.&nbsp;Snapshots operations and ACLs</h3></div></div></div>
+    If you are using security with the AccessController Coprocessor (See <a class="xref" href="">???</a>),
+    only a global administrator can take, clone, or restore a snapshot, and these actions do not capture the ACL rights.
+    This means that restoring a table preserves the ACL rights of the existing table,
+    while cloning a table creates a new table that has no ACL rights until the administrator adds them.
+    </div><div class="section" title="1.8.8.&nbsp;Export to another cluster"><div class="titlepage"><div><div><h3 class="title"><a name="ops.snapshots.export"></a>1.8.8.&nbsp;Export to another cluster</h3></div></div></div><p>The ExportSnapshot tool copies all the data related to a snapshot (hfiles, logs, snapshot metadata) to another cluster.
+        The tool executes a Map-Reduce job, similar to distcp, to copy files between the two clusters,
+        and since it works at file-system level the hbase cluster does not have to be online.
+        </p><p>To copy a snapshot called MySnapshot to an HBase cluster srv2 (hdfs:///srv2:8082/hbase) using 16 mappers:
+</p><pre class="programlisting">$ bin/hbase class org.apache.hadoop.hbase.snapshot.tool.ExportSnapshot -snapshot MySnapshot -copy-to hdfs:///srv2:8082/hbase -mappers 16</pre><p>
+        </p><p>
+      </p></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'ops.snapshots';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="ops.backup.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="ops.capacity.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">1.7.&nbsp;HBase Backup&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="ops_mgt.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;1.9.&nbsp;Capacity Planning and Region Sizing</td></tr></table></div></body></html>

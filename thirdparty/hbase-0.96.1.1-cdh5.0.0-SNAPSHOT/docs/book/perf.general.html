@@ -1,0 +1,31 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>12.7.&nbsp;HBase General Patterns</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="book.html" title="The Apache HBase&#153; Reference Guide"><link rel="up" href="performance.html" title="Chapter&nbsp;12.&nbsp;Apache HBase Performance Tuning"><link rel="prev" href="perf.schema.html" title="12.6.&nbsp;Schema Design"><link rel="next" href="perf.writing.html" title="12.8.&nbsp;Writing to HBase"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">12.7.&nbsp;HBase General Patterns</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="perf.schema.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;12.&nbsp;Apache HBase Performance Tuning</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="perf.writing.html">Next</a></td></tr></table><hr></div><div class="section" title="12.7.&nbsp;HBase General Patterns"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="perf.general"></a>12.7.&nbsp;HBase General Patterns</h2></div></div></div><div class="section" title="12.7.1.&nbsp;Constants"><div class="titlepage"><div><div><h3 class="title"><a name="perf.general.constants"></a>12.7.1.&nbsp;Constants</h3></div></div></div><p>When people get started with HBase they have a tendency to write code that looks like this:
+</p><pre class="programlisting">
+Get get = new Get(rowkey);
+Result r = htable.get(get);
+byte[] b = r.getValue(Bytes.toBytes("cf"), Bytes.toBytes("attr"));  // returns current version of value
+</pre><p>
+		But especially when inside loops (and MapReduce jobs), converting the columnFamily and column-names
+		to byte-arrays repeatedly is surprisingly expensive.
+		It's better to use constants for the byte-arrays, like this:
+</p><pre class="programlisting">
+public static final byte[] CF = "cf".getBytes();
+public static final byte[] ATTR = "attr".getBytes();
+...
+Get get = new Get(rowkey);
+Result r = htable.get(get);
+byte[] b = r.getValue(CF, ATTR);  // returns current version of value
+</pre><p>
+      </p></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'perf.general';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="perf.schema.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="performance.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="perf.writing.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">12.6.&nbsp;Schema Design&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;12.8.&nbsp;Writing to HBase</td></tr></table></div></body></html>

@@ -1,0 +1,274 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>6.11.&nbsp;Schema Design Case Studies</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="book.html" title="The Apache HBase&#153; Reference Guide"><link rel="up" href="schema.html" title="Chapter&nbsp;6.&nbsp;HBase and Schema Design"><link rel="prev" href="constraints.html" title="6.10.&nbsp;Constraints"><link rel="next" href="schema.ops.html" title="6.12.&nbsp;Operational and Performance Configuration Options"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">6.11.&nbsp;Schema Design Case Studies</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="constraints.html">Prev</a>&nbsp;</td><th width="60%" align="center">Chapter&nbsp;6.&nbsp;HBase and Schema Design</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="schema.ops.html">Next</a></td></tr></table><hr></div><div class="section" title="6.11.&nbsp;Schema Design Case Studies"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.casestudies"></a>6.11.&nbsp;Schema Design Case Studies</h2></div></div></div><p>The following will describe some typical data ingestion use-cases with HBase, and how the rowkey design and construction
+   can be approached.  Note:  this is just an illustration of potential approaches, not an exhaustive list. 
+   Know your data, and know your processing requirements.
+  </p><p>It is highly recommended that you read the rest of the <a class="xref" href="schema.html" title="Chapter&nbsp;6.&nbsp;HBase and Schema Design">Chapter&nbsp;6, <i>HBase and Schema Design</i></a> first, before reading
+  these case studies.
+  </p><p>Thee following case studies are described:    
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Log Data / Timeseries Data</li><li class="listitem">Log Data / Timeseries on Steroids</li><li class="listitem">Customer/Order</li><li class="listitem">Tall/Wide/Middle Schema Design</li><li class="listitem">List Data</li></ul></div><p> 
+  </p><div class="section" title="6.11.1.&nbsp;Case Study - Log Data and Timeseries Data"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.log-timeseries"></a>6.11.1.&nbsp;Case Study - Log Data and Timeseries Data</h3></div></div></div><p>Assume that the following data elements are being collected.
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Hostname</li><li class="listitem">Timestamp</li><li class="listitem">Log event</li><li class="listitem">Value/message</li></ul></div><p>
+        We can store them in an HBase table called LOG_DATA, but what will the rowkey be?  
+       From these attributes the rowkey will be some combination of hostname, timestamp, and log-event - but what specifically?        
+      </p><div class="section" title="6.11.1.1.&nbsp;Timestamp In The Rowkey Lead Position"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.tslead"></a>6.11.1.1.&nbsp;Timestamp In The Rowkey Lead Position</h4></div></div></div><p>The rowkey <code class="code">[timestamp][hostname][log-event]</code> suffers from the monotonically increasing rowkey problem 
+        described in <a class="xref" href="rowkey.design.html#timeseries" title="6.3.1.&nbsp; Monotonically Increasing Row Keys/Timeseries Data">Section&nbsp;6.3.1, &#8220;
+    Monotonically Increasing Row Keys/Timeseries Data
+    &#8221;</a>.
+        </p><p>There is another pattern frequently mentioned in the dist-lists about &#8220;bucketing&#8221; timestamps, by performing a mod operation 
+        on the timestamp.  If time-oriented scans are important, this could be a useful approach.  Attention must be paid to the number
+        of buckets, because this will require the same number of scans to return results.
+</p><pre class="programlisting">
+long bucket = timestamp % numBuckets;
+</pre><p>
+        &#8230; to construct:
+</p><pre class="programlisting">
+[bucket][timestamp][hostname][log-event]
+</pre><p>        
+          As stated above, to select data for a particular timerange, a Scan will need to be performed for each bucket.  100 buckets,
+          for example, will provide a wide distribution in the keyspace but it will require 100 Scans to obtain data for a single
+          timestamp, so there are trade-offs. 
+        </p></div><div class="section" title="6.11.1.2.&nbsp;Host In The Rowkey Lead Position"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.hostlead"></a>6.11.1.2.&nbsp;Host In The Rowkey Lead Position</h4></div></div></div><p>The rowkey <code class="code">[hostname][log-event][timestamp]</code> is a candidate if there is a large-ish number of hosts to spread
+        the writes and reads across the keyspace.  This approach would be useful if scanning by hostname was a priority.
+        </p></div><div class="section" title="6.11.1.3.&nbsp;Timestamp, or Reverse Timestamp?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.revts"></a>6.11.1.3.&nbsp;Timestamp, or Reverse Timestamp?</h4></div></div></div><p>If the most important access path is to pull most recent events, then storing the timestamps as reverse-timestamps 
+        (e.g., <code class="code">timestamp = Long.MAX_VALUE &#8211; timestamp</code>) will create the property of being able to do a Scan on
+        <code class="code">[hostname][log-event]</code> to obtain the quickly obtain the most recently captured events.
+        </p><p>Neither approach is wrong, it just depends on what is most appropriate for the situation.
+        </p></div><div class="section" title="6.11.1.4.&nbsp;Variangle Length or Fixed Length Rowkeys?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.varkeys"></a>6.11.1.4.&nbsp;Variangle Length or Fixed Length Rowkeys?</h4></div></div></div><p>It is critical to remember that rowkeys are stamped on every column in HBase.  If the hostname is &#8220;a&#8221; and the event type
+         is &#8220;e1&#8221; then the resulting rowkey would be quite small.  However, what if the ingested hostname is
+          &#8220;myserver1.mycompany.com&#8221; and the event type is &#8220;com.package1.subpackage2.subsubpackage3.ImportantService&#8221;?  
+         </p><p>It might make sense to use some substitution in the rowkey.  There are at least two approaches:  hashed and numeric.
+         In the Hostname In The Rowkey Lead Position example, it might look like this:
+        </p><p>Composite Rowkey With Hashes:  
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[MD5 hash of hostname] = 16 bytes</li><li class="listitem">[MD5 hash of event-type] = 16 bytes</li><li class="listitem">[timestamp] = 8 bytes</li></ul></div><p>
+        </p><p>Composite Rowkey With Numeric Substitution: 
+        </p><p>For this approach another lookup table would be needed in addition to LOG_DATA, called LOG_TYPES.  
+        The rowkey of LOG_TYPES would be:
+		  </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[type]  (e.g., byte indicating hostname vs. event-type)</li><li class="listitem">[bytes]  variable length bytes for raw hostname or event-type.</li></ul></div><p>
+        A column for this rowkey could be a long with an assigned number, which could be obtained by using an 
+		<a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HTable.html#incrementColumnValue%28byte[],%20byte[],%20byte[],%20long%29" target="_top">HBase counter</a>.
+        </p><p>So the resulting composite rowkey would be:
+		</p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[substituted long for hostname] = 8 bytes</li><li class="listitem">[substituted long for event type] = 8 bytes</li><li class="listitem">[timestamp] = 8 bytes</li></ul></div><p>
+		In either the Hash or Numeric substitution approach, the raw values for hostname and event-type can be stored as columns.
+        </p></div></div><div class="section" title="6.11.2.&nbsp;Case Study - Log Data and Timeseries Data on Steroids"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.log-steroids"></a>6.11.2.&nbsp;Case Study - Log Data and Timeseries Data on Steroids</h3></div></div></div><p>This effectively is the OpenTSDB approach.  What OpenTSDB does is re-write data and pack rows into columns for 
+        certain time-periods.  For a detailed explanation, see:  <a class="link" href="http://opentsdb.net/schema.html" target="_top">http://opentsdb.net/schema.html</a>, 
+        and <a class="link" href="http://www.cloudera.com/content/cloudera/en/resources/library/hbasecon/video-hbasecon-2012-lessons-learned-from-opentsdb.html" target="_top">Lessons Learned from OpenTSDB</a>
+	    from HBaseCon2012.
+      </p><p>But this is how the general concept works:  data is ingested, for example, in this manner&#8230;
+</p><pre class="programlisting">
+[hostname][log-event][timestamp1]
+[hostname][log-event][timestamp2]
+[hostname][log-event][timestamp3]
+</pre><p>
+       &#8230; with separate rowkeys for each detailed event, but is re-written like this&#8230; 
+       </p><p><code class="code">[hostname][log-event][timerange]</code>
+       </p><p>&#8230; and each of the above events are converted into columns stored with a time-offset relative to the beginning timerange 
+       (e.g., every 5 minutes).  This is obviously a very advanced processing technique, but HBase makes this possible.
+      </p></div><div class="section" title="6.11.3.&nbsp;Case Study - Customer/Order"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.custorder"></a>6.11.3.&nbsp;Case Study - Customer/Order</h3></div></div></div><p>Assume that HBase is used to store customer and order information.  There are two core record-types being ingested:  
+        a Customer record type, and Order record type.
+      </p><p>The Customer record type would include all the things that you&#8217;d typically expect:
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Customer number</li><li class="listitem">Customer name</li><li class="listitem">Address (e.g., city, state, zip)</li><li class="listitem">Phone numbers, etc.</li></ul></div><p>
+     </p><p>The Order record type would include things like:
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Customer number</li><li class="listitem">Order number</li><li class="listitem">Sales date</li><li class="listitem">A series of nested objects for shipping locations and line-items (see <a class="xref" href="schema.casestudies.html#schema.casestudies.custorder.obj" title="6.11.3.2.&nbsp;Order Object Design">Section&nbsp;6.11.3.2, &#8220;Order Object Design&#8221;</a>
+           for details)</li></ul></div><p>
+    </p><p>Assuming that the combination of customer number and sales order uniquely identify an order, these two attributes will compose
+ the rowkey, and specifically a composite key such as:
+    </p><p><code class="code">[customer number][order number]</code>
+    </p><p>&#8230; for a ORDER table.  However, there are more design decisions to make:  are the <span class="emphasis"><em>raw</em></span> values the best choices for rowkeys?
+    </p><p>The same design questions in the Log Data use-case confront us here.  What is the keyspace of the customer number, and what is the 
+format (e.g., numeric?  alphanumeric?) As it is advantageous to use fixed-length keys in HBase, as well as keys that can support a 
+reasonable spread in the keyspace, similar options appear:
+    </p><p>Composite Rowkey With Hashes:  
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[MD5 of customer number] = 16 bytes</li><li class="listitem">[MD5 of order number] = 16 bytes</li></ul></div><p>
+    </p><p>Composite Numeric/Hash Combo Rowkey: 
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[substituted long for customer number] = 8 bytes</li><li class="listitem">[MD5 of order number] = 16 bytes</li></ul></div><p>
+     </p><div class="section" title="6.11.3.1.&nbsp;Single Table? Multiple Tables?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.custorder.tables"></a>6.11.3.1.&nbsp;Single Table?  Multiple Tables?</h4></div></div></div><p>A traditional design approach would have separate tables for CUSTOMER and SALES.  Another option is to pack multiple 
+            record types into a single table (e.g., CUSTOMER++).            
+            </p><p>Customer Record Type Rowkey:
+              </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[customer-id]</li><li class="listitem">[type] = type indicating &#8216;1&#8217; for customer record type</li></ul></div><p>
+            </p><p>Order Record Type Rowkey:
+              </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[customer-id]</li><li class="listitem">[type] = type indicating &#8216;2&#8217; for order record type</li><li class="listitem">[order]</li></ul></div><p>
+            </p><p>The advantage of this particular CUSTOMER++ approach is that organizes many different record-types by customer-id 
+            (e.g., a single scan could get you everything about that customer).  The disadvantage is that it&#8217;s not as easy to scan for
+            a particular record-type.
+            </p></div><div class="section" title="6.11.3.2.&nbsp;Order Object Design"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.custorder.obj"></a>6.11.3.2.&nbsp;Order Object Design</h4></div></div></div><p>Now we need to address how to model the Order object.  Assume that the class structure is as follows:
+</p><pre class="programlisting">
+<code class="filename">Order</code>
+     <code class="filename">ShippingLocation</code>     (an Order can have multiple ShippingLocations)
+          <code class="filename">LineItem</code>               (a ShippingLocation can have multiple LineItems)
+</pre><p>
+	       ... there are multiple options on storing this data.
+	      </p><div class="section" title="6.11.3.2.1.&nbsp;Completely Normalized"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.norm"></a>6.11.3.2.1.&nbsp;Completely Normalized</h5></div></div></div><p>With this approach, there would be separate tables for ORDER, SHIPPING_LOCATION, and LINE_ITEM.          
+	        </p><p>The ORDER table's rowkey was described above: <a class="xref" href="schema.casestudies.html#schema.casestudies.custorder" title="6.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;6.11.3, &#8220;Case Study - Customer/Order&#8221;</a>
+	        </p><p>The SHIPPING_LOCATION's composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li></ul></div><p>
+	        </p><p>The LINE_ITEM table's composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc.)</li></ul></div><p>
+	        </p><p>Such a normalized model is likely to be the approach with an RDBMS, but that's not your only option with HBase.
+	        The cons of such an approach is that to retrieve information about any Order, you will need:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Get on the ORDER table for the Order</li><li class="listitem">Scan on the SHIPPING_LOCATION table for that order to get the ShippingLocation instances</li><li class="listitem">Scan on the LINE_ITEM for each ShippingLocation</li></ul></div><p>
+	          ... granted, this is what an RDBMS would do under the covers anyway, but since there are no joins in HBase
+	          you're just more aware of this fact.
+	        </p></div><div class="section" title="6.11.3.2.2.&nbsp;Single Table With Record Types"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.rectype"></a>6.11.3.2.2.&nbsp;Single Table With Record Types</h5></div></div></div><p>With this approach, there would exist a single table ORDER that would contain 
+	        </p><p>The Order rowkey was described above: <a class="xref" href="schema.casestudies.html#schema.casestudies.custorder" title="6.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;6.11.3, &#8220;Case Study - Customer/Order&#8221;</a>
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[ORDER record type]</li></ul></div><p>
+	        </p><p>The ShippingLocation composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[SHIPPING record type]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li></ul></div><p>
+	        </p><p>The LineItem composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[LINE record type]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc.)</li></ul></div><p>
+	        </p></div><div class="section" title="6.11.3.2.3.&nbsp;Denormalized"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.denorm"></a>6.11.3.2.3.&nbsp;Denormalized</h5></div></div></div><p>A variant of the Single Table With Record Types approach is to denormalize and flatten some of the object 
+	        hierarchy, such as collapsing the ShippingLocation attributes onto each LineItem instance.
+	        </p><p>The LineItem composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[LINE record type]</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc. - care must be taken that there are unique across the entire order)</li></ul></div><p>
+	        </p><p>... and the LineItem columns would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">itemNumber</li><li class="listitem">quantity</li><li class="listitem">price</li><li class="listitem">shipToLine1 (denormalized from ShippingLocation)</li><li class="listitem">shipToLine2 (denormalized from ShippingLocation)</li><li class="listitem">shipToCity (denormalized from ShippingLocation)</li><li class="listitem">shipToState (denormalized from ShippingLocation)</li><li class="listitem">shipToZip (denormalized from ShippingLocation)</li></ul></div><p>
+	        </p><p>The pros of this approach include a less complex object heirarchy, but one of the cons is that updating gets more 
+	        complicated in case any of this information changes.
+	        </p></div><div class="section" title="6.11.3.2.4.&nbsp;Object BLOB"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.singleobj"></a>6.11.3.2.4.&nbsp;Object BLOB</h5></div></div></div><p>With this approach, the entire Order object graph is treated, in one way or another, as a BLOB.  For example, the 
+	        ORDER table's rowkey was described above: <a class="xref" href="schema.casestudies.html#schema.casestudies.custorder" title="6.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;6.11.3, &#8220;Case Study - Customer/Order&#8221;</a>, and a 
+	        single column called "order" would contain an object that could be deserialized that contained a container Order, 
+	        ShippingLocations, and LineItems.
+	        </p><p>There are many options here:  JSON, XML, Java Serialization, Avro, Hadoop Writables, etc.  All of them are variants
+	        of the same approach:  encode the object graph to a byte-array.  Care should be taken with this approach to ensure backward 
+	        compatibilty in case the object model changes such that older persisted structures can still be read back out of HBase.
+	        </p><p>Pros are being able to manage complex object graphs with minimal I/O (e.g., a single HBase Get per
+	        Order in this example), but the cons include the aforementioned warning about backward compatiblity of serialization,
+	        language dependencies of serialization (e.g., Java Serialization only works with Java clients), the fact that
+	        you have to deserialize the entire object to get any piece of information inside the BLOB, and the difficulty in 
+	        getting frameworks like Hive to work with custom objects like this.
+	        </p></div></div></div><div class="section" title="6.11.4.&nbsp;Case Study - &#34;Tall/Wide/Middle&#34; Schema Design Smackdown"><div class="titlepage"><div><div><h3 class="title"><a name="schema.smackdown"></a>6.11.4.&nbsp;Case Study - "Tall/Wide/Middle" Schema Design Smackdown</h3></div></div></div><p>This section will describe additional schema design questions that appear on the dist-list, specifically about
+	  tall and wide tables.  These are general guidelines and not laws - each application must consider its own needs.
+	  </p><div class="section" title="6.11.4.1.&nbsp;Rows vs. Versions"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowsversions"></a>6.11.4.1.&nbsp;Rows vs. Versions</h4></div></div></div><p>A common question is whether one should prefer rows or HBase's built-in-versioning.  The context is typically where there are
+	    "a lot" of versions of a row to be retained (e.g., where it is significantly above the HBase default of 3 max versions).  The
+	    rows-approach would require storing a timstamp in some portion of the rowkey so that they would not overwite with each successive update.
+	    </p><p>Preference:  Rows (generally speaking).
+	    </p></div><div class="section" title="6.11.4.2.&nbsp;Rows vs. Columns"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowscols"></a>6.11.4.2.&nbsp;Rows vs. Columns</h4></div></div></div><p>Another common question is whether one should prefer rows or columns.  The context is typically in extreme cases of wide
+	    tables, such as having 1 row with 1 million attributes, or 1 million rows with 1 columns apiece.
+	    </p><p>Preference:  Rows (generally speaking).  To be clear, this guideline is in the context is in extremely wide cases, not in the
+	    standard use-case where one needs to store a few dozen or hundred columns.  But there is also a middle path between these two
+	    options, and that is "Rows as Columns."
+	    </p></div><div class="section" title="6.11.4.3.&nbsp;Rows as Columns"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowsascols"></a>6.11.4.3.&nbsp;Rows as Columns</h4></div></div></div><p>The middle path between Rows vs. Columns is packing data that would be a separate row into columns, for certain rows.
+	    OpenTSDB is the best example of this case where a single row represents a defined time-range, and then discrete events are treated as
+	    columns.  This approach is often more complex, and may require the additional complexity of re-writing your data, but has the
+	    advantage of being I/O efficient.  For an overview of this approach, see
+	    <a class="xref" href="">???</a>.
+	    </p></div></div><div class="section" title="6.11.5.&nbsp;Case Study - List Data"><div class="titlepage"><div><div><h3 class="title"><a name="casestudies.schema.listdata"></a>6.11.5.&nbsp;Case Study - List Data</h3></div></div></div><p>The following is an exchange from the user dist-list regarding a fairly common question:  
+    		how to handle per-user list data in Apache HBase. 
+    		</p><p>*** QUESTION ***</p><p>
+    		We're looking at how to store a large amount of (per-user) list data in
+HBase, and we were trying to figure out what kind of access pattern made
+the most sense.  One option is store the majority of the data in a key, so
+we could have something like:
+    		</p><pre class="programlisting">
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId1&gt;:"" (no value)
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId2&gt;:"" (no value)
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId3&gt;:"" (no value)
+			</pre>
+
+The other option we had was to do this entirely using:
+    		<pre class="programlisting">
+&lt;FixedWidthUserName&gt;&lt;FixedWidthPageNum0&gt;:&lt;FixedWidthLength&gt;&lt;FixedIdNextPageNum&gt;&lt;ValueId1&gt;&lt;ValueId2&gt;&lt;ValueId3&gt;...
+&lt;FixedWidthUserName&gt;&lt;FixedWidthPageNum1&gt;:&lt;FixedWidthLength&gt;&lt;FixedIdNextPageNum&gt;&lt;ValueId1&gt;&lt;ValueId2&gt;&lt;ValueId3&gt;...
+    		</pre><p>
+where each row would contain multiple values.
+So in one case reading the first thirty values would be:
+			</p><pre class="programlisting">
+scan { STARTROW =&gt; 'FixedWidthUsername' LIMIT =&gt; 30}
+    		</pre>
+And in the second case it would be
+    		<pre class="programlisting">
+get 'FixedWidthUserName\x00\x00\x00\x00'
+    		</pre><p>
+The general usage pattern would be to read only the first 30 values of
+these lists, with infrequent access reading deeper into the lists.  Some
+users would have &lt;= 30 total values in these lists, and some users would
+have millions (i.e. power-law distribution)
+			</p><p>
+ The single-value format seems like it would take up more space on HBase,
+but would offer some improved retrieval / pagination flexibility.  Would
+there be any significant performance advantages to be able to paginate via
+gets vs paginating with scans?
+			</p><p>
+  My initial understanding was that doing a scan should be faster if our
+paging size is unknown (and caching is set appropriately), but that gets
+should be faster if we'll always need the same page size.  I've ended up
+hearing different people tell me opposite things about performance.  I
+assume the page sizes would be relatively consistent, so for most use cases
+we could guarantee that we only wanted one page of data in the
+fixed-page-length case.  I would also assume that we would have infrequent
+updates, but may have inserts into the middle of these lists (meaning we'd
+need to update all subsequent rows).
+			</p><p>
+Thanks for help / suggestions / follow-up questions.
+			</p><p>*** ANSWER ***</p><p>
+If I understand you correctly, you're ultimately trying to store
+triples in the form "user, valueid, value", right? E.g., something
+like:
+			</p><pre class="programlisting">
+"user123, firstname, Paul",
+"user234, lastname, Smith"
+			</pre><p>
+(But the usernames are fixed width, and the valueids are fixed width).
+			</p><p>
+And, your access pattern is along the lines of: "for user X, list the
+next 30 values, starting with valueid Y". Is that right? And these
+values should be returned sorted by valueid?
+			</p><p>
+The tl;dr version is that you should probably go with one row per
+user+value, and not build a complicated intra-row pagination scheme on
+your own unless you're really sure it is needed.
+			</p><p>
+Your two options mirror a common question people have when designing
+HBase schemas: should I go "tall" or "wide"? Your first schema is
+"tall": each row represents one value for one user, and so there are
+many rows in the table for each user; the row key is user + valueid,
+and there would be (presumably) a single column qualifier that means
+"the value". This is great if you want to scan over rows in sorted
+order by row key (thus my question above, about whether these ids are
+sorted correctly). You can start a scan at any user+valueid, read the
+next 30, and be done. What you're giving up is the ability to have
+transactional guarantees around all the rows for one user, but it
+doesn't sound like you need that. Doing it this way is generally
+recommended (see
+here <a class="link" href="http://hbase.apache.org/book.html#schema.smackdown" target="_top">http://hbase.apache.org/book.html#schema.smackdown</a>).
+			</p><p>
+Your second option is "wide": you store a bunch of values in one row,
+using different qualifiers (where the qualifier is the valueid). The
+simple way to do that would be to just store ALL values for one user
+in a single row. I'm guessing you jumped to the "paginated" version
+because you're assuming that storing millions of columns in a single
+row would be bad for performance, which may or may not be true; as
+long as you're not trying to do too much in a single request, or do
+things like scanning over and returning all of the cells in the row,
+it shouldn't be fundamentally worse. The client has methods that allow
+you to get specific slices of columns.
+			</p><p>
+Note that neither case fundamentally uses more disk space than the
+other; you're just "shifting" part of the identifying information for
+a value either to the left (into the row key, in option one) or to the
+right (into the column qualifiers in option 2). Under the covers,
+every key/value still stores the whole row key, and column family
+name. (If this is a bit confusing, take an hour and watch Lars
+George's excellent video about understanding HBase schema design:
+<a class="link" href="http://www.youtube.com/watch?v=_HLoH_PgrLk)" target="_top">http://www.youtube.com/watch?v=_HLoH_PgrLk)</a>.
+			</p><p>
+A manually paginated version has lots more complexities, as you note,
+like having to keep track of how many things are in each page,
+re-shuffling if new values are inserted, etc. That seems significantly
+more complex. It might have some slight speed advantages (or
+disadvantages!) at extremely high throughput, and the only way to
+really know that would be to try it out. If you don't have time to
+build it both ways and compare, my advice would be to start with the
+simplest option (one row per user+value). Start simple and iterate! :)
+			</p></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'schema.casestudies';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="constraints.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="schema.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="schema.ops.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">6.10.&nbsp;Constraints&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="book.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;6.12.&nbsp;Operational and Performance Configuration Options</td></tr></table></div></body></html>

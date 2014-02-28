@@ -1,0 +1,163 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>1.4.&nbsp;Releasing Apache HBase</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="developer.html" title="Chapter&nbsp;1.&nbsp;Building and Developing Apache HBase"><link rel="up" href="developer.html" title="Chapter&nbsp;1.&nbsp;Building and Developing Apache HBase"><link rel="prev" href="build.html" title="1.3.&nbsp;Building Apache HBase"><link rel="next" href="documentation.html" title="1.5.&nbsp;Generating the HBase Reference Guide"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.4.&nbsp;Releasing Apache HBase</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="build.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="documentation.html">Next</a></td></tr></table><hr></div><div class="section" title="1.4.&nbsp;Releasing Apache HBase"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="releasing"></a>1.4.&nbsp;Releasing Apache HBase</h2></div></div></div><p>HBase 0.96.x will run on hadoop 1.x or hadoop 2.x but building, you
+             must choose which to build against; we cannot make a single HBase binary
+             to run against both hadoop1 and hadoop2. Since we include the Hadoop we were built
+             against -- so we can do standalone mode -- the set of modules included
+             in the tarball changes dependent on whether the hadoop1 or hadoop2 target chosen.
+             You can tell which HBase you have -- whether it is for hadoop1 or hadoop2
+             by looking at the version; the HBase for hadoop1 will include 'hadoop1' in its
+             version.  Ditto for hadoop2.
+         </p><p>Maven, our build system, natively will not let you have a single product
+             built against different dependencies.  Its understandable.  But neither could
+             we convince maven to change the set of included modules and write out
+             the correct poms w/ appropriate dependencies even though we have two
+             build targets; one for hadoop1 and another for hadoop2.  So, there is a prestep
+             required.  This prestep takes as input the current pom.xmls and it generates hadoop1 or
+             hadoop2 versions.  You then reference these generated poms when you build. Read on
+         for examples</p><p><a name="mvn.settings.file"></a>Publishing to maven requires you sign the artifacts you want to upload.  To have the
+         build do this for you, you need to make sure you have a properly configured
+         <code class="filename">settings.xml</code> in your local repository under <code class="filename">.m2</code>.
+            Here is my <code class="filename">~/.m2/settings.xml</code>.
+        </p><pre class="programlisting">&lt;settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                      http://maven.apache.org/xsd/settings-1.0.0.xsd"&gt;
+  &lt;servers&gt;
+    &lt;!- To publish a snapshot of some part of Maven --&gt;
+    &lt;server&gt;
+      &lt;id&gt;apache.snapshots.https&lt;/id&gt;
+      &lt;username&gt;YOUR_APACHE_ID
+      &lt;/username&gt;
+      &lt;password&gt;YOUR_APACHE_PASSWORD
+      &lt;/password&gt;
+    &lt;/server&gt;
+    &lt;!-- To publish a website using Maven --&gt;
+    &lt;!-- To stage a release of some part of Maven --&gt;
+    &lt;server&gt;
+      &lt;id&gt;apache.releases.https&lt;/id&gt;
+      &lt;username&gt;YOUR_APACHE_ID
+      &lt;/username&gt;
+      &lt;password&gt;YOUR_APACHE_PASSWORD
+      &lt;/password&gt;
+    &lt;/server&gt;
+  &lt;/servers&gt;
+  &lt;profiles&gt;
+    &lt;profile&gt;
+      &lt;id&gt;apache-release&lt;/id&gt;
+      &lt;properties&gt;
+    &lt;gpg.keyname&gt;YOUR_KEYNAME&lt;/gpg.keyname&gt;
+    &lt;!--Keyname is something like this ... 00A5F21E... do gpg --list-keys to find it--&gt;
+    &lt;gpg.passphrase&gt;YOUR_KEY_PASSWORD
+    &lt;/gpg.passphrase&gt;
+      &lt;/properties&gt;
+    &lt;/profile&gt;
+  &lt;/profiles&gt;
+&lt;/settings&gt;
+        </pre><p>
+        </p><p>You must use maven 3.0.x (Check by running <span class="command"><strong>mvn -version</strong></span>).
+        </p><div class="section" title="1.4.1.&nbsp;Making a Release Candidate"><div class="titlepage"><div><div><h3 class="title"><a name="maven.release"></a>1.4.1.&nbsp;Making a Release Candidate</h3></div></div></div><p>I'll explain by running through the process.  See later in this section for more detail on particular steps.
+             The script <code class="filename">dev-support/make_rc.sh</code> automates most of this.</p><p>The <a class="link" href="http://wiki.apache.org/hadoop/HowToRelease" target="_top">Hadoop How To Release</a> wiki page informs much of the below and may have more detail on particular sections so it is worth review.</p><p>Update CHANGES.txt with the changes since the last release (query JIRA, export to excel then hack w/ vim to format to suit CHANGES.txt TODO: Needs detail).
+             Adjust the version in all the poms appropriately; e.g. you may need to remove <span class="emphasis"><em>-SNAPSHOT</em></span> from all versions.
+             The <a class="link" href="http://mojo.codehaus.org/versions-maven-plugin/" target="_top">Versions Maven Plugin</a> can be of use here.  To
+             set a version in all poms, do something like this:
+             </p><pre class="programlisting">$ mvn clean org.codehaus.mojo:versions-maven-plugin:1.3.1:set -DnewVersion=0.96.0</pre><p>
+             Checkin the <code class="filename">CHANGES.txt</code> and version changes.
+        </p><p>Now, build the src tarball.  This tarball is hadoop version independent.  It is just the pure src code and documentation without an hadoop1 or hadoop2 taint.
+            Add the <code class="varname">-Prelease</code> profile when building; it checks files for licenses and will fail the build if unlicensed files present.
+            </p><pre class="programlisting">$ MAVEN_OPTS="-Xmx2g" mvn clean install -DskipTests assembly:single -Dassembly.file=hbase-assembly/src/main/assembly/src.xml -Prelease</pre><p>
+            Undo the tarball and make sure it looks good (A good test is seeing if you can build from the undone tarball).
+            Save it off to a <span class="emphasis"><em>version directory</em></span>, i.e a directory somewhere where you are collecting
+            all of the tarballs you will publish as part of the release candidate.  For example if we were building a
+            hbase-0.96.0 release candidate, we might call the directory <code class="filename">hbase-0.96.0RC0</code>.  Later
+            we will publish this directory as our release candidate up on people.apache.org/~you.
+        </p><p>Now we are into the making of the hadoop1 and hadoop2 specific builds.  Lets do hadoop1 first.
+        First generate the hadoop1 poms.  See the <code class="filename">generate-hadoopX-poms.sh</code> script usage for what it expects by way of arguments.
+            You will find it in the <code class="filename">dev-support</code> subdirectory.  In the below, we generate hadoop1 poms with a version
+            of <code class="varname">0.96.0-hadoop1</code> (the script will look for a version of <code class="varname">0.96.0</code> in the current <code class="filename">pom.xml</code>).
+            </p><pre class="programlisting">$ ./dev-support/generate-hadoopX-poms.sh 0.96.0 0.96.0-hadoop1</pre><p>
+            The script will work silently if all goes well.  It will drop a <code class="filename">pom.xml.hadoop1</code> beside all <code class="filename">pom.xml</code>s in all modules.
+        </p><p>Now build the hadoop1 tarball.  Note how we reference the new <code class="filename">pom.xml.hadoop1</code> explicitly.
+            We also add the <code class="varname">-Prelease</code> profile when building; it checks files for licenses and will fail the build if unlicensed files present.
+            Do it in two steps. First install into the local repository and then generate documentation and assemble the tarball
+            (Otherwise build complains that hbase modules are not in maven repo when we try to do it all in the one go especially on fresh repo).
+            It seems that you need the install goal in both steps.
+            </p><pre class="programlisting">$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop1 clean install -DskipTests -Prelease
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop1 install -DskipTests site assembly:single -Prelease</pre><p>
+Undo the generated tarball and check it out.  Look at doc. and see if it runs, etc.  Are the set of modules appropriate: e.g. do we have a hbase-hadoop2-compat in the hadoop1 tarball?
+If good, copy the tarball to your <span class="emphasis"><em>version directory</em></span>.
+</p><p>I'll tag the release at this point since its looking good.  If we find an issue later, we can delete the tag and start over.  Release needs to be tagged when we do next step.</p><p>Now deploy hadoop1 hbase to mvn. Do the mvn deploy and tgz for a particular version all together in the one go else if you flip between hadoop1 and hadoop2 builds,
+you might mal-publish poms and hbase-default.xml's (the version interpolations won't match).
+This time we use the <code class="varname">apache-release</code> profile instead of just <code class="varname">release</code> profile when doing mvn deploy;
+it will invoke the apache pom referenced by our poms.  It will also sign your artifacts published to mvn as long as your settings.xml in your local <code class="filename">.m2</code>
+repository is configured correctly (your <code class="filename">settings.xml</code> adds your gpg password property to the apache profile).
+</p><pre class="programlisting">$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop1 deploy -DskipTests -Papache-release</pre><p>
+The last command above copies all artifacts for hadoop1 up to mvn repo.  If no <code class="varname">-SNAPSHOT</code> in the version, it puts the artifacts into a staging directory.  This is what you want.
+</p><div class="note" title="hbase-downstreamer" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">hbase-downstreamer</h3><p>
+        See the <a class="link" href="" target="_top">hbase-downstreamer</a> test for a simple example of a project that is downstream of hbase an depends on it.
+        Check it out and run its simple test to make sure maven hbase-hadoop1 and hbase-hadoop2 are properly deployed to the maven repository.
+    </p></div><p>
+            </p><p>Lets do the hadoop2 artifacts (read above hadoop1 section closely before coming here because we don't repeat explaination in the below).
+            </p><pre class="programlisting"># Generate the hadoop2 poms.
+$ ./dev-support/generate-hadoopX-poms.sh 0.96.0 0.96.0-hadoop2
+# Install the hbase hadoop2 jars into local repo then build the doc and tarball
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop2 clean install -DskipTests -Prelease
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop2 install -DskipTests site assembly:single -Prelease
+# Undo the tgz and check it out.  If good, copy the tarball to your 'version directory'. Now deploy to mvn.
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop2 deploy -DskipTests -Papache-release
+            </pre><p>
+        </p><p>
+        At this stage we have three tarballs in our 'version directory' and two sets of artifacts up in maven in staging area.
+        First lets put the <span class="emphasis"><em>version directory</em></span> up on people.apache.org.  You will need to sign and fingerprint them before you
+        push them up. In the <span class="emphasis"><em>version directory</em></span> do this:
+        </p><pre class="programlisting">$ for i in *.tar.gz; do echo $i; gpg --print-mds $i &gt; $i.mds ; done
+$ for i in *.tar.gz; do echo $i; gpg --armor --output $i.asc --detach-sig $i  ; done
+$ cd ..
+# Presuming our 'version directory' is named 0.96.0RC0, now copy it up to people.apache.org.
+$ rsync -av 0.96.0RC0 people.apache.org:public_html
+        </pre><p>
+        </p><p>
+            For the maven artifacts, login at repository.apache.org.  Find your artifacts in the staging directory.
+            Close the artifacts.  This will give you an URL for the temporary mvn staging repository.  Do the closing
+            for hadoop1 and hadoop2 repos.
+            See <a class="link" href="http://www.apache.org/dev/publishing-maven-artifacts.html" target="_top">Publishing Maven Artifacts</a> for
+            some pointers.
+            </p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>We no longer publish using the maven release plugin.  Instead we do mvn deploy.  It seems to give
+                    us a backdoor to maven release publishing.  If no <span class="emphasis"><em>-SNAPSHOT</em></span> on the version
+                    string, then we are 'deployed' to the apache maven repository staging directory from which we
+                    can publish URLs for candidates and later, if they pass, publish as release (if a
+                    <span class="emphasis"><em>-SNAPSHOT</em></span> on the version string, deploy will put the artifacts up into
+                    apache snapshot repos).
+                </p></div><p>
+        </p><p>Make sure the people.apache.org directory is showing -- it can take a while to show -- and that the
+            mvn repo urls are good.
+            Announce the release candidate on the mailing list and call a vote.
+        </p><p>A strange issue I ran into was the one where the upload into the apache
+        repository was being sprayed across multiple apache machines making it so I could
+        not release.  See <a class="link" href="https://issues.apache.org/jira/browse/INFRA-4482" target="_top">INFRA-4482 Why is my upload to mvn spread across multiple repositories?</a>.</p></div><div class="section" title="1.4.2.&nbsp;Publishing a SNAPSHOT to maven"><div class="titlepage"><div><div><h3 class="title"><a name="maven.snapshot"></a>1.4.2.&nbsp;Publishing a SNAPSHOT to maven</h3></div></div></div><p>Make sure your <code class="filename">settings.xml</code> is set up properly (see above for how).
+              Make sure the hbase version includes <code class="varname">-SNAPSHOT</code> as a suffix.  Here is how I published SNAPSHOTS of
+              a checked that had an hbase version of 0.96.0 in its poms.
+First we generated the hadoop1 poms with a version that has a <code class="varname">-SNAPSHOT</code> suffix.
+We then installed the build into the local repository. Then we deploy this build to apache.  See the output for the location
+up in apache to where the snapshot is copied.  Notice how add the <code class="varname">release</code> profile
+when install locally -- to find files that are without proper license -- and then the <code class="varname">apache-release</code>
+profile to deploy to the apache maven repository.
+          </p><pre class="programlisting">$ ./dev-support/generate-hadoopX-poms.sh 0.96.0 0.96.0-hadoop1-SNAPSHOT
+ $ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop1 clean install -DskipTests  javadoc:aggregate site assembly:single -Prelease
+ $ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop1 -DskipTests  deploy -Papache-release</pre><p>
+Next, do the same to publish the hadoop2 artifacts.
+</p><pre class="programlisting">$ ./dev-support/generate-hadoopX-poms.sh 0.96.0 0.96.0-hadoop2-SNAPSHOT
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop2 clean install -DskipTests  javadoc:aggregate site assembly:single -Prelease
+$ MAVEN_OPTS="-Xmx3g" mvn -f pom.xml.hadoop2 deploy -DskipTests -Papache-release</pre><p>
+</p></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'releasing';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="build.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="documentation.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">1.3.&nbsp;Building Apache HBase&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="developer.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;1.5.&nbsp;Generating the HBase Reference Guide</td></tr></table></div></body></html>

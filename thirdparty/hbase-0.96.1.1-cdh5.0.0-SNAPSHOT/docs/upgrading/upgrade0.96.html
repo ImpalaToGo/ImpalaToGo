@@ -1,0 +1,120 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>1.2.&nbsp;Upgrading from 0.94.x to 0.96.x</title><link rel="stylesheet" type="text/css" href="../css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"><link rel="home" href="upgrading.html" title="Chapter&nbsp;1.&nbsp;Upgrading"><link rel="up" href="upgrading.html" title="Chapter&nbsp;1.&nbsp;Upgrading"><link rel="prev" href="upgrading.html" title="Chapter&nbsp;1.&nbsp;Upgrading"><link rel="next" href="upgrade0.94.html" title="1.3.&nbsp;Upgrading from 0.92.x to 0.94.x"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">1.2.&nbsp;Upgrading from 0.94.x to 0.96.x</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="upgrading.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="upgrade0.94.html">Next</a></td></tr></table><hr></div><div class="section" title="1.2.&nbsp;Upgrading from 0.94.x to 0.96.x"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="upgrade0.96"></a>1.2.&nbsp;Upgrading from 0.94.x to 0.96.x</h2></div><div><h3 class="subtitle">The Singularity</h3></div></div></div><p>You will have to stop your old 0.94.x cluster completely to upgrade.  If you are replicating
+     between clusters, both clusters will have to go down to upgrade.  Make sure it is a clean shutdown.
+     The less WAL files around, the faster the upgrade will run (the upgrade will split any log files it
+     finds in the filesystem as part of the upgrade process).  All clients must be upgraded to 0.96 too.
+ </p><p>The API has changed.  You will need to recompile your code against 0.96 and you may need to
+     adjust applications to go against new APIs (TODO: List of changes).
+ </p><div class="section" title="1.2.1.&nbsp;Executing the 0.96 Upgrade"><div class="titlepage"><div><div><h3 class="title"><a name="d5180e52"></a>1.2.1.&nbsp;Executing the 0.96 Upgrade</h3></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>HDFS and ZooKeeper should be up and running during the upgrade process.</p></div><p>hbase-0.96.0 comes with an upgrade script.  Run
+     </p><pre class="programlisting">$ bin/hbase upgrade</pre><p> to see its usage.
+     The script has two main modes: -check, and -execute.
+ </p><div class="section" title="1.2.1.1.&nbsp;check"><div class="titlepage"><div><div><h4 class="title"><a name="d5180e63"></a>1.2.1.1.&nbsp;check</h4></div></div></div><p>The <span class="emphasis"><em>check</em></span> step is run against a running 0.94 cluster.
+             Run it from a downloaded 0.96.x binary.  The <span class="emphasis"><em>check</em></span> step
+             is looking for the presence of <code class="filename">HFileV1</code> files.  These are
+             unsupported in hbase-0.96.0.  To purge them -- have them rewritten as HFileV2 --
+             you must run a compaction.
+         </p><p>The <span class="emphasis"><em>check</em></span> step prints stats at the end of its run
+             (grep for &#8220;Result:&#8221; in the log) printing absolute path of the tables it scanned,
+             any HFileV1 files found, the regions containing said files (the regions we
+             need to  major compact to purge the HFileV1s), and any corrupted files if
+             any found. A corrupt file is unreadable, and so is undefined (neither HFileV1 nor HFileV2).
+         </p><p>To run the check step, run </p><pre class="programlisting">$ bin/hbase upgrade -check</pre><p>.
+          Here is sample output:
+</p><pre class="programlisting">
+             Tables Processed:
+             hdfs://localhost:41020/myHBase/.META.
+             hdfs://localhost:41020/myHBase/usertable
+             hdfs://localhost:41020/myHBase/TestTable
+             hdfs://localhost:41020/myHBase/t
+
+             Count of HFileV1: 2
+             HFileV1:
+             hdfs://localhost:41020/myHBase/usertable    /fa02dac1f38d03577bd0f7e666f12812/family/249450144068442524
+             hdfs://localhost:41020/myHBase/usertable    /ecdd3eaee2d2fcf8184ac025555bb2af/family/249450144068442512
+
+             Count of corrupted files: 1
+             Corrupted Files:
+             hdfs://localhost:41020/myHBase/usertable/fa02dac1f38d03577bd0f7e666f12812/family/1
+             Count of Regions with HFileV1: 2
+             Regions to Major Compact:
+             hdfs://localhost:41020/myHBase/usertable/fa02dac1f38d03577bd0f7e666f12812
+             hdfs://localhost:41020/myHBase/usertable/ecdd3eaee2d2fcf8184ac025555bb2af
+
+             There are some HFileV1, or corrupt files (files with incorrect major version)
+</pre><p>
+             In the above sample output, there are two HFileV1 in two regions, and one corrupt file.
+             Corrupt files should probably be removed.  The regions that have HFileV1s need to be major
+             compacted.  To major compact, start up the hbase shell and review how to compact an individual
+             region.  After the major compaction is done, rerun the check step and the HFileV1s shoudl be
+             gone, replaced by HFileV2 instances.
+         </p><p>By default, the check step scans the hbase root directory (defined as hbase.rootdir in the configuration).
+             To scan a specific directory only, pass the <span class="emphasis"><em>-dir</em></span> option.
+             </p><pre class="programlisting">$ bin/hbase upgrade -check -dir /myHBase/testTable</pre><p>
+             The above command would detect HFileV1s in the /myHBase/testTable directory.
+         </p><p>
+             Once the check step reports all the HFileV1 files have been rewritten, it is safe to proceed with the
+             upgrade.
+          </p></div><div class="section" title="1.2.1.2.&nbsp;execute"><div class="titlepage"><div><div><h4 class="title"><a name="d5180e100"></a>1.2.1.2.&nbsp;execute</h4></div></div></div><p>After the check step shows the cluster is free of HFileV1, it is safe to proceed with the upgrade.
+             Next is the <span class="emphasis"><em>execute</em></span> step.  You must <span class="emphasis"><em>SHUTDOWN YOUR 0.94.x CLUSTER</em></span>
+             before you can run the <span class="emphasis"><em>execute</em></span> step.  The execute step will not run if it
+             detects running HBase masters or regionservers.
+         </p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>HDFS and ZooKeeper should be up and running during the upgrade process.
+             If zookeeper is managed by HBase, then you can start zookeeper so it is available to the upgrade
+             by running </p><pre class="programlisting">$ ./hbase/bin/hbase-daemon.sh  start zookeeper</pre><p>
+         </p></div><p>
+         </p><p>
+             The <span class="emphasis"><em>execute</em></span> upgrade step is made of three substeps.
+
+             </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem"><p>Namespaces: HBase 0.96.0 has support for namespaces.  The upgrade needs to reorder directories in the filesystem for namespaces to work.</p></li><li class="listitem"><p>ZNodes: All znodes are purged so that new ones can be written in their place using a new protobuf'ed format and a few are migrated in place: e.g. replication and table state znodes</p></li><li class="listitem"><p>WAL Log Splitting: If the 0.94.x cluster shutdown was not clean, we'll split WAL logs as part of migration before
+                     we startup on 0.96.0.  This WAL splitting runs slower than the native distributed WAL splitting because it is all inside the
+                     single upgrade process (so try and get a clean shutdown of the 0.94.0 cluster  if you can).
+             </p></li></ul></div><p>
+         </p><p>
+             To run the <span class="emphasis"><em>execute</em></span> step, make sure that first you have copied hbase-0.96.0
+             binaries everywhere under servers and under clients.  Make sure the 0.94.0 cluster is down.
+             Then do as follows:
+         </p><pre class="programlisting">$ bin/hbase upgrade -execute</pre><p>
+         Here is some sample output
+         </p><pre class="programlisting">
+             Starting Namespace upgrade
+             Created version file at hdfs://localhost:41020/myHBase with version=7
+             Migrating table testTable to hdfs://localhost:41020/myHBase/.data/default/testTable
+             &#8230;..
+             Created version file at hdfs://localhost:41020/myHBase with version=8
+             Successfully completed NameSpace upgrade.
+             Starting Znode upgrade
+             &#8230;.
+             Successfully completed Znode upgrade
+
+             Starting Log splitting
+             &#8230;
+             Successfully completed Log splitting
+         </pre><p>
+         </p><p>
+             If the output from the execute step looks good, start hbase-0.96.0.
+         </p></div><div class="section" title="1.2.1.3.&nbsp;Troubleshooting"><div class="titlepage"><div><div><h4 class="title"><a name="096.migration.troubleshooting"></a>1.2.1.3.&nbsp;Troubleshooting</h4></div></div></div><div class="section" title="1.2.1.3.1.&nbsp;Old Client connecting to 0.96 cluster"><div class="titlepage"><div><div><h5 class="title"><a name="096.migration.troubleshooting.old.client"></a>1.2.1.3.1.&nbsp;Old Client connecting to 0.96 cluster</h5></div></div></div><p>It will fail with an exception like the below.  Upgrade.
+             </p><pre class="programlisting">17:22:15  Exception in thread "main" java.lang.IllegalArgumentException: Not a host:port pair: PBUF
+17:22:15  *
+17:22:15   api-compat-8.ent.cloudera.com &#65533;&#65533;  &#65533;&#65533;&#65533;(
+17:22:15    at org.apache.hadoop.hbase.util.Addressing.parseHostname(Addressing.java:60)
+17:22:15    at org.apache.hadoop.hbase.ServerName.&amp;init&gt;(ServerName.java:101)
+17:22:15    at org.apache.hadoop.hbase.ServerName.parseVersionedServerName(ServerName.java:283)
+17:22:15    at org.apache.hadoop.hbase.MasterAddressTracker.bytesToServerName(MasterAddressTracker.java:77)
+17:22:15    at org.apache.hadoop.hbase.MasterAddressTracker.getMasterAddress(MasterAddressTracker.java:61)
+17:22:15    at org.apache.hadoop.hbase.client.HConnectionManager$HConnectionImplementation.getMaster(HConnectionManager.java:703)
+17:22:15    at org.apache.hadoop.hbase.client.HBaseAdmin.&amp;init&gt;(HBaseAdmin.java:126)
+17:22:15    at Client_4_3_0.setup(Client_4_3_0.java:716)
+17:22:15    at Client_4_3_0.main(Client_4_3_0.java:63)</pre><p>
+         </p></div></div></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'upgrade0.96';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="upgrading.html">Prev</a>&nbsp;</td><td width="20%" align="center">&nbsp;</td><td width="40%" align="right">&nbsp;<a accesskey="n" href="upgrade0.94.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;1.&nbsp;Upgrading&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="upgrading.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;1.3.&nbsp;Upgrading from 0.92.x to 0.94.x</td></tr></table></div></body></html>

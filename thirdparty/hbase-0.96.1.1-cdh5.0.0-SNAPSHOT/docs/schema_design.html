@@ -1,0 +1,575 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+   <title>Chapter&nbsp;1.&nbsp;HBase and Schema Design</title><link rel="stylesheet" type="text/css" href="css/freebsd_docbook.css"><meta name="generator" content="DocBook XSL-NS Stylesheets V1.76.1"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="chapter" title="Chapter&nbsp;1.&nbsp;HBase and Schema Design"><div class="titlepage"><div><div><h2 class="title"><a name="schema"></a>Chapter&nbsp;1.&nbsp;HBase and Schema Design</h2></div></div></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="section"><a href="#schema.creation">1.1. 
+      Schema Creation
+  </a></span></dt><dd><dl><dt><span class="section"><a href="#schema.updates">1.1.1. Schema Updates</a></span></dt></dl></dd><dt><span class="section"><a href="#number.of.cfs">1.2. 
+      On the number of column families
+  </a></span></dt><dd><dl><dt><span class="section"><a href="#number.of.cfs.card">1.2.1. Cardinality of ColumnFamilies</a></span></dt></dl></dd><dt><span class="section"><a href="#rowkey.design">1.3. Rowkey Design</a></span></dt><dd><dl><dt><span class="section"><a href="#timeseries">1.3.1. 
+    Monotonically Increasing Row Keys/Timeseries Data
+    </a></span></dt><dt><span class="section"><a href="#keysize">1.3.2. Try to minimize row and column sizes</a></span></dt><dt><span class="section"><a href="#reverse.timestamp">1.3.3. Reverse Timestamps</a></span></dt><dt><span class="section"><a href="#rowkey.scope">1.3.4. Rowkeys and ColumnFamilies</a></span></dt><dt><span class="section"><a href="#changing.rowkeys">1.3.5. Immutability of Rowkeys</a></span></dt><dt><span class="section"><a href="#rowkey.regionsplits">1.3.6. Relationship Between RowKeys and Region Splits</a></span></dt></dl></dd><dt><span class="section"><a href="#schema.versions">1.4. 
+  Number of Versions
+  </a></span></dt><dd><dl><dt><span class="section"><a href="#schema.versions.max">1.4.1. Maximum Number of Versions</a></span></dt><dt><span class="section"><a href="#schema.minversions">1.4.2. 
+    Minimum Number of Versions
+    </a></span></dt></dl></dd><dt><span class="section"><a href="#supported.datatypes">1.5. 
+  Supported Datatypes
+  </a></span></dt><dd><dl><dt><span class="section"><a href="#counters">1.5.1. Counters</a></span></dt></dl></dd><dt><span class="section"><a href="#schema.joins">1.6. Joins</a></span></dt><dt><span class="section"><a href="#ttl">1.7. Time To Live (TTL)</a></span></dt><dt><span class="section"><a href="#cf.keep.deleted">1.8. 
+  Keeping Deleted Cells
+  </a></span></dt><dt><span class="section"><a href="#secondary.indexes">1.9. 
+  Secondary Indexes and Alternate Query Paths
+  </a></span></dt><dd><dl><dt><span class="section"><a href="#secondary.indexes.filter">1.9.1. 
+       Filter Query
+      </a></span></dt><dt><span class="section"><a href="#secondary.indexes.periodic">1.9.2. 
+       Periodic-Update Secondary Index
+      </a></span></dt><dt><span class="section"><a href="#secondary.indexes.dualwrite">1.9.3. 
+       Dual-Write Secondary Index
+      </a></span></dt><dt><span class="section"><a href="#secondary.indexes.summary">1.9.4. 
+       Summary Tables
+      </a></span></dt><dt><span class="section"><a href="#secondary.indexes.coproc">1.9.5. 
+       Coprocessor Secondary Index
+      </a></span></dt></dl></dd><dt><span class="section"><a href="#constraints">1.10. Constraints</a></span></dt><dt><span class="section"><a href="#schema.casestudies">1.11. Schema Design Case Studies</a></span></dt><dd><dl><dt><span class="section"><a href="#schema.casestudies.log-timeseries">1.11.1. Case Study - Log Data and Timeseries Data</a></span></dt><dt><span class="section"><a href="#schema.casestudies.log-steroids">1.11.2. Case Study - Log Data and Timeseries Data on Steroids</a></span></dt><dt><span class="section"><a href="#schema.casestudies.custorder">1.11.3. Case Study - Customer/Order</a></span></dt><dt><span class="section"><a href="#schema.smackdown">1.11.4. Case Study - "Tall/Wide/Middle" Schema Design Smackdown</a></span></dt><dt><span class="section"><a href="#casestudies.schema.listdata">1.11.5. Case Study - List Data</a></span></dt></dl></dd><dt><span class="section"><a href="#schema.ops">1.12. Operational and Performance Configuration Options</a></span></dt></dl></div><p>A good general introduction on the strength and weaknesses modelling on
+          the various non-rdbms datastores is Ian Varley's Master thesis,
+          <a class="link" href="http://ianvarley.com/UT/MR/Varley_MastersReport_Full_2009-08-07.pdf" target="_top">No Relation: The Mixed Blessings of Non-Relational Databases</a>.
+          Recommended.  Also, read <a class="xref" href="#">???</a> for how HBase stores data internally, and the section on 
+          <a class="xref" href="#schema.casestudies" title="1.11.&nbsp;Schema Design Case Studies">Section&nbsp;1.11, &#8220;Schema Design Case Studies&#8221;</a>.
+      </p><div class="section" title="1.1.&nbsp; Schema Creation"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.creation"></a>1.1.&nbsp;
+      Schema Creation
+  </h2></div></div></div><p>HBase schemas can be created or updated with <a class="xref" href="#">???</a>
+      or by using <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HBaseAdmin.html" target="_top">HBaseAdmin</a> in the Java API.
+      </p><p>Tables must be disabled when making ColumnFamily modifications, for example..
+      </p><pre class="programlisting">
+Configuration config = HBaseConfiguration.create();
+HBaseAdmin admin = new HBaseAdmin(conf);
+String table = "myTable";
+
+admin.disableTable(table);
+
+HColumnDescriptor cf1 = ...;
+admin.addColumn(table, cf1);      // adding new ColumnFamily
+HColumnDescriptor cf2 = ...;
+admin.modifyColumn(table, cf2);    // modifying existing ColumnFamily
+
+admin.enableTable(table);
+      </pre><p>
+      </p>See <a class="xref" href="#">???</a> for more information about configuring client connections.
+      <p>Note:  online schema changes are supported in the 0.92.x codebase, but the 0.90.x codebase requires the table
+      to be disabled.
+      </p><div class="section" title="1.1.1.&nbsp;Schema Updates"><div class="titlepage"><div><div><h3 class="title"><a name="schema.updates"></a>1.1.1.&nbsp;Schema Updates</h3></div></div></div><p>When changes are made to either Tables or ColumnFamilies (e.g., region size, block size), these changes
+      take effect the next time there is a major compaction and the StoreFiles get re-written.
+      </p><p>See <a class="xref" href="#">???</a> for more information on StoreFiles.
+      </p></div></div><div class="section" title="1.2.&nbsp; On the number of column families"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="number.of.cfs"></a>1.2.&nbsp;
+      On the number of column families
+  </h2></div></div></div><p>
+      HBase currently does not do well with anything above two or three column families so keep the number
+      of column families in your schema low.  Currently, flushing and compactions are done on a per Region basis so
+      if one column family is carrying the bulk of the data bringing on flushes, the adjacent families
+      will also be flushed though the amount of data they carry is small.  When many column families the
+      flushing and compaction interaction can make for a bunch of needless i/o loading (To be addressed by
+      changing flushing and compaction to work on a per column family basis).  For more information
+      on compactions, see <a class="xref" href="#">???</a>.
+    </p><p>Try to make do with one column family if you can in your schemas.  Only introduce a
+        second and third column family in the case where data access is usually column scoped;
+        i.e. you query one column family or the other but usually not both at the one time.
+    </p><div class="section" title="1.2.1.&nbsp;Cardinality of ColumnFamilies"><div class="titlepage"><div><div><h3 class="title"><a name="number.of.cfs.card"></a>1.2.1.&nbsp;Cardinality of ColumnFamilies</h3></div></div></div><p>Where multiple ColumnFamilies exist in a single table, be aware of the cardinality (i.e., number of rows).
+      If ColumnFamilyA has 1 million rows and ColumnFamilyB has 1 billion rows, ColumnFamilyA's data will likely be spread
+      across many, many regions (and RegionServers).  This makes mass scans for ColumnFamilyA less efficient.
+      </p></div></div><div class="section" title="1.3.&nbsp;Rowkey Design"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="rowkey.design"></a>1.3.&nbsp;Rowkey Design</h2></div></div></div><div class="section" title="1.3.1.&nbsp; Monotonically Increasing Row Keys/Timeseries Data"><div class="titlepage"><div><div><h3 class="title"><a name="timeseries"></a>1.3.1.&nbsp;
+    Monotonically Increasing Row Keys/Timeseries Data
+    </h3></div></div></div><p>
+      In the HBase chapter of Tom White's book Hadoop: The Definitive Guide (O'Reilly) there is a an optimization note on watching out for a phenomenon where an import process walks in lock-step with all clients in concert pounding one of the table's regions (and thus, a single node), then moving onto the next region, etc.  With monotonically increasing row-keys (i.e., using a timestamp), this will happen.  See this comic by IKai Lan on why monotonically increasing row keys are problematic in BigTable-like datastores:
+      <a class="link" href="http://ikaisays.com/2011/01/25/app-engine-datastore-tip-monotonically-increasing-values-are-bad/" target="_top">monotonically increasing values are bad</a>.  The pile-up on a single region brought on
+      by monotonically increasing keys can be mitigated by randomizing the input records to not be in sorted order, but in general it's best to avoid using a timestamp or a sequence (e.g. 1, 2, 3) as the row-key.
+    </p><p>If you do need to upload time series data into HBase, you should
+    study <a class="link" href="http://opentsdb.net/" target="_top">OpenTSDB</a> as a
+    successful example.  It has a page describing the <a class="link" href=" http://opentsdb.net/schema.html" target="_top">schema</a> it uses in
+    HBase.  The key format in OpenTSDB is effectively [metric_type][event_timestamp], which would appear at first glance to contradict the previous advice about not using a timestamp as the key.  However, the difference is that the timestamp is not in the <span class="emphasis"><em>lead</em></span> position of the key, and the design assumption is that there are dozens or hundreds (or more) of different metric types.  Thus, even with a continual stream of input data with a mix of metric types, the Puts are distributed across various points of regions in the table.
+   </p><p>See <a class="xref" href="#schema.casestudies" title="1.11.&nbsp;Schema Design Case Studies">Section&nbsp;1.11, &#8220;Schema Design Case Studies&#8221;</a> for some rowkey design examples.
+   </p></div><div class="section" title="1.3.2.&nbsp;Try to minimize row and column sizes"><div class="titlepage"><div><div><h3 class="title"><a name="keysize"></a>1.3.2.&nbsp;Try to minimize row and column sizes</h3></div><div><h4 class="subtitle">Or why are my StoreFile indices large?</h4></div></div></div><p>In HBase, values are always freighted with their coordinates; as a
+          cell value passes through the system, it'll be accompanied by its
+          row, column name, and timestamp - always.  If your rows and column names
+          are large, especially compared to the size of the cell value, then
+          you may run up against some interesting scenarios.  One such is
+          the case described by Marc Limotte at the tail of
+          HBASE-3551
+          (recommended!).
+          Therein, the indices that are kept on HBase storefiles (<a class="xref" href="#">???</a>)
+                  to facilitate random access may end up occupyng large chunks of the HBase
+                  allotted RAM because the cell value coordinates are large.
+                  Mark in the above cited comment suggests upping the block size so
+                  entries in the store file index happen at a larger interval or
+                  modify the table schema so it makes for smaller rows and column
+                  names.
+                  Compression will also make for larger indices.  See
+                  the thread <a class="link" href="http://search-hadoop.com/m/hemBv1LiN4Q1/a+question+storefileIndexSize&amp;subj=a+question+storefileIndexSize" target="_top">a question storefileIndexSize</a>
+                  up on the user mailing list.
+       </p><p>Most of the time small inefficiencies don't matter all that much.  Unfortunately,
+         this is a case where they do.  Whatever patterns are selected for ColumnFamilies, attributes, and rowkeys they could be repeated
+       several billion times in your data. </p><p>See <a class="xref" href="#">???</a> for more information on HBase stores data internally to see why this is important.</p><div class="section" title="1.3.2.1.&nbsp;Column Families"><div class="titlepage"><div><div><h4 class="title"><a name="keysize.cf"></a>1.3.2.1.&nbsp;Column Families</h4></div></div></div><p>Try to keep the ColumnFamily names as small as possible, preferably one character (e.g. "d" for data/default).
+         </p><p>See <a class="xref" href="#">???</a> for more information on HBase stores data internally to see why this is important.</p></div><div class="section" title="1.3.2.2.&nbsp;Attributes"><div class="titlepage"><div><div><h4 class="title"><a name="keysize.atttributes"></a>1.3.2.2.&nbsp;Attributes</h4></div></div></div><p>Although verbose attribute names (e.g., "myVeryImportantAttribute") are easier to read, prefer shorter attribute names (e.g., "via")
+         to store in HBase.
+         </p><p>See <a class="xref" href="#">???</a> for more information on HBase stores data internally to see why this is important.</p></div><div class="section" title="1.3.2.3.&nbsp;Rowkey Length"><div class="titlepage"><div><div><h4 class="title"><a name="keysize.row"></a>1.3.2.3.&nbsp;Rowkey Length</h4></div></div></div><p>Keep them as short as is reasonable such that they can still be useful for required data access (e.g., Get vs. Scan).
+         A short key that is useless for data access is not better than a longer key with better get/scan properties.  Expect tradeoffs
+         when designing rowkeys.
+         </p></div><div class="section" title="1.3.2.4.&nbsp;Byte Patterns"><div class="titlepage"><div><div><h4 class="title"><a name="keysize.patterns"></a>1.3.2.4.&nbsp;Byte Patterns</h4></div></div></div><p>A long is 8 bytes.  You can store an unsigned number up to 18,446,744,073,709,551,615 in those eight bytes.
+            If you stored this number as a String -- presuming a byte per character -- you need nearly 3x the bytes.
+         </p><p>Not convinced?  Below is some sample code that you can run on your own.
+</p><pre class="programlisting">
+// long
+//
+long l = 1234567890L;
+byte[] lb = Bytes.toBytes(l);
+System.out.println("long bytes length: " + lb.length);   // returns 8
+
+String s = "" + l;
+byte[] sb = Bytes.toBytes(s);
+System.out.println("long as string length: " + sb.length);    // returns 10
+
+// hash
+//
+MessageDigest md = MessageDigest.getInstance("MD5");
+byte[] digest = md.digest(Bytes.toBytes(s));
+System.out.println("md5 digest bytes length: " + digest.length);    // returns 16
+
+String sDigest = new String(digest);
+byte[] sbDigest = Bytes.toBytes(sDigest);
+System.out.println("md5 digest as string length: " + sbDigest.length);    // returns 26
+</pre><p>
+         </p><p>Unfortunately, using a binary representation of a type will make your data harder to read outside of your code. For example,
+               this is what you will see in the shell when you increment a value:
+</p><pre class="programlisting">
+hbase(main):001:0&gt; incr 't', 'r', 'f:q', 1
+COUNTER VALUE = 1
+
+hbase(main):002:0&gt; get 't', 'r'
+COLUMN                                        CELL
+ f:q                                          timestamp=1369163040570, value=\x00\x00\x00\x00\x00\x00\x00\x01
+1 row(s) in 0.0310 seconds
+</pre><p>
+               The shell makes a best effort to print a string, and it this case it decided to just print the hex. The same will
+               happen to your row keys inside the region names. It can be okay if you know what's being stored, but it might also
+               be unreadable if arbitrary data can be put in the same cells. This is the main trade-off.
+         </p></div></div><div class="section" title="1.3.3.&nbsp;Reverse Timestamps"><div class="titlepage"><div><div><h3 class="title"><a name="reverse.timestamp"></a>1.3.3.&nbsp;Reverse Timestamps</h3></div></div></div><p>A common problem in database processing is quickly finding the most recent version of a value.  A technique using reverse timestamps
+    as a part of the key can help greatly with a special case of this problem.  Also found in the HBase chapter of Tom White's book Hadoop:  The Definitive Guide (O'Reilly),
+    the technique involves appending (<code class="code">Long.MAX_VALUE - timestamp</code>) to the end of any key, e.g., [key][reverse_timestamp].
+    </p><p>The most recent value for [key] in a table can be found by performing a Scan for [key] and obtaining the first record.  Since HBase keys
+    are in sorted order, this key sorts before any older row-keys for [key] and thus is first.
+    </p><p>This technique would be used instead of using <a class="xref" href="#schema.versions" title="1.4.&nbsp; Number of Versions">Section&nbsp;1.4, &#8220;
+  Number of Versions
+  &#8221;</a> where the intent is to hold onto all versions
+    "forever" (or a very long time) and at the same time quickly obtain access to any other version by using the same Scan technique.
+    </p></div><div class="section" title="1.3.4.&nbsp;Rowkeys and ColumnFamilies"><div class="titlepage"><div><div><h3 class="title"><a name="rowkey.scope"></a>1.3.4.&nbsp;Rowkeys and ColumnFamilies</h3></div></div></div><p>Rowkeys are scoped to ColumnFamilies.  Thus, the same rowkey could exist in each ColumnFamily that exists in a table without collision.
+    </p></div><div class="section" title="1.3.5.&nbsp;Immutability of Rowkeys"><div class="titlepage"><div><div><h3 class="title"><a name="changing.rowkeys"></a>1.3.5.&nbsp;Immutability of Rowkeys</h3></div></div></div><p>Rowkeys cannot be changed.  The only way they can be "changed" in a table is if the row is deleted and then re-inserted.
+    This is a fairly common question on the HBase dist-list so it pays to get the rowkeys right the first time (and/or before you've
+    inserted a lot of data).
+    </p></div><div class="section" title="1.3.6.&nbsp;Relationship Between RowKeys and Region Splits"><div class="titlepage"><div><div><h3 class="title"><a name="rowkey.regionsplits"></a>1.3.6.&nbsp;Relationship Between RowKeys and Region Splits</h3></div></div></div><p>If you pre-split your table, it is <span class="emphasis"><em>critical</em></span> to understand how your rowkey will be distributed across
+    the region boundaries.  As an example of why this is important, consider the example of using displayable hex characters as the
+    lead position of the key (e.g., ""0000000000000000" to "ffffffffffffffff").  Running those key ranges through <code class="code">Bytes.split</code>
+    (which is the split strategy used when creating regions in <code class="code">HBaseAdmin.createTable(byte[] startKey, byte[] endKey, numRegions)</code>
+    for 10 regions will generate the following splits...
+    </p><p>
+    </p><pre class="programlisting">
+48 48 48 48 48 48 48 48 48 48 48 48 48 48 48 48                                // 0
+54 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10 -10                 // 6
+61 -67 -67 -67 -67 -67 -67 -67 -67 -67 -67 -67 -67 -67 -67 -68                 // =
+68 -124 -124 -124 -124 -124 -124 -124 -124 -124 -124 -124 -124 -124 -124 -126  // D
+75 75 75 75 75 75 75 75 75 75 75 75 75 75 75 72                                // K
+82 18 18 18 18 18 18 18 18 18 18 18 18 18 18 14                                // R
+88 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -44                 // X
+95 -97 -97 -97 -97 -97 -97 -97 -97 -97 -97 -97 -97 -97 -97 -102                // _
+102 102 102 102 102 102 102 102 102 102 102 102 102 102 102 102                // f
+    </pre><p>
+    ... (note:  the lead byte is listed to the right as a comment.)  Given that the first split is a '0' and the last split is an 'f',
+    everything is great, right?  Not so fast.
+    </p><p>The problem is that all the data is going to pile up in the first 2 regions and the last region thus creating a "lumpy" (and
+    possibly "hot") region problem.  To understand why, refer to an  <a class="link" href="http://www.asciitable.com" target="_top">ASCII Table</a>.
+    '0' is byte 48, and 'f' is byte 102, but there is a huge gap in byte values (bytes 58 to 96) that will <span class="emphasis"><em>never appear in this
+    keyspace</em></span> because the only values are [0-9] and [a-f].  Thus, the middle regions regions will
+    never be used.  To make pre-spliting work with this example keyspace, a custom definition of splits (i.e., and not relying on the
+    built-in split method) is required.
+    </p><p>Lesson #1:  Pre-splitting tables is generally a best practice, but you need to pre-split them in such a way that all the
+    regions are accessible in the keyspace.  While this example demonstrated the problem with a hex-key keyspace, the same problem can happen
+     with <span class="emphasis"><em>any</em></span> keyspace.  Know your data.
+    </p><p>Lesson #2:  While generally not advisable, using hex-keys (and more generally, displayable data) can still work with pre-split
+    tables as long as all the created regions are accessible in the keyspace.
+    </p><p>To conclude this example, the following is an example of  how appropriate splits can be pre-created for hex-keys:.
+	    </p><pre class="programlisting">public static boolean createTable(HBaseAdmin admin, HTableDescriptor table, byte[][] splits)
+throws IOException {
+  try {
+    admin.createTable( table, splits );
+    return true;
+  } catch (TableExistsException e) {
+    logger.info("table " + table.getNameAsString() + " already exists");
+    // the table already exists...
+    return false;
+  }
+}
+
+public static byte[][] getHexSplits(String startKey, String endKey, int numRegions) {
+  byte[][] splits = new byte[numRegions-1][];
+  BigInteger lowestKey = new BigInteger(startKey, 16);
+  BigInteger highestKey = new BigInteger(endKey, 16);
+  BigInteger range = highestKey.subtract(lowestKey);
+  BigInteger regionIncrement = range.divide(BigInteger.valueOf(numRegions));
+  lowestKey = lowestKey.add(regionIncrement);
+  for(int i=0; i &lt; numRegions-1;i++) {
+    BigInteger key = lowestKey.add(regionIncrement.multiply(BigInteger.valueOf(i)));
+    byte[] b = String.format("%016x", key).getBytes();
+    splits[i] = b;
+  }
+  return splits;
+}</pre></div></div><div class="section" title="1.4.&nbsp; Number of Versions"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.versions"></a>1.4.&nbsp;
+  Number of Versions
+  </h2></div></div></div><div class="section" title="1.4.1.&nbsp;Maximum Number of Versions"><div class="titlepage"><div><div><h3 class="title"><a name="schema.versions.max"></a>1.4.1.&nbsp;Maximum Number of Versions</h3></div></div></div><p>The maximum number of row versions to store is configured per column
+      family via <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/HColumnDescriptor.html" target="_top">HColumnDescriptor</a>.
+      The default for max versions is 3.
+      This is an important parameter because as described in <a class="xref" href="#">???</a>
+      section HBase does <span class="emphasis"><em>not</em></span> overwrite row values, but rather
+      stores different values per row by time (and qualifier).  Excess versions are removed during major
+      compactions.  The number of max versions may need to be increased or decreased depending on application needs.
+      </p><p>It is not recommended setting the number of max versions to an exceedingly high level (e.g., hundreds or more) unless those old values are
+      very dear to you because this will greatly increase StoreFile size.
+      </p></div><div class="section" title="1.4.2.&nbsp; Minimum Number of Versions"><div class="titlepage"><div><div><h3 class="title"><a name="schema.minversions"></a>1.4.2.&nbsp;
+    Minimum Number of Versions
+    </h3></div></div></div><p>Like maximum number of row versions, the minimum number of row versions to keep is configured per column
+      family via <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/HColumnDescriptor.html" target="_top">HColumnDescriptor</a>.
+      The default for min versions is 0, which means the feature is disabled.
+      The minimum number of row versions parameter is used together with the time-to-live parameter and can be combined with the
+      number of row versions parameter to allow configurations such as
+      "keep the last T minutes worth of data, at most N versions, <span class="emphasis"><em>but keep at least M versions around</em></span>"
+      (where M is the value for minimum number of row versions, M&lt;N).
+      This parameter should only be set when time-to-live is enabled for a column family and must be less than the
+      number of row versions.
+    </p></div></div><div class="section" title="1.5.&nbsp; Supported Datatypes"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="supported.datatypes"></a>1.5.&nbsp;
+  Supported Datatypes
+  </h2></div></div></div><p>HBase supports a "bytes-in/bytes-out" interface via <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Put.html" target="_top">Put</a> and
+  <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Result.html" target="_top">Result</a>, so anything that can be
+  converted to an array of bytes can be stored as a value.  Input could be strings, numbers, complex objects, or even images as long as they can rendered as bytes.
+  </p><p>There are practical limits to the size of values (e.g., storing 10-50MB objects in HBase would probably be too much to ask);
+  search the mailling list for conversations on this topic. All rows in HBase conform to the <a class="xref" href="#">???</a>, and
+  that includes versioning.  Take that into consideration when making your design, as well as block size for the ColumnFamily.
+  </p><div class="section" title="1.5.1.&nbsp;Counters"><div class="titlepage"><div><div><h3 class="title"><a name="counters"></a>1.5.1.&nbsp;Counters</h3></div></div></div><p>
+      One supported datatype that deserves special mention are "counters" (i.e., the ability to do atomic increments of numbers).  See
+      <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HTable.html#increment%28org.apache.hadoop.hbase.client.Increment%29" target="_top">Increment</a> in HTable.
+      </p><p>Synchronization on counters are done on the RegionServer, not in the client.
+      </p></div></div><div class="section" title="1.6.&nbsp;Joins"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.joins"></a>1.6.&nbsp;Joins</h2></div></div></div><p>If you have multiple tables, don't forget to factor in the potential for <a class="xref" href="#">???</a> into the schema design.
+    </p></div><div class="section" title="1.7.&nbsp;Time To Live (TTL)"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="ttl"></a>1.7.&nbsp;Time To Live (TTL)</h2></div></div></div><p>ColumnFamilies can set a TTL length in seconds, and HBase will automatically delete rows once the expiration time is reached.
+  This applies to <span class="emphasis"><em>all</em></span> versions of a row - even the current one.  The TTL time encoded in the HBase for the row is specified in UTC.
+  </p><p>See <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/HColumnDescriptor.html" target="_top">HColumnDescriptor</a> for more information.
+  </p></div><div class="section" title="1.8.&nbsp; Keeping Deleted Cells"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="cf.keep.deleted"></a>1.8.&nbsp;
+  Keeping Deleted Cells
+  </h2></div></div></div><p>ColumnFamilies can optionally keep deleted cells. That means deleted cells can still be retrieved with
+  <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Get.html" target="_top">Get</a> or
+  <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Scan.html" target="_top">Scan</a> operations,
+  as long these operations have a time range specified that ends before the timestamp of any delete that would affect the cells.
+  This allows for point in time queries even in the presence of deletes.
+  </p><p>
+  Deleted cells are still subject to TTL and there will never be more than "maximum number of versions" deleted cells.
+  A new "raw" scan options returns all deleted rows and the delete markers.
+  </p><p>See <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/HColumnDescriptor.html" target="_top">HColumnDescriptor</a> for more information.
+  </p></div><div class="section" title="1.9.&nbsp; Secondary Indexes and Alternate Query Paths"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="secondary.indexes"></a>1.9.&nbsp;
+  Secondary Indexes and Alternate Query Paths
+  </h2></div></div></div><p>This section could also be titled "what if my table rowkey looks like <span class="emphasis"><em>this</em></span> but I also want to query my table like <span class="emphasis"><em>that</em></span>."
+  A common example on the dist-list is where a row-key is of the format "user-timestamp" but there are reporting requirements on activity across users for certain
+  time ranges.  Thus, selecting by user is easy because it is in the lead position of the key, but time is not.
+  </p><p>There is no single answer on the best way to handle this because it depends on...
+   </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Number of users</li><li class="listitem">Data size and data arrival rate</li><li class="listitem">Flexibility of reporting requirements (e.g., completely ad-hoc date selection vs. pre-configured ranges) </li><li class="listitem">Desired execution speed of query (e.g., 90 seconds may be reasonable to some for an ad-hoc report, whereas it may be too long for others) </li></ul></div><p>
+   ... and solutions are also influenced by the size of the cluster and how much processing power you have to throw at the solution.
+   Common techniques are in sub-sections below.  This is a comprehensive, but not exhaustive, list of approaches.
+  </p><p>It should not be a surprise that secondary indexes require additional cluster space and processing.
+  This is precisely what happens in an RDBMS because the act of creating an alternate index requires both space and processing cycles to update.  RBDMS products
+  are more advanced in this regard to handle alternative index management out of the box.  However, HBase scales better at larger data volumes, so this is a feature trade-off.
+  </p><p>Pay attention to <a class="xref" href="#">???</a> when implementing any of these approaches.</p><p>Additionally, see the David Butler response in this dist-list thread <a class="link" href="http://search-hadoop.com/m/nvbiBp2TDP/Stargate%252Bhbase&amp;subj=Stargate+hbase" target="_top">HBase, mail # user - Stargate+hbase</a>
+   </p><div class="section" title="1.9.1.&nbsp; Filter Query"><div class="titlepage"><div><div><h3 class="title"><a name="secondary.indexes.filter"></a>1.9.1.&nbsp;
+       Filter Query
+      </h3></div></div></div><p>Depending on the case, it may be appropriate to use <a class="xref" href="#">???</a>.  In this case, no secondary index is created.
+      However, don't try a full-scan on a large table like this from an application (i.e., single-threaded client).
+      </p></div><div class="section" title="1.9.2.&nbsp; Periodic-Update Secondary Index"><div class="titlepage"><div><div><h3 class="title"><a name="secondary.indexes.periodic"></a>1.9.2.&nbsp;
+       Periodic-Update Secondary Index
+      </h3></div></div></div><p>A secondary index could be created in an other table which is periodically updated via a MapReduce job.  The job could be executed intra-day, but depending on
+      load-strategy it could still potentially be out of sync with the main data table.</p><p>See <a class="xref" href="#">???</a> for more information.</p></div><div class="section" title="1.9.3.&nbsp; Dual-Write Secondary Index"><div class="titlepage"><div><div><h3 class="title"><a name="secondary.indexes.dualwrite"></a>1.9.3.&nbsp;
+       Dual-Write Secondary Index
+      </h3></div></div></div><p>Another strategy is to build the secondary index while publishing data to the cluster (e.g., write to data table, write to index table).
+      If this is approach is taken after a data table already exists, then bootstrapping will be needed for the secondary index with a MapReduce job (see <a class="xref" href="#secondary.indexes.periodic" title="1.9.2.&nbsp; Periodic-Update Secondary Index">Section&nbsp;1.9.2, &#8220;
+       Periodic-Update Secondary Index
+      &#8221;</a>).</p></div><div class="section" title="1.9.4.&nbsp; Summary Tables"><div class="titlepage"><div><div><h3 class="title"><a name="secondary.indexes.summary"></a>1.9.4.&nbsp;
+       Summary Tables
+      </h3></div></div></div><p>Where time-ranges are very wide (e.g., year-long report) and where the data is voluminous, summary tables are a common approach.
+      These would be generated with MapReduce jobs into another table.</p><p>See <a class="xref" href="#">???</a> for more information.</p></div><div class="section" title="1.9.5.&nbsp; Coprocessor Secondary Index"><div class="titlepage"><div><div><h3 class="title"><a name="secondary.indexes.coproc"></a>1.9.5.&nbsp;
+       Coprocessor Secondary Index
+      </h3></div></div></div><p>Coprocessors act like RDBMS triggers.  These were added in 0.92.  For more information, see <a class="xref" href="#">???</a>
+      </p></div></div><div class="section" title="1.10.&nbsp;Constraints"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="constraints"></a>1.10.&nbsp;Constraints</h2></div></div></div><p>HBase currently supports 'constraints' in traditional (SQL) database parlance. The advised usage for Constraints is in enforcing business rules for attributes in the table (eg. make sure values are in the range 1-10).
+    Constraints could also be used to enforce referential integrity, but this is strongly discouraged as it will dramatically decrease the write throughput of the tables where integrity checking is enabled.
+    Extensive documentation on using Constraints can be found at: <a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/constraint" target="_top">Constraint</a> since version 0.94.
+    </p></div><div class="section" title="1.11.&nbsp;Schema Design Case Studies"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.casestudies"></a>1.11.&nbsp;Schema Design Case Studies</h2></div></div></div><p>The following will describe some typical data ingestion use-cases with HBase, and how the rowkey design and construction
+   can be approached.  Note:  this is just an illustration of potential approaches, not an exhaustive list. 
+   Know your data, and know your processing requirements.
+  </p><p>It is highly recommended that you read the rest of the <a class="xref" href="#schema" title="Chapter&nbsp;1.&nbsp;HBase and Schema Design">Chapter&nbsp;1, <i>HBase and Schema Design</i></a> first, before reading
+  these case studies.
+  </p><p>Thee following case studies are described:    
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Log Data / Timeseries Data</li><li class="listitem">Log Data / Timeseries on Steroids</li><li class="listitem">Customer/Order</li><li class="listitem">Tall/Wide/Middle Schema Design</li><li class="listitem">List Data</li></ul></div><p> 
+  </p><div class="section" title="1.11.1.&nbsp;Case Study - Log Data and Timeseries Data"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.log-timeseries"></a>1.11.1.&nbsp;Case Study - Log Data and Timeseries Data</h3></div></div></div><p>Assume that the following data elements are being collected.
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Hostname</li><li class="listitem">Timestamp</li><li class="listitem">Log event</li><li class="listitem">Value/message</li></ul></div><p>
+        We can store them in an HBase table called LOG_DATA, but what will the rowkey be?  
+       From these attributes the rowkey will be some combination of hostname, timestamp, and log-event - but what specifically?        
+      </p><div class="section" title="1.11.1.1.&nbsp;Timestamp In The Rowkey Lead Position"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.tslead"></a>1.11.1.1.&nbsp;Timestamp In The Rowkey Lead Position</h4></div></div></div><p>The rowkey <code class="code">[timestamp][hostname][log-event]</code> suffers from the monotonically increasing rowkey problem 
+        described in <a class="xref" href="#timeseries" title="1.3.1.&nbsp; Monotonically Increasing Row Keys/Timeseries Data">Section&nbsp;1.3.1, &#8220;
+    Monotonically Increasing Row Keys/Timeseries Data
+    &#8221;</a>.
+        </p><p>There is another pattern frequently mentioned in the dist-lists about &#8220;bucketing&#8221; timestamps, by performing a mod operation 
+        on the timestamp.  If time-oriented scans are important, this could be a useful approach.  Attention must be paid to the number
+        of buckets, because this will require the same number of scans to return results.
+</p><pre class="programlisting">
+long bucket = timestamp % numBuckets;
+</pre><p>
+        &#8230; to construct:
+</p><pre class="programlisting">
+[bucket][timestamp][hostname][log-event]
+</pre><p>        
+          As stated above, to select data for a particular timerange, a Scan will need to be performed for each bucket.  100 buckets,
+          for example, will provide a wide distribution in the keyspace but it will require 100 Scans to obtain data for a single
+          timestamp, so there are trade-offs. 
+        </p></div><div class="section" title="1.11.1.2.&nbsp;Host In The Rowkey Lead Position"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.hostlead"></a>1.11.1.2.&nbsp;Host In The Rowkey Lead Position</h4></div></div></div><p>The rowkey <code class="code">[hostname][log-event][timestamp]</code> is a candidate if there is a large-ish number of hosts to spread
+        the writes and reads across the keyspace.  This approach would be useful if scanning by hostname was a priority.
+        </p></div><div class="section" title="1.11.1.3.&nbsp;Timestamp, or Reverse Timestamp?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.revts"></a>1.11.1.3.&nbsp;Timestamp, or Reverse Timestamp?</h4></div></div></div><p>If the most important access path is to pull most recent events, then storing the timestamps as reverse-timestamps 
+        (e.g., <code class="code">timestamp = Long.MAX_VALUE &#8211; timestamp</code>) will create the property of being able to do a Scan on
+        <code class="code">[hostname][log-event]</code> to obtain the quickly obtain the most recently captured events.
+        </p><p>Neither approach is wrong, it just depends on what is most appropriate for the situation.
+        </p></div><div class="section" title="1.11.1.4.&nbsp;Variangle Length or Fixed Length Rowkeys?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.log-timeseries.varkeys"></a>1.11.1.4.&nbsp;Variangle Length or Fixed Length Rowkeys?</h4></div></div></div><p>It is critical to remember that rowkeys are stamped on every column in HBase.  If the hostname is &#8220;a&#8221; and the event type
+         is &#8220;e1&#8221; then the resulting rowkey would be quite small.  However, what if the ingested hostname is
+          &#8220;myserver1.mycompany.com&#8221; and the event type is &#8220;com.package1.subpackage2.subsubpackage3.ImportantService&#8221;?  
+         </p><p>It might make sense to use some substitution in the rowkey.  There are at least two approaches:  hashed and numeric.
+         In the Hostname In The Rowkey Lead Position example, it might look like this:
+        </p><p>Composite Rowkey With Hashes:  
+           </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[MD5 hash of hostname] = 16 bytes</li><li class="listitem">[MD5 hash of event-type] = 16 bytes</li><li class="listitem">[timestamp] = 8 bytes</li></ul></div><p>
+        </p><p>Composite Rowkey With Numeric Substitution: 
+        </p><p>For this approach another lookup table would be needed in addition to LOG_DATA, called LOG_TYPES.  
+        The rowkey of LOG_TYPES would be:
+		  </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[type]  (e.g., byte indicating hostname vs. event-type)</li><li class="listitem">[bytes]  variable length bytes for raw hostname or event-type.</li></ul></div><p>
+        A column for this rowkey could be a long with an assigned number, which could be obtained by using an 
+		<a class="link" href="http://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/HTable.html#incrementColumnValue%28byte[],%20byte[],%20byte[],%20long%29" target="_top">HBase counter</a>.
+        </p><p>So the resulting composite rowkey would be:
+		</p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[substituted long for hostname] = 8 bytes</li><li class="listitem">[substituted long for event type] = 8 bytes</li><li class="listitem">[timestamp] = 8 bytes</li></ul></div><p>
+		In either the Hash or Numeric substitution approach, the raw values for hostname and event-type can be stored as columns.
+        </p></div></div><div class="section" title="1.11.2.&nbsp;Case Study - Log Data and Timeseries Data on Steroids"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.log-steroids"></a>1.11.2.&nbsp;Case Study - Log Data and Timeseries Data on Steroids</h3></div></div></div><p>This effectively is the OpenTSDB approach.  What OpenTSDB does is re-write data and pack rows into columns for 
+        certain time-periods.  For a detailed explanation, see:  <a class="link" href="http://opentsdb.net/schema.html" target="_top">http://opentsdb.net/schema.html</a>, 
+        and <a class="link" href="http://www.cloudera.com/content/cloudera/en/resources/library/hbasecon/video-hbasecon-2012-lessons-learned-from-opentsdb.html" target="_top">Lessons Learned from OpenTSDB</a>
+	    from HBaseCon2012.
+      </p><p>But this is how the general concept works:  data is ingested, for example, in this manner&#8230;
+</p><pre class="programlisting">
+[hostname][log-event][timestamp1]
+[hostname][log-event][timestamp2]
+[hostname][log-event][timestamp3]
+</pre><p>
+       &#8230; with separate rowkeys for each detailed event, but is re-written like this&#8230; 
+       </p><p><code class="code">[hostname][log-event][timerange]</code>
+       </p><p>&#8230; and each of the above events are converted into columns stored with a time-offset relative to the beginning timerange 
+       (e.g., every 5 minutes).  This is obviously a very advanced processing technique, but HBase makes this possible.
+      </p></div><div class="section" title="1.11.3.&nbsp;Case Study - Customer/Order"><div class="titlepage"><div><div><h3 class="title"><a name="schema.casestudies.custorder"></a>1.11.3.&nbsp;Case Study - Customer/Order</h3></div></div></div><p>Assume that HBase is used to store customer and order information.  There are two core record-types being ingested:  
+        a Customer record type, and Order record type.
+      </p><p>The Customer record type would include all the things that you&#8217;d typically expect:
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Customer number</li><li class="listitem">Customer name</li><li class="listitem">Address (e.g., city, state, zip)</li><li class="listitem">Phone numbers, etc.</li></ul></div><p>
+     </p><p>The Order record type would include things like:
+        </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Customer number</li><li class="listitem">Order number</li><li class="listitem">Sales date</li><li class="listitem">A series of nested objects for shipping locations and line-items (see <a class="xref" href="#schema.casestudies.custorder.obj" title="1.11.3.2.&nbsp;Order Object Design">Section&nbsp;1.11.3.2, &#8220;Order Object Design&#8221;</a>
+           for details)</li></ul></div><p>
+    </p><p>Assuming that the combination of customer number and sales order uniquely identify an order, these two attributes will compose
+ the rowkey, and specifically a composite key such as:
+    </p><p><code class="code">[customer number][order number]</code>
+    </p><p>&#8230; for a ORDER table.  However, there are more design decisions to make:  are the <span class="emphasis"><em>raw</em></span> values the best choices for rowkeys?
+    </p><p>The same design questions in the Log Data use-case confront us here.  What is the keyspace of the customer number, and what is the 
+format (e.g., numeric?  alphanumeric?) As it is advantageous to use fixed-length keys in HBase, as well as keys that can support a 
+reasonable spread in the keyspace, similar options appear:
+    </p><p>Composite Rowkey With Hashes:  
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[MD5 of customer number] = 16 bytes</li><li class="listitem">[MD5 of order number] = 16 bytes</li></ul></div><p>
+    </p><p>Composite Numeric/Hash Combo Rowkey: 
+      </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[substituted long for customer number] = 8 bytes</li><li class="listitem">[MD5 of order number] = 16 bytes</li></ul></div><p>
+     </p><div class="section" title="1.11.3.1.&nbsp;Single Table? Multiple Tables?"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.custorder.tables"></a>1.11.3.1.&nbsp;Single Table?  Multiple Tables?</h4></div></div></div><p>A traditional design approach would have separate tables for CUSTOMER and SALES.  Another option is to pack multiple 
+            record types into a single table (e.g., CUSTOMER++).            
+            </p><p>Customer Record Type Rowkey:
+              </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[customer-id]</li><li class="listitem">[type] = type indicating &#8216;1&#8217; for customer record type</li></ul></div><p>
+            </p><p>Order Record Type Rowkey:
+              </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[customer-id]</li><li class="listitem">[type] = type indicating &#8216;2&#8217; for order record type</li><li class="listitem">[order]</li></ul></div><p>
+            </p><p>The advantage of this particular CUSTOMER++ approach is that organizes many different record-types by customer-id 
+            (e.g., a single scan could get you everything about that customer).  The disadvantage is that it&#8217;s not as easy to scan for
+            a particular record-type.
+            </p></div><div class="section" title="1.11.3.2.&nbsp;Order Object Design"><div class="titlepage"><div><div><h4 class="title"><a name="schema.casestudies.custorder.obj"></a>1.11.3.2.&nbsp;Order Object Design</h4></div></div></div><p>Now we need to address how to model the Order object.  Assume that the class structure is as follows:
+</p><pre class="programlisting">
+<code class="filename">Order</code>
+     <code class="filename">ShippingLocation</code>     (an Order can have multiple ShippingLocations)
+          <code class="filename">LineItem</code>               (a ShippingLocation can have multiple LineItems)
+</pre><p>
+	       ... there are multiple options on storing this data.
+	      </p><div class="section" title="1.11.3.2.1.&nbsp;Completely Normalized"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.norm"></a>1.11.3.2.1.&nbsp;Completely Normalized</h5></div></div></div><p>With this approach, there would be separate tables for ORDER, SHIPPING_LOCATION, and LINE_ITEM.          
+	        </p><p>The ORDER table's rowkey was described above: <a class="xref" href="#schema.casestudies.custorder" title="1.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;1.11.3, &#8220;Case Study - Customer/Order&#8221;</a>
+	        </p><p>The SHIPPING_LOCATION's composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li></ul></div><p>
+	        </p><p>The LINE_ITEM table's composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc.)</li></ul></div><p>
+	        </p><p>Such a normalized model is likely to be the approach with an RDBMS, but that's not your only option with HBase.
+	        The cons of such an approach is that to retrieve information about any Order, you will need:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">Get on the ORDER table for the Order</li><li class="listitem">Scan on the SHIPPING_LOCATION table for that order to get the ShippingLocation instances</li><li class="listitem">Scan on the LINE_ITEM for each ShippingLocation</li></ul></div><p>
+	          ... granted, this is what an RDBMS would do under the covers anyway, but since there are no joins in HBase
+	          you're just more aware of this fact.
+	        </p></div><div class="section" title="1.11.3.2.2.&nbsp;Single Table With Record Types"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.rectype"></a>1.11.3.2.2.&nbsp;Single Table With Record Types</h5></div></div></div><p>With this approach, there would exist a single table ORDER that would contain 
+	        </p><p>The Order rowkey was described above: <a class="xref" href="#schema.casestudies.custorder" title="1.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;1.11.3, &#8220;Case Study - Customer/Order&#8221;</a>
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[ORDER record type]</li></ul></div><p>
+	        </p><p>The ShippingLocation composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[SHIPPING record type]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li></ul></div><p>
+	        </p><p>The LineItem composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[LINE record type]</li><li class="listitem">[shipping location number] (e.g., 1st location, 2nd, etc.)</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc.)</li></ul></div><p>
+	        </p></div><div class="section" title="1.11.3.2.3.&nbsp;Denormalized"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.denorm"></a>1.11.3.2.3.&nbsp;Denormalized</h5></div></div></div><p>A variant of the Single Table With Record Types approach is to denormalize and flatten some of the object 
+	        hierarchy, such as collapsing the ShippingLocation attributes onto each LineItem instance.
+	        </p><p>The LineItem composite rowkey would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">[order-rowkey]</li><li class="listitem">[LINE record type]</li><li class="listitem">[line item number] (e.g., 1st lineitem, 2nd, etc. - care must be taken that there are unique across the entire order)</li></ul></div><p>
+	        </p><p>... and the LineItem columns would be something like this:
+	          </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">itemNumber</li><li class="listitem">quantity</li><li class="listitem">price</li><li class="listitem">shipToLine1 (denormalized from ShippingLocation)</li><li class="listitem">shipToLine2 (denormalized from ShippingLocation)</li><li class="listitem">shipToCity (denormalized from ShippingLocation)</li><li class="listitem">shipToState (denormalized from ShippingLocation)</li><li class="listitem">shipToZip (denormalized from ShippingLocation)</li></ul></div><p>
+	        </p><p>The pros of this approach include a less complex object heirarchy, but one of the cons is that updating gets more 
+	        complicated in case any of this information changes.
+	        </p></div><div class="section" title="1.11.3.2.4.&nbsp;Object BLOB"><div class="titlepage"><div><div><h5 class="title"><a name="schema.casestudies.custorder.obj.singleobj"></a>1.11.3.2.4.&nbsp;Object BLOB</h5></div></div></div><p>With this approach, the entire Order object graph is treated, in one way or another, as a BLOB.  For example, the 
+	        ORDER table's rowkey was described above: <a class="xref" href="#schema.casestudies.custorder" title="1.11.3.&nbsp;Case Study - Customer/Order">Section&nbsp;1.11.3, &#8220;Case Study - Customer/Order&#8221;</a>, and a 
+	        single column called "order" would contain an object that could be deserialized that contained a container Order, 
+	        ShippingLocations, and LineItems.
+	        </p><p>There are many options here:  JSON, XML, Java Serialization, Avro, Hadoop Writables, etc.  All of them are variants
+	        of the same approach:  encode the object graph to a byte-array.  Care should be taken with this approach to ensure backward 
+	        compatibilty in case the object model changes such that older persisted structures can still be read back out of HBase.
+	        </p><p>Pros are being able to manage complex object graphs with minimal I/O (e.g., a single HBase Get per
+	        Order in this example), but the cons include the aforementioned warning about backward compatiblity of serialization,
+	        language dependencies of serialization (e.g., Java Serialization only works with Java clients), the fact that
+	        you have to deserialize the entire object to get any piece of information inside the BLOB, and the difficulty in 
+	        getting frameworks like Hive to work with custom objects like this.
+	        </p></div></div></div><div class="section" title="1.11.4.&nbsp;Case Study - &#34;Tall/Wide/Middle&#34; Schema Design Smackdown"><div class="titlepage"><div><div><h3 class="title"><a name="schema.smackdown"></a>1.11.4.&nbsp;Case Study - "Tall/Wide/Middle" Schema Design Smackdown</h3></div></div></div><p>This section will describe additional schema design questions that appear on the dist-list, specifically about
+	  tall and wide tables.  These are general guidelines and not laws - each application must consider its own needs.
+	  </p><div class="section" title="1.11.4.1.&nbsp;Rows vs. Versions"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowsversions"></a>1.11.4.1.&nbsp;Rows vs. Versions</h4></div></div></div><p>A common question is whether one should prefer rows or HBase's built-in-versioning.  The context is typically where there are
+	    "a lot" of versions of a row to be retained (e.g., where it is significantly above the HBase default of 3 max versions).  The
+	    rows-approach would require storing a timstamp in some portion of the rowkey so that they would not overwite with each successive update.
+	    </p><p>Preference:  Rows (generally speaking).
+	    </p></div><div class="section" title="1.11.4.2.&nbsp;Rows vs. Columns"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowscols"></a>1.11.4.2.&nbsp;Rows vs. Columns</h4></div></div></div><p>Another common question is whether one should prefer rows or columns.  The context is typically in extreme cases of wide
+	    tables, such as having 1 row with 1 million attributes, or 1 million rows with 1 columns apiece.
+	    </p><p>Preference:  Rows (generally speaking).  To be clear, this guideline is in the context is in extremely wide cases, not in the
+	    standard use-case where one needs to store a few dozen or hundred columns.  But there is also a middle path between these two
+	    options, and that is "Rows as Columns."
+	    </p></div><div class="section" title="1.11.4.3.&nbsp;Rows as Columns"><div class="titlepage"><div><div><h4 class="title"><a name="schema.smackdown.rowsascols"></a>1.11.4.3.&nbsp;Rows as Columns</h4></div></div></div><p>The middle path between Rows vs. Columns is packing data that would be a separate row into columns, for certain rows.
+	    OpenTSDB is the best example of this case where a single row represents a defined time-range, and then discrete events are treated as
+	    columns.  This approach is often more complex, and may require the additional complexity of re-writing your data, but has the
+	    advantage of being I/O efficient.  For an overview of this approach, see
+	    <a class="xref" href="#">???</a>.
+	    </p></div></div><div class="section" title="1.11.5.&nbsp;Case Study - List Data"><div class="titlepage"><div><div><h3 class="title"><a name="casestudies.schema.listdata"></a>1.11.5.&nbsp;Case Study - List Data</h3></div></div></div><p>The following is an exchange from the user dist-list regarding a fairly common question:  
+    		how to handle per-user list data in Apache HBase. 
+    		</p><p>*** QUESTION ***</p><p>
+    		We're looking at how to store a large amount of (per-user) list data in
+HBase, and we were trying to figure out what kind of access pattern made
+the most sense.  One option is store the majority of the data in a key, so
+we could have something like:
+    		</p><pre class="programlisting">
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId1&gt;:"" (no value)
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId2&gt;:"" (no value)
+&lt;FixedWidthUserName&gt;&lt;FixedWidthValueId3&gt;:"" (no value)
+			</pre>
+
+The other option we had was to do this entirely using:
+    		<pre class="programlisting">
+&lt;FixedWidthUserName&gt;&lt;FixedWidthPageNum0&gt;:&lt;FixedWidthLength&gt;&lt;FixedIdNextPageNum&gt;&lt;ValueId1&gt;&lt;ValueId2&gt;&lt;ValueId3&gt;...
+&lt;FixedWidthUserName&gt;&lt;FixedWidthPageNum1&gt;:&lt;FixedWidthLength&gt;&lt;FixedIdNextPageNum&gt;&lt;ValueId1&gt;&lt;ValueId2&gt;&lt;ValueId3&gt;...
+    		</pre><p>
+where each row would contain multiple values.
+So in one case reading the first thirty values would be:
+			</p><pre class="programlisting">
+scan { STARTROW =&gt; 'FixedWidthUsername' LIMIT =&gt; 30}
+    		</pre>
+And in the second case it would be
+    		<pre class="programlisting">
+get 'FixedWidthUserName\x00\x00\x00\x00'
+    		</pre><p>
+The general usage pattern would be to read only the first 30 values of
+these lists, with infrequent access reading deeper into the lists.  Some
+users would have &lt;= 30 total values in these lists, and some users would
+have millions (i.e. power-law distribution)
+			</p><p>
+ The single-value format seems like it would take up more space on HBase,
+but would offer some improved retrieval / pagination flexibility.  Would
+there be any significant performance advantages to be able to paginate via
+gets vs paginating with scans?
+			</p><p>
+  My initial understanding was that doing a scan should be faster if our
+paging size is unknown (and caching is set appropriately), but that gets
+should be faster if we'll always need the same page size.  I've ended up
+hearing different people tell me opposite things about performance.  I
+assume the page sizes would be relatively consistent, so for most use cases
+we could guarantee that we only wanted one page of data in the
+fixed-page-length case.  I would also assume that we would have infrequent
+updates, but may have inserts into the middle of these lists (meaning we'd
+need to update all subsequent rows).
+			</p><p>
+Thanks for help / suggestions / follow-up questions.
+			</p><p>*** ANSWER ***</p><p>
+If I understand you correctly, you're ultimately trying to store
+triples in the form "user, valueid, value", right? E.g., something
+like:
+			</p><pre class="programlisting">
+"user123, firstname, Paul",
+"user234, lastname, Smith"
+			</pre><p>
+(But the usernames are fixed width, and the valueids are fixed width).
+			</p><p>
+And, your access pattern is along the lines of: "for user X, list the
+next 30 values, starting with valueid Y". Is that right? And these
+values should be returned sorted by valueid?
+			</p><p>
+The tl;dr version is that you should probably go with one row per
+user+value, and not build a complicated intra-row pagination scheme on
+your own unless you're really sure it is needed.
+			</p><p>
+Your two options mirror a common question people have when designing
+HBase schemas: should I go "tall" or "wide"? Your first schema is
+"tall": each row represents one value for one user, and so there are
+many rows in the table for each user; the row key is user + valueid,
+and there would be (presumably) a single column qualifier that means
+"the value". This is great if you want to scan over rows in sorted
+order by row key (thus my question above, about whether these ids are
+sorted correctly). You can start a scan at any user+valueid, read the
+next 30, and be done. What you're giving up is the ability to have
+transactional guarantees around all the rows for one user, but it
+doesn't sound like you need that. Doing it this way is generally
+recommended (see
+here <a class="link" href="http://hbase.apache.org/book.html#schema.smackdown" target="_top">http://hbase.apache.org/book.html#schema.smackdown</a>).
+			</p><p>
+Your second option is "wide": you store a bunch of values in one row,
+using different qualifiers (where the qualifier is the valueid). The
+simple way to do that would be to just store ALL values for one user
+in a single row. I'm guessing you jumped to the "paginated" version
+because you're assuming that storing millions of columns in a single
+row would be bad for performance, which may or may not be true; as
+long as you're not trying to do too much in a single request, or do
+things like scanning over and returning all of the cells in the row,
+it shouldn't be fundamentally worse. The client has methods that allow
+you to get specific slices of columns.
+			</p><p>
+Note that neither case fundamentally uses more disk space than the
+other; you're just "shifting" part of the identifying information for
+a value either to the left (into the row key, in option one) or to the
+right (into the column qualifiers in option 2). Under the covers,
+every key/value still stores the whole row key, and column family
+name. (If this is a bit confusing, take an hour and watch Lars
+George's excellent video about understanding HBase schema design:
+<a class="link" href="http://www.youtube.com/watch?v=_HLoH_PgrLk)" target="_top">http://www.youtube.com/watch?v=_HLoH_PgrLk)</a>.
+			</p><p>
+A manually paginated version has lots more complexities, as you note,
+like having to keep track of how many things are in each page,
+re-shuffling if new values are inserted, etc. That seems significantly
+more complex. It might have some slight speed advantages (or
+disadvantages!) at extremely high throughput, and the only way to
+really know that would be to try it out. If you don't have time to
+build it both ways and compare, my advice would be to start with the
+simplest option (one row per user+value). Start simple and iterate! :)
+			</p></div></div><div class="section" title="1.12.&nbsp;Operational and Performance Configuration Options"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="schema.ops"></a>1.12.&nbsp;Operational and Performance Configuration Options</h2></div></div></div><p>See the Performance section <a class="xref" href="#">???</a> for more information operational and performance
+    schema design options, such as Bloom Filters, Table-configured regionsizes, compression, and blocksizes.
+    </p></div></div><div id="disqus_thread"></div><script type="text/javascript">
+    var disqus_shortname = 'hbase'; // required: replace example with your forum shortname
+    var disqus_url = 'http://hbase.apache.org/book';
+    var disqus_identifier = 'schema';
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript><a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a></body></html>
