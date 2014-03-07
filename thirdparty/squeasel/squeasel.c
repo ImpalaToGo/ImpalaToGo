@@ -1,4 +1,5 @@
-// Copyright (c) 2004-2013 Sergey Lyubka
+// Some portions Copyright (c) 2004-2013 Sergey Lyubka
+// Some portions Copyright (c) 2013 Cloudera Inc.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +26,7 @@
 #define __STDC_FORMAT_MACROS  // <inttypes.h> wants this for C++
 #define __STDC_LIMIT_MACROS   // C++ wants that for INT64_MAX
 
+#include <sys/prctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -89,6 +91,7 @@ typedef int SOCKET;
 #define MAX_CGI_ENVIR_VARS 64
 #define SQ_BUF_LEN 8192
 #define MAX_REQUEST_SIZE 16384
+#define WORKER_THREAD_TIMEOUT_SECS 3
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
 
 #ifdef DEBUG_TRACE
@@ -135,6 +138,10 @@ typedef int socklen_t;
 #if !defined(MGSQLEN)
 #define MGSQLEN 20
 #endif
+
+#define RETRY_ON_EINTR(ret, expr) do { \
+  ret = expr; \
+} while ((ret == -1) && (errno == EINTR));
 
 static const char *http_500_error = "Internal Server Error";
 
@@ -272,6 +279,14 @@ struct socket {
   unsigned ssl_redir:1; // Is port supposed to redirect everything to SSL port
 };
 
+char* SAFE_HTTP_METHODS[] = {
+  "GET", "POST", "HEAD", "PROPFIND", "MKCOL" };
+
+// See https://www.owasp.org/index.php/Test_HTTP_Methods_(OTG-CONFIG-006) for details.
+#ifdef ALLOW_UNSAFE_HTTP_METHODS
+char* UNSAFE_HTTP_METHODS[] = { "DELETE" , "CONNECT", "PUT" };
+#endif
+
 // NOTE(lsm): this enum shoulds be in sync with the config_options below.
 enum {
   CGI_EXTENSIONS, CGI_ENVIRONMENT, PUT_DELETE_PASSWORDS_FILE, CGI_INTERPRETER,
@@ -325,8 +340,11 @@ struct sq_context {
   struct socket *listening_sockets;
   int num_listening_sockets;
 
+  int max_threads;           // Maximum number of threads to start.
+  int num_free_threads;      // Number of worker threads currently not working
+                             // on a request.
   volatile int num_threads;  // Number of threads
-  pthread_mutex_t mutex;     // Protects (max|num)_threads
+  pthread_mutex_t mutex;     // Protects (max|num|num_free)_threads
   pthread_cond_t  cond;      // Condvar for tracking workers terminations
 
   struct socket queue[MGSQLEN];   // Accepted sockets
@@ -959,7 +977,7 @@ static int64_t push(FILE *fp, SOCKET sock, SSL *ssl, const char *buf,
       if (ferror(fp))
         n = -1;
     } else {
-      n = send(sock, buf + sent, (size_t) k, MSG_NOSIGNAL);
+      RETRY_ON_EINTR(n, send(sock, buf + sent, (size_t) k, MSG_NOSIGNAL));
     }
 
     if (n <= 0)
@@ -980,13 +998,16 @@ static int pull(FILE *fp, struct sq_connection *conn, char *buf, int len) {
     // Use read() instead of fread(), because if we're reading from the CGI
     // pipe, fread() may block until IO buffer is filled up. We cannot afford
     // to block and must pass all read bytes immediately to the client.
-    nread = read(fileno(fp), buf, (size_t) len);
+    RETRY_ON_EINTR(nread, read(fileno(fp), buf, (size_t) len));
 #ifndef NO_SSL
   } else if (conn->ssl != NULL) {
     nread = SSL_read(conn->ssl, buf, len);
 #endif
   } else {
-    nread = recv(conn->client.sock, buf, (size_t) len, 0);
+    RETRY_ON_EINTR(nread, recv(conn->client.sock, buf, (size_t) len, 0));
+    if (nread == -1) {
+      cry(conn, "error reading: %s", strerror(errno));
+    }
   }
 
   return conn->ctx->stop_flag ? -1 : nread;
@@ -2122,8 +2143,9 @@ static void print_dir_entry(struct de *de) {
                   "%.1fG", (double) de->file.size / 1073741824);
     }
   }
+  struct tm the_time;
   strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M",
-           localtime(&de->file.modification_time));
+           localtime_r(&de->file.modification_time, &the_time));
   sq_url_encode(de->file_name, href, sizeof(href));
   de->conn->num_bytes_sent += sq_printf(de->conn,
       "<tr><td><a href=\"%s%s%s\">%s%s</a></td>"
@@ -2499,12 +2521,17 @@ static void parse_http_headers(char **buf, struct sq_request_info *ri) {
 }
 
 static int is_valid_http_method(const char *method) {
-  return !strcmp(method, "GET") || !strcmp(method, "POST") ||
-    !strcmp(method, "HEAD") || !strcmp(method, "CONNECT") ||
-    !strcmp(method, "PUT") || !strcmp(method, "DELETE") ||
-    !strcmp(method, "OPTIONS") || !strcmp(method, "PROPFIND")
-    || !strcmp(method, "MKCOL")
-          ;
+  for (unsigned int i = 0; i < sizeof(SAFE_HTTP_METHODS) / sizeof(char*); ++i) {
+    if (!strcmp(method, SAFE_HTTP_METHODS[i])) return 1;
+  }
+
+#ifdef ALLOW_UNSAFE_HTTP_METHODS
+  for (unsigned int i = 0; i < sizeof(UNSAFE_HTTP_METHODS) / sizeof(char*); ++i) {
+    if (!strcmp(method, UNSAFE_HTTP_METHODS[i])) return 1;
+  }
+#endif
+
+  return 0;
 }
 
 // Parse HTTP request, fill in sq_request_info structure.
@@ -4105,8 +4132,9 @@ static void log_access(const struct sq_connection *conn) {
   if (fp == NULL)
     return;
 
+  struct tm the_time;
   strftime(date, sizeof(date), "%d/%b/%Y:%H:%M:%S %z",
-           localtime(&conn->birth_time));
+           localtime_r(&conn->birth_time, &the_time));
 
   ri = &conn->request_info;
   flockfile(fp);
@@ -4536,8 +4564,28 @@ static int consume_socket(struct sq_context *ctx, struct socket *sp) {
   DEBUG_TRACE(("going idle"));
 
   // If the queue is empty, wait. We're idle at this point.
+  // If a request doesn't come within WORKER_THREAD_TIMEOUT_SECS,
+  // we'll stop waiting and shut down the thread.
   while (ctx->sq_head == ctx->sq_tail && ctx->stop_flag == 0) {
-    pthread_cond_wait(&ctx->sq_full, &ctx->mutex);
+    struct timespec timeout;
+    if (clock_gettime(CLOCK_MONOTONIC, &timeout) != 0) {
+      perror("Unable to get CLOCK_MONOTONIC");
+      abort(); // CLOCK_MONOTONIC should always be supported
+    }
+
+    ctx->num_free_threads++;
+    assert(ctx->num_free_threads <= ctx->num_threads);
+    timeout.tv_sec += WORKER_THREAD_TIMEOUT_SECS;
+    int err = pthread_cond_timedwait(&ctx->sq_full, &ctx->mutex, &timeout);
+    ctx->num_free_threads--;
+    if (err == ETIMEDOUT && ctx->sq_head == ctx->sq_tail) {
+      DEBUG_TRACE(("worker thread timed out waiting for new connection"));
+      // We didn't get signaled, and there's nothing in the queue.
+      (void) pthread_mutex_unlock(&ctx->mutex);
+      return 0;
+    } else if (err != 0 && err != ETIMEDOUT) {
+      cry(fc(ctx), "%s: %s", "Failed timedwait", strerror(err));
+    }
   }
 
   // If we're stopping, sq_head may be equal to sq_tail.
@@ -4546,6 +4594,7 @@ static int consume_socket(struct sq_context *ctx, struct socket *sp) {
     *sp = ctx->queue[ctx->sq_tail % ARRAY_SIZE(ctx->queue)];
     ctx->sq_tail++;
     DEBUG_TRACE(("grabbed socket %d, going busy", sp->sock));
+    assert(ctx->num_free_threads <= ctx->num_threads);
 
     // Wrap pointers if needed
     while (ctx->sq_tail > (int) ARRAY_SIZE(ctx->queue)) {
@@ -4561,6 +4610,8 @@ static int consume_socket(struct sq_context *ctx, struct socket *sp) {
 }
 
 static void *worker_thread(void *thread_func_param) {
+  (void)prctl(PR_SET_NAME, "sq_worker");
+
   struct sq_context *ctx = (struct sq_context *) thread_func_param;
   struct sq_connection *conn;
 
@@ -4612,13 +4663,35 @@ static void *worker_thread(void *thread_func_param) {
   return NULL;
 }
 
+static void try_start_another_worker(struct sq_context *ctx) {
+  // REQUIRES: ctx->mutex is locked
+  if (ctx->num_threads >= ctx->max_threads) {
+    return;
+  }
+
+  if (sq_start_thread(worker_thread, ctx) != 0) {
+    cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
+  } else {
+    ctx->num_threads++;
+  }
+}
+
+
 // Master thread adds accepted socket to a queue
 static void produce_socket(struct sq_context *ctx, const struct socket *sp) {
   (void) pthread_mutex_lock(&ctx->mutex);
 
+  // If all of the worker threads are busy, then start another worker thread
+  // to handle this request, assuming the limit isn't yet hit.
+  if (ctx->num_free_threads == 0) {
+    try_start_another_worker(ctx);
+  }
+
   // If the queue is full, wait
   while (ctx->stop_flag == 0 &&
          ctx->sq_head - ctx->sq_tail >= (int) ARRAY_SIZE(ctx->queue)) {
+
+    DEBUG_TRACE(("queue is full - waiting"));
     (void) pthread_cond_wait(&ctx->sq_empty, &ctx->mutex);
   }
 
@@ -4673,6 +4746,7 @@ static void accept_new_connection(const struct socket *listener,
 }
 
 static void *master_thread(void *thread_func_param) {
+  (void)prctl(PR_SET_NAME, "sq_acceptor");
   struct sq_context *ctx = (struct sq_context *) thread_func_param;
   struct pollfd *pfd;
   int i;
@@ -4773,7 +4847,7 @@ void sq_stop(struct sq_context *ctx) {
   ctx->stop_flag = 1;
 
   if (ctx->wakeup_fds[1] != -1) {
-    unused = write(ctx->wakeup_fds[1], &c, 1);
+    RETRY_ON_EINTR(unused, write(ctx->wakeup_fds[1], &c, 1));
   }
 
   // Wait until sq_fini() stops
@@ -4844,9 +4918,19 @@ struct sq_context *sq_start(const struct sq_callbacks *callbacks,
   (void) signal(SIGCHLD, SIG_IGN);
 
   (void) pthread_mutex_init(&ctx->mutex, NULL);
-  (void) pthread_cond_init(&ctx->cond, NULL);
-  (void) pthread_cond_init(&ctx->sq_empty, NULL);
-  (void) pthread_cond_init(&ctx->sq_full, NULL);
+
+  pthread_condattr_t attr;
+
+  pthread_condattr_init(&attr);
+  if (pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) != 0) {
+    perror("pthread_condattr_setclock");
+    free_context(ctx);
+    return NULL;
+  }
+
+  (void) pthread_cond_init(&ctx->cond, &attr);
+  (void) pthread_cond_init(&ctx->sq_empty, &attr);
+  (void) pthread_cond_init(&ctx->sq_full, &attr);
 
   // Create a pipe used for sq_stop to wake up the master thread.
   ctx->wakeup_fds[0] = -1;
@@ -4858,17 +4942,12 @@ struct sq_context *sq_start(const struct sq_callbacks *callbacks,
     set_close_on_exec(ctx->wakeup_fds[1]);
   }
 
-  // Start master (listening) thread
-  sq_start_thread(master_thread, ctx);
+  ctx->max_threads = atoi(ctx->config[NUM_THREADS]);
+  assert(ctx->max_threads > 0);
 
-  // Start worker threads
-  for (i = 0; i < atoi(ctx->config[NUM_THREADS]); i++) {
-    if (sq_start_thread(worker_thread, ctx) != 0) {
-      cry(fc(ctx), "Cannot start worker thread: %ld", (long) ERRNO);
-    } else {
-      ctx->num_threads++;
-    }
-  }
+  // Start master (listening) thread. This thread will spawn worker
+  // threads lazily as necessary up to the configured max.
+  sq_start_thread(master_thread, ctx);
 
   return ctx;
 }
