@@ -32,25 +32,31 @@ import org.w3c.dom.Node;
 
 public abstract class QueuePlacementRule {
   protected boolean create;
-
+  
   /**
    * Initializes the rule with any arguments.
-   *
-   * @param args Additional attributes of the rule's xml element other than create.
+   * 
+   * @param args
+   *    Additional attributes of the rule's xml element other than create.
    */
-  public QueuePlacementRule initialize(boolean create,
-      Map<String, String> args) {
+  public QueuePlacementRule initialize(boolean create, Map<String, String> args) {
     this.create = create;
     return this;
   }
-
+  
   /**
-   * @param requestedQueue The queue explicitly requested.
-   * @param user The user submitting the app.
-   * @param groups The groups of the user submitting the app.
-   * @param configuredQueues The queues specified in the scheduler configuration.
-   * @return The queue to place the app into. An empty string indicates that we should
-   * continue to the next rule, and null indicates that the app should be rejected.
+   * 
+   * @param requestedQueue
+   *    The queue explicitly requested.
+   * @param user
+   *    The user submitting the app.
+   * @param groups
+   *    The groups of the user submitting the app.
+   * @param configuredQueues
+   *    The queues specified in the scheduler configuration.
+   * @return
+   *    The queue to place the app into. An empty string indicates that we should
+   *    continue to the next rule, and null indicates that the app should be rejected.
    */
   public String assignAppToQueue(String requestedQueue, String user,
       Groups groups, Collection<String> configuredQueues) throws IOException {
@@ -61,7 +67,7 @@ public abstract class QueuePlacementRule {
       return "";
     }
   }
-
+  
   public void initializeFromXml(Element el) {
     boolean create = true;
     NamedNodeMap attributes = el.getAttributes();
@@ -78,21 +84,25 @@ public abstract class QueuePlacementRule {
     }
     initialize(create, args);
   }
-
+  
   /**
    * Returns true if this rule never tells the policy to continue.
    */
   public abstract boolean isTerminal();
-
+  
   /**
    * Applies this rule to an app with the given requested queue and user/group
    * information.
-   *
-   * @param requestedQueue The queue specified in the ApplicationSubmissionContext
-   * @param user The user submitting the app.
-   * @param groups The groups of the user submitting the app.
-   * @return The name of the queue to assign the app to, or null to empty string
-   * continue to the next rule.
+   * 
+   * @param requestedQueue
+   *    The queue specified in the ApplicationSubmissionContext
+   * @param user
+   *    The user submitting the app.
+   * @param groups
+   *    The groups of the user submitting the app.
+   * @return
+   *    The name of the queue to assign the app to, or null to empty string
+   *    continue to the next rule.
    */
   protected abstract String getQueueForApp(String requestedQueue, String user,
       Groups groups, Collection<String> configuredQueues) throws IOException;
@@ -106,40 +116,40 @@ public abstract class QueuePlacementRule {
         String user, Groups groups, Collection<String> configuredQueues) {
       return "root." + user;
     }
-
+    
     @Override
     public boolean isTerminal() {
       return create;
     }
   }
-
+  
   /**
    * Places apps in queues by primary group of the submitter
    */
   public static class PrimaryGroup extends QueuePlacementRule {
     @Override
     protected String getQueueForApp(String requestedQueue,
-        String user, Groups groups,
+        String user, Groups groups, 
         Collection<String> configuredQueues) throws IOException {
       return "root." + groups.getGroups(user).get(0);
     }
-
+    
     @Override
     public boolean isTerminal() {
       return create;
     }
   }
-
+  
   /**
    * Places apps in queues by secondary group of the submitter
-   * <p/>
+   * 
    * Match will be made on first secondary group that exist in
    * queues
    */
   public static class SecondaryGroupExistingQueue extends QueuePlacementRule {
     @Override
     protected String getQueueForApp(String requestedQueue,
-        String user, Groups groups,
+        String user, Groups groups, 
         Collection<String> configuredQueues) throws IOException {
       List<String> groupNames = groups.getGroups(user);
       for (int i = 1; i < groupNames.size(); i++) {
@@ -147,13 +157,13 @@ public abstract class QueuePlacementRule {
           return "root." + groupNames.get(i);
         }
       }
-
+      
       return "";
     }
-
+        
     @Override
     public boolean isTerminal() {
-      return create;
+      return false;
     }
   }
 
@@ -173,13 +183,13 @@ public abstract class QueuePlacementRule {
         return requestedQueue;
       }
     }
-
+    
     @Override
     public boolean isTerminal() {
       return false;
     }
   }
-
+  
   /**
    * Places all apps in the default queue
    */
@@ -189,13 +199,13 @@ public abstract class QueuePlacementRule {
         Groups groups, Collection<String> configuredQueues) {
       return "root." + YarnConfiguration.DEFAULT_QUEUE_NAME;
     }
-
+    
     @Override
     public boolean isTerminal() {
-      return create;
+      return true;
     }
   }
-
+  
   /**
    * Rejects all apps
    */
@@ -205,13 +215,13 @@ public abstract class QueuePlacementRule {
         Groups groups, Collection<String> configuredQueues) {
       return null;
     }
-
+    
     @Override
     protected String getQueueForApp(String requestedQueue, String user,
         Groups groups, Collection<String> configuredQueues) {
       throw new UnsupportedOperationException();
     }
-
+    
     @Override
     public boolean isTerminal() {
       return true;

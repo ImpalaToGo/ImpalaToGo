@@ -15,7 +15,7 @@
     <aclSubmitApps> </aclSubmitApps>
   </queue>
   <queuePlacementPolicy>
-    <specified create="false"/>
-    <reject/>
+    <rule name="specified" create="false"/>
+    <rule name="reject" />
   </queuePlacementPolicy>
 </allocations>
