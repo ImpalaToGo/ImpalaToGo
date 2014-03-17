@@ -19,6 +19,9 @@ fi
 . ${IMPALA_HOME}/bin/impala-config.sh
 set -e
 
+# Setup for HDFS caching
+${IMPALA_HOME}/testdata/bin/setup-hdfs-caching.sh
+
 # If the user has specified a command line argument, treat it as the test-warehouse
 # snapshot file and pass it to the load-test-warehouse-snapshot.sh script for processing.
 if [[ $1 ]]; then
