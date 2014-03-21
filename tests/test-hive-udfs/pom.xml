@@ -26,7 +26,7 @@
       <artifactId>hive-exec</artifactId>
       <scope>system</scope>
       <version>${hive.version}</version>
-      <systemPath>${env.IMPALA_HOME}/thirdparty/hive-${hive.version}/lib/hive-exec-${hive.version}.jar</systemPath>
+      <systemPath>${env.IMPALA_HOME}/thirdparty/hive-${hive.version}/lib/hive-exec-${hive.version}-SNAPSHOT.jar</systemPath>
     </dependency>
   </dependencies>
 
