@@ -37,6 +37,9 @@ set -u
 # Exit on non-zero return value
 set -e
 
+# Always run in debug mode
+set -x
+
 # parse command line options
 for ARG in $*
 do
@@ -196,6 +199,12 @@ if [ $FORMAT_METASTORE -eq 1 ]; then
 else
   ${IMPALA_HOME}/bin/create-test-configuration.sh
 fi
+
+
+# Generate all the make files from root.
+cd ${IMPALA_HOME}
+rm -f CMakeCache.txt
+cmake -DCMAKE_BUILD_TYPE=$TARGET_BUILD_TYPE .
 
 # build common and backend
 $IMPALA_HOME/bin/make_impala.sh $*
