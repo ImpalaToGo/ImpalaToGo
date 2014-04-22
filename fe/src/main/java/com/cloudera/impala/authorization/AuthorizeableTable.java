@@ -45,7 +45,7 @@ public class AuthorizeableTable implements Authorizeable {
   }
 
   @Override
-  public String getName() {
-    return database_.getName() + "." + table_.getName();
-  }
+  public String getName() { return database_.getName() + "." + table_.getName(); }
+  public String getDbName() { return database_.getName(); }
+  public String getTblName() { return table_.getName(); }
 }

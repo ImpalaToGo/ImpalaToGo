@@ -27,6 +27,7 @@ import org.junit.Test;
 import com.cloudera.impala.analysis.LiteralExpr;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.ImpalaException;
+import com.cloudera.impala.testutil.CatalogServiceTestCatalog;
 import com.cloudera.impala.thrift.ImpalaInternalServiceConstants;
 import com.cloudera.impala.thrift.TAccessLevel;
 import com.cloudera.impala.thrift.THBaseTable;
@@ -44,7 +45,7 @@ public class CatalogObjectToFromThriftTest {
 
   @BeforeClass
   public static void setUp() throws Exception {
-    catalog_ = CatalogServiceCatalog.createForTesting(false);
+    catalog_ = CatalogServiceTestCatalog.create();
   }
 
   @AfterClass

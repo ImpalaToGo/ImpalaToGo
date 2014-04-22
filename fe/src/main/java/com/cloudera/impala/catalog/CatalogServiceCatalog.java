@@ -26,6 +26,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 
+import com.cloudera.impala.authorization.SentryConfig;
 import com.cloudera.impala.catalog.MetaStoreClientPool.MetaStoreClient;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.Pair;
@@ -94,29 +95,15 @@ public class CatalogServiceCatalog extends Catalog {
   private final boolean loadInBackground_;
 
   /**
-   * Initialize the CatalogServiceCatalog, loading all table metadata
-   * lazily.
+   * Initialize the CatalogServiceCatalog. If loadInBackground is true, table metadata
+   * will be loaded in the background
    */
   public CatalogServiceCatalog(boolean loadInBackground, int numLoadingThreads,
-      TUniqueId catalogServiceId) {
+      SentryConfig sentryConfig, TUniqueId catalogServiceId) {
     super(true);
     catalogServiceId_ = catalogServiceId;
     tableLoadingMgr_ = new TableLoadingMgr(this, numLoadingThreads);
     loadInBackground_ = loadInBackground;
-  }
-
-  /**
-   * Only used for testing. Creates a catalog server with default options.
-   */
-  public static CatalogServiceCatalog createForTesting(boolean loadInBackground) {
-    CatalogServiceCatalog cs =
-        new CatalogServiceCatalog(loadInBackground, 16, new TUniqueId());
-    try {
-      cs.reset();
-    } catch (CatalogException e) {
-      throw new IllegalStateException(e.getMessage(), e);
-    }
-    return cs;
   }
 
   /**
@@ -213,6 +200,23 @@ public class CatalogServiceCatalog extends Catalog {
             cachePool.getCatalogVersion());
         pool.setCache_pool(cachePool.toThrift());
         resp.addToObjects(pool);
+      }
+
+      // Get all roles
+      for (Role role: authPolicy_.getAllRoles()) {
+        TCatalogObject thriftRole = new TCatalogObject();
+        thriftRole.setRole(role.toThrift());
+        thriftRole.setCatalog_version(role.getCatalogVersion());
+        thriftRole.setType(role.getCatalogObjectType());
+        resp.addToObjects(thriftRole);
+
+        for (RolePrivilege p: role.getPrivileges()) {
+          TCatalogObject privilege = new TCatalogObject();
+          privilege.setPrivilege(p.toThrift());
+          privilege.setCatalog_version(p.getCatalogVersion());
+          privilege.setType(p.getCatalogObjectType());
+          resp.addToObjects(privilege);
+        }
       }
 
       // Each update should contain a single "TCatalog" object which is used to
