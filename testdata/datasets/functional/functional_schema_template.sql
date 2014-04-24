@@ -1219,3 +1219,45 @@ STORED AS INPUTFORMAT
 OUTPUTFORMAT
   'org.apache.hadoop.hive.ql.io.RCFileOutputFormat';
 ====
+--- DATASET
+functional
+---- BASE_TABLE_NAME
+widetable_250_cols
+---- COLUMNS
+`${IMPALA_HOME}/testdata/common/widetable.py --get_columns -n 250
+---- ROW_FORMAT
+delimited fields terminated by ','  escaped by '\\'
+---- DEPENDENT_LOAD
+INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name}
+select * from functional.{table_name};
+---- LOAD
+`${IMPALA_HOME}/testdata/common/widetable.py --create_data -n 250 -o /tmp/widetable_data.csv
+====
+---- DATASET
+functional
+---- BASE_TABLE_NAME
+widetable_500_cols
+---- COLUMNS
+`${IMPALA_HOME}/testdata/common/widetable.py --get_columns -n 500
+---- ROW_FORMAT
+delimited fields terminated by ','  escaped by '\\'
+---- DEPENDENT_LOAD
+INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name}
+select * from functional.{table_name};
+---- LOAD
+`${IMPALA_HOME}/testdata/common/widetable.py --create_data -n 500 -o /tmp/widetable_data.csv
+====
+---- DATASET
+functional
+---- BASE_TABLE_NAME
+widetable_1000_cols
+---- COLUMNS
+`${IMPALA_HOME}/testdata/common/widetable.py --get_columns -n 1000
+---- ROW_FORMAT
+delimited fields terminated by ','  escaped by '\\'
+---- DEPENDENT_LOAD
+INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name}
+select * from functional.{table_name};
+---- LOAD
+`${IMPALA_HOME}/testdata/common/widetable.py --create_data -n 1000 -o /tmp/widetable_data.csv
+====
