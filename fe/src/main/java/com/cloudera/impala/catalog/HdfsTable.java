@@ -958,6 +958,7 @@ public class HdfsTable extends Table {
     TTableDescriptor tableDesc = new TTableDescriptor(id_.asInt(), TTableType.HDFS_TABLE,
         colsByPos_.size(), numClusteringCols_, name_, db_.getName());
     tableDesc.setHdfsTable(getHdfsTable());
+    tableDesc.setColNames(getColumnNames());
     return tableDesc;
   }
 
@@ -975,11 +976,7 @@ public class HdfsTable extends Table {
       idToPartition.put(partition.getId(), partition.toThrift(true));
     }
 
-    List<String> colNames = new ArrayList<String>();
-    for (int i = 0; i < colsByPos_.size(); ++i) {
-      colNames.add(colsByPos_.get(i).getName());
-    }
-    THdfsTable hdfsTable = new THdfsTable(hdfsBaseDir_, colNames,
+    THdfsTable hdfsTable = new THdfsTable(hdfsBaseDir_, getColumnNames(),
         nullPartitionKeyValue_, nullColumnValue_, idToPartition);
     hdfsTable.setAvroSchema(avroSchema_);
 
