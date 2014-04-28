@@ -1219,7 +1219,7 @@ STORED AS INPUTFORMAT
 OUTPUTFORMAT
   'org.apache.hadoop.hive.ql.io.RCFileOutputFormat';
 ====
---- DATASET
+---- DATASET
 functional
 ---- BASE_TABLE_NAME
 widetable_250_cols
