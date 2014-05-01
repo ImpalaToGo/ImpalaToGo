@@ -45,6 +45,7 @@ enum PrimitiveType {
   // parsed from scan nodes. It can be returned from exprs and must be consumable
   // by exprs.
   TYPE_CHAR,
+  TYPE_VARCHAR
 };
 
 PrimitiveType ThriftToType(TPrimitiveType::type ttype);
@@ -58,8 +59,9 @@ apache::hive::service::cli::thrift::TTypeId::type TypeToHiveServer2Type(Primitiv
 // TODO: Rename to ScalarType and mirror FE type hierarchy after the expr refactoring.
 struct ColumnType {
   PrimitiveType type;
-  /// Only set if type == TYPE_CHAR
+  // Only set if type == TYPE_CHAR or type == TYPE_VARCHAR
   int len;
+  static const int MAX_VARCHAR_LENGTH = 32672;
 
   // Only set if type == TYPE_DECIMAL
   int precision, scale;
@@ -76,8 +78,18 @@ struct ColumnType {
 
   static ColumnType CreateCharType(int len) {
     DCHECK_GE(len, 0);
+    DCHECK_LE(len, MAX_VARCHAR_LENGTH);
     ColumnType ret;
     ret.type = TYPE_CHAR;
+    ret.len = len;
+    return ret;
+  }
+
+  static ColumnType CreateVarcharType(int len) {
+    DCHECK_GE(len, 0);
+    DCHECK_LE(len, MAX_VARCHAR_LENGTH);
+    ColumnType ret;
+    ret.type = TYPE_VARCHAR;
     ret.len = len;
     return ret;
   }
@@ -101,7 +113,7 @@ struct ColumnType {
     DCHECK(node.__isset.scalar_type);
     const TScalarType scalar_type = node.scalar_type;
     type = ThriftToType(scalar_type.type);
-    if (type == TYPE_CHAR) {
+    if (type == TYPE_CHAR || type == TYPE_VARCHAR) {
       DCHECK(scalar_type.__isset.len);
       len = scalar_type.len;
     } else if (type == TYPE_DECIMAL) {
@@ -135,7 +147,7 @@ struct ColumnType {
     node.__set_scalar_type(TScalarType());
     TScalarType& scalar_type = node.scalar_type;
     scalar_type.__set_type(impala::ToThrift(type));
-    if (type == TYPE_CHAR) {
+    if (type == TYPE_CHAR || type == TYPE_VARCHAR) {
       DCHECK_NE(len, -1);
       scalar_type.__set_len(len);
     } else if (type == TYPE_DECIMAL) {
@@ -148,13 +160,14 @@ struct ColumnType {
   }
 
   inline bool IsStringType() const {
-    return type == TYPE_STRING;
+    return type == TYPE_STRING || type == TYPE_VARCHAR;
   }
 
   // Returns the byte size of this type.  Returns 0 for variable length types.
   inline int GetByteSize() const {
     switch (type) {
       case TYPE_STRING:
+      case TYPE_VARCHAR:
         return 0;
       case TYPE_NULL:
       case TYPE_BOOLEAN:
@@ -185,6 +198,7 @@ struct ColumnType {
   inline int GetSlotSize() const {
     switch (type) {
       case TYPE_STRING:
+      case TYPE_VARCHAR:
         return 16;
       default:
         return GetByteSize();

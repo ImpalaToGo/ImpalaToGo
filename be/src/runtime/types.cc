@@ -36,6 +36,7 @@ PrimitiveType ThriftToType(TPrimitiveType::type ttype) {
     case TPrimitiveType::DATETIME: return TYPE_DATETIME;
     case TPrimitiveType::TIMESTAMP: return TYPE_TIMESTAMP;
     case TPrimitiveType::STRING: return TYPE_STRING;
+    case TPrimitiveType::VARCHAR: return TYPE_VARCHAR;
     case TPrimitiveType::BINARY: return TYPE_BINARY;
     case TPrimitiveType::DECIMAL: return TYPE_DECIMAL;
     case TPrimitiveType::CHAR: return TYPE_CHAR;
@@ -58,6 +59,7 @@ TPrimitiveType::type ToThrift(PrimitiveType ptype) {
     case TYPE_DATETIME: return TPrimitiveType::DATETIME;
     case TYPE_TIMESTAMP: return TPrimitiveType::TIMESTAMP;
     case TYPE_STRING: return TPrimitiveType::STRING;
+    case TYPE_VARCHAR: return TPrimitiveType::VARCHAR;
     case TYPE_BINARY: return TPrimitiveType::BINARY;
     case TYPE_DECIMAL: return TPrimitiveType::DECIMAL;
     case TYPE_CHAR: return TPrimitiveType::CHAR;
@@ -80,6 +82,7 @@ string TypeToString(PrimitiveType t) {
     case TYPE_DATETIME: return "DATETIME";
     case TYPE_TIMESTAMP: return "TIMESTAMP";
     case TYPE_STRING: return "STRING";
+    case TYPE_VARCHAR: return "VARCHAR";
     case TYPE_BINARY: return "BINARY";
     case TYPE_DECIMAL: return "DECIMAL";
     case TYPE_CHAR: return "CHAR";
@@ -103,6 +106,7 @@ string TypeToOdbcString(PrimitiveType t) {
     case TYPE_DATETIME: return "datetime";
     case TYPE_TIMESTAMP: return "timestamp";
     case TYPE_STRING: return "string";
+    case TYPE_VARCHAR: return "string";
     case TYPE_BINARY: return "binary";
     case TYPE_DECIMAL: return "decimal";
     case TYPE_CHAR: return "char";
@@ -124,6 +128,7 @@ TTypeId::type TypeToHiveServer2Type(PrimitiveType t) {
     case TYPE_DOUBLE: return TTypeId::DOUBLE_TYPE;
     case TYPE_TIMESTAMP: return TTypeId::TIMESTAMP_TYPE;
     case TYPE_STRING: return TTypeId::STRING_TYPE;
+    case TYPE_VARCHAR: return TTypeId::STRING_TYPE;
     case TYPE_BINARY: return TTypeId::BINARY_TYPE;
     case TYPE_DECIMAL: return TTypeId::DECIMAL_TYPE;
     // TODO: update when hs2 has char(n)
