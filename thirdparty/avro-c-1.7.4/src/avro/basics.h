@@ -40,7 +40,8 @@ enum avro_type_t {
 	AVRO_MAP,
 	AVRO_ARRAY,
 	AVRO_UNION,
-	AVRO_LINK
+	AVRO_LINK,
+	AVRO_DECIMAL,
 };
 typedef enum avro_type_t avro_type_t;
 
@@ -66,6 +67,7 @@ typedef struct avro_obj_t *avro_schema_t;
 #define avro_typeof(obj)      ((obj)->type)
 #define is_avro_string(obj)   (obj && avro_typeof(obj) == AVRO_STRING)
 #define is_avro_bytes(obj)    (obj && avro_typeof(obj) == AVRO_BYTES)
+#define is_avro_decimal(obj)  (obj && avro_typeof(obj) == AVRO_DECIMAL)
 #define is_avro_int32(obj)    (obj && avro_typeof(obj) == AVRO_INT32)
 #define is_avro_int64(obj)    (obj && avro_typeof(obj) == AVRO_INT64)
 #define is_avro_float(obj)    (obj && avro_typeof(obj) == AVRO_FLOAT)
@@ -74,6 +76,7 @@ typedef struct avro_obj_t *avro_schema_t;
 #define is_avro_null(obj)     (obj && avro_typeof(obj) == AVRO_NULL)
 #define is_avro_primitive(obj)(is_avro_string(obj) \
                              ||is_avro_bytes(obj) \
+                             ||is_avro_decimal(obj) \
                              ||is_avro_int32(obj) \
                              ||is_avro_int64(obj) \
                              ||is_avro_float(obj) \
@@ -89,10 +92,10 @@ typedef struct avro_obj_t *avro_schema_t;
 #define is_avro_map(obj)      (obj && avro_typeof(obj) == AVRO_MAP)
 #define is_avro_array(obj)    (obj && avro_typeof(obj) == AVRO_ARRAY)
 #define is_avro_union(obj)    (obj && avro_typeof(obj) == AVRO_UNION)
-#define is_avro_complex_type(obj) (!(is_avro_primitive(obj))
+#define is_avro_complex_type(obj) (!(is_avro_primitive(obj)))
 #define is_avro_link(obj)     (obj && avro_typeof(obj) == AVRO_LINK)
 
-
+const char *avro_type_name(const avro_type_t type);
 
 CLOSE_EXTERN
 #endif

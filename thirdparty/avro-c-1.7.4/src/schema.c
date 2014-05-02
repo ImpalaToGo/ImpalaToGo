@@ -203,6 +203,13 @@ static void avro_schema_free(avro_schema_t schema)
 			}
 			break;
 
+		case AVRO_DECIMAL:{
+				struct avro_decimal_schema_t *decimal;
+				decimal = avro_schema_to_decimal(schema);
+				avro_freet(struct avro_fixed_schema_t, decimal);
+			}
+			break;
+
 		case AVRO_MAP:{
 				struct avro_map_schema_t *map;
 				map = avro_schema_to_map(schema);
@@ -360,6 +367,30 @@ avro_schema_t avro_schema_fixed(const char *name, const int64_t size)
 int64_t avro_schema_fixed_size(const avro_schema_t fixed)
 {
 	return avro_schema_to_fixed(fixed)->size;
+}
+
+avro_schema_t avro_schema_decimal(const int64_t scale, const int64_t precision)
+{
+	struct avro_decimal_schema_t *decimal =
+	    (struct avro_decimal_schema_t *) avro_new(struct avro_decimal_schema_t);
+	if (!decimal) {
+		avro_set_error("Cannot allocate new decimal schema");
+		return NULL;
+	}
+	decimal->scale = scale;
+	decimal->precision = precision;
+	avro_schema_init(&decimal->obj, AVRO_DECIMAL);
+	return &decimal->obj;
+}
+
+int64_t avro_schema_decimal_scale(const avro_schema_t decimal)
+{
+	return avro_schema_to_decimal(decimal)->scale;
+}
+
+int64_t avro_schema_decimal_precision(const avro_schema_t decimal)
+{
+	return avro_schema_to_decimal(decimal)->precision;
 }
 
 avro_schema_t avro_schema_union(void)
@@ -805,7 +836,13 @@ avro_type_from_json_t(json_t *json, avro_type_t *type,
 	if (strcmp(type_str, "string") == 0) {
 		*type = AVRO_STRING;
 	} else if (strcmp(type_str, "bytes") == 0) {
-		*type = AVRO_BYTES;
+    json_t *json_logical_type = json_object_get(json, "logicalType");
+    const char *logical_type_str = json_string_value(json_logical_type);
+    if (logical_type_str && strcmp(logical_type_str, "decimal") == 0) {
+      *type = AVRO_DECIMAL;
+    } else {
+      *type = AVRO_BYTES;
+    }
 	} else if (strcmp(type_str, "int") == 0) {
 		*type = AVRO_INT32;
 	} else if (strcmp(type_str, "long") == 0) {
@@ -1155,6 +1192,27 @@ avro_schema_from_json_t(json_t *json, avro_schema_t *schema,
 		}
 		break;
 
+	case AVRO_DECIMAL:
+		{
+			json_t *json_scale = json_object_get(json, "scale");
+			json_t *json_precision = json_object_get(json, "precision");
+			json_int_t scale = 0; // default scale is 0
+			json_int_t precision; // precision is required
+			if (!json_is_integer(json_precision)) {
+				avro_set_error("Decimal type must have an integer attribute \"precision\"");
+				return EINVAL;
+			}
+			precision = json_integer_value(json_precision);
+      if (json_is_integer(json_scale)) {
+        scale = json_integer_value(json_scale);
+      } else if (json_scale) {
+				avro_set_error("Decimal type \"scale\" attribute must be an integer");
+				return EINVAL;
+      }
+			*schema = avro_schema_decimal((int64_t) scale, (int64_t) precision);
+		}
+		break;
+
 	default:
 		avro_set_error("Unknown schema type");
 		return EINVAL;
@@ -1471,12 +1529,37 @@ const char *avro_schema_type_name(const avro_schema_t schema)
 		return "string";
 	} else if (is_avro_bytes(schema)) {
 		return "bytes";
+	} else if (is_avro_decimal(schema)) {
+		return "decimal";
 	} else if (is_avro_link(schema)) {
 		avro_schema_t  target = avro_schema_link_target(schema);
 		return avro_schema_type_name(target);
 	}
 	avro_set_error("Unknown schema type");
 	return NULL;
+}
+
+const char *avro_type_name(const avro_type_t type)
+{
+  switch (type) {
+    case AVRO_STRING: return "string";
+    case AVRO_BYTES: return "bytes";
+    case AVRO_INT32: return "int";
+    case AVRO_INT64: return "long";
+    case AVRO_FLOAT: return "float";
+    case AVRO_DOUBLE: return "double";
+    case AVRO_BOOLEAN: return "boolean";
+    case AVRO_NULL: return "null";
+    case AVRO_RECORD: return "record";
+    case AVRO_ENUM: return "enum";
+    case AVRO_FIXED: return "fixed";
+    case AVRO_MAP: return "map";
+    case AVRO_ARRAY: return "array";
+    case AVRO_UNION: return "union";
+    case AVRO_LINK: return "link";
+    case AVRO_DECIMAL: return "decimal";
+  }
+  return "unknown type";
 }
 
 avro_datum_t avro_datum_from_schema(const avro_schema_t schema)
@@ -1488,6 +1571,7 @@ avro_datum_t avro_datum_from_schema(const avro_schema_t schema)
 			return avro_givestring("", NULL);
 
 		case AVRO_BYTES:
+		case AVRO_DECIMAL:
 			return avro_givebytes("", 0, NULL);
 
 		case AVRO_INT32:
@@ -1642,6 +1726,20 @@ static int write_fixed(avro_writer_t out, const struct avro_fixed_schema_t *fixe
 	check(rval, avro_write_str(out, size));
 	return avro_write_str(out, "}");
 }
+static int write_decimal(avro_writer_t out, const struct avro_decimal_schema_t *decimal)
+{
+	int rval;
+	char scale[16];
+	char precision[16];
+	check(rval, avro_write_str(out, "{\"type\":\"bytes\",\"logicalType\":\"decimal\""));
+	check(rval, avro_write_str(out, "\",\"scale\":"));
+	snprintf(scale, sizeof(scale), "%" PRId64, decimal->scale);
+	check(rval, avro_write_str(out, scale));
+	check(rval, avro_write_str(out, "\",\"precision\":"));
+	snprintf(precision, sizeof(precision), "%" PRId64, decimal->precision);
+	check(rval, avro_write_str(out, precision));
+	return avro_write_str(out, "}");
+}
 static int write_map(avro_writer_t out, const struct avro_map_schema_t *map)
 {
 	int rval;
@@ -1725,6 +1823,8 @@ int avro_schema_to_json(const avro_schema_t schema, avro_writer_t out)
 		return write_enum(out, avro_schema_to_enum(schema));
 	case AVRO_FIXED:
 		return write_fixed(out, avro_schema_to_fixed(schema));
+	case AVRO_DECIMAL:
+		return write_decimal(out, avro_schema_to_decimal(schema));
 	case AVRO_MAP:
 		return write_map(out, avro_schema_to_map(schema));
 	case AVRO_ARRAY:

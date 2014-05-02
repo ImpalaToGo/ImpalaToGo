@@ -264,6 +264,7 @@ avro_consume_binary(avro_reader_t reader, avro_consumer_t *consumer, void *ud)
 		break;
 
 	case AVRO_BYTES:
+	case AVRO_DECIMAL:
 		{
 			char *bytes;
 			int64_t len;
