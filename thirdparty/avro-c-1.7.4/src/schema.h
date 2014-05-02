@@ -67,6 +67,12 @@ struct avro_fixed_schema_t {
 	int64_t size;
 };
 
+struct avro_decimal_schema_t {
+	struct avro_obj_t obj;
+	int64_t scale;
+	int64_t precision;
+};
+
 struct avro_link_schema_t {
 	struct avro_obj_t obj;
 	avro_schema_t to;
@@ -78,6 +84,7 @@ struct avro_link_schema_t {
 #define avro_schema_to_map(schema_)     (container_of(schema_, struct avro_map_schema_t, obj))
 #define avro_schema_to_union(schema_)   (container_of(schema_, struct avro_union_schema_t, obj))
 #define avro_schema_to_fixed(schema_)   (container_of(schema_, struct avro_fixed_schema_t, obj))
+#define avro_schema_to_decimal(schema_) (container_of(schema_, struct avro_decimal_schema_t, obj))
 #define avro_schema_to_link(schema_)    (container_of(schema_, struct avro_link_schema_t, obj))
 
 #endif

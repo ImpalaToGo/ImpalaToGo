@@ -155,6 +155,7 @@ int avro_skip_data(avro_reader_t reader, avro_schema_t writers_schema)
 		break;
 
 	case AVRO_BYTES:
+  case AVRO_DECIMAL:
 		rval = enc->skip_bytes(reader);
 		break;
 

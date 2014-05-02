@@ -62,6 +62,7 @@ avro_schema_datum_validate(avro_schema_t expected_schema, avro_datum_t datum)
 		return is_avro_string(datum);
 
 	case AVRO_BYTES:
+	case AVRO_DECIMAL:
 		return is_avro_bytes(datum);
 
 	case AVRO_INT32:

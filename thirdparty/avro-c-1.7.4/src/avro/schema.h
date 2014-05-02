@@ -65,6 +65,10 @@ int avro_schema_enum_symbol_append(const avro_schema_t
 avro_schema_t avro_schema_fixed(const char *name, const int64_t len);
 int64_t avro_schema_fixed_size(const avro_schema_t fixed);
 
+avro_schema_t avro_schema_decimal(const int64_t scale, const int64_t precision);
+int64_t avro_schema_decimal_scale(const avro_schema_t decimal);
+int64_t avro_schema_decimal_precision(const avro_schema_t decimal);
+
 avro_schema_t avro_schema_map(const avro_schema_t values);
 avro_schema_t avro_schema_map_values(avro_schema_t map);
 

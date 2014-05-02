@@ -106,6 +106,12 @@ schema_fixed_equal(struct avro_fixed_schema_t *a, struct avro_fixed_schema_t *b)
 }
 
 static int
+schema_decimal_equal(struct avro_decimal_schema_t *a, struct avro_decimal_schema_t *b)
+{
+	return (a->scale == b->scale) && (a->precision == b->precision);
+}
+
+static int
 schema_map_equal(struct avro_map_schema_t *a, struct avro_map_schema_t *b)
 {
 	return avro_schema_equal(a->values, b->values);
@@ -174,6 +180,9 @@ int avro_schema_equal(avro_schema_t a, avro_schema_t b)
 	} else if (is_avro_fixed(a)) {
 		return schema_fixed_equal(avro_schema_to_fixed(a),
 					  avro_schema_to_fixed(b));
+	} else if (is_avro_decimal(a)) {
+		return schema_decimal_equal(avro_schema_to_decimal(a),
+					  avro_schema_to_decimal(b));
 	} else if (is_avro_map(a)) {
 		return schema_map_equal(avro_schema_to_map(a),
 					avro_schema_to_map(b));

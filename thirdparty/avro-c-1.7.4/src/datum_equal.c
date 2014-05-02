@@ -135,6 +135,7 @@ int avro_datum_equal(const avro_datum_t a, const avro_datum_t b)
 		return strcmp(avro_datum_to_string(a)->s,
 			      avro_datum_to_string(b)->s) == 0;
 	case AVRO_BYTES:
+	case AVRO_DECIMAL:
 		return (avro_datum_to_bytes(a)->size ==
 			avro_datum_to_bytes(b)->size)
 		    && memcmp(avro_datum_to_bytes(a)->bytes,

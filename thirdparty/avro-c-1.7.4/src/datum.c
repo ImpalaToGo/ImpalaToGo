@@ -1056,7 +1056,8 @@ static void avro_datum_free(avro_datum_t datum)
 				avro_freet(struct avro_string_datum_t, string);
 			}
 			break;
-		case AVRO_BYTES:{
+		case AVRO_BYTES:
+		case AVRO_DECIMAL: {
 				struct avro_bytes_datum_t *bytes;
 				bytes = avro_datum_to_bytes(datum);
 				if (bytes->free) {

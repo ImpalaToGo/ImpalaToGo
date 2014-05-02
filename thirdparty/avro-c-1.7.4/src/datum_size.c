@@ -207,6 +207,7 @@ static int64_t size_datum(avro_writer_t writer, const avro_encoding_t * enc,
 		return enc->size_string(writer, avro_datum_to_string(datum)->s);
 
 	case AVRO_BYTES:
+	case AVRO_DECIMAL:
 		return enc->size_bytes(writer,
 				       avro_datum_to_bytes(datum)->bytes,
 				       avro_datum_to_bytes(datum)->size);
