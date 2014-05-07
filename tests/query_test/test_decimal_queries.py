@@ -4,6 +4,7 @@
 #
 import logging
 import pytest
+import os
 from copy import copy
 from tests.common.test_vector import *
 from tests.common.impala_test_suite import *
@@ -29,6 +30,8 @@ class TestDecimalQueries(ImpalaTestSuite):
          v.get_value('table_format').file_format == 'parquet')
 
   def test_queries(self, vector):
+    if os.environ.get('ASAN_OPTIONS') == 'handle_segv=0':
+      pytest.xfail(run=False, reason="IMPALA-959, sum on a decimal column fails ASAN")
     new_vector = copy(vector)
     new_vector.get_value('exec_option')['batch_size'] = vector.get_value('batch_size')
     self.run_test_case('QueryTest/decimal', new_vector)
