@@ -31,7 +31,7 @@ class TestDecimalQueries(ImpalaTestSuite):
 
   def test_queries(self, vector):
     if os.environ.get('ASAN_OPTIONS') == 'handle_segv=0':
-      pytest.xfail(run=False, reason="IMPALA-959, sum on a decimal column fails ASAN")
+      pytest.xfail(reason="IMPALA-959: Sum on a decimal column fails ASAN")
     new_vector = copy(vector)
     new_vector.get_value('exec_option')['batch_size'] = vector.get_value('batch_size')
     self.run_test_case('QueryTest/decimal', new_vector)
