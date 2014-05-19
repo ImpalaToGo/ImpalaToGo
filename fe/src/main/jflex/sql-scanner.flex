@@ -16,6 +16,7 @@ package com.cloudera.impala.analysis;
 
 import java_cup.runtime.Symbol;
 import java.lang.Integer;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -214,8 +215,8 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     tokenIdMap.put(new Integer(SqlParserSymbols.RPAREN), ")");
     tokenIdMap.put(new Integer(SqlParserSymbols.LBRACKET), "[");
     tokenIdMap.put(new Integer(SqlParserSymbols.RBRACKET), "]");
-    tokenIdMap.put(new Integer(SqlParserSymbols.FLOATINGPOINT_LITERAL),
-        "FLOATING POINT LITERAL");
+    tokenIdMap.put(new Integer(SqlParserSymbols.DECIMAL_LITERAL),
+        "DECIMAL LITERAL");
     tokenIdMap.put(new Integer(SqlParserSymbols.INTEGER_LITERAL), "INTEGER LITERAL");
     tokenIdMap.put(new Integer(SqlParserSymbols.NOT), "!");
     tokenIdMap.put(new Integer(SqlParserSymbols.LESSTHAN), "<");
@@ -267,7 +268,7 @@ FLit1 = [0-9]+ \. [0-9]*
 FLit2 = \. [0-9]+
 FLit3 = [0-9]+
 Exponent = [eE] [+-]? [0-9]+
-DoubleLiteral = ({FLit1}|{FLit2}|{FLit3}) {Exponent}?
+DecimalLiteral = ({FLit1}|{FLit2}|{FLit3}) {Exponent}?
 
 IdentifierOrKw = [:digit:]*[:jletter:][:jletterdigit:]* | "&&" | "||"
 QuotedIdentifier = \`(\\.|[^\\\`])*\`
@@ -316,18 +317,14 @@ EndOfLineComment = "--" {NonTerminator}* {LineTerminator}?
   return newToken(SqlParserSymbols.INTEGER_LITERAL, val);
 }
 
-{DoubleLiteral} {
-  Double val = null;
+{DecimalLiteral} {
+  BigDecimal val = null;
   try {
-    val = new Double(yytext());
+    val = new BigDecimal(yytext());
   } catch (NumberFormatException e) {
     return newToken(SqlParserSymbols.NUMERIC_OVERFLOW, yytext());
   }
-  // conversion succeeded but literal is infinity or not a number
-  if (val.isInfinite() || val.isNaN()) {
-   return newToken(SqlParserSymbols.NUMERIC_OVERFLOW, yytext());
-  }
-  return newToken(SqlParserSymbols.FLOATINGPOINT_LITERAL, val);
+  return newToken(SqlParserSymbols.DECIMAL_LITERAL, val);
 }
 
 {QuotedIdentifier} {
