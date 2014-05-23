@@ -77,6 +77,11 @@
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-format</artifactId>
+      <version>${env.IMPALA_PARQUET_FORMAT_VERSION}</version>
+    </dependency>
   </dependencies>
 
   <build>

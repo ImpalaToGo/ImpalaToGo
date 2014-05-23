@@ -60,9 +60,9 @@ function(THRIFT_GEN VAR)
       set(CPP_ARGS -r ${THRIFT_INCLUDE_DIR_OPTION} --gen cpp -o ${BE_OUTPUT_DIR})
     ENDIF(FIL STREQUAL "beeswax.thrift")
 
-    IF (FIL STREQUAL "cli_service.thrift")
-      # HiveServer2 thrift generation
-      # Do not generate Java source because we should use the jar from Hive directly.
+    IF (FIL STREQUAL "cli_service.thrift" OR FIL STREQUAL "parquet.thrift")
+      # HiveServer2 and Parquet thrift generation
+      # Do not generate Java source because we should use the jar from Hive or Parquet
       add_custom_command(
         OUTPUT ${OUTPUT_BE_FILE}
         COMMAND ${THRIFT_COMPILER} ${CPP_ARGS} ${FIL}
