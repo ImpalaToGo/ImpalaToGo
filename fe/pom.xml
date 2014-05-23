@@ -103,6 +103,36 @@
     </dependency>
 
     <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-format</artifactId>
+      <version>${env.IMPALA_PARQUET_FORMAT_VERSION}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-hadoop</artifactId>
+      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-common</artifactId>
+      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-encoding</artifactId>
+      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-thrift</artifactId>
+      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.shiro</groupId>
       <artifactId>shiro-core</artifactId>
       <version>1.2.1</version>

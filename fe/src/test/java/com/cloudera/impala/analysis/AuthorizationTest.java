@@ -28,6 +28,7 @@ import org.apache.hive.service.cli.thrift.TGetTablesReq;
 import org.apache.sentry.provider.file.HadoopGroupResourceAuthorizationProvider;
 import org.apache.sentry.provider.file.LocalGroupResourceAuthorizationProvider;
 import org.apache.sentry.provider.file.ResourceAuthorizationProvider;
+import org.junit.After;
 import org.junit.Test;
 
 import com.cloudera.impala.authorization.AuthorizationConfig;
@@ -79,6 +80,16 @@ public class AuthorizationTest {
       new AnalysisContext(catalog_, queryCtx_);
   private final static Frontend fe_ =
       new Frontend(authzConfig_, new ImpaladTestCatalog(authzConfig_));
+
+  @After
+  public void TestTPCHCleanup() throws AuthorizationException, AnalysisException {
+    // Failure to cleanup TPCH can cause:
+    // TestDropDatabase(com.cloudera.impala.analysis.AuthorizationTest):
+    // Cannot drop non-empty database: tpch
+    if (catalog_.getDb("tpch").numFunctions() != 0) {
+      fail("Failed to clean up functions in tpch.");
+    }
+  }
 
   @Test
   public void TestSelect() throws AuthorizationException, AnalysisException {
@@ -384,6 +395,12 @@ public class AuthorizationTest {
 
     AuthzError("create table _impala_builtins.tbl(i int)",
         "Cannot modify system database.");
+
+    // Check that create like file follows authorization rules for HDFS files
+    AuthzError("create table tpch.table_DNE like parquet "
+        + "'hdfs://localhost:20500/test-warehouse/alltypes'",
+        "User 'test_user' does not have privileges to access: "
+        + "hdfs://localhost:20500/test-warehouse/alltypes");
   }
 
   @Test
@@ -769,7 +786,7 @@ public class AuthorizationTest {
   public void TestLoad() throws AuthorizationException, AnalysisException {
     // User has permission on table and URI.
     AuthzOk("load data inpath 'hdfs://localhost:20500/test-warehouse/tpch.lineitem'" +
-    		" into table functional.alltypes partition(month=10, year=2009)");
+        " into table functional.alltypes partition(month=10, year=2009)");
 
     // User does not have permission on table.
     AuthzError("load data inpath 'hdfs://localhost:20500/test-warehouse/tpch.lineitem'" +
@@ -1060,12 +1077,21 @@ public class AuthorizationTest {
     catalog_.addFunction(new ScalarFunction(new FunctionName("tpch", "f"),
         new ArrayList<ColumnType>(), ColumnType.INT, null, null, null, null));
 
-    AuthzError(context, "select default.f()",
-        "User '%s' does not have privileges to access: default",
-        currentUser);
-    // Couldn't create tpch.f() but can run it.
-    AuthzOk(context, "select tpch.f()");
-    AuthzOk(adminContext, "drop function tpch.f()");
+    try {
+      AuthzError(context, "select default.f()",
+          "User '%s' does not have privileges to access: default",
+          currentUser);
+      // Couldn't create tpch.f() but can run it.
+      AuthzOk(context, "select tpch.f()");
+      AuthzOk(adminContext, "drop function tpch.f()");
+    } finally {
+      // Other tests don't expect tpch to contain functions
+      // Specifically, if these functions are not cleaned up, TestDropDatabase() will fail
+      catalog_.removeFunction(new ScalarFunction(new FunctionName("default", "f"),
+          new ArrayList<ColumnType>(), ColumnType.INT, null, null, null, null));
+      catalog_.removeFunction(new ScalarFunction(new FunctionName("tpch", "f"),
+          new ArrayList<ColumnType>(), ColumnType.INT, null, null, null, null));
+    }
   }
 
   @Test
