@@ -18,24 +18,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.protocol.CachePoolEntry;
-import org.apache.hadoop.hdfs.protocol.CachePoolInfo;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
 
 import com.cloudera.impala.catalog.MetaStoreClientPool.MetaStoreClient;
-import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.Pair;
 import com.cloudera.impala.thrift.TCatalog;
@@ -49,8 +40,6 @@ import com.cloudera.impala.thrift.TUniqueId;
 import com.cloudera.impala.util.PatternMatcher;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 
 /**
  * Specialized Catalog that implements the CatalogService specific Catalog
@@ -104,9 +93,6 @@ public class CatalogServiceCatalog extends Catalog {
 
   private final boolean loadInBackground_;
 
-  private final ScheduledExecutorService cachePoolReader_ =
-      Executors.newScheduledThreadPool(1);
-
   /**
    * Initialize the CatalogServiceCatalog, loading all table metadata
    * lazily.
@@ -117,55 +103,6 @@ public class CatalogServiceCatalog extends Catalog {
     catalogServiceId_ = catalogServiceId;
     tableLoadingMgr_ = new TableLoadingMgr(this, numLoadingThreads);
     loadInBackground_ = loadInBackground;
-    cachePoolReader_.scheduleAtFixedRate(new CachePoolReader(), 0, 1, TimeUnit.MINUTES);
-  }
-
-  /**
-   * Reads the current set of cache pools from HDFS and updates the catalog.
-   * Called periodically by the cachePoolReader_.
-   */
-  private class CachePoolReader implements Runnable {
-    public void run() {
-      LOG.trace("Reloading cache pool names from HDFS");
-      // Map of cache pool name to CachePoolInfo. Stored in a map to allow Set operations
-      // to be performed on the keys.
-      Map<String, CachePoolInfo> currentCachePools = Maps.newHashMap();
-      try {
-        DistributedFileSystem dfs = FileSystemUtil.getDistributedFileSystem();
-        RemoteIterator<CachePoolEntry> itr = dfs.listCachePools();
-        while (itr.hasNext()) {
-          CachePoolInfo cachePoolInfo = itr.next().getInfo();
-          currentCachePools.put(cachePoolInfo.getPoolName(), cachePoolInfo);
-        }
-      } catch (Exception e) {
-        LOG.error("Error loading cache pools: ", e);
-        return;
-      }
-
-      catalogLock_.writeLock().lock();
-      try {
-        // Determine what has changed relative to what we have cached.
-        Set<String> droppedCachePoolNames = Sets.difference(
-            hdfsCachePools_.keySet(), currentCachePools.keySet());
-        Set<String> createdCachePoolNames = Sets.difference(
-            currentCachePools.keySet(), hdfsCachePools_.keySet());
-        // Add all new cache pools.
-        for (String createdCachePool: createdCachePoolNames) {
-          HdfsCachePool cachePool = new HdfsCachePool(
-              currentCachePools.get(createdCachePool));
-          cachePool.setCatalogVersion(
-              CatalogServiceCatalog.this.incrementAndGetCatalogVersion());
-          hdfsCachePools_.add(cachePool);
-        }
-        // Remove dropped cache pools.
-        for (String cachePoolName: droppedCachePoolNames) {
-          hdfsCachePools_.remove(cachePoolName);
-          CatalogServiceCatalog.this.incrementAndGetCatalogVersion();
-        }
-      } finally {
-        catalogLock_.writeLock().unlock();
-      }
-    }
   }
 
   /**

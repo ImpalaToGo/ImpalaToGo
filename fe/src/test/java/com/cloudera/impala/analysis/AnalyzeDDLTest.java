@@ -141,13 +141,15 @@ public class AnalyzeDDLTest extends AnalyzerTest {
           "partition(year=2050, month=10)");
 
     // Caching ops
-    AnalyzesOk("alter table functional.alltypes add " +
-        "partition(year=2050, month=10) cached in 'testPool'");
-    AnalyzesOk("alter table functional.alltypes add " +
-        "partition(year=2050, month=10) uncached");
+    AnalysisError("alter table functional.alltypes add " +
+        "partition(year=2050, month=10) cached in 'testPool'",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("alter table functional.alltypes add " +
+        "partition(year=2050, month=10) uncached",
+        "HDFS caching is not supported on CDH4");
     AnalysisError("alter table functional.alltypes add " +
         "partition(year=2050, month=10) cached in 'badPool'",
-        "The specified cache pool does not exist: badPool");
+        "HDFS caching is not supported on CDH4");
   }
 
   @Test
@@ -397,10 +399,12 @@ public class AnalyzeDDLTest extends AnalyzerTest {
   @Test
   public void TestAlterTableSetCached() {
     // Positive cases
-    AnalyzesOk("alter table functional.alltypesnopart set cached in 'testPool'");
-    AnalyzesOk("alter table functional.alltypes set cached in 'testPool'");
-    AnalyzesOk("alter table functional.alltypes partition(year=2010, month=12) " +
-        "set cached in 'testPool'");
+    AnalysisError("alter table functional.alltypesnopart set cached in 'testPool'",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("alter table functional.alltypes set cached in 'testPool'",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("alter table functional.alltypes partition(year=2010, month=12) " +
+        "set cached in 'testPool'", "HDFS caching is not supported on CDH4");
 
     // Attempt to alter a table that is not backed by HDFS.
     AnalysisError("alter table functional_hbase.alltypesnopart set cached in 'testPool'",
@@ -409,29 +413,21 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "ALTER TABLE not allowed on a view: functional.view_view");
 
     AnalysisError("alter table functional.alltypes set cached in 'badPool'",
-        "The specified cache pool does not exist: badPool");
+        "HDFS caching is not supported on CDH4");
     AnalysisError("alter table functional.alltypes partition(year=2010, month=12) " +
-        "set cached in 'badPool'", "The specified cache pool does not exist: badPool");
+        "set cached in 'badPool'", "HDFS caching is not supported on CDH4");
 
     // Attempt to uncache a table that is not cached. Should be a no-op.
-    AnalyzesOk("alter table functional.alltypes set uncached");
-    AnalyzesOk("alter table functional.alltypes partition(year=2010, month=12) " +
-        "set uncached");
+    AnalysisError("alter table functional.alltypes set uncached",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("alter table functional.alltypes partition(year=2010, month=12) " +
+        "set uncached", "HDFS caching is not supported on CDH4");
 
     // Attempt to cache a table that is already cached. Should be a no-op.
-    AnalyzesOk("alter table functional.alltypestiny set cached in 'testPool'");
-    AnalyzesOk("alter table functional.alltypestiny partition(year=2009, month=1) " +
-        "set cached in 'testPool'");
-
-    // Change location of a cached table/partition
-    AnalysisError("alter table functional.alltypestiny set location '/tmp/tiny'",
-        "Target table is cached, please uncache before changing the location using: " +
-        "ALTER TABLE functional.alltypestiny SET UNCACHED");
-    AnalysisError("alter table functional.alltypestiny partition (year=2009,month=1) " +
-        "set location '/test-warehouse/new_location'",
-        "Target partition is cached, please uncache before changing the location " +
-        "using: ALTER TABLE functional.alltypestiny PARTITION (year=2009, month=1) " +
-        "SET UNCACHED");
+    AnalysisError("alter table functional.alltypestiny set cached in 'testPool'",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("alter table functional.alltypestiny partition(year=2009, month=1) " +
+        "set cached in 'testPool'", "HDFS caching is not supported on CDH4");
 
     // Table/db/partition do not exist
     AnalysisError("alter table baddb.alltypestiny set cached in 'testPool'",
@@ -708,10 +704,12 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "join functional.alltypes b on (a.int_col=b.int_col) limit 1000");
 
     // Caching operations
-    AnalyzesOk("create table functional.newtbl cached in 'testPool'" +
-        " as select count(*) as CNT from functional.alltypes");
-    AnalyzesOk("create table functional.newtbl uncached" +
-        " as select count(*) as CNT from functional.alltypes");
+    AnalysisError("create table functional.newtbl cached in 'testPool'" +
+        " as select count(*) as CNT from functional.alltypes",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("create table functional.newtbl uncached" +
+        " as select count(*) as CNT from functional.alltypes",
+        "HDFS caching is not supported on CDH4");
 
     // Table already exists with and without IF NOT EXISTS
     AnalysisError("create table functional.alltypes as select 1",
@@ -814,13 +812,16 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "Type 'DATETIME' is not supported as partition-column type in column: d");
 
     // Caching ops
-    AnalyzesOk("create table cached_tbl(i int) partitioned by(j int) " +
-        "cached in 'testPool'");
-    AnalyzesOk("create table cached_tbl(i int) partitioned by(j int) uncached");
-    AnalyzesOk("create table cached_tbl(i int) partitioned by(j int) " +
-        "location '/test-warehouse/' cached in 'testPool'");
-    AnalyzesOk("create table cached_tbl(i int) partitioned by(j int) " +
-        "location '/test-warehouse/' uncached");
+    AnalysisError("create table cached_tbl(i int) partitioned by(j int) " +
+        "cached in 'testPool'", "HDFS caching is not supported on CDH4");
+    AnalysisError("create table cached_tbl(i int) partitioned by(j int) uncached",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("create table cached_tbl(i int) partitioned by(j int) " +
+        "location '/test-warehouse/' cached in 'testPool'",
+        "HDFS caching is not supported on CDH4");
+    AnalysisError("create table cached_tbl(i int) partitioned by(j int) " +
+        "location '/test-warehouse/' uncached",
+        "HDFS caching is not supported on CDH4");
 
     // Invalid database name.
     AnalysisError("create table `???`.new_table (x int) PARTITIONED BY (y int)",

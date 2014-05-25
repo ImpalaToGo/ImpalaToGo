@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pytest
 import re
 import uuid
@@ -44,6 +45,8 @@ class TestDdlStress(ImpalaTestSuite):
         v.get_value('table_format').compression_codec == 'none')
 
   @pytest.mark.stress
+  @pytest.mark.skipif(int(os.environ['CDH_MAJOR_VERSION']) < 5,
+      reason='HDFS caching not supported on CDH4')
   def test_create_cache_many_tables(self, vector):
     self.client.set_configuration(vector.get_value('exec_option'))
     self.client.execute("create database if not exists ddl_stress_testdb")
