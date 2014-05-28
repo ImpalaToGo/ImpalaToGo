@@ -42,6 +42,7 @@ pushd ${IMPALA_HOME}/bin
 python -u ./load-data.py --workloads functional-query --exploration_strategy exhaustive
 python -u ./load-data.py --workloads tpcds --exploration_strategy core
 python -u ./load-data.py --workloads tpch --exploration_strategy core
+
 # Load all the auxiliary workloads (if any exist)
 if [ -d ${IMPALA_AUX_WORKLOAD_DIR} ] && [ -d ${IMPALA_AUX_DATASET_DIR} ]; then
   python -u ./load-data.py --workloads all --workload_dir=${IMPALA_AUX_WORKLOAD_DIR}\
