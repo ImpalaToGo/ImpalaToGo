@@ -45,6 +45,7 @@ pushd ${IMPALA_HOME}/bin
 python -u ./load-data.py --workloads functional-query --exploration_strategy exhaustive
 python -u ./load-data.py --workloads tpcds --exploration_strategy core
 python -u ./load-data.py --workloads tpch --exploration_strategy core
+
 # Load the test data source and table
 ./impala-shell.sh -f ${IMPALA_HOME}/testdata/bin/create-data-source-table.sql
 # Load all the auxiliary workloads (if any exist)

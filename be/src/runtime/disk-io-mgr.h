@@ -157,6 +157,9 @@ class MemTracker;
 // range (GetNextRange()) instead of when the ranges are issued. This guarantees that
 // there will be a CPU available to process the buffer and any throttling we do with
 // the number of scanner threads properly controls the amount of files we mlock.
+// With cached scan ranges, we cannot close the scan range until the cached buffer
+// is returned (HDFS does not allow this). We therefore need to defer the close until
+// the cached buffer is returned (BufferDescriptor::Return()).
 //
 // On CDH4, where caching is not supported, much of the caching structure is still
 // preserved to minimize how much the code in the IoMgr diverges.
@@ -283,6 +286,8 @@ class DiskIoMgr {
     // The initial queue capacity for this.  Specify -1 to use IoMgr default.
     ScanRange(int initial_capacity = -1);
 
+    virtual ~ScanRange();
+
     // Resets this scan range object with the scan range description.
     void Reset(const char* file, int64_t len,
         int64_t offset, int disk_id, bool try_cache, void* metadata = NULL);
@@ -317,8 +322,8 @@ class DiskIoMgr {
     // Returns true if this scan range has hit the queue capacity, false otherwise.
     bool EnqueueBuffer(BufferDescriptor* buffer);
 
-    // Cleanup any queued buffers (i.e. due to cancellation). This must
-    // be called with lock_ taken.
+    // Cleanup any queued buffers (i.e. due to cancellation). This cannot
+    // be called with any locks taken.
     void CleanupQueuedBuffers();
 
     // Validates the internal state of this range. lock_ must be taken
@@ -672,6 +677,10 @@ class DiskIoMgr {
   // of 2, and buffer_size should be <= max_buffer_size_. These constraints will be met
   // if buffer was acquired via GetFreeBuffer() (which it should have been).
   void ReturnFreeBuffer(char* buffer, int64_t buffer_size);
+
+  // Returns the buffer in desc (cannot be NULL), sets buffer to NULL and clears the
+  // mem tracker.
+  void ReturnFreeBuffer(BufferDescriptor* desc);
 
   // Disk worker thread loop. This function retrieves the next range to process on
   // the disk queue and invokes ReadRange() or Write() depending on the type of Range().
