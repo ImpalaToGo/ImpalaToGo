@@ -407,6 +407,7 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
         fileDescriptors_.add(HdfsPartition.FileDescriptor.fromThrift(desc));
       }
     }
+
     TAccessLevel accessLevel = thriftPartition.isSetAccess_level() ?
         thriftPartition.getAccess_level() : TAccessLevel.READ_WRITE;
     HdfsPartition partition = new HdfsPartition(table, null, literalExpr, storageDesc,
