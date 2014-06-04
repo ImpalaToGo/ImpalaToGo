@@ -46,7 +46,7 @@ import com.cloudera.impala.testutil.TestUtils;
 import com.cloudera.impala.thrift.TMetadataOpRequest;
 import com.cloudera.impala.thrift.TMetadataOpcode;
 import com.cloudera.impala.thrift.TNetworkAddress;
-import com.cloudera.impala.thrift.TQueryContext;
+import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TResultSet;
 import com.cloudera.impala.thrift.TSessionState;
 import com.google.common.base.Preconditions;
@@ -73,10 +73,10 @@ public class AuthorizationTest {
       LocalGroupResourceAuthorizationProvider.class.getName());
   private final static ImpaladCatalog catalog_ =
       new ImpaladTestCatalog(authzConfig_);
-  private final static TQueryContext queryCtxt_ =
+  private final static TQueryCtx queryCtx_ =
         TestUtils.createQueryContext(Catalog.DEFAULT_DB, USER.getName());
   private final static AnalysisContext analysisContext_ =
-      new AnalysisContext(catalog_, queryCtxt_);
+      new AnalysisContext(catalog_, queryCtx_);
   private final static Frontend fe_ =
       new Frontend(authzConfig_, new ImpaladTestCatalog(authzConfig_));
 
