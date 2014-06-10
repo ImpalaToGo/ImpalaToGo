@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.6)
 
 SET(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_C_FLAGS_RELEASE "-O3 -std=c99 -Wall -W -Wundef -Wno-implicit-function-declaration")
+set(CMAKE_C_FLAGS_RELEASE "-fPIC -O3 -std=c99 -Wall -W -Wundef -Wno-implicit-function-declaration")
 
 set(LZ4_SOURCES lz4.c lz4hc.c)
 set(LZ4_HEADERS lz4.h lz4hc.h)
