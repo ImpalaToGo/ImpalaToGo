@@ -146,8 +146,10 @@ public abstract class QueryStmt extends StatementBase {
     }
 
     sortInfo_ = new SortInfo(orderingExprs, isAscOrder, nullsFirstParams);
-    // order by w/o limit and offset in inline views and union operands are ignored.
-    if (!analyzer.isRootAnalyzer() && !hasLimit() && !hasOffset()) {
+    // order by w/o limit and offset in inline views, union operands and insert statements
+    // are ignored.
+    if (!hasLimit() && !hasOffset() &&
+        (!analyzer.isRootAnalyzer() || analyzer.isInsertStmt())) {
       evaluateOrderBy_ = false;
     } else {
       evaluateOrderBy_ = true;
