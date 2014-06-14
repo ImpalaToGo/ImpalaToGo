@@ -15,6 +15,8 @@
 #
 # Superclass of all HS2 tests containing commonly used functions.
 
+import random
+
 from getpass import getuser
 from cli_service import TCLIService
 from thrift.transport.TSocket import TSocket
@@ -49,7 +51,10 @@ def operation_id_to_query_id(operation_id):
   return "%s:%s" % (lo, hi)
 
 class HS2TestSuite(ImpalaTestSuite):
-  TEST_DB = 'hs2_db'
+  # This DB will be created/dropped for every HS2TestSuite subclass. Make the name unique
+  # so different test suites don't clobber each other's DBs. The [2:] is to remove the
+  # "0." from the random floating-point number.
+  TEST_DB = 'hs2_db' + str(random.random())[2:]
 
   def setup(self):
     self.cleanup_db(self.TEST_DB)
@@ -59,6 +64,7 @@ class HS2TestSuite(ImpalaTestSuite):
     self.transport.open()
     self.protocol = TBinaryProtocol.TBinaryProtocol(self.transport)
     self.hs2_client = TCLIService.Client(self.protocol)
+    self.client.execute("create database %s" % self.TEST_DB)
 
   def teardown(self):
     self.cleanup_db(self.TEST_DB)

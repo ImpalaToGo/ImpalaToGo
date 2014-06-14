@@ -90,6 +90,7 @@ public class AlterTableChangeColStmt extends AlterTableStmt {
 
     // Check that the new column def's name is valid.
     newColDef_.analyze();
+    analyzer.warnIfUnsupportedType(newColDef_.getColType());
     // Verify that if the column name is being changed, the new name doesn't conflict
     // with an existing column.
     if (!colName_.toLowerCase().equals(newColDef_.getColName().toLowerCase()) &&

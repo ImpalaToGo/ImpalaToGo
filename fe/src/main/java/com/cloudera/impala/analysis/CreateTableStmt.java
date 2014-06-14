@@ -192,6 +192,7 @@ public class CreateTableStmt extends StatementBase {
     Set<String> colNames = Sets.newHashSet();
     for (ColumnDesc colDef: columnDefs_) {
       colDef.analyze();
+      analyzer.warnIfUnsupportedType(colDef.getColType());
       if (!colNames.add(colDef.getColName().toLowerCase())) {
         throw new AnalysisException("Duplicate column name: " + colDef.getColName());
       }

@@ -335,7 +335,6 @@ class TestFetchFirst(HS2TestSuite):
     (IMPALA-963)
     """
     self.client.set_configuration({'sync_ddl': 1})
-    self.client.execute("create database %s" % self.TEST_DB)
     self.client.execute("create table %s.orderclone like tpch.orders" % self.TEST_DB)
     execute_statement_req = TCLIService.TExecuteStatementReq()
     execute_statement_req.sessionHandle = self.session_handle

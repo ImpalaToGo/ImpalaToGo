@@ -1516,6 +1516,19 @@ public class Analyzer {
   }
 
   /**
+   * Warns if 'type' is not supported on this version of CDH. This is true
+   * for types that are only added in later CDH versions.
+   */
+  public void warnIfUnsupportedType(ColumnType t) {
+    if (t.isDecimal()) {
+      addWarning("DECIMAL columns are not supported by every component of CDH4, " +
+          "particularly Hive. Impala can read and write these columns, but Hive " +
+          "cannot. This means data written in this table might not be readable by the " +
+          "other components.");
+    }
+  }
+
+  /**
    * Efficiently computes and stores the transitive closure of the value transfer graph
    * of slots. After calling computeValueTransfers(), value transfers between slots can
    * be queried via hasValueTransfer(). Value transfers can be uni-directional due to
