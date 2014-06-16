@@ -71,7 +71,7 @@ function(THRIFT_GEN VAR)
         COMMENT "Running thrift compiler on ${FIL}"
         VERBATIM
       )
-    ELSE (FIL STREQUAL "cli_service.thrift")
+    ELSE (FIL STREQUAL "cli_service.thrift" OR FIL STREQUAL "parquet.thrift")
       add_custom_command(
         OUTPUT ${OUTPUT_BE_FILE}
         COMMAND ${THRIFT_COMPILER} ${CPP_ARGS} ${FIL}
@@ -82,7 +82,7 @@ function(THRIFT_GEN VAR)
         COMMENT "Running thrift compiler on ${FIL}"
         VERBATIM
     )
-    ENDIF(FIL STREQUAL "cli_service.thrift")
+    ENDIF(FIL STREQUAL "cli_service.thrift" OR FIL STREQUAL "parquet.thrift")
   endforeach(FIL)
 
   set(${VAR} ${${VAR}} PARENT_SCOPE)
