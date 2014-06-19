@@ -224,6 +224,17 @@
 
   <!-- LlamaAM configuration -->
   <property>
+    <name>llama.am.cluster.id</name>
+    <value>llama</value>
+    <description>
+      Identification of a Llama (or an Active/Standby pair). YARN resources
+      are grouped by this ID. When multiple applications on a YARN cluster
+      use their own Llamas, it is recommended that they use different values
+      for this config. On Llama restart, all YARN applications corresponding
+      to this cluster-id are killed.
+    </description>
+  </property>
+  <property>
     <name>llama.am.rm.connector.class</name>
     <value>com.cloudera.llama.am.yarn.YarnRMConnector</value>
     <description>
