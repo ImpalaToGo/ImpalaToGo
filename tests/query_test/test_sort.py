@@ -79,8 +79,6 @@ class TestQueryFullSort(ImpalaTestSuite):
 
   def test_sort_union(self, vector):
 
-    pytest.xfail("Union patch is needed")
-
     query = """select o_orderdate, o_custkey, o_comment from (select * from orders union
     select * from orders union all select * from orders) as i
     order by o_orderdate limit 100000"""
