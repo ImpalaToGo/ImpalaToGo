@@ -205,6 +205,10 @@ class TestHS2(HS2TestSuite):
     log = self.get_log("select * from functional.alltypeserror")
     assert "Error converting column" in log
 
+    # Test overflow warning
+    log = self.get_log("select cast(1000 as decimal(2, 1))")
+    assert "Expression overflowed, returning NULL" in log
+
     # Test CDH4 decimal warnings
     TEST_TABLE = "%s.get_log_test" % self.TEST_DB
     LOG_MSG = "DECIMAL columns are not supported by every component of CDH4"
