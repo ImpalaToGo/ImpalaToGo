@@ -17,8 +17,7 @@
 # Define some default values that can be overridden by system properties
 hive.log.threshold=ALL
 hive.root.logger=INFO,FA
-hive.log.dir=${java.io.tmpdir}/${user.name}
-hive.query.id=hadoop
+hive.log.dir=/tmp/${user.name}
 hive.log.file=${hive.query.id}.log
 
 # Define the root logger to the system property "hadoop.root.logger".
@@ -71,7 +70,3 @@ log4j.category.JPOX.Query=ERROR,FA
 log4j.category.JPOX.General=ERROR,FA
 log4j.category.JPOX.Enhancer=ERROR,FA
 
-
-# Silence useless ZK logs
-log4j.logger.org.apache.zookeeper.server.NIOServerCnxn=WARN,FA
-log4j.logger.org.apache.zookeeper.ClientCnxnSocketNIO=WARN,FA

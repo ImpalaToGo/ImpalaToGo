@@ -58,7 +58,7 @@ function log() {
 
 # return(print) the webhcat jar
 function find_jar_path() {
-         for dir in "." "build" "share/webhcat/svr/lib"; do
+         for dir in "." "build" "share/webhcat/svr/"; do
                 if (( `ls -1 $base_dir/$dir/$WEBHCAT_JAR 2>/dev/null| wc -l ` > 1 )) ; then
                        echo "Error:  found more than one hcatalog jar in $base_dir/$dir/$WEBHCAT_JAR"
                        exit 1
@@ -121,7 +121,7 @@ function check_pid() {
 
 # Start the webhcat server in the foreground
 function foreground_webhcat() {
-        exec $start_cmd
+        $start_cmd
 }
 
 # Start the webhcat server in the background.  Record the PID for

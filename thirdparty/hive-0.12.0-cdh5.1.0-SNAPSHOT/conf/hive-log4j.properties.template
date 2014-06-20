@@ -17,7 +17,7 @@
 # Define some default values that can be overridden by system properties
 hive.log.threshold=ALL
 hive.root.logger=WARN,DRFA
-hive.log.dir=${java.io.tmpdir}/${user.name}
+hive.log.dir=/tmp/${user.name}
 hive.log.file=hive.log
 
 # Define the root logger to the system property "hadoop.root.logger".
@@ -53,7 +53,7 @@ log4j.appender.DRFA.layout.ConversionPattern=%d{ISO8601} %-5p %c{2} (%F:%M(%L)) 
 
 #
 # console
-# Add "console" to rootlogger above if you want to use this
+# Add "console" to rootlogger above if you want to use this 
 #
 
 log4j.appender.console=org.apache.log4j.ConsoleAppender
@@ -81,18 +81,4 @@ log4j.category.JPOX.MetaData=ERROR,DRFA
 log4j.category.JPOX.Query=ERROR,DRFA
 log4j.category.JPOX.General=ERROR,DRFA
 log4j.category.JPOX.Enhancer=ERROR,DRFA
-
-
-# Silence useless ZK logs
-log4j.logger.org.apache.zookeeper.server.NIOServerCnxn=WARN,DRFA
-log4j.logger.org.apache.zookeeper.ClientCnxnSocketNIO=WARN,DRFA
-
-#custom logging levels
-log4j.logger.org.apache.hadoop.hive.ql.parse.SemanticAnalyzer=INFO
-log4j.logger.org.apache.hadoop.hive.ql.Driver=INFO
-log4j.logger.org.apache.hadoop.hive.ql.exec.mr.ExecDriver=INFO
-log4j.logger.org.apache.hadoop.hive.ql.exec.mr.MapRedTask=INFO
-log4j.logger.org.apache.hadoop.hive.ql.exec.mr.MapredLocalTask=INFO
-log4j.logger.org.apache.hadoop.hive.ql.exec.Task=INFO
-log4j.logger.org.apache.hadoop.hive.ql.session.SessionState=INFO
 

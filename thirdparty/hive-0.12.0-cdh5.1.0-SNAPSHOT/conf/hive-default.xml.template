@@ -177,8 +177,8 @@
 
 <property>
   <name>datanucleus.connectionPoolingType</name>
-  <value>BoneCP</value>
-  <description>Uses a BoneCP connection pool for JDBC metastore</description>
+  <value>DBCP</value>
+  <description>Uses a DBCP connection pool for JDBC metastore</description>
 </property>
 
 <property>
@@ -375,7 +375,7 @@
 
 <property>
   <name>hive.default.rcfile.serde</name>
-  <value>org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe</value>
+  <value>org.apache.hadoop.hive.serde2.columnar.LazyBinaryColumnarSerDe</value>
   <description>The default SerDe hive will use for the rcfile format</description>
 </property>
 
@@ -458,6 +458,12 @@
   <description>Hash aggregation will be turned off if the ratio between hash
   table size and input rows is bigger than this number. Set to 1 to make sure
   hash aggregation is never turned off.</description>
+</property>
+
+<property>
+  <name>hive.optimize.cp</name>
+  <value>true</value>
+  <description>Whether to enable column pruner</description>
 </property>
 
 <property>
@@ -723,7 +729,7 @@
 
 <property>
   <name>hive.hwi.war.file</name>
-  <value>lib/hive-hwi-@VERSION@.war</value>
+  <value>lib/hive-hwi-0.12.0.war</value>
   <description>This sets the path to the HWI war file, relative to ${HIVE_HOME}. </description>
 </property>
 
@@ -877,18 +883,12 @@
   <description>Read from a binary stream and treat each hive.binary.record.max.length bytes as a record.
   The last record before the end of stream can have less than hive.binary.record.max.length bytes</description>
 </property>
-
-<property>
-  <name>hive.server2.max.start.attempts</name>
-  <value>30</value>
-  <description>This number of times HiveServer2 will attempt to start before exiting, sleeping 60 seconds between retries. The default of 30 will keep trying for 30 minutes.</description>
-</property>
-
+    
 <property>
   <name>hive.server2.transport.mode</name>
   <value>binary</value>
   <description>Server transport mode. "binary" or "http".</description>
-</property>
+</property>    
 
 <property>
   <name>hive.server2.thrift.http.port</name>
@@ -1520,18 +1520,6 @@
 </property>
 
 <property>
-  <name>hive.security.command.whitelist</name>
-  <value>set,reset,dfs,add,delete</value>
-  <description>Comma seperated list of non-SQL Hive commands users are authorized to execute</description>
-</property>
-
-<property>
-  <name>hive.conf.restricted.list</name>
-  <value></value>
-  <description>Comma seperated list of configuration options which are immutable at runtime</description>
-</property>
-
-<property>
   <name>hive.metastore.authorization.storage.checks</name>
   <value>false</value>
   <description>Should the metastore do authorization checks against the underlying storage
@@ -1702,7 +1690,7 @@
 
 <property>
   <name>hive.warehouse.subdir.inherit.perms</name>
-  <value>true</value>
+  <value>false</value>
   <description>Set this to true if the the table directories should inherit the
     permission of the warehouse or database directory instead of being created
     with the permissions derived from dfs umask</description>
@@ -1829,22 +1817,6 @@
 </property>
 
 <property>
-  <name>hive.server2.in.mem.logging</name>
-  <value>true</value>
-  <description>
-    Whether to turn on hiveserver2 in memory logging
-  </description>
-</property>
-
-<property>
-  <name>hive.server2.in.mem.log.size</name>
-  <value>131072</value>
-  <description>
-    Maximum size of the hiveserver2 in memory query log. Note that the size is per query.
-  </description>
-</property>
-
-<property>
    <name>hive.decode.partition.name</name>
    <value>false</value>
    <description>Whether to show the unquoted partition names in query results.</description>
@@ -1919,29 +1891,15 @@
 
 <property>
   <name>hive.server2.async.exec.threads</name>
-  <value>100</value>
+  <value>50</value>
   <description>Number of threads in the async thread pool for HiveServer2</description>
 </property>
 
 <property>
   <name>hive.server2.async.exec.shutdown.timeout</name>
   <value>10</value>
-  <description>Time (in seconds) for which HiveServer2 shutdown will wait for async
+  <description>Time (in seconds) for which HiveServer2 shutdown will wait for async 
   threads to terminate</description>
-</property>
-
-<property>
-  <name>hive.server2.async.exec.keepalive.time</name>
-  <value>10</value>
-  <description>Time (in seconds) that an idle HiveServer2 async thread (from the thread pool) will wait
-  for a new task to arrive before terminating</description>
-</property>
-
-<property>
-  <name>hive.server2.async.exec.wait.queue.size</name>
-  <value>100</value>
-  <description>Size of the wait queue for async thread pool in HiveServer2.
-  After hitting this limit, the async thread pool will reject new requests.</description>
 </property>
 
 <property>
@@ -2039,7 +1997,7 @@
 
 <property>
   <name>hive.server2.thrift.sasl.qop</name>
-  <value>auth</value>
+  <value>auth</auth>
   <description>Sasl QOP value; Set it to one of following values to enable higher levels of
      protection for hive server2 communication with clients.
       "auth" - authentication only (default)
@@ -2061,21 +2019,5 @@
    </description>
 </property>
 
-<property>
-  <name>hive.plan.serialization.format</name>
-  <value>kryo</value>
-  <description>
-  Query plan format serialization between client and task nodes. 
-  Two supported values are : kryo and javaXML. Kryo is default.
-  </description>
-</property>
-
-<property>
-  <name>hive.server2.allow.user.substitution</name>
-  <value>true</value>
-  <description>
-  Allow altername user to be specified as part of HiveServer2 open connection requestion
-  </description>
-</property>
 
 </configuration>
