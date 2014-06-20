@@ -29,10 +29,6 @@ SERVICE=""
 HELP=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version)
-      shift
-      SERVICE=version
-      ;;
     --service)
       shift
       SERVICE=$1
@@ -119,7 +115,7 @@ elif [ "${HIVE_AUX_JARS_PATH}" != "" ]; then
       HIVE_AUX_JARS_PATH=`cygpath -p -w "$HIVE_AUX_JARS_PATH"`
       HIVE_AUX_JARS_PATH=`echo $HIVE_AUX_JARS_PATH | sed 's/;/,/g'`
   fi
-  AUX_CLASSPATH=${AUX_CLASSPATH}:${HIVE_AUX_JARS_PATH}
+  AUX_CLASSPATH=${HIVE_AUX_JARS_PATH}
   AUX_PARAM="file://$(echo ${HIVE_AUX_JARS_PATH} | sed 's/:/,file:\/\//g')"
 fi
 
@@ -218,6 +214,7 @@ if [ "$DEBUG" ]; then
   else
     get_debug_params "$DEBUG"
     export HADOOP_CLIENT_OPTS="$HADOOP_CLIENT_OPTS $HIVE_MAIN_CLIENT_DEBUG_OPTS"
+    export HADOOP_OPTS="$HADOOP_OPTS $HADOOP_CLIENT_OPTS"
   fi
 fi
 
