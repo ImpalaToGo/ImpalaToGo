@@ -288,7 +288,6 @@ public class HdfsScanNode extends ScanNode {
   private HashSet<Long> evalBinaryPredicate(Expr expr) {
     Preconditions.checkNotNull(expr);
     Preconditions.checkState(expr instanceof BinaryPredicate);
-    HashSet<Long> matchingIds = Sets.newHashSet();
     boolean isSlotOnLeft = true;
     if (expr.getChild(0).isLiteral()) isSlotOnLeft = false;
 
@@ -306,7 +305,9 @@ public class HdfsScanNode extends ScanNode {
     int partitionPos = slot.getDesc().getColumn().getPosition();
     TreeMap<LiteralExpr, HashSet<Long>> partitionValueMap =
         tbl_.getPartitionValueMap(partitionPos);
+    if (partitionValueMap.isEmpty()) return Sets.newHashSet();
 
+    HashSet<Long> matchingIds = Sets.newHashSet();
     // Compute the matching partition ids
     Operator op = bp.getOp();
     if (op == Operator.EQ) {
