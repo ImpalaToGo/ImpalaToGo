@@ -66,7 +66,7 @@ show column stats compute_stats_db.mixed_types
 ---- LABELS
 COLUMN, TYPE, #DISTINCT VALUES, #NULLS, MAX SIZE, AVG SIZE
 ---- RESULTS
-'a','INT',2,0,4,4
+'a','INT',2,-1,4,4
 'b','DECIMAL(10,0)',-1,-1,8,8
 ---- TYPES
 STRING, STRING, BIGINT, BIGINT, DOUBLE, DOUBLE
