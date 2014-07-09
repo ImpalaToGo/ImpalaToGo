@@ -59,7 +59,6 @@ import com.cloudera.impala.thrift.TCatalogObject;
 import com.cloudera.impala.thrift.TDescribeTableParams;
 import com.cloudera.impala.thrift.TDescribeTableResult;
 import com.cloudera.impala.thrift.TExecRequest;
-import com.cloudera.impala.thrift.TGetAllHadoopConfigsResponse;
 import com.cloudera.impala.thrift.TGetDataSrcsParams;
 import com.cloudera.impala.thrift.TGetDataSrcsResult;
 import com.cloudera.impala.thrift.TGetDbsParams;
