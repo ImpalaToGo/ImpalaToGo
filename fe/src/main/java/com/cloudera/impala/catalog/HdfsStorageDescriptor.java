@@ -23,8 +23,6 @@ import org.apache.hadoop.hive.serde.serdeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.cloudera.impala.thrift.CatalogObjectsConstants;
-import com.cloudera.impala.thrift.THdfsCompression;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
@@ -70,7 +68,6 @@ public class HdfsStorageDescriptor {
   private final byte escapeChar_;
   private final byte quoteChar_;
   private final int blockSize_;
-  private final THdfsCompression compression_;
 
   /**
    * Returns a map from delimiter key to a single delimiter character,
@@ -142,7 +139,7 @@ public class HdfsStorageDescriptor {
 
   public HdfsStorageDescriptor(String tblName, HdfsFileFormat fileFormat, byte lineDelim,
       byte fieldDelim, byte collectionDelim, byte mapKeyDelim, byte escapeChar,
-      byte quoteChar, int blockSize, THdfsCompression compression) {
+      byte quoteChar, int blockSize) {
     this.fileFormat_ = fileFormat;
     this.lineDelim_ = lineDelim;
     this.fieldDelim_ = fieldDelim;
@@ -150,7 +147,6 @@ public class HdfsStorageDescriptor {
     this.mapKeyDelim_ = mapKeyDelim;
     this.quoteChar_ = quoteChar;
     this.blockSize_ = blockSize;
-    this.compression_ = compression;
 
     // You can set the escape character as a tuple or row delim.  Empirically,
     // this is ignored by hive.
@@ -207,15 +203,6 @@ public class HdfsStorageDescriptor {
     if (blockValue != null) {
       blockSize = Integer.parseInt(blockValue);
     }
-    THdfsCompression compression = THdfsCompression.NONE;
-    String compressionValue = parameters.get(COMPRESSION);
-    if (compressionValue != null) {
-      if (CatalogObjectsConstants.COMPRESSION_MAP.containsKey(compressionValue)) {
-        compression = CatalogObjectsConstants.COMPRESSION_MAP.get(compressionValue);
-      } else {
-        LOG.warn("Unknown compression type: " + compressionValue);
-      }
-    }
 
     try {
       return new HdfsStorageDescriptor(tblName,
@@ -226,7 +213,7 @@ public class HdfsStorageDescriptor {
           delimMap.get(serdeConstants.MAPKEY_DELIM),
           delimMap.get(serdeConstants.ESCAPE_CHAR),
           delimMap.get(serdeConstants.QUOTE_CHAR),
-          blockSize, compression);
+          blockSize);
     } catch (IllegalArgumentException ex) {
       // Thrown by fromJavaClassName
       throw new InvalidStorageDescriptorException(ex);
@@ -241,5 +228,4 @@ public class HdfsStorageDescriptor {
   public byte getQuoteChar() { return quoteChar_; }
   public HdfsFileFormat getFileFormat() { return fileFormat_; }
   public int getBlockSize() { return blockSize_; }
-  public THdfsCompression getCompression() { return compression_; }
 }
