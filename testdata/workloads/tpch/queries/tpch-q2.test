@@ -1,5 +1,5 @@
 ====
----- QUERY : TPCH-Q2_QUERY_1
+---- QUERY: TPCH-Q2_QUERY_1
 # Q2 - Minimum Cost Supplier Query
 insert overwrite table q2_minimum_cost_supplier_tmp1
 select
@@ -26,7 +26,7 @@ RESET q2_minimum_cost_supplier_tmp1
 ---- RESULTS
 : 642
 ====
----- QUERY : TPCH-Q2_QUERY_2
+---- QUERY: TPCH-Q2_QUERY_2
 insert overwrite table q2_minimum_cost_supplier_tmp2
 select
   p_partkey,
@@ -38,7 +38,7 @@ RESET q2_minimum_cost_supplier_tmp2
 ---- RESULTS
 : 460
 ====
----- QUERY : TPCH-Q2_QUERY_3
+---- QUERY: TPCH-Q2_QUERY_3
 # Modifications: Fully qualified name of p_partkey column in the ORDER BY clause
 select
   t1.s_acctbal,
@@ -58,8 +58,6 @@ order by
   s_name,
   t1.p_partkey
 limit 100
----- TYPES
-DOUBLE, STRING, STRING, BIGINT, STRING, STRING, STRING, STRING
 ---- RESULTS
 9938.530000000001,'Supplier#000005359','UNITED KINGDOM',185358,'Manufacturer#4','QKuHYh,vZGiwu2FWEJoLDx04','33-429-790-6131','uriously regular requests hag'
 9937.84,'Supplier#000005969','ROMANIA',108438,'Manufacturer#1','ANDENSOSmk,miq23Xfb5RWt6dvUcvt6Qa','29-520-692-3537','efully express instructions. regular requests against the slyly fin'
@@ -161,4 +159,6 @@ DOUBLE, STRING, STRING, BIGINT, STRING, STRING, STRING, STRING
 7852.45,'Supplier#000005864','RUSSIA',8363,'Manufacturer#4','WCNfBPZeSXh3h,c','32-454-883-3821','usly unusual pinto beans. brave ideas sleep carefully quickly ironi'
 7850.66,'Supplier#000001518','UNITED KINGDOM',86501,'Manufacturer#1','ONda3YJiHKJOC','33-730-383-3892','ifts haggle fluffily pending pai'
 7843.52,'Supplier#000006683','FRANCE',11680,'Manufacturer#4','2Z0JGkiv01Y00oCFwUGfviIbhzCdy','16-464-517-8943',' express, final pinto beans x-ray slyly asymptotes. unusual, unusual'
+---- TYPES
+DOUBLE, STRING, STRING, BIGINT, STRING, STRING, STRING, STRING
 ====

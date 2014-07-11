@@ -1,5 +1,5 @@
 ====
----- QUERY : TPCH-Q22_QUERY_1
+---- QUERY: TPCH-Q22_QUERY_1
 # Q22 - Global Sales Opportunity Query
 # Modifications: Added a cust_name_char column that will always have
 # a constant value ('C') so that we can do a join between this table
@@ -26,11 +26,11 @@ RESET q22_customer_tmp1
 ---- RESULTS
 : 1
 ====
----- QUERY : TPCH-Q22_QUERY_2
+---- QUERY: TPCH-Q22_QUERY_2
 # Modifications: Updated to use LEFT OUTER JOIN instead of NOT EXISTS,
 # removed subquery by pushing aggregation up a level, added temp table
 # to remove another subquery that computed the average account balance,
-# added limit, added round()
+# added round()
 select
   substring(c_phone, 1, 2) as cntrycode,
   count(*) as numcust,
@@ -54,9 +54,6 @@ group by
   substring(c_phone, 1, 2)
 order by
   cntrycode
-limit 100
----- TYPES
-string, bigint, double
 ---- RESULTS
 '13',888,6737713.99
 '17',861,6460573.72
@@ -65,4 +62,6 @@ string, bigint, double
 '29',948,7158866.63
 '30',909,6808436.13
 '31',922,6806670.18
+---- TYPES
+string, bigint, double
 ====

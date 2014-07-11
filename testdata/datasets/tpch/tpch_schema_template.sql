@@ -249,14 +249,6 @@ ps_suppkey bigint
 ---- DATASET
 tpch
 ---- BASE_TABLE_NAME
-lineitem_tmp
----- COLUMNS
-t_partkey bigint
-t_avg_quantity double
-====
----- DATASET
-tpch
----- BASE_TABLE_NAME
 q18_tmp
 ---- COLUMNS
 l_orderkey bigint

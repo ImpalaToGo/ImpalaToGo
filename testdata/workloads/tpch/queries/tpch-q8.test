@@ -1,5 +1,5 @@
 ====
----- QUERY : TPCH-Q8
+---- QUERY: TPCH-Q8
 # Q8 - National Market Share Query
 # Modifications: Got rid of subquery, converted select from multiple tables to joins,
 # added round() call
@@ -31,10 +31,9 @@ group by
   o_year
 order by
   o_year
-limit 100
----- TYPES
-int, double
 ---- RESULTS
 1995,0.03444
 1996,0.04158
+---- TYPES
+int, double
 ====

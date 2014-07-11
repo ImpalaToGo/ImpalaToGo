@@ -1,33 +1,38 @@
 ====
----- QUERY : TPCH-Q9
+---- QUERY: TPCH-Q9
 # Q9 - Product Type Measure Query
-# Modifications: Removed subquery, converted selects from multiple tables to joins,
-# added limit, added round()
+# Modifications: added round().
 select
-  n.n_name as nation,
-  year(o.o_orderdate) as o_year,
-  round(sum(l.l_extendedprice * (1 - l.l_discount) -
-            ps.ps_supplycost * l.l_quantity), 1) as sum_profit
-from lineitem l
-  join part p
-    on (p.p_partkey = l.l_partkey)
-  join orders o
-    on (o.o_orderkey = l.l_orderkey)
-  join partsupp ps
-    on (ps.ps_suppkey = l.l_suppkey and ps.ps_partkey = l.l_partkey)
-  join supplier s
-    on (s.s_suppkey = l.l_suppkey)
-  join nation n
-    on (s.s_nationkey = n.n_nationkey)
-where
-  p.p_name like '%green%'
+  nation,
+  o_year,
+  round(sum(amount), 1) as sum_profit
+from (
+  select
+    n_name as nation,
+    year(o_orderdate) as o_year,
+    l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+  from
+    part,
+    supplier,
+    lineitem,
+    partsupp,
+    orders,
+    nation
+  where
+    s_suppkey = l_suppkey
+    and ps_suppkey = l_suppkey
+    and ps_partkey = l_partkey
+    and p_partkey = l_partkey
+    and o_orderkey = l_orderkey
+    and s_nationkey = n_nationkey
+    and p_name like '%green%'
+  ) as profit
 group by
-  n.n_name,
-  year(o.o_orderdate)
+  nation,
+  o_year
 order by
   nation,
-  o_year desc
-limit 200
+  o_year desc;
 ---- RESULTS
 'ALGERIA',1998,27136900.2
 'ALGERIA',1997,48611833.5

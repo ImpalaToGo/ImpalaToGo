@@ -1497,61 +1497,35 @@ limit 1000
    predicates: p_size = 49 OR p_size = 14 OR p_size = 23 OR p_size = 45 OR p_size = 19 OR p_size = 3 OR p_size = 36 OR p_size = 9
 ====
 # Q17 - Small-Quantity-Order Revenue Query
-insert overwrite table tpch.lineitem_tmp
-select l_partkey as t_partkey, 0.2 * avg(l_quantity) as t_avg_quantity
-from tpch.lineitem
-group by l_partkey
----- PLAN
-WRITE TO HDFS [tpch.lineitem_tmp, OVERWRITE=true]
-|  partitions=1
-|
-01:AGGREGATE [FINALIZE]
-|  output: sum(l_quantity), count(l_quantity)
-|  group by: l_partkey
-|
-00:SCAN HDFS [tpch.lineitem]
-   partitions=1/1 size=718.94MB
----- DISTRIBUTEDPLAN
-WRITE TO HDFS [tpch.lineitem_tmp, OVERWRITE=true]
-|  partitions=1
-|
-03:AGGREGATE [MERGE FINALIZE]
-|  output: sum(sum(l_quantity)), sum(count(l_quantity))
-|  group by: l_partkey
-|
-02:EXCHANGE [HASH(l_partkey)]
-|
-01:AGGREGATE
-|  output: sum(l_quantity), count(l_quantity)
-|  group by: l_partkey
-|
-00:SCAN HDFS [tpch.lineitem]
-   partitions=1/1 size=718.94MB
-====
-# Modifications: Converted selects from multiple tables to joins,
-# added round() call, removed subquery
+# Modifications: added round() call
 select round(sum(l_extendedprice) / 7.0, 5) as avg_yearly
 from tpch.lineitem l
   join tpch.part p
     on (p.p_partkey = l.l_partkey)
-  join tpch.lineitem_tmp lt
+  join ( select l_partkey as t_partkey,
+         round(0.2 * avg(l_quantity), 2) as t_avg_quantity
+         from tpch.lineitem group by l_partkey ) as lt
     on (lt.t_partkey = p.p_partkey)
 where
   p.p_brand = 'Brand#23' and
   p.p_container = 'MED BOX' and
   l.l_quantity < lt.t_avg_quantity
 ---- PLAN
-05:AGGREGATE [FINALIZE]
+06:AGGREGATE [FINALIZE]
 |  output: sum(l_extendedprice)
 |
+05:HASH JOIN [INNER JOIN]
+|  hash predicates: p.p_partkey = l_partkey
+|  other predicates: l.l_quantity < round(0.2 * sum(l_quantity) / count(l_quantity), 2)
+|
+|--03:AGGREGATE [FINALIZE]
+|  |  output: sum(l_quantity), count(l_quantity)
+|  |  group by: l_partkey
+|  |
+|  02:SCAN HDFS [tpch.lineitem]
+|     partitions=1/1 size=718.94MB
+|
 04:HASH JOIN [INNER JOIN]
-|  hash predicates: p.p_partkey = lt.t_partkey
-|  other predicates: l.l_quantity < lt.t_avg_quantity
-|
-|--02:SCAN HDFS [tpch.lineitem_tmp lt]
-|     partitions=1/1 size=2.18MB compact
-|
-03:HASH JOIN [INNER JOIN]
 |  hash predicates: l.l_partkey = p.p_partkey
 |
 |--01:SCAN HDFS [tpch.part p]
@@ -1561,27 +1535,37 @@ where
 00:SCAN HDFS [tpch.lineitem l]
    partitions=1/1 size=718.94MB
 ---- DISTRIBUTEDPLAN
-09:AGGREGATE [MERGE FINALIZE]
+12:AGGREGATE [MERGE FINALIZE]
 |  output: sum(sum(l_extendedprice))
 |
-08:EXCHANGE [UNPARTITIONED]
+11:EXCHANGE [UNPARTITIONED]
 |
-05:AGGREGATE
+06:AGGREGATE
 |  output: sum(l_extendedprice)
 |
-04:HASH JOIN [INNER JOIN, BROADCAST]
-|  hash predicates: p.p_partkey = lt.t_partkey
-|  other predicates: l.l_quantity < lt.t_avg_quantity
+05:HASH JOIN [INNER JOIN, BROADCAST]
+|  hash predicates: p.p_partkey = l_partkey
+|  other predicates: l.l_quantity < round(0.2 * sum(l_quantity) / count(l_quantity), 2)
 |
-|--07:EXCHANGE [BROADCAST]
+|--10:EXCHANGE [BROADCAST]
 |  |
-|  02:SCAN HDFS [tpch.lineitem_tmp lt]
-|     partitions=1/1 size=2.18MB
+|  09:AGGREGATE [MERGE FINALIZE]
+|  |  output: sum(sum(l_quantity)), sum(count(l_quantity))
+|  |  group by: l_partkey
+|  |
+|  08:EXCHANGE [HASH(l_partkey)]
+|  |
+|  03:AGGREGATE
+|  |  output: sum(l_quantity), count(l_quantity)
+|  |  group by: l_partkey
+|  |
+|  02:SCAN HDFS [tpch.lineitem]
+|     partitions=1/1 size=718.94MB
 |
-03:HASH JOIN [INNER JOIN, BROADCAST]
+04:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: l.l_partkey = p.p_partkey
 |
-|--06:EXCHANGE [BROADCAST]
+|--07:EXCHANGE [BROADCAST]
 |  |
 |  01:SCAN HDFS [tpch.part p]
 |     partitions=1/1 size=22.83MB
@@ -1622,14 +1606,12 @@ WRITE TO HDFS [tpch.q18_tmp, OVERWRITE=true]
 00:SCAN HDFS [tpch.lineitem]
    partitions=1/1 size=718.94MB
 ====
-# Modifications: Cast o_totalprice column due to float/double values not
-# allowed in GROUP BY.
 select
   c_name,
   c_custkey,
   o_orderkey,
   o_orderdate,
-  cast(o_totalprice as bigint) as total_price_bigint,
+  round(o_totalprice, 5),
   round(sum(l_quantity), 5)
 from tpch.lineitem l
   join tpch.orders o
@@ -1643,18 +1625,19 @@ group by
   c_custkey,
   o_orderkey,
   o_orderdate,
-  cast(o_totalprice as bigint)
+  o_totalprice,
+  o_totalprice
 order by
-  total_price_bigint,
+  o_totalprice,
   o_orderdate
 limit 100
 ---- PLAN
 08:TOP-N [LIMIT=100]
-|  order by: CAST(o_totalprice AS BIGINT) ASC, o_orderdate ASC
+|  order by: o_totalprice ASC, o_orderdate ASC
 |
 07:AGGREGATE [FINALIZE]
 |  output: sum(l_quantity)
-|  group by: c_name, c_custkey, o_orderkey, o_orderdate, CAST(o_totalprice AS BIGINT)
+|  group by: c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
 |
 06:HASH JOIN [INNER JOIN]
 |  hash predicates: o.o_orderkey = t.l_orderkey
@@ -1679,21 +1662,21 @@ limit 100
    partitions=1/1 size=718.94MB
 ---- DISTRIBUTEDPLAN
 15:MERGING-EXCHANGE [UNPARTITIONED]
-|  order by: CAST(o_totalprice AS BIGINT) ASC, o_orderdate ASC
+|  order by: o_totalprice ASC, o_orderdate ASC
 |  limit: 100
 |
 08:TOP-N [LIMIT=100]
-|  order by: CAST(o_totalprice AS BIGINT) ASC, o_orderdate ASC
+|  order by: o_totalprice ASC, o_orderdate ASC
 |
 14:AGGREGATE [MERGE FINALIZE]
 |  output: sum(sum(l_quantity))
-|  group by: c_name, c_custkey, o_orderkey, o_orderdate, CAST(o_totalprice AS BIGINT)
+|  group by: c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
 |
-13:EXCHANGE [HASH(c_name,c_custkey,o_orderkey,o_orderdate,CAST(o_totalprice AS BIGINT))]
+13:EXCHANGE [HASH(c_name,c_custkey,o_orderkey,o_orderdate,o_totalprice)]
 |
 07:AGGREGATE
 |  output: sum(l_quantity)
-|  group by: c_name, c_custkey, o_orderkey, o_orderdate, CAST(o_totalprice AS BIGINT)
+|  group by: c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice
 |
 06:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: o.o_orderkey = t.l_orderkey
