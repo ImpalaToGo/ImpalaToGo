@@ -202,7 +202,7 @@ public class CreateTableStmt extends StatementBase {
       if (!colDef.getType().supportsTablePartitioning()) {
         throw new AnalysisException(
             String.format("Type '%s' is not supported as partition-column type " +
-                "in column: %s", colDef.getType().toString(), colDef.getColName()));
+                "in column: %s", colDef.getType().toSql(), colDef.getColName()));
       }
       if (!colNames.add(colDef.getColName().toLowerCase())) {
         throw new AnalysisException("Duplicate column name: " + colDef.getColName());
