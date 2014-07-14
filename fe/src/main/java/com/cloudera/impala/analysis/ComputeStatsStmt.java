@@ -23,11 +23,11 @@ import org.apache.log4j.Logger;
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.AuthorizationException;
 import com.cloudera.impala.catalog.Column;
-import com.cloudera.impala.catalog.ColumnType;
 import com.cloudera.impala.catalog.HBaseTable;
 import com.cloudera.impala.catalog.HdfsTable;
 import com.cloudera.impala.catalog.PrimitiveType;
 import com.cloudera.impala.catalog.Table;
+import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.TComputeStatsParams;
@@ -43,6 +43,7 @@ import com.google.common.collect.Lists;
  * and no existing stats are reused.
  *
  * TODO: Allow more coarse/fine grained (db, column) and/or incremental stats collection.
+ * TODO: Compute stats on complex types.
  */
 public class ComputeStatsStmt extends StatementBase {
   private static final Logger LOG = Logger.getLogger(ComputeStatsStmt.class);
@@ -120,13 +121,16 @@ public class ComputeStatsStmt extends StatementBase {
     int startColIdx = (table_ instanceof HBaseTable) ? 0 : table_.getNumClusteringCols();
     for (int i = startColIdx; i < table_.getColumns().size(); ++i) {
       Column c = table_.getColumns().get(i);
-      ColumnType ctype = c.getType();
+      Type type = c.getType();
 
       // Ignore columns with an invalid/unsupported type. For example, complex types in
       // an HBase-backed table will appear as invalid types.
-      if (!ctype.isValid() || !ctype.isSupported()) continue;
+      if (!type.isValid() || !type.isSupported()
+          || c.getType().isComplexType()) {
+        continue;
+      }
       // Skip decimal columns (see IMPALA-950)
-      if (ctype.getPrimitiveType() == PrimitiveType.DECIMAL) {
+      if (type.getPrimitiveType() == PrimitiveType.DECIMAL) {
         analyzer.addWarning("Decimal column stats not yet supported, skipping column '" +
             c.getName() + "'");
         continue;
@@ -149,21 +153,21 @@ public class ComputeStatsStmt extends StatementBase {
       }
 
       // For STRING columns also compute the max and avg string length.
-      if (ctype.isStringType()) {
+      if (type.isStringType()) {
         columnStatsSelectList.add("MAX(length(" + colRefSql + "))");
         columnStatsSelectList.add("AVG(length(" + colRefSql + "))");
       } else {
         // For non-STRING columns we use the fixed size of the type.
         // We store the same information for all types to avoid having to
         // treat STRING columns specially in the BE CatalogOpExecutor.
-        Integer typeSize = ctype.getPrimitiveType().getSlotSize();
+        Integer typeSize = type.getPrimitiveType().getSlotSize();
         columnStatsSelectList.add(typeSize.toString());
         columnStatsSelectList.add("CAST(" + typeSize.toString() + " as DOUBLE)");
       }
     }
 
-    if (columnStatsSelectList.size() == 0) {
-      // Table doesn't have any columns that we can compute stats for
+    if (columnStatsSelectList.isEmpty()) {
+      // Table doesn't have any columns that we can compute stats for.
       columnStatsQueryStr_ = null;
       return;
     }

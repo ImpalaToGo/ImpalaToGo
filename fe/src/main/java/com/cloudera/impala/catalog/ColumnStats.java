@@ -39,11 +39,11 @@ public class ColumnStats {
   private final static Logger LOG = LoggerFactory.getLogger(ColumnStats.class);
 
   // Set of the currently supported column stats column types.
-  private final static Set<ColumnType> SUPPORTED_COL_TYPES = Sets.newHashSet(
-      ColumnType.BIGINT, ColumnType.BINARY, ColumnType.BOOLEAN,
-      ColumnType.DOUBLE, ColumnType.FLOAT, ColumnType.INT,
-      ColumnType.SMALLINT, ColumnType.STRING, ColumnType.TIMESTAMP,
-      ColumnType.TINYINT);
+  private final static Set<ScalarType> SUPPORTED_COL_TYPES = Sets.newHashSet(
+      Type.BIGINT, Type.BINARY, Type.BOOLEAN,
+      Type.DOUBLE, Type.FLOAT, Type.INT,
+      Type.SMALLINT, Type.STRING, Type.TIMESTAMP,
+      Type.TINYINT);
 
   // in bytes: excludes serialization overhead
   private double avgSize_;
@@ -53,7 +53,7 @@ public class ColumnStats {
   private long numDistinctValues_;
   private long numNulls_;
 
-  public ColumnStats(ColumnType colType) {
+  public ColumnStats(Type colType) {
     initColStats(colType);
   }
 
@@ -62,7 +62,7 @@ public class ColumnStats {
    * (those which don't need additional storage besides the slot they occupy),
    * sets avgSerializedSize and maxSize to their slot size.
    */
-  private void initColStats(ColumnType colType) {
+  private void initColStats(Type colType) {
     avgSize_ = -1;
     avgSerializedSize_ = -1;
     maxSize_ = -1;
@@ -140,7 +140,7 @@ public class ColumnStats {
    * Returns false if the ColumnStatisticsData data was incompatible with the given
    * column type, otherwise returns true.
    */
-  public boolean update(ColumnType colType, ColumnStatisticsData statsData) {
+  public boolean update(Type colType, ColumnStatisticsData statsData) {
     Preconditions.checkState(SUPPORTED_COL_TYPES.contains(colType));
     initColStats(colType);
     boolean isCompatible = false;
@@ -206,11 +206,11 @@ public class ColumnStats {
   /**
    * Returns true if the given PrimitiveType supports column stats updates.
    */
-  public static boolean isSupportedColType(ColumnType colType) {
+  public static boolean isSupportedColType(Type colType) {
     return SUPPORTED_COL_TYPES.contains(colType);
   }
 
-  public void update(ColumnType colType, TColumnStats stats) {
+  public void update(Type colType, TColumnStats stats) {
     initColStats(colType);
     avgSize_ = Double.valueOf(stats.getAvg_size()).floatValue();
     if (colType.getPrimitiveType() == PrimitiveType.STRING ||

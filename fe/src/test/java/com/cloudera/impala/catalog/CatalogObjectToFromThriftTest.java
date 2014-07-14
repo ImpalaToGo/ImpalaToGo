@@ -165,7 +165,7 @@ public class CatalogObjectToFromThriftTest {
     HBaseTable newHBaseTable = (HBaseTable) newTable;
     Assert.assertEquals(newHBaseTable.getColumns().size(), 13);
     Assert.assertEquals(newHBaseTable.getColumn("double_col").getType(),
-        ColumnType.DOUBLE);
+        Type.DOUBLE);
     Assert.assertEquals(newHBaseTable.getNumClusteringCols(), 1);
   }
 
@@ -200,7 +200,7 @@ public class CatalogObjectToFromThriftTest {
     HBaseTable newHBaseTable = (HBaseTable) newTable;
     Assert.assertEquals(newHBaseTable.getColumns().size(), 13);
     Assert.assertEquals(newHBaseTable.getColumn("double_col").getType(),
-        ColumnType.DOUBLE);
+        Type.DOUBLE);
     Assert.assertEquals(newHBaseTable.getNumClusteringCols(), 1);
   }
 
@@ -220,8 +220,8 @@ public class CatalogObjectToFromThriftTest {
     // Create a dummy partition with an invalid decimal type.
     try {
       HdfsPartition dummyPart = new HdfsPartition(hdfsTable, part.getMetaStorePartition(),
-        Lists.newArrayList(LiteralExpr.create("1.1", ColumnType.createDecimalType(1, 0)),
-            LiteralExpr.create("1.1", ColumnType.createDecimalType(1, 0))),
+        Lists.newArrayList(LiteralExpr.create("1.1", ScalarType.createDecimalType(1, 0)),
+            LiteralExpr.create("1.1", ScalarType.createDecimalType(1, 0))),
         null, Lists.<HdfsPartition.FileDescriptor>newArrayList(),
         TAccessLevel.READ_WRITE);
       fail("Expected metadata to be malformed.");
