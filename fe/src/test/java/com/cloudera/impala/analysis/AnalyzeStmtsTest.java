@@ -2320,5 +2320,6 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
   @Test
   public void TestSetQueryOption() {
     AnalyzesOk("set foo=true");
+    AnalyzesOk("set");
   }
 }
