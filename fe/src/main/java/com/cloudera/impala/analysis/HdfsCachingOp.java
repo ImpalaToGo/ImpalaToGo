@@ -14,7 +14,6 @@
 
 package com.cloudera.impala.analysis;
 
-import com.cloudera.impala.catalog.AuthorizationException;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.THdfsCachingOp;
 
@@ -41,8 +40,7 @@ public class HdfsCachingOp implements ParseNode {
   }
 
   @Override
-  public void analyze(Analyzer analyzer) throws AnalysisException,
-      AuthorizationException {
+  public void analyze(Analyzer analyzer) throws AnalysisException {
     throw new AnalysisException("HDFS caching is not supported on CDH4");
   }
 
