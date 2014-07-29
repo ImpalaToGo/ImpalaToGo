@@ -1,0 +1,28 @@
+From 9616b18cc2cadd4430910e7a88c2e65752b8334c Mon Sep 17 00:00:00 2001
+From: Sean Mackrory <sean@cloudera.com>
+Date: Wed, 23 Jul 2014 15:56:36 -0700
+Subject: [PATCH 72/72] CLOUDERA-BUILD. Embedding internal git repo hash in HBase
+
+---
+ hbase-common/src/saveVersion.sh |    5 ++++-
+ 1 files changed, 4 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-common/src/saveVersion.sh b/hbase-common/src/saveVersion.sh
+index 5edb8ea..6fb5c00 100644
+--- a/hbase-common/src/saveVersion.sh
++++ b/hbase-common/src/saveVersion.sh
+@@ -30,7 +30,10 @@ cd ..
+ user=`whoami`
+ date=`date`
+ cwd=`pwd`
+-if [ -d .svn ]; then
++if [ -n "${COMPONENT_HASH}" ]; then
++  revision="${COMPONENT_HASH}"
++  url="http://github.com/cloudera/hbase"
++elif [ -d .svn ]; then
+   revision=`svn info | sed -n -e 's/Last Changed Rev: \(.*\)/\1/p'`
+   url=`svn info | sed -n -e 's/^URL: \(.*\)/\1/p'`
+ elif [ -d .git ]; then
+-- 
+1.7.0.4
+

@@ -1,0 +1,215 @@
+From 9a2aad50f5df9ccda8879e1335b6d709fa7c575e Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Fri, 4 Jul 2014 10:45:19 -0700
+Subject: [PATCH 68/72] HBASE-11446 Reduce the frequency of RNG calls in SecureWALCellCodec#EncryptedKvEncoder
+
+Reason: Bug
+Author: Andrew Purtell
+Ref: CDH-20174
+---
+ .../apache/hadoop/hbase/io/crypto/Decryptor.java   |    6 ++++
+ .../apache/hadoop/hbase/io/crypto/Encryption.java  |   22 ++++++++++-----
+ .../apache/hadoop/hbase/io/crypto/Encryptor.java   |    7 ++++-
+ .../org/apache/hadoop/hbase/io/crypto/aes/AES.java |    1 +
+ .../hadoop/hbase/io/crypto/aes/AESDecryptor.java   |    5 +++
+ .../hadoop/hbase/io/crypto/aes/AESEncryptor.java   |    5 +++
+ .../hbase/regionserver/wal/SecureWALCellCodec.java |   28 ++++++++++++++++---
+ 7 files changed, 61 insertions(+), 13 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Decryptor.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Decryptor.java
+index ff0fc8c..adb8121 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Decryptor.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Decryptor.java
+@@ -43,6 +43,12 @@ public interface Decryptor {
+   public int getIvLength();
+ 
+   /**
++   * Get the cipher's internal block size
++   * @return the cipher's internal block size
++   */
++  public int getBlockSize();
++
++  /**
+    * Set the initialization vector
+    * @param iv
+    */
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryption.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryption.java
+index 8dffb66..0245378 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryption.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryption.java
+@@ -487,16 +487,24 @@ public final class Encryption {
+   }
+ 
+   public static void incrementIv(byte[] iv) {
++    incrementIv(iv, 1);
++  }
++
++  public static void incrementIv(byte[] iv, int v) {
+     int length = iv.length;
+     boolean carry = true;
+-    for (int i = 0; i < length; i++) {
+-      if (carry) {
+-        iv[i] = (byte) ((iv[i] + 1) & 0xFF);
+-        carry = 0 == iv[i];
+-      } else {
+-        break;
++    // TODO: Optimize for v > 1, e.g. 16, 32
++    do {
++      for (int i = 0; i < length; i++) {
++        if (carry) {
++          iv[i] = (byte) ((iv[i] + 1) & 0xFF);
++          carry = 0 == iv[i];
++        } else {
++          break;
++        }
+       }
+-    }
++      v--;
++    } while (v > 0);
+   }
+ 
+ }
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryptor.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryptor.java
+index 902a536..1163c3f 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryptor.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/Encryptor.java
+@@ -43,6 +43,12 @@ public interface Encryptor {
+   public int getIvLength();
+ 
+   /**
++   * Get the cipher's internal block size
++   * @return the cipher's internal block size
++   */
++  public int getBlockSize();
++
++  /**
+    * Get the initialization vector
+    */
+   public byte[] getIv();
+@@ -63,5 +69,4 @@ public interface Encryptor {
+    * Reset state, reinitialize with the key and iv
+    */
+   void reset();
+-
+ }
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AES.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AES.java
+index 86e5e78..fa20a8a 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AES.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AES.java
+@@ -53,6 +53,7 @@ public class AES extends Cipher {
+ 
+   public static final int KEY_LENGTH = 16;
+   public static final int KEY_LENGTH_BITS = KEY_LENGTH * 8;
++  public static final int BLOCK_SIZE = 16;
+   public static final int IV_LENGTH = 16;
+ 
+   public static final String CIPHER_MODE_KEY = "hbase.crypto.algorithm.aes.mode";
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESDecryptor.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESDecryptor.java
+index 8dc6b9e..2cb0618 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESDecryptor.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESDecryptor.java
+@@ -59,6 +59,11 @@ public class AESDecryptor implements Decryptor {
+   }
+ 
+   @Override
++  public int getBlockSize() {
++    return AES.BLOCK_SIZE;
++  }
++
++  @Override
+   public void setIv(byte[] iv) {
+     Preconditions.checkNotNull(iv, "IV cannot be null");
+     Preconditions.checkArgument(iv.length == AES.IV_LENGTH, "Invalid IV length");
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESEncryptor.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESEncryptor.java
+index 38e6b8d..1c93fbd 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESEncryptor.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/crypto/aes/AESEncryptor.java
+@@ -61,6 +61,11 @@ public class AESEncryptor implements Encryptor {
+   }
+ 
+   @Override
++  public int getBlockSize() {
++    return AES.BLOCK_SIZE;
++  }
++
++  @Override
+   public byte[] getIv() {
+     return iv;
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/wal/SecureWALCellCodec.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/wal/SecureWALCellCodec.java
+index 35b7193..e36d741 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/wal/SecureWALCellCodec.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/wal/SecureWALCellCodec.java
+@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.Cell;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.codec.KeyValueCodec;
+ import org.apache.hadoop.hbase.io.crypto.Decryptor;
++import org.apache.hadoop.hbase.io.crypto.Encryption;
+ import org.apache.hadoop.hbase.io.crypto.Encryptor;
+ import org.apache.hadoop.hbase.io.util.StreamUtils;
+ import org.apache.hadoop.hbase.util.Bytes;
+@@ -40,8 +41,6 @@ import org.apache.hadoop.hbase.util.Bytes;
+  */
+ public class SecureWALCellCodec extends WALCellCodec {
+ 
+-  private static final SecureRandom RNG = new SecureRandom();
+-
+   private Encryptor encryptor;
+   private Decryptor decryptor;
+ 
+@@ -139,7 +138,24 @@ public class SecureWALCellCodec extends WALCellCodec {
+   static class EncryptedKvEncoder extends KeyValueCodec.KeyValueEncoder {
+ 
+     private Encryptor encryptor;
+-    private byte[] iv;
++    private final ThreadLocal<byte[]> iv = new ThreadLocal<byte[]>() {
++      @Override
++      protected byte[] initialValue() {
++        byte[] iv = new byte[encryptor.getIvLength()];
++        new SecureRandom().nextBytes(iv);
++        return iv;
++      }
++    };
++
++    protected byte[] nextIv() {
++      byte[] b = iv.get(), ret = new byte[b.length];
++      System.arraycopy(b, 0, ret, 0, b.length);
++      return ret;
++    }
++
++    protected void incrementIv(int v) {
++      Encryption.incrementIv(iv.get(), 1 + (v / encryptor.getBlockSize()));
++    }
+ 
+     public EncryptedKvEncoder(OutputStream os) {
+       super(os);
+@@ -148,7 +164,6 @@ public class SecureWALCellCodec extends WALCellCodec {
+     public EncryptedKvEncoder(OutputStream os, Encryptor encryptor) {
+       super(os);
+       this.encryptor = encryptor;
+-      iv = new byte[encryptor.getIvLength()];
+     }
+ 
+     @Override
+@@ -159,7 +174,7 @@ public class SecureWALCellCodec extends WALCellCodec {
+       byte[] kvBuffer = kv.getBuffer();
+       int offset = kv.getOffset();
+ 
+-      RNG.nextBytes(iv);
++      byte[] iv = nextIv();
+       encryptor.setIv(iv);
+       encryptor.reset();
+ 
+@@ -196,6 +211,9 @@ public class SecureWALCellCodec extends WALCellCodec {
+ 
+       StreamUtils.writeRawVInt32(out, baos.size());
+       baos.writeTo(out);
++
++      // Increment IV given the final payload length
++      incrementIv(baos.size());
+     }
+ 
+   }
+-- 
+1.7.0.4
+
