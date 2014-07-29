@@ -182,7 +182,7 @@ TEST(Webserver, StartWithMissingPasswordFileTest) {
 }
 
 int main(int argc, char **argv) {
-  InitCommonRuntime(argc, argv, false, false);
+  InitCommonRuntime(argc, argv, false, TestInfo::BE_TEST);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
