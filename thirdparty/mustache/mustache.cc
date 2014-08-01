@@ -57,8 +57,9 @@ TagOperator GetOperator(const string& tag) {
   }
 }
 
-int EvaluateTag(const string& document, int idx, const Value* context, TagOperator tag,
-    const string& tag_name, bool is_triple, stringstream* out);
+int EvaluateTag(const string& document, const string& document_root, int idx,
+    const Value* context, TagOperator tag, const string& tag_name, bool is_triple,
+    stringstream* out);
 
 void EscapeHtml(const string& in, stringstream *out) {
   BOOST_FOREACH(const char& c, in) {
@@ -199,8 +200,9 @@ int FindNextTag(const string& document, int idx, TagOperator* tag_op, string* ta
 //
 // If 'is_negation' is true, the behaviour is the opposite of the above: false values
 // cause the section to be normally evaluated etc.
-int EvaluateSection(const string& document, int idx, const Value* parent_context,
-    TagOperator op, const string& tag_name, stringstream* out) {
+int EvaluateSection(const string& document, const string& document_root, int idx,
+    const Value* parent_context, TagOperator op, const string& tag_name,
+    stringstream* out) {
   // Precondition: idx is the immedate next character after an opening {{ #tag_name }}
   const Value* context;
   ResolveJsonContext(tag_name, *parent_context, &context);
@@ -248,7 +250,8 @@ int EvaluateSection(const string& document, int idx, const Value* parent_context
 
       // Don't need to evaluate any templates if we're skipping the contents
       if (!skip_contents) {
-        idx = EvaluateTag(document, idx, v, tag_op, next_tag_name, is_triple, out);
+        idx = EvaluateTag(document, document_root, idx, v, tag_op, next_tag_name,
+            is_triple, out);
       }
     }
   }
@@ -285,37 +288,39 @@ int EvaluateSubstitution(const string& document, const int idx,
 //
 // TODO: This could obviously be more efficient (and there are lots of file accesses in a
 // long list context).
-void EvaluatePartial(const string& tag_name, const Value* parent_context,
-    stringstream* out) {
-  ifstream tmpl(tag_name.c_str());
+void EvaluatePartial(const string& tag_name, const string& document_root,
+    const Value* parent_context, stringstream* out) {
+  stringstream ss;
+  ss << document_root << tag_name;
+  ifstream tmpl(ss.str().c_str());
   if (!tmpl.is_open()) {
-    stringstream ss;
-    ss << tag_name << ".mustache";
+    ss << ".mustache";
     tmpl.open(ss.str().c_str());
     if (!tmpl.is_open()) return;
   }
   stringstream file_ss;
   file_ss << tmpl.rdbuf();
-  RenderTemplate(file_ss.str(), *parent_context, out);
+  RenderTemplate(file_ss.str(), document_root, *parent_context, out);
 }
 
 // Given a tag name, and its operator, evaluate the tag in the given context and write the
 // output to 'out'. The heavy-lifting is delegated to specific Evaluate*()
 // methods. Returns the new cursor position within 'document', or -1 on error.
-int EvaluateTag(const string& document, int idx, const Value* context, TagOperator tag,
+int EvaluateTag(const string& document, const string& document_root, int idx,
+    const Value* context, TagOperator tag,
     const string& tag_name, bool is_triple, stringstream* out) {
   if (idx == -1) return idx;
   switch (tag) {
     case SECTION_START:
     case PREDICATE_SECTION_START:
     case NEGATED_SECTION_START:
-      return EvaluateSection(document, idx, context, tag, tag_name, out);
+      return EvaluateSection(document, document_root, idx, context, tag, tag_name, out);
     case SUBSTITUTION:
       return EvaluateSubstitution(document, idx, context, tag_name, is_triple, out);
     case COMMENT:
       return idx; // Ignored
     case PARTIAL:
-      EvaluatePartial(tag_name, context, out);
+      EvaluatePartial(tag_name, document_root, context, out);
       return idx;
     case NONE:
       return idx; // No tag was found
@@ -325,14 +330,16 @@ int EvaluateTag(const string& document, int idx, const Value* context, TagOperat
   }
 }
 
-void RenderTemplate(const string& document, const Value& context, stringstream* out) {
+void RenderTemplate(const string& document, const string& document_root,
+    const Value& context, stringstream* out) {
   int idx = 0;
   while (idx < document.size() && idx != -1) {
     string tag_name;
     TagOperator tag_op;
     bool is_triple;
     idx = FindNextTag(document, idx, &tag_op, &tag_name, &is_triple, out);
-    idx = EvaluateTag(document, idx, &context, tag_op, tag_name, is_triple, out);
+    idx = EvaluateTag(document, document_root, idx, &context, tag_op, tag_name, is_triple,
+        out);
   }
 }
 
