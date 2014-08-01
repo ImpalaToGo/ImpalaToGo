@@ -1,27 +1,29 @@
 ====
 ---- QUERY: TPCDS-Q43
-SELECT
+select
   s_store_name,
   s_store_id,
-  SUM(CASE WHEN (d_day_name='Sunday') THEN ss_sales_price ELSE NULL END) AS sun_sales,
-  SUM(CASE WHEN (d_day_name='Monday') THEN ss_sales_price ELSE NULL END) AS mon_sales,
-  SUM(CASE WHEN (d_day_name='Tuesday') THEN ss_sales_price ELSE NULL END) AS tue_sales,
-  SUM(CASE WHEN (d_day_name='Wednesday') THEN ss_sales_price ELSE NULL END) AS wed_sales,
-  SUM(CASE WHEN (d_day_name='Thursday') THEN ss_sales_price ELSE NULL END) AS thu_sales,
-  SUM(CASE WHEN (d_day_name='Friday') THEN ss_sales_price ELSE NULL END) AS fri_sales,
-  SUM(CASE WHEN (d_day_name='Saturday') THEN ss_sales_price ELSE NULL END) AS sat_sales
-FROM store_sales ss
-JOIN date_dim d
-  ON (ss.ss_sold_date_sk = d.d_date_sk)
-JOIN store s
-  ON (ss.ss_store_sk = s.s_store_sk)
-WHERE
-  s_gmt_offset = -5
-  AND d_year = 1998
-GROUP BY
+  sum(case when (d_day_name = 'Sunday') then ss_sales_price else null end) sun_sales,
+  sum(case when (d_day_name = 'Monday') then ss_sales_price else null end) mon_sales,
+  sum(case when (d_day_name = 'Tuesday') then ss_sales_price else null end) tue_sales,
+  sum(case when (d_day_name = 'Wednesday') then ss_sales_price else null end) wed_sales,
+  sum(case when (d_day_name = 'Thursday') then ss_sales_price else null end) thu_sales,
+  sum(case when (d_day_name = 'Friday') then ss_sales_price else null end) fri_sales,
+  sum(case when (d_day_name = 'Saturday') then ss_sales_price else null end) sat_sales
+from
+  date_dim,
+  store_sales,
+  store
+where
+  d_date_sk = ss_sold_date_sk
+  and s_store_sk = ss_store_sk
+  and s_gmt_offset = -5
+  and d_year = 1998
+  and ss_sold_date_sk between 2450816 and 2451179  -- partition key filter
+group by
   s_store_name,
   s_store_id
-ORDER BY
+order by
   s_store_name,
   s_store_id,
   sun_sales,
@@ -31,7 +33,7 @@ ORDER BY
   thu_sales,
   fri_sales,
   sat_sales
-LIMIT 100;
+limit 100;
 ---- RESULTS
 'able','AAAAAAAACAAAAAAA',49349.00003224239,11964.64000336081,65415.32002990693,19680.4499460794,33027.47998429835,9612.440022587776,14204.49997875094
 'ation','AAAAAAAAHAAAAAAA',52459.95003125817,8478.659984946251,57051.6899147816,30679.71003594995,36850.72004932165,11021.47001165897,22339.60996101797
