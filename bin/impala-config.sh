@@ -80,6 +80,7 @@ export IMPALA_HADOOP_VERSION=2.0.0-cdh4.5.0
 export IMPALA_HBASE_VERSION=0.94.6-cdh4.5.0
 export IMPALA_HIVE_VERSION=0.10.0-cdh4.5.0
 export IMPALA_SENTRY_VERSION=1.1.0
+# If the thrift version changes, please update ext-data-source/pom.xml
 export IMPALA_THRIFT_VERSION=0.9.0
 export IMPALA_AVRO_VERSION=1.7.4
 export IMPALA_LLVM_VERSION=3.3
