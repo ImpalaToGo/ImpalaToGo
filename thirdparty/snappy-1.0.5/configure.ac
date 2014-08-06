@@ -11,8 +11,9 @@ AC_INIT([snappy], [snappy_major.snappy_minor.snappy_patchlevel])
 AC_CONFIG_MACRO_DIR([m4])
 
 # These are flags passed to automake (though they look like gcc flags!)
-AM_INIT_AUTOMAKE([-Wall -Werror])
+AM_INIT_AUTOMAKE([-Wall])
 
+AC_PROG_LIBTOOL
 LT_INIT
 AC_SUBST([LIBTOOL_DEPS])
 AC_PROG_CXX
