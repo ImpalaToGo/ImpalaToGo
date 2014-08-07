@@ -40,13 +40,14 @@ from
 order by
   -- sum_sales - avg_monthly_sales,
   sum_sales,  -- modification
-  s_store_name
+  s_store_name,
+  i_category -- modification: added this sorting column to break ties for stable test results
 limit 100;
 ---- RESULTS
 'Electronics','musical','corpunivamalg #6','ation','Unknown',11,0
 'Books','parenting','corpmaxi #12','bar','Unknown',9,0
-'Jewelry','birdal','amalgcorp #3','bar','Unknown',9,0
 'Home','wallpaper','exportinameless #6','bar','Unknown',7,0
+'Jewelry','birdal','amalgcorp #3','bar','Unknown',9,0
 'Books','parenting','corpmaxi #8','ought','Unknown',4,0.1000000014901161
 'Electronics','musical','corpunivamalg #17','ese','Unknown',9,0.119999997317791
 'Home','wallpaper','exportinameless #1','eing','Unknown',9,0.3400000035762787
@@ -125,8 +126,8 @@ limit 100;
 'Books','parenting','corpmaxi #5','ation','Unknown',1,4.730000019073486
 'Books','parenting','corpmaxi #2','bar','Unknown',1,4.789999961853027
 'Jewelry','birdal','amalgcorp #5','ation','Unknown',9,4.829999923706055
-'Home','wallpaper','exportinameless #8','ought','Unknown',11,4.860000133514404
 'Electronics','musical','corpunivamalg #2','ought','Unknown',1,4.860000133514404
+'Home','wallpaper','exportinameless #8','ought','Unknown',11,4.860000133514404
 'Jewelry','birdal','amalgcorp #7','able','Unknown',8,4.889999866485596
 'Electronics','musical','corpunivamalg #7','bar','Unknown',10,5.199999809265137
 'Electronics','musical','corpunivamalg #7','ought','Unknown',11,5.199999809265137
