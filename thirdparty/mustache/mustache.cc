@@ -278,7 +278,7 @@ int EvaluateSubstitution(const string& document, const int idx,
   } else if (context->IsDouble()) {
     (*out) << context->GetDouble();
   } else if (context->IsBool()) {
-    (*out) << context->GetBool();
+    (*out) << boolalpha << context->GetBool();
   }
   return idx;
 }
