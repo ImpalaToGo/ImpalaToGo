@@ -1,7 +1,7 @@
 ====
 ---- QUERY: TPCH-Q9
 # Q9 - Product Type Measure Query
-# Modifications: added round().
+# Modifications: Added round() calls
 select
   nation,
   o_year,
@@ -32,7 +32,7 @@ group by
   o_year
 order by
   nation,
-  o_year desc;
+  o_year desc
 ---- RESULTS
 'ALGERIA',1998,27136900.2
 'ALGERIA',1997,48611833.5
