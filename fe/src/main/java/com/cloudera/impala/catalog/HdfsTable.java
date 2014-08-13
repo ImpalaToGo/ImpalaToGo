@@ -75,6 +75,7 @@ import com.cloudera.impala.thrift.TTableType;
 import com.cloudera.impala.util.AvroSchemaParser;
 import com.cloudera.impala.util.FsPermissionChecker;
 import com.cloudera.impala.util.HdfsCachingUtil;
+import com.cloudera.impala.util.ListMap;
 import com.cloudera.impala.util.MetaStoreUtil;
 import com.cloudera.impala.util.TAccessLevelUtil;
 import com.cloudera.impala.util.TResultRowBuilder;
@@ -135,16 +136,13 @@ public class HdfsTable extends Table {
   // Flag to indicate if the HdfsTable has the partition metadata populated.
   private boolean hasPartitionMd_ = false;
 
-  // Contains a list of unique datanode TNetworkAddresses, each of which contains blocks
-  // of 1 or more files in this table. The network addresses are stored using IP
-  // address as the host name. Each FileBlock specifies a list of indices within this
-  // hostList_ to specify which nodes contain replicas of the block.
-  private List<TNetworkAddress> hostList_ = Lists.newArrayList();
-
-  // Map of unique datanode TNetworkAddress to index of that item in the hostList_. Used
-  // to provide efficient lookups of the host index using TNetworkAddress as a key. Must
-  // be kept in sync with hostList_.
-  private final Map<TNetworkAddress, Integer> hostMap_ = Maps.newHashMap();
+  // Bi-directional map between an integer index and a unique datanode
+  // TNetworkAddresses, each of which contains blocks of 1 or more
+  // files in this table. The network addresses are stored using IP
+  // address as the host name. Each FileBlock specifies a list of
+  // indices within this hostIndex_ to specify which nodes contain
+  // replicas of the block.
+  private ListMap<TNetworkAddress> hostIndex_ = new ListMap<TNetworkAddress>();
 
   // Map of parent directory (partition location) to list of files (FileDescriptors)
   // under that directory. Used to look up/index all files in the table.
@@ -262,26 +260,15 @@ public class HdfsTable extends Table {
               LOG.error(errorMsg);
               throw new IllegalStateException(errorMsg);
             }
-
             // Now enumerate all replicas of the block, adding any unknown hosts
-            // to hostMap_/hostList_. The host ID (index in to the hostList_) for each
-            // replica is stored in replicaHostIdxs.
+            // to hostIndex_ and the index for that host to replicaHostIdxs.
             List<Integer> replicaHostIdxs = new ArrayList<Integer>(blockHostPorts.length);
             for (int i = 0; i < blockHostPorts.length; ++i) {
               String[] ip_port = blockHostPorts[i].split(":");
               Preconditions.checkState(ip_port.length == 2);
-
               TNetworkAddress network_address = new TNetworkAddress(ip_port[0],
                   Integer.parseInt(ip_port[1]));
-
-              Integer hostIdx = hostMap_.get(network_address);
-              if (hostIdx == null) {
-                // No match was found, add a new entry for this host to the hostMap_.
-                hostList_.add(network_address);
-                hostMap_.put(network_address, hostList_.size() - 1);
-                hostIdx = hostList_.size() - 1;
-              }
-              replicaHostIdxs.add(hostIdx);
+              replicaHostIdxs.add(hostIndex_.getIndex(network_address));
             }
             fileDescriptor.addFileBlock(
                 new FileBlock(block.getOffset(), block.getLength(), replicaHostIdxs));
@@ -1047,10 +1034,7 @@ public class HdfsTable extends Table {
       if (cachedEntry != null && cachedEntry instanceof HdfsTable) {
         HdfsTable cachedHdfsTable = (HdfsTable) cachedEntry;
         oldFileDescMap = cachedHdfsTable.fileDescMap_;
-        hostList_.addAll(cachedHdfsTable.hostList_);
-        for (int i = 0; i < hostList_.size(); ++i) {
-          hostMap_.put(hostList_.get(i), i);
-        }
+        hostIndex_.populate(cachedHdfsTable.hostIndex_.getList());
       }
       loadPartitions(msPartitions, msTbl, oldFileDescMap);
 
@@ -1147,12 +1131,8 @@ public class HdfsTable extends Table {
     hdfsBaseDir_ = hdfsTable.getHdfsBaseDir();
     nullColumnValue_ = hdfsTable.nullColumnValue;
     nullPartitionKeyValue_ = hdfsTable.nullPartitionKeyValue;
-    hostList_ = hdfsTable.getNetwork_addresses();
-    hostMap_.clear();
+    hostIndex_.populate(hdfsTable.getNetwork_addresses());
     resetPartitionMd();
-    for (int i = 0; i < hostList_.size(); ++i) {
-      hostMap_.put(hostList_.get(i), i);
-    }
 
     numHdfsFiles_ = 0;
     totalHdfsBytes_ = 0;
@@ -1200,7 +1180,7 @@ public class HdfsTable extends Table {
     if (includeFileDesc) {
       // Network addresses are used only by THdfsFileBlocks which are inside
       // THdfsFileDesc, so include network addreses only when including THdfsFileDesc.
-      hdfsTable.setNetwork_addresses(hostList_);
+      hdfsTable.setNetwork_addresses(hostIndex_.getList());
     }
     return hdfsTable;
   }
@@ -1211,15 +1191,12 @@ public class HdfsTable extends Table {
   public boolean isAvroTable() { return avroSchema_ != null; }
 
   @Override
-  public int getNumNodes() { return hostMap_.size(); }
+  public int getNumNodes() { return hostIndex_.size(); }
 
   /**
-   * Looks up a datanode TNetworkAddress (IP address / port pair) given the
-   * host index (index in to the hostList_).
+   * Get the index of hosts that store replicas of blocks of this table.
    */
-  public TNetworkAddress getNetworkAddressByIdx(int hostIdx) {
-    return hostList_.get(hostIdx);
-  }
+  public ListMap<TNetworkAddress> getHostIndex() { return hostIndex_; }
 
   /**
    * Returns the file format that the majority of partitions are stored in.
