@@ -44,6 +44,7 @@ import com.cloudera.impala.thrift.TCacheJarResult;
 import com.cloudera.impala.thrift.TColumnValue;
 import com.cloudera.impala.thrift.TDataSourceScanNode;
 import com.cloudera.impala.thrift.TExplainLevel;
+import com.cloudera.impala.thrift.TNetworkAddress;
 import com.cloudera.impala.thrift.TPlanNode;
 import com.cloudera.impala.thrift.TPlanNodeType;
 import com.cloudera.impala.thrift.TPrimitiveType;
@@ -94,11 +95,10 @@ public class DataSourceScanNode extends ScanNode {
     analyzer.enforceSlotEquivalences(tupleIds_.get(0), conjuncts_);
     prepareDataSource();
     computeStats(analyzer);
-
     // materialize slots in remaining conjuncts_
     analyzer.materializeSlots(conjuncts_);
-
     computeMemLayout(analyzer);
+    computeScanRangeLocations(analyzer);
   }
 
   /**
@@ -305,14 +305,16 @@ public class DataSourceScanNode extends ScanNode {
         table_.getDataSource(), table_.getInitString(), acceptedPredicates_);
   }
 
-  @Override
-  public List<TScanRangeLocations> getScanRangeLocations() {
-    // Always returns a single scan range for the localhost
+  /**
+   * Create a single scan range for the localhost.
+   */
+  private void computeScanRangeLocations(Analyzer analyzer) {
     // TODO: Does the port matter?
-    return Lists.newArrayList(
-        new TScanRangeLocations(new TScanRange(),
-        Lists.newArrayList(
-            new TScanRangeLocation(addressToTNetworkAddress("localhost:12345")))));
+    TNetworkAddress networkAddress = addressToTNetworkAddress("localhost:12345");
+    Integer hostIndex = analyzer.getHostIndex().getIndex(networkAddress);
+    scanRanges_ = Lists.newArrayList(
+        new TScanRangeLocations(
+            new TScanRange(), Lists.newArrayList(new TScanRangeLocation(hostIndex))));
   }
 
   @Override
