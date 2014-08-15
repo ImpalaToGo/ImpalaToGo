@@ -17,8 +17,8 @@ package com.cloudera.impala.authorization;
 import java.util.EnumSet;
 import java.util.List;
 
+import org.apache.commons.lang.reflect.ConstructorUtils;
 import org.apache.sentry.core.Authorizable;
-import org.apache.sentry.provider.file.HadoopGroupResourceAuthorizationProvider;
 import org.apache.sentry.provider.file.ResourceAuthorizationProvider;
 
 import com.cloudera.impala.catalog.AuthorizationException;
@@ -58,8 +58,9 @@ public class AuthorizationChecker {
     try {
       // Try to create an instance of the specified policy provider class.
       // Re-throw any exceptions that are encountered.
-      return new HadoopGroupResourceAuthorizationProvider(config.getPolicyFile(),
-          config.getServerName());
+      return (ResourceAuthorizationProvider) ConstructorUtils.invokeConstructor(
+          Class.forName(config.getPolicyProviderClassName()),
+          new Object[] {config.getPolicyFile(), config.getServerName()});
     } catch (Exception e) {
       // Re-throw as unchecked exception.
       throw new IllegalStateException(
