@@ -421,8 +421,7 @@ HdfsAvroScanner::SchemaElement HdfsAvroScanner::ConvertSchema(
         // not a complex type nor a [<primitive type>, "null"] union itself), we treat
         // this node as the same type as child except with null_union_position set
         // appropriately.
-        if (is_avro_primitive(child.schema.get()) &&
-            child.null_union_position == -1) {
+        if (is_avro_primitive(child.schema.get()) && child.null_union_position == -1) {
           element = child;
           element.null_union_position = null_position;
         }
@@ -632,6 +631,7 @@ void HdfsAvroScanner::MaterializeTuple(MemPool* pool, uint8_t** data, Tuple* tup
         ReadAvroDouble(slot_type, data, write_slot, slot, pool);
         break;
       case AVRO_STRING:
+      case AVRO_BYTES:
         ReadAvroString(slot_type, data, write_slot, slot, pool);
         break;
       case AVRO_DECIMAL: {
@@ -820,6 +820,8 @@ Function* HdfsAvroScanner::CodegenMaterializeTuple(HdfsScanNode* node,
         break;
       default:
         // Unsupported type, can't codegen
+        VLOG(1) << "Failed to codegen MaterializeTuple() due to unsupported type: "
+                << element.schema->type;
         fn->eraseFromParent();
         return NULL;
     }
@@ -874,5 +876,7 @@ Function* HdfsAvroScanner::CodegenDecodeAvroData(LlvmCodeGen* codegen,
     DCHECK_EQ(replaced, 1);
   }
 
-  return codegen->FinalizeFunction(decode_avro_data_fn);
+  decode_avro_data_fn = codegen->FinalizeFunction(decode_avro_data_fn);
+  DCHECK(decode_avro_data_fn != NULL);
+  return decode_avro_data_fn;
 }
