@@ -29,6 +29,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.cloudera.impala.authorization.AuthorizationConfig;
 import com.cloudera.impala.catalog.AggregateFunction;
 import com.cloudera.impala.catalog.Catalog;
 import com.cloudera.impala.catalog.Function;
@@ -75,13 +76,15 @@ public class AnalyzerTest {
   protected Analyzer createAnalyzer(String defaultDb) {
     TQueryCtx queryCtx =
         TestUtils.createQueryContext(defaultDb, System.getProperty("user.name"));
-    return new Analyzer(catalog_, queryCtx);
+    return new Analyzer(catalog_, queryCtx,
+        AuthorizationConfig.createAuthDisabledConfig());
   }
 
   protected Analyzer createAnalyzer(TQueryOptions queryOptions) {
     TQueryCtx queryCtx = TestUtils.createQueryContext();
     queryCtx.request.query_options = queryOptions;
-    return new Analyzer(catalog_, queryCtx);
+    return new Analyzer(catalog_, queryCtx,
+        AuthorizationConfig.createAuthDisabledConfig());
   }
 
   protected Analyzer createAnalyzerUsingHiveColLabels() {
@@ -202,7 +205,8 @@ public class AnalyzerTest {
       analyzer_ = analyzer;
       AnalysisContext analysisCtx = new AnalysisContext(catalog_,
           TestUtils.createQueryContext(Catalog.DEFAULT_DB,
-              System.getProperty("user.name")));
+              System.getProperty("user.name")),
+              AuthorizationConfig.createAuthDisabledConfig());
       analysisCtx.analyze(stmt, analyzer);
       AnalysisContext.AnalysisResult analysisResult = analysisCtx.getAnalysisResult();
       if (expectedWarning != null) {
@@ -261,7 +265,8 @@ public class AnalyzerTest {
     try {
       AnalysisContext analysisCtx = new AnalysisContext(catalog_,
           TestUtils.createQueryContext(Catalog.DEFAULT_DB,
-              System.getProperty("user.name")));
+              System.getProperty("user.name")),
+              AuthorizationConfig.createAuthDisabledConfig());
       analysisCtx.analyze(stmt, analyzer);
       AnalysisContext.AnalysisResult analysisResult = analysisCtx.getAnalysisResult();
       Preconditions.checkNotNull(analysisResult.getStmt());

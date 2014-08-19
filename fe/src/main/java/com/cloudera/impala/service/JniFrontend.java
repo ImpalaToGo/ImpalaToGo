@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ import com.cloudera.impala.authorization.ImpalaInternalAdminUser;
 import com.cloudera.impala.authorization.User;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.Function;
+import com.cloudera.impala.catalog.Role;
 import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.InternalException;
@@ -74,6 +76,8 @@ import com.cloudera.impala.thrift.TLogLevel;
 import com.cloudera.impala.thrift.TMetadataOpRequest;
 import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TResultSet;
+import com.cloudera.impala.thrift.TShowRolesParams;
+import com.cloudera.impala.thrift.TShowRolesResult;
 import com.cloudera.impala.thrift.TShowStatsParams;
 import com.cloudera.impala.thrift.TTableName;
 import com.cloudera.impala.thrift.TUpdateCatalogCacheRequest;
@@ -108,9 +112,9 @@ public class JniFrontend {
         authorizationPolicyFile, sentryConfigFile, authPolicyProviderClass);
     authConfig.validateConfig();
     if (authConfig.isEnabled()) {
-      LOG.info("Authorization is 'ENABLED' using %s",
+      LOG.info(String.format("Authorization is 'ENABLED' using %s",
           authConfig.isFileBasedPolicy() ? " file based policy from: " +
-          authConfig.getPolicyFile() : " using Sentry Policy Service.");
+          authConfig.getPolicyFile() : " using Sentry Policy Service."));
     } else {
       LOG.info("Authorization is 'DISABLED'.");
     }
@@ -356,6 +360,35 @@ public class JniFrontend {
     JniUtil.deserializeThrift(protocolFactory_, params, thriftTableName);
     return ToSqlUtils.getCreateTableSql(frontend_.getCatalog().getTable(
         params.getDb_name(), params.getTable_name()));
+  }
+
+  /**
+   * Gets all roles
+   */
+  public byte[] getRoles(byte[] showRolesParams) throws ImpalaException {
+    TShowRolesParams params = new TShowRolesParams();
+    JniUtil.deserializeThrift(protocolFactory_, params, showRolesParams);
+    TShowRolesResult result = new TShowRolesResult();
+
+    List<Role> roles;
+    if (params.isSetGrant_group()) {
+      roles = frontend_.getCatalog().getAuthPolicy().getGrantedRoles(
+          params.getGrant_group());
+      if (roles == null) roles = Lists.newArrayList();
+    } else {
+      roles = frontend_.getCatalog().getAuthPolicy().getAllRoles();
+    }
+    result.setRole_names(Lists.<String>newArrayListWithExpectedSize(roles.size()));
+    for (Role role: roles) {
+      result.getRole_names().add(role.getName());
+    }
+    Collections.sort(result.getRole_names());
+    TSerializer serializer = new TSerializer(protocolFactory_);
+    try {
+      return serializer.serialize(result);
+    } catch (TException e) {
+      throw new InternalException(e.getMessage());
+    }
   }
 
   /**
