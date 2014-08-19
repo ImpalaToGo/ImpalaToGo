@@ -1743,7 +1743,7 @@ public class Analyzer {
   }
 
   /**
-   * Returns a the fully-qualified table name of tableName. If tableName
+   * Returns the fully-qualified table name of tableName. If tableName
    * is already fully qualified, returns tableName.
    */
   public TableName getFqTableName(TableName tableName) {
