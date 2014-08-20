@@ -1400,9 +1400,9 @@ public class AuthorizationTest {
     Frontend fe = new Frontend(authzConfig, catalog);
 
     // Can select from table that user has privileges on.
-    AuthzOk(fe, context, "select * from functional.alltypesagg");
+    AuthzOk(context, "select * from functional.alltypesagg");
     // Does not have privileges to execute a query
-    AuthzError(fe, context, "select * from functional.alltypes",
+    AuthzError(context, "select * from functional.alltypes",
         "User '%s' does not have privileges to execute 'SELECT' on: functional.alltypes",
         user);
 
@@ -1413,9 +1413,9 @@ public class AuthorizationTest {
     fe = new Frontend(authzConfig, catalog);
 
     // Admin user should have privileges to do anything
-    AuthzOk(fe, context, "select * from functional.alltypesagg");
-    AuthzOk(fe, context, "select * from functional.alltypes");
-    AuthzOk(fe, context, "invalidate metadata");
+    AuthzOk(context, "select * from functional.alltypesagg");
+    AuthzOk(context, "select * from functional.alltypes");
+    AuthzOk(context, "invalidate metadata");
   }
 
   private void TestWithIncorrectConfig(AuthorizationConfig authzConfig, User user)
