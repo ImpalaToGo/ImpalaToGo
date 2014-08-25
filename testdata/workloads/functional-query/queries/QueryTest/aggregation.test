@@ -1124,6 +1124,6 @@ DECIMAL, DECIMAL, DECIMAL
 ---- QUERY
 select sample(d1) from functional.decimal_tbl;
 ---- TYPES
-# Results are unstable, just check that this doesn't crash
+# Results are unstable, just check that this does not crash
 STRING
 ====
