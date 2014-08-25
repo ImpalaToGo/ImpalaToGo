@@ -125,7 +125,7 @@
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>parquet-hadoop-bundle</artifactId>
-      <version>1.2.5-cdh5.0.3</version>
+      <version>1.2.5-cdh5.0.4</version>
     </dependency>
 
     <dependency>
