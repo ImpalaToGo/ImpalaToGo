@@ -77,7 +77,7 @@ struct ColumnType {
   }
 
   static ColumnType CreateCharType(int len) {
-    DCHECK_GE(len, 0);
+    DCHECK_GE(len, 1);
     DCHECK_LE(len, MAX_VARCHAR_LENGTH);
     ColumnType ret;
     ret.type = TYPE_CHAR;
@@ -86,7 +86,7 @@ struct ColumnType {
   }
 
   static ColumnType CreateVarcharType(int len) {
-    DCHECK_GE(len, 0);
+    DCHECK_GE(len, 1);
     DCHECK_LE(len, MAX_VARCHAR_LENGTH);
     ColumnType ret;
     ret.type = TYPE_VARCHAR;
@@ -160,6 +160,10 @@ struct ColumnType {
   }
 
   inline bool IsStringType() const {
+    return type == TYPE_STRING || type == TYPE_VARCHAR || type == TYPE_CHAR;
+  }
+
+  inline bool IsVarLen() const {
     return type == TYPE_STRING || type == TYPE_VARCHAR;
   }
 
@@ -169,6 +173,8 @@ struct ColumnType {
       case TYPE_STRING:
       case TYPE_VARCHAR:
         return 0;
+      case TYPE_CHAR:
+        return len;
       case TYPE_NULL:
       case TYPE_BOOLEAN:
       case TYPE_TINYINT:
