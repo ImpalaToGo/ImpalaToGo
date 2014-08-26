@@ -1,0 +1,132 @@
+From 2799434dc84a193c60076a9e296a0d75ca077afa Mon Sep 17 00:00:00 2001
+From: Jean-Daniel Cryans <jdcryans@apache.org>
+Date: Fri, 25 Apr 2014 20:00:29 +0000
+Subject: [PATCH 11/70] HBASE-11008 Align bulk load, flush, and compact to require Action.CREATE
+
+Reason: Bug
+Author: Jean-Daniel Cryans
+Ref: CDH-18360
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1590126 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/security/access/AccessController.java    |    8 +++++---
+ .../security/access/TestAccessController.java      |   10 +++++-----
+ src/main/docbkx/security.xml                       |   20 ++++++++++++--------
+ 3 files changed, 22 insertions(+), 16 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index 0ee5b21..74d4984 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -1101,7 +1101,8 @@ public class AccessController extends BaseRegionObserver
+ 
+   @Override
+   public void preFlush(ObserverContext<RegionCoprocessorEnvironment> e) throws IOException {
+-    requirePermission("flush", getTableName(e.getEnvironment()), null, null, Action.ADMIN);
++    requirePermission("flush", getTableName(e.getEnvironment()), null, null, Action.ADMIN,
++        Action.CREATE);
+   }
+ 
+   @Override
+@@ -1119,7 +1120,8 @@ public class AccessController extends BaseRegionObserver
+   public InternalScanner preCompact(ObserverContext<RegionCoprocessorEnvironment> e,
+       final Store store, final InternalScanner scanner, final ScanType scanType)
+           throws IOException {
+-    requirePermission("compact", getTableName(e.getEnvironment()), null, null, Action.ADMIN);
++    requirePermission("compact", getTableName(e.getEnvironment()), null, null, Action.ADMIN,
++        Action.CREATE);
+     return scanner;
+   }
+ 
+@@ -1437,7 +1439,7 @@ public class AccessController extends BaseRegionObserver
+           ctx.getEnvironment().getRegion().getTableDesc().getTableName(),
+           el.getFirst(),
+           null,
+-          Permission.Action.WRITE);
++          Action.CREATE);
+     }
+   }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+index 5053fe2..3af43a0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestAccessController.java
+@@ -583,7 +583,7 @@ public class TestAccessController extends SecureTestUtil {
+     };
+ 
+     verifyAllowed(action, SUPERUSER, USER_ADMIN, USER_OWNER);
+-    verifyDenied(action, USER_CREATE, USER_RW, USER_RO, USER_NONE);
++    verifyDenied(action, USER_RW, USER_RO, USER_NONE);
+   }
+ 
+   @Test
+@@ -631,8 +631,8 @@ public class TestAccessController extends SecureTestUtil {
+       }
+     };
+ 
+-    verifyAllowed(action, SUPERUSER, USER_ADMIN, USER_OWNER);
+-    verifyDenied(action, USER_CREATE, USER_RW, USER_RO, USER_NONE);
++    verifyAllowed(action, SUPERUSER, USER_ADMIN, USER_OWNER, USER_CREATE);
++    verifyDenied(action, USER_RW, USER_RO, USER_NONE);
+   }
+ 
+   @Test
+@@ -646,8 +646,8 @@ public class TestAccessController extends SecureTestUtil {
+       }
+     };
+ 
+-    verifyAllowed(action, SUPERUSER, USER_ADMIN, USER_OWNER);
+-    verifyDenied(action, USER_CREATE, USER_RW, USER_RO, USER_NONE);
++    verifyAllowed(action, SUPERUSER, USER_ADMIN, USER_OWNER, USER_CREATE);
++    verifyDenied(action, USER_RW, USER_RO, USER_NONE);
+   }
+ 
+   @Test
+diff --git a/src/main/docbkx/security.xml b/src/main/docbkx/security.xml
+index 633bdcd..be845b1 100644
+--- a/src/main/docbkx/security.xml
++++ b/src/main/docbkx/security.xml
+@@ -602,14 +602,6 @@ Access control mechanisms are mature and fairly standardized in the relational d
+           <entry></entry>
+           <entry>CheckAndDelete/Put</entry>
+         </row>
+-        <row>
+-          <entry></entry>
+-          <entry>Flush</entry>
+-        </row>
+-        <row>
+-          <entry></entry>
+-          <entry>Compact</entry>
+-        </row>
+         <!-- CREATE -->
+         <row>
+           <entry>Create</entry>
+@@ -623,6 +615,10 @@ Access control mechanisms are mature and fairly standardized in the relational d
+           <entry></entry>
+           <entry>Drop</entry>
+         </row>
++        <row>
++          <entry></entry>
++          <entry>Bulk Load</entry>
++        </row>
+         <!-- ADMIN -->
+         <row>
+           <entry>Admin</entry>
+@@ -638,6 +634,14 @@ Access control mechanisms are mature and fairly standardized in the relational d
+         </row>
+         <row>
+           <entry></entry>
++          <entry>Flush</entry>
++        </row>
++        <row>
++          <entry></entry>
++          <entry>Compact</entry>
++        </row>
++        <row>
++          <entry></entry>
+           <entry>Major Compact</entry>
+         </row>
+         <row>
+-- 
+1.7.0.4
+

@@ -1,0 +1,222 @@
+From b976e42c6154c5bf2a8c4e1228f4538b55e1ec29 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Sun, 11 May 2014 11:40:02 +0000
+Subject: [PATCH 18/70] HBASE-11128 Add -target option to ExportSnapshot to export with a different name
+
+Reason: Improvement
+Author: Matteo Bertozzi
+Ref: CDH-19025
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1593776 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   27 ++++++++++--
+ .../hadoop/hbase/snapshot/TestExportSnapshot.java  |   42 ++++++++++++++------
+ 2 files changed, 52 insertions(+), 17 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index d2ba528..6997de1 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -653,6 +653,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+     boolean verifyTarget = true;
+     boolean verifyChecksum = true;
+     String snapshotName = null;
++    String targetName = null;
+     boolean overwrite = false;
+     String filesGroup = null;
+     String filesUser = null;
+@@ -668,6 +669,8 @@ public final class ExportSnapshot extends Configured implements Tool {
+       try {
+         if (cmd.equals("-snapshot")) {
+           snapshotName = args[++i];
++        } else if (cmd.equals("-target")) {
++          targetName = args[++i];
+         } else if (cmd.equals("-copy-to")) {
+           outputRoot = new Path(args[++i]);
+         } else if (cmd.equals("-copy-from")) {
+@@ -711,6 +714,10 @@ public final class ExportSnapshot extends Configured implements Tool {
+       printUsageAndExit();
+     }
+ 
++    if (targetName == null) {
++      targetName = snapshotName;
++    }
++
+     Path inputRoot = FSUtils.getRootDir(conf);
+     FileSystem inputFs = FileSystem.get(inputRoot.toUri(), conf);
+     LOG.debug("inputFs=" + inputFs.getUri().toString() + " inputRoot=" + inputRoot);
+@@ -720,8 +727,8 @@ public final class ExportSnapshot extends Configured implements Tool {
+     boolean skipTmp = conf.getBoolean(CONF_SKIP_TMP, false);
+ 
+     Path snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, inputRoot);
+-    Path snapshotTmpDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(snapshotName, outputRoot);
+-    Path outputSnapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, outputRoot);
++    Path snapshotTmpDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(targetName, outputRoot);
++    Path outputSnapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(targetName, outputRoot);
+     Path initialOutputSnapshotDir = skipTmp ? outputSnapshotDir : snapshotTmpDir;
+ 
+     // Check if the snapshot already exists
+@@ -732,7 +739,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+           return 1;
+         }
+       } else {
+-        System.err.println("The snapshot '" + snapshotName +
++        System.err.println("The snapshot '" + targetName +
+           "' already exists in the destination: " + outputSnapshotDir);
+         return 1;
+       }
+@@ -747,7 +754,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+             return 1;
+           }
+         } else {
+-          System.err.println("A snapshot with the same name '"+snapshotName+"' may be in-progress");
++          System.err.println("A snapshot with the same name '"+ targetName +"' may be in-progress");
+           System.err.println("Please check "+snapshotTmpDir+". If the snapshot has completed, ");
+           System.err.println("consider removing "+snapshotTmpDir+" by using the -overwrite option");
+           return 1;
+@@ -774,6 +781,16 @@ public final class ExportSnapshot extends Configured implements Tool {
+         snapshotDir + " to=" + initialOutputSnapshotDir, e);
+     }
+ 
++    // Write a new .snapshotinfo if the target name is different from the source name
++    if (!targetName.equals(snapshotName)) {
++      SnapshotDescription snapshotDesc =
++        SnapshotDescriptionUtils.readSnapshotInfo(inputFs, snapshotDir)
++          .toBuilder()
++          .setName(targetName)
++          .build();
++      SnapshotDescriptionUtils.writeSnapshotInfo(snapshotDesc, snapshotTmpDir, outputFs);
++    }
++
+     // Step 2 - Start MR Job to copy files
+     // The snapshot references must be copied before the files otherwise the files gets removed
+     // by the HFileArchiver, since they have no references.
+@@ -801,7 +818,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+         verifySnapshot(conf, outputFs, outputRoot, outputSnapshotDir);
+       }
+ 
+-      LOG.info("Export Completed: " + snapshotName);
++      LOG.info("Export Completed: " + targetName);
+       return 0;
+     } catch (Exception e) {
+       LOG.error("Snapshot export failed", e);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
+index ec22af8..e0f2d37 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
+@@ -118,7 +118,7 @@ public class TestExportSnapshot {
+ 
+     // Add some rows
+     HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
+-    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 1000, FAMILY);
++    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, FAMILY);
+ 
+     // take a snapshot
+     admin.snapshot(snapshotName, tableName);
+@@ -174,28 +174,34 @@ public class TestExportSnapshot {
+    */
+   @Test
+   public void testExportFileSystemState() throws Exception {
+-    testExportFileSystemState(tableName, snapshotName, 2);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, 2);
+   }
+ 
+   @Test
+   public void testExportFileSystemStateWithSkipTmp() throws Exception {
+     TEST_UTIL.getConfiguration().setBoolean(ExportSnapshot.CONF_SKIP_TMP, true);
+-    testExportFileSystemState(tableName, snapshotName, 2);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, 2);
+   }
+ 
+   @Test
+   public void testEmptyExportFileSystemState() throws Exception {
+-    testExportFileSystemState(tableName, emptySnapshotName, 1);
++    testExportFileSystemState(tableName, emptySnapshotName, emptySnapshotName, 1);
+   }
+ 
+   @Test
+   public void testConsecutiveExports() throws Exception {
+     Path copyDir = getLocalDestinationDir();
+-    testExportFileSystemState(tableName, snapshotName, 2, copyDir, false);
+-    testExportFileSystemState(tableName, snapshotName, 2, copyDir, true);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, 2, copyDir, false);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, 2, copyDir, true);
+     removeExportDir(copyDir);
+   }
+ 
++  @Test
++  public void testExportWithTargetName() throws Exception {
++    final byte[] targetName = Bytes.toBytes("testExportWithTargetName");
++    testExportFileSystemState(tableName, snapshotName, targetName, 2);
++  }
++
+   /**
+    * Mock a snapshot with files in the archive dir,
+    * two regions, and one reference file.
+@@ -244,13 +250,14 @@ public class TestExportSnapshot {
+     FileUtil.copy(fs, tableDir, fs, snapshotDir, false, conf);
+     SnapshotDescriptionUtils.writeSnapshotInfo(sd, snapshotDir, fs);
+ 
+-    testExportFileSystemState(tableWithRefsName, Bytes.toBytes(snapshotName), 2);
++    byte[] name = Bytes.toBytes(snapshotName);
++    testExportFileSystemState(tableWithRefsName, name, name, 2);
+   }
+ 
+   private void testExportFileSystemState(final TableName tableName, final byte[] snapshotName,
+-      int filesExpected) throws Exception {
++      final byte[] targetName, int filesExpected) throws Exception {
+     Path copyDir = getHdfsDestinationDir();
+-    testExportFileSystemState(tableName, snapshotName, filesExpected, copyDir, false);
++    testExportFileSystemState(tableName, snapshotName, targetName, filesExpected, copyDir, false);
+     removeExportDir(copyDir);
+   }
+ 
+@@ -258,7 +265,8 @@ public class TestExportSnapshot {
+    * Test ExportSnapshot
+    */
+   private void testExportFileSystemState(final TableName tableName, final byte[] snapshotName,
+-      int filesExpected, Path copyDir, boolean overwrite) throws Exception {
++      final byte[] targetName, int filesExpected, Path copyDir, boolean overwrite)
++      throws Exception {
+     URI hdfsUri = FileSystem.get(TEST_UTIL.getConfiguration()).getUri();
+     FileSystem fs = FileSystem.get(copyDir.toUri(), new Configuration());
+     copyDir = copyDir.makeQualified(fs);
+@@ -268,6 +276,10 @@ public class TestExportSnapshot {
+     opts.add(Bytes.toString(snapshotName));
+     opts.add("-copy-to");
+     opts.add(copyDir.toString());
++    if (targetName != snapshotName) {
++      opts.add("-target");
++      opts.add(Bytes.toString(targetName));
++    }
+     if (overwrite) opts.add("-overwrite");
+ 
+     // Export Snapshot
+@@ -288,9 +300,10 @@ public class TestExportSnapshot {
+     // compare the snapshot metadata and verify the hfiles
+     final FileSystem hdfs = FileSystem.get(hdfsUri, TEST_UTIL.getConfiguration());
+     final Path snapshotDir = new Path(HConstants.SNAPSHOT_DIR_NAME, Bytes.toString(snapshotName));
++    final Path targetDir = new Path(HConstants.SNAPSHOT_DIR_NAME, Bytes.toString(targetName));
+     verifySnapshot(hdfs, new Path(TEST_UTIL.getDefaultRootDirPath(), snapshotDir),
+-        fs, new Path(copyDir, snapshotDir));
+-    verifyArchive(fs, copyDir, tableName, Bytes.toString(snapshotName));
++        fs, new Path(copyDir, targetDir));
++    verifyArchive(fs, copyDir, tableName, Bytes.toString(targetName));
+     FSUtils.logFileSystemState(hdfs, snapshotDir, LOG);
+   }
+ 
+@@ -377,6 +390,11 @@ public class TestExportSnapshot {
+           assertTrue(path + " should not be empty", fs.getFileStatus(path).getLen() > 0);
+         }
+     });
++
++    // Verify Snapshot description
++    SnapshotDescription desc = SnapshotDescriptionUtils.readSnapshotInfo(fs, exportedSnapshot);
++    assertTrue(desc.getName().equals(snapshotName));
++    assertTrue(desc.getTable().equals(tableName.getNameAsString()));
+   }
+ 
+   private Set<String> listFiles(final FileSystem fs, final Path root, final Path dir)
+-- 
+1.7.0.4
+

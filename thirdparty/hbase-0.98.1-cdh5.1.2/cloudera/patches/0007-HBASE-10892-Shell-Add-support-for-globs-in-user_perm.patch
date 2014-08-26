@@ -1,0 +1,150 @@
+From f7f584a4ed06c2677f3a0438bbfff9e990b2f45d Mon Sep 17 00:00:00 2001
+From: Andrew Kyle Purtell <apurtell@apache.org>
+Date: Fri, 25 Apr 2014 22:34:28 +0000
+Subject: [PATCH 07/70] HBASE-10892 [Shell] Add support for globs in user_permission (Esteban Gutierrez)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1590173 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 86a475f95ad0310b87c006d45faec36d13e0507c)
+---
+ hbase-shell/src/main/ruby/hbase/security.rb        |   88 +++++++++++++-------
+ .../main/ruby/shell/commands/user_permission.rb    |    2 +
+ 2 files changed, 59 insertions(+), 31 deletions(-)
+
+diff --git a/hbase-shell/src/main/ruby/hbase/security.rb b/hbase-shell/src/main/ruby/hbase/security.rb
+index 322fc98..14f0e82 100644
+--- a/hbase-shell/src/main/ruby/hbase/security.rb
++++ b/hbase-shell/src/main/ruby/hbase/security.rb
+@@ -58,7 +58,8 @@ module Hbase
+           if (isNamespace?(table_name))
+             # Namespace should exist first.
+             namespace_name = table_name[1...table_name.length]
+-            raise(ArgumentError, "Can't find a namespace: #{namespace_name}") unless namespace_exists?(namespace_name)
++            raise(ArgumentError, "Can't find a namespace: #{namespace_name}") unless
++              namespace_exists?(namespace_name)
+ 
+             # invoke cp endpoint to perform access controlse
+             org.apache.hadoop.hbase.protobuf.ProtobufUtil.grant(
+@@ -148,7 +149,7 @@ module Hbase
+     end
+ 
+     #----------------------------------------------------------------------------------------------
+-    def user_permission(table_name=nil)
++    def user_permission(table_regex=nil)
+       security_available?
+ 
+       begin
+@@ -160,44 +161,69 @@ module Hbase
+         protocol = org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos::
+           AccessControlService.newBlockingStub(service)
+ 
+-        if (table_name != nil)
+-          #check if namespace is passed.
+-          if (isNamespace?(table_name))
+-            # Namespace should exist first.
+-            namespace_name = table_name[1...table_name.length]
+-            raise(ArgumentError, "Can't find a namespace: #{namespace_name}") unless namespace_exists?(namespace_name)
+-            # invoke cp endpoint to perform access controls
+-            perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
+-              protocol, namespace_name.to_java_bytes)
+-          else
+-             raise(ArgumentError, "Can't find table: #{table_name}") unless exists?(table_name)
+-             perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
+-               protocol, org.apache.hadoop.hbase.TableName.valueOf(table_name))
+-          end
++        if (table_regex == '')
++          table_regex = nil
++        end
++
++        # handle simple glob '*' but if '.' is passed before '*' then assume regex
++        if /\*/.match(table_regex) && !/\.\*/.match(table_regex)
++          table_regex = table_regex.gsub(/\*/, '.*')
++        end
++
++        all_perms = []
++        tables = []
++
++        if table_regex != nil
++
++          htds = @admin.listTables(table_regex)
++          htds.each { |t|
++            tables << t.getTableName().toString()
++          }
++
++          tables.each { |t|
++            if (isNamespace?(t))
++              # Namespace should exist first.
++              namespace_name = t[1...t.length]
++              raise(ArgumentError, "Can't find a namespace: #{namespace_name}") unless namespace_exists?(namespace_name)
++              perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
++                protocol, org.apache.hadoop.hbase.TableName.valueOf(t))
++            else
++              raise(ArgumentError, "Can't find table: #{t}") unless exists?(t)
++              perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
++                protocol, org.apache.hadoop.hbase.TableName.valueOf(t))
++            end
++            all_perms << perms
++          }
+         else
+           perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(protocol)
++          all_perms << perms
+         end
+       ensure
+         meta_table.close()
+       end
+-
+       res = {}
+       count  = 0
+-      perms.each do |value|
+-        user_name = String.from_java_bytes(value.getUser)
+-        table = (value.getTableName != nil) ? value.getTableName.getNameAsString() : ''
+-        family = (value.getFamily != nil) ? org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getFamily) : ''
+-        qualifier = (value.getQualifier != nil) ? org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getQualifier) : ''
+-
+-        action = org.apache.hadoop.hbase.security.access.Permission.new value.getActions
+-
+-        if block_given?
+-          yield(user_name, "#{table},#{family},#{qualifier}: #{action.to_s}")
+-        else
+-          res[user_name] ||= {}
+-          res[user_name][family + ":" +qualifier] = action
++      all_perms.each do |this_perms|
++        this_perms.each do |value|
++          user_name = String.from_java_bytes(value.getUser)
++          table = (value.getTableName != nil) ? value.getTableName.getNameAsString() : ''
++          family = (value.getFamily != nil) ?
++            org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getFamily) :
++            ''
++          qualifier = (value.getQualifier != nil) ?
++            org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getQualifier) :
++            ''
++
++          action = org.apache.hadoop.hbase.security.access.Permission.new value.getActions
++
++          if block_given?
++            yield(user_name, "#{table},#{family},#{qualifier}: #{action.to_s}")
++          else
++            res[user_name] ||= {}
++            res[user_name][family + ":" +qualifier] = action
++          end
++          count += 1
+         end
+-        count += 1
+       end
+ 
+       return ((block_given?) ? count : res)
+diff --git a/hbase-shell/src/main/ruby/shell/commands/user_permission.rb b/hbase-shell/src/main/ruby/shell/commands/user_permission.rb
+index 03e5761..1c416e5 100644
+--- a/hbase-shell/src/main/ruby/shell/commands/user_permission.rb
++++ b/hbase-shell/src/main/ruby/shell/commands/user_permission.rb
+@@ -28,6 +28,8 @@ For example:
+     hbase> user_permission
+     hbase> user_permission 'table1'
+     hbase> user_permission 'namespace1:table1'
++    hbase> user_permission '*'
++    hbase> user_permission '^[A-C].*'
+ EOF
+       end
+ 
+-- 
+1.7.0.4
+

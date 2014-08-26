@@ -1,0 +1,29 @@
+From e90e749c639d36c80c8a396b894dd7f04c930240 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Thu, 19 Jun 2014 09:12:53 -0700
+Subject: [PATCH 59/70] HBASE-11378 TableMapReduceUtil overwrites user supplied options for multiple tables/scaners job
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-19606
+---
+ .../hadoop/hbase/mapreduce/TableMapReduceUtil.java |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
+index 41b3ec7..e5a3c18 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
+@@ -389,7 +389,8 @@ public class TableMapReduceUtil {
+       job.setMapOutputKeyClass(outputKeyClass);
+     }
+     job.setMapperClass(mapper);
+-    HBaseConfiguration.addHbaseResources(job.getConfiguration());
++    Configuration conf = job.getConfiguration();
++    HBaseConfiguration.merge(conf, HBaseConfiguration.create(conf));
+     List<String> scanStrings = new ArrayList<String>();
+ 
+     for (Scan scan : scans) {
+-- 
+1.7.0.4
+

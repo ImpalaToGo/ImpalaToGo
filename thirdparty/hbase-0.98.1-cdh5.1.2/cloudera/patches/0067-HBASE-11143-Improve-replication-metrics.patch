@@ -1,0 +1,75 @@
+From 4636bb582c811769491c99797a78c97d490db7a5 Mon Sep 17 00:00:00 2001
+From: larsh <larsh@unknown>
+Date: Wed, 14 May 2014 06:15:14 +0000
+Subject: [PATCH 67/70] HBASE-11143 Improve replication metrics.
+
+Ref: CDH-19081
+Reason: Bug
+Author: Lars Hofhansl
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1594469 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 2d5f7444ffb3dc543f6c3d45de285426db59c003)
+---
+ .../replication/regionserver/MetricsSource.java    |    7 ++++++-
+ .../regionserver/ReplicationSource.java            |    2 +-
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/MetricsSource.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/MetricsSource.java
+index 2237997..b38a0c8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/MetricsSource.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/MetricsSource.java
+@@ -36,6 +36,7 @@ public class MetricsSource {
+   public static final String SOURCE_LOG_EDITS_READ = "source.logEditsRead";
+   public static final String SOURCE_LOG_EDITS_FILTERED = "source.logEditsFiltered";
+   public static final String SOURCE_SHIPPED_BATCHES = "source.shippedBatches";
++  public static final String SOURCE_SHIPPED_KBS = "source.shippedKBs";
+   public static final String SOURCE_SHIPPED_OPS = "source.shippedOps";
+   public static final String SOURCE_LOG_READ_IN_BYTES = "source.logReadInBytes";
+ 
+@@ -51,6 +52,7 @@ public class MetricsSource {
+   private String logEditsFilteredKey;
+   private final String shippedBatchesKey;
+   private final String shippedOpsKey;
++  private final String shippedKBsKey;
+   private final String logReadInBytesKey;
+ 
+   private MetricsReplicationSource rms;
+@@ -69,6 +71,7 @@ public class MetricsSource {
+     logEditsFilteredKey = "source." + id + ".logEditsFiltered";
+     shippedBatchesKey = "source." + this.id + ".shippedBatches";
+     shippedOpsKey = "source." + this.id + ".shippedOps";
++    shippedKBsKey = "source." + this.id + ".shippedKBs";
+     logReadInBytesKey = "source." + this.id + ".logReadInBytes";
+     rms = CompatibilitySingletonFactory.getInstance(MetricsReplicationSource.class);
+   }
+@@ -141,11 +144,13 @@ public class MetricsSource {
+    *
+    * @param batchSize the size of the batch that was shipped to sinks.
+    */
+-  public void shipBatch(long batchSize) {
++  public void shipBatch(long batchSize, int sizeInKB) {
+     rms.incCounters(shippedBatchesKey, 1);
+     rms.incCounters(SOURCE_SHIPPED_BATCHES, 1);
+     rms.incCounters(shippedOpsKey, batchSize);
+     rms.incCounters(SOURCE_SHIPPED_OPS, batchSize);
++    rms.incCounters(shippedKBsKey, sizeInKB);
++    rms.incCounters(SOURCE_SHIPPED_KBS, sizeInKB);
+   }
+   
+   /** increase the byte number read by source from log file */
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
+index 536b50c..f2107be 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSource.java
+@@ -737,7 +737,7 @@ public class ReplicationSource extends Thread
+         }
+         this.totalReplicatedEdits += entries.size();
+         this.totalReplicatedOperations += currentNbOperations;
+-        this.metrics.shipBatch(this.currentNbOperations);
++        this.metrics.shipBatch(this.currentNbOperations, this.currentSize/1024);
+         this.metrics.setAgeOfLastShippedOp(entries.get(entries.size()-1).getKey().getWriteTime());
+         if (LOG.isTraceEnabled()) {
+           LOG.trace("Replicated " + this.totalReplicatedEdits + " entries in total, or "
+-- 
+1.7.0.4
+

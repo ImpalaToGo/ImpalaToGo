@@ -1,0 +1,42 @@
+From 10fc7589e95efcde34e81ae1c2555d5aff393d4a Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org =  tedyu = Zhihong Yu tedyu@apache.org@apache.org>
+Date: Sat, 12 Apr 2014 01:54:47 +0000
+Subject: [PATCH 21/70] HBASE-10968 Null check in TableSnapshotInputFormat#TableSnapshotRegionRecordReader#initialize() is redundant
+
+Reason: Improvement
+Author: Ted Yu
+Ref: CDH-18297
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1586806 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/mapreduce/TableSnapshotInputFormat.java  |    7 ++-----
+ 1 files changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
+index e37bb42..545cbfc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
+@@ -235,10 +235,8 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+       scan.setCacheBlocks(false);
+ 
+       scanner = new ClientSideRegionScanner(conf, fs, tmpRootDir, htd, hri, scan, null);
+-      if (context != null) {
+-        this.context = context;
+-        getCounter = TableRecordReaderImpl.retrieveGetCounterWithStringsParams(context);
+-      }
++      this.context = context;
++      getCounter = TableRecordReaderImpl.retrieveGetCounterWithStringsParams(context);
+     }
+ 
+     @Override
+@@ -300,7 +298,6 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+     FileSystem fs = rootDir.getFileSystem(conf);
+ 
+     Path snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, rootDir);
+-    SnapshotDescription snapshotDesc = SnapshotDescriptionUtils.readSnapshotInfo(fs, snapshotDir);
+ 
+     Set<String> snapshotRegionNames
+       = SnapshotReferenceUtil.getSnapshotRegionNames(fs, snapshotDir);
+-- 
+1.7.0.4
+

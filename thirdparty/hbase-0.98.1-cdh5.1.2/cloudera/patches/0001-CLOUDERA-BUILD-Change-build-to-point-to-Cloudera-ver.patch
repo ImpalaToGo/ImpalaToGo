@@ -1,0 +1,1515 @@
+From cb8265a11167cc8c957889fcc396f6ad8ff29001 Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Wed, 16 Apr 2014 15:45:43 -0700
+Subject: [PATCH 01/70] CLOUDERA-BUILD Change build to point to Cloudera versions and repositories.
+     - Change version to 0.98.1-cdh5.1.0-SNAPSHOT
+
+---
+ hbase-assembly/pom.xml                             |    5 +-
+ hbase-assembly/src/main/assembly/components.xml    |    6 +
+ .../src/main/assembly/hadoop-two-compat.xml        |   11 +-
+ hbase-assembly/src/main/assembly/src.xml           |   13 ++
+ hbase-client/pom.xml                               |   65 ++++++-
+ hbase-common/pom.xml                               |   51 +++++-
+ hbase-examples/pom.xml                             |   43 ++++-
+ hbase-hadoop-compat/pom.xml                        |    2 +-
+ hbase-hadoop1-compat/pom.xml                       |    2 +-
+ hbase-hadoop2-compat/pom.xml                       |  100 ++++++++--
+ .../org/apache/hadoop/hbase/mapreduce/JobUtil.java |   86 ++++++++-
+ hbase-it/pom.xml                                   |   53 +++++-
+ hbase-prefix-tree/pom.xml                          |    4 +-
+ hbase-protocol/pom.xml                             |    2 +-
+ hbase-server/pom.xml                               |   73 ++++++-
+ .../hbase/mapreduce/MapreduceTestingShim.java      |    8 +-
+ hbase-shell/pom.xml                                |   71 ++++++-
+ hbase-testing-util/pom.xml                         |   56 +++++-
+ hbase-thrift/pom.xml                               |   58 +++++-
+ pom.xml                                            |  219 +++++++++++++++++---
+ 20 files changed, 852 insertions(+), 76 deletions(-)
+
+diff --git a/hbase-assembly/pom.xml b/hbase-assembly/pom.xml
+index 18f2b6b..712dd62 100644
+--- a/hbase-assembly/pom.xml
++++ b/hbase-assembly/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-assembly</artifactId>
+@@ -48,6 +48,7 @@
+           <tarLongFileMode>gnu</tarLongFileMode>
+           <descriptors>
+             <descriptor>${assembly.file}</descriptor>
++            <descriptor>src/main/assembly/src.xml</descriptor>
+           </descriptors>
+         </configuration>
+       </plugin>
+@@ -93,7 +94,7 @@
+     </dependency>
+     <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-assembly/src/main/assembly/components.xml b/hbase-assembly/src/main/assembly/components.xml
+index ec85bc1..8e44a11 100644
+--- a/hbase-assembly/src/main/assembly/components.xml
++++ b/hbase-assembly/src/main/assembly/components.xml
+@@ -40,6 +40,12 @@
+       </includes>
+       <fileMode>0644</fileMode>
+     </fileSet>
++    <!-- Include top level cloudera directory -->
++    <fileSet>
++      <directory>cloudera</directory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
+     <!-- Include the top level conf directory -->
+     <fileSet>
+       <directory>${project.basedir}/../conf</directory>
+diff --git a/hbase-assembly/src/main/assembly/hadoop-two-compat.xml b/hbase-assembly/src/main/assembly/hadoop-two-compat.xml
+index f8ebcda..901a9ce 100644
+--- a/hbase-assembly/src/main/assembly/hadoop-two-compat.xml
++++ b/hbase-assembly/src/main/assembly/hadoop-two-compat.xml
+@@ -38,7 +38,16 @@
+         <outputDirectory>lib</outputDirectory>
+         <unpack>false</unpack>
+         <dependencySets>
+-          <dependencySet/>
++          <dependencySet>
++  <!-- CLOUDERA-SPECIFIC-NOTE: In CDH5, HBase is built against the MR1 profile
++    by default (See CDH-16257 for more ref). We removed all hadoop-client and
++    hadoop-core jars from the packaged tar.gz file. The user should provide hadoop-core
++    and hadoop-client classes in his environment. This is done to avoid any classpath
++    clashes when he is running a Mapreduce job in a MR2/YARN environment -->
++            <excludes>
++              <exclude>org.apache.hadoop:hadoop-core</exclude>
++            </excludes>
++          </dependencySet>
+         </dependencySets>
+       </binaries>
+     </moduleSet>
+diff --git a/hbase-assembly/src/main/assembly/src.xml b/hbase-assembly/src/main/assembly/src.xml
+index b7a21a4..7e93d9b 100644
+--- a/hbase-assembly/src/main/assembly/src.xml
++++ b/hbase-assembly/src/main/assembly/src.xml
+@@ -65,6 +65,12 @@
+               <exclude>.settings/</exclude>
+             </excludes>
+     </fileSet>
++    <!-- Include top level cloudera directory -->
++    <fileSet>
++      <directory>cloudera</directory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
+     <!--Include dev tools-->
+     <fileSet>
+       <directory>${project.basedir}/../dev-support</directory>
+@@ -104,5 +110,12 @@
+       </includes>
+       <fileMode>0644</fileMode>
+     </fileSet>
++    <!-- Include the cloudera directory -->
++    <fileSet>
++      <directory>${project.basedir}/../cloudera</directory>
++      <outputDirectory>cloudera</outputDirectory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
+ </fileSets>
+ </assembly>
+diff --git a/hbase-client/pom.xml b/hbase-client/pom.xml
+index 1faef9d..5fdc115 100644
+--- a/hbase-client/pom.xml
++++ b/hbase-client/pom.xml
+@@ -24,7 +24,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -178,7 +178,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -229,6 +229,67 @@
+       </dependencies>
+     </profile>
+ 
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++          <exclusions>
++            <exclusion>
++              <groupId>javax.servlet.jsp</groupId>
++              <artifactId>jsp-api</artifactId>
++            </exclusion>
++            <exclusion>
++              <groupId>com.sun.jersey</groupId>
++              <artifactId>jersey-server</artifactId>
++            </exclusion>
++            <exclusion>
++              <groupId>javax.servlet</groupId>
++              <artifactId>servlet-api</artifactId>
++            </exclusion>
++            <exclusion>
++              <groupId>tomcat</groupId>
++              <artifactId>jasper-compiler</artifactId>
++            </exclusion>
++            <exclusion>
++              <groupId>tomcat</groupId>
++              <artifactId>jasper-runtime</artifactId>
++            </exclusion>
++          </exclusions>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-auth</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++          <scope>provided</scope>
++          <exclusions>
++          <exclusion>
++            <groupId>com.sun.jersey.jersey-test-framework</groupId>
++            <artifactId>jersey-test-framework-grizzly2</artifactId>
++          </exclusion>
++        </exclusions>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-auth</artifactId>
++        </dependency>
++      </dependencies>
++    </profile>
++
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/hbase-common/pom.xml b/hbase-common/pom.xml
+index 88dcd78..fd8ff3e 100644
+--- a/hbase-common/pom.xml
++++ b/hbase-common/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -273,7 +273,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -315,6 +315,53 @@
+       </build>
+     </profile>
+ 
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
++
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/hbase-examples/pom.xml b/hbase-examples/pom.xml
+index d2aebed..4440d95 100644
+--- a/hbase-examples/pom.xml
++++ b/hbase-examples/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-examples</artifactId>
+@@ -155,7 +155,7 @@ if we can combine these profiles somehow -->
+          <activation>
+              <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+              </property>
+          </activation>
+          <dependencies>
+@@ -192,6 +192,45 @@ if we can combine these profiles somehow -->
+              </plugins>
+          </build>
+      </profile>
++
++     <profile>
++         <id>cdh5</id>
++         <activation>
++             <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++             </property>
++         </activation>
++         <dependencies>
++             <dependency>
++                 <groupId>org.apache.hadoop</groupId>
++                 <artifactId>hadoop-common</artifactId>
++             </dependency>
++         </dependencies>
++         <build>
++             <plugins>
++                 <plugin>
++                     <artifactId>maven-dependency-plugin</artifactId>
++                     <executions>
++                         <execution>
++                             <id>create-mrapp-generated-classpath</id>
++                             <phase>generate-test-resources</phase>
++                             <goals>
++                                 <goal>build-classpath</goal>
++                             </goals>
++                             <configuration>
++                                 <!-- needed to run the unit test for DS to generate
++                                 the required classpath that is required in the env
++                                 of the launch container in the mini mr/yarn cluster
++                                 -->
++                                 <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                             </configuration>
++                         </execution>
++                     </executions>
++                 </plugin>
++             </plugins>
++         </build>
++     </profile>
+      <!--
+        profile for building against Hadoop 3.0.x. Activate using:
+         mvn -Dhadoop.profile=3.0
+diff --git a/hbase-hadoop-compat/pom.xml b/hbase-hadoop-compat/pom.xml
+index 07151d6..acf8d72 100644
+--- a/hbase-hadoop-compat/pom.xml
++++ b/hbase-hadoop-compat/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>0.98.1</version>
++        <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+ 
+diff --git a/hbase-hadoop1-compat/pom.xml b/hbase-hadoop1-compat/pom.xml
+index a546d50..c4c2f74 100644
+--- a/hbase-hadoop1-compat/pom.xml
++++ b/hbase-hadoop1-compat/pom.xml
+@@ -21,7 +21,7 @@ limitations under the License.
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-hadoop2-compat/pom.xml b/hbase-hadoop2-compat/pom.xml
+index a2682a1..1302f9b 100644
+--- a/hbase-hadoop2-compat/pom.xml
++++ b/hbase-hadoop2-compat/pom.xml
+@@ -21,7 +21,7 @@ limitations under the License.
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -139,21 +139,6 @@ limitations under the License.
+       <scope>test</scope>
+     </dependency>
+     <dependency>
+-      <groupId>org.apache.hadoop</groupId>
+-      <artifactId>hadoop-mapreduce-client-core</artifactId>
+-      <version>${hadoop-two.version}</version>
+-    </dependency>
+-    <dependency>
+-      <groupId>org.apache.hadoop</groupId>
+-      <artifactId>hadoop-annotations</artifactId>
+-      <version>${hadoop-two.version}</version>
+-    </dependency>
+-    <dependency>
+-      <groupId>org.apache.hadoop</groupId>
+-      <artifactId>hadoop-common</artifactId>
+-      <version>${hadoop-two.version}</version>
+-    </dependency>
+-    <dependency>
+       <groupId>com.yammer.metrics</groupId>
+       <artifactId>metrics-core</artifactId>
+     </dependency>
+@@ -184,5 +169,86 @@ limitations under the License.
+                 <surefire.skipFirstPart>true</surefire.skipFirstPart>
+             </properties>
+         </profile>
++        <profile>
++          <id>hadoop-2.0</id>
++          <activation>
++            <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++		      <name>hadoop.profile</name><value>2.0</value>
++            </property>
++          </activation>
++          <dependencies>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-mapreduce-client-core</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-annotations</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-common</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++          </dependencies>
++        </profile>
++        <profile>
++          <id>cdh5</id>
++          <activation>
++          <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++          </property>
++          </activation>
++          <dependencies>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-core</artifactId>
++              <version>${hadoop-two.mr1.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-annotations</artifactId>
++              <version>${hadoop-two.yarn.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-common</artifactId>
++              <version>${hadoop-two.yarn.version}</version>
++            </dependency>
++          </dependencies>
++        </profile>
++        <profile>
++          <id>hadoop-3.0</id>
++          <activation>
++            <property>
++              <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++              <name>hadoop.profile</name><value>3.0</value>
++            </property>
++          </activation>
++          <properties>
++            <hadoop.version>3.0-SNAPSHOT</hadoop.version>
++          </properties>
++          <dependencies>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-mapreduce-client-core</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-annotations</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++            <dependency>
++              <groupId>org.apache.hadoop</groupId>
++              <artifactId>hadoop-common</artifactId>
++              <version>${hadoop-two.version}</version>
++            </dependency>
++          </dependencies>
++        </profile>
+   </profiles>
+-</project>
++</project>
+\ No newline at end of file
+diff --git a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/mapreduce/JobUtil.java b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/mapreduce/JobUtil.java
+index 82731b2..0e3858b 100644
+--- a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/mapreduce/JobUtil.java
++++ b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/mapreduce/JobUtil.java
+@@ -19,6 +19,9 @@
+ package org.apache.hadoop.hbase.mapreduce;
+ 
+ import java.io.IOException;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.InvocationTargetException;
++import java.lang.reflect.Method;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -26,7 +29,8 @@ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.classification.InterfaceStability;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.conf.Configuration;
+-import org.apache.hadoop.mapreduce.Cluster;
++import org.apache.hadoop.mapred.JobClient;
++import org.apache.hadoop.mapred.JobConf;
+ import org.apache.hadoop.mapreduce.JobSubmissionFiles;
+ 
+ /**
+@@ -43,6 +47,12 @@ public abstract class JobUtil {
+ 
+   /**
+    * Initializes the staging directory and returns the path.
++   * <p>
++   * CLOUDERA-SPECIFIC-NOTE:
++   * MR1 and MR2 are incompatible regarding getStagingDir() API.
++   * <p>
++   * The following code is to handle both MR1 and MR2 at
++   * compile/run time. This is done using reflection to figure out the right API.
+    *
+    * @param conf system configuration
+    * @return staging directory path
+@@ -51,6 +61,78 @@ public abstract class JobUtil {
+    */
+   public static Path getStagingDir(Configuration conf)
+       throws IOException, InterruptedException {
+-    return JobSubmissionFiles.getStagingDir(new Cluster(conf), conf);
++    Path stagingDirPath = null;
++    // The API to get staging directory is different in MR1 and MR2/YARN. We first try MR1, and if
++    // it is not present, fall back to MR2.
++    try {
++      stagingDirPath = getStagingDirFromMR1(conf);
++    } catch (NoSuchMethodException e) {
++      stagingDirPath = getStagingDirFromMR2(conf);
++    }
++    if (stagingDirPath != null) LOG.debug("Staging dir of the job is: " + stagingDirPath);
++    return stagingDirPath;
++  }
++
++  /**
++   * Invokes {@link JobSubmissionFiles#getStagingDir(org.apache.hadoop.mapred.JobClient,
++   * Configuration)} API, if present, to get staging dir path.
++   * @param conf
++   * @return stagingDir path for the job
++   * @throws IOException
++   * @throws NoSuchMethodException
++   */
++  private static Path getStagingDirFromMR1(Configuration conf) throws IOException,
++      NoSuchMethodException, InterruptedException {
++    Path stagingDirPath;
++    JobClient jobClient = new JobClient(new JobConf(conf));
++    Method getStagingDirMethod = JobSubmissionFiles.class.getMethod("getStagingDir",
++      jobClient.getClass(), conf.getClass());
++    try {
++      // call this mr1 specific call:
++      // JobSubmissionFiles.getStagingDir(jobClient, conf);
++      stagingDirPath = (Path) getStagingDirMethod.invoke(null, jobClient, conf);
++    } catch (IllegalArgumentException iae) {
++      throw new IllegalStateException(iae);
++    } catch (IllegalAccessException e) {
++      throw new IllegalStateException(e);
++    } catch (InvocationTargetException ite) {
++      throw new IllegalStateException(ite);
++    }
++    return stagingDirPath;
++  }
++
++  /**
++   * Invokes {@link JobSubmissionFiles#getStagingDir(org.apache.hadoop.mapreduce.Cluster,
++   *  Configuration)} API, if present, to get the staging dir path.
++   * @param conf
++   * @return stagingDir path for the job
++   */
++  private static Path getStagingDirFromMR2(Configuration conf) {
++    Path stagingDirPath = null;
++    try {
++      Class<?> clusterClass = Class.forName("org.apache.hadoop.mapreduce.Cluster");
++      Method getStagingDirMethod = JobSubmissionFiles.class.getMethod("getStagingDir",
++        clusterClass, conf.getClass());
++      Constructor<?> ctr = clusterClass.getConstructor(conf.getClass());
++      Object clusterInstance = ctr.newInstance(conf);
++      // call this mr2 specific call:
++      // JobSubmissionFiles.getStagingDir(cluster, conf);
++      stagingDirPath = (Path) getStagingDirMethod.invoke(null, clusterInstance, conf);
++    } catch (ClassNotFoundException cnfe) {
++      throw new IllegalStateException(cnfe);
++    } catch (SecurityException se) {
++      throw new IllegalStateException(se);
++    } catch (NoSuchMethodException nsme) {
++      throw new IllegalStateException(nsme);
++    } catch (IllegalArgumentException iae) {
++      throw new IllegalStateException(iae);
++    } catch (InstantiationException ie) {
++      throw new IllegalStateException(ie);
++    } catch (IllegalAccessException e) {
++      throw new IllegalStateException(e);
++    } catch (InvocationTargetException ite) {
++      throw new IllegalStateException(ite);
++    }
++    return stagingDirPath;
+   }
+ }
+diff --git a/hbase-it/pom.xml b/hbase-it/pom.xml
+index c10908e..ece80c9 100644
+--- a/hbase-it/pom.xml
++++ b/hbase-it/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -164,7 +164,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+@@ -262,7 +262,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -309,6 +309,53 @@
+       </build>
+     </profile>
+ 
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
++
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/hbase-prefix-tree/pom.xml b/hbase-prefix-tree/pom.xml
+index bef98fb..eb2cecd 100644
+--- a/hbase-prefix-tree/pom.xml
++++ b/hbase-prefix-tree/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -84,7 +84,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-protocol/pom.xml b/hbase-protocol/pom.xml
+index 54a1235..038478f 100644
+--- a/hbase-protocol/pom.xml
++++ b/hbase-protocol/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>0.98.1</version>
++        <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+ 
+diff --git a/hbase-server/pom.xml b/hbase-server/pom.xml
+index d2cb5ab..76acaa1 100644
+--- a/hbase-server/pom.xml
++++ b/hbase-server/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-server</artifactId>
+@@ -318,12 +318,12 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+       <type>test-jar</type>
+       <scope>test</scope>
+@@ -560,7 +560,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -628,6 +628,71 @@
+         </plugins>
+       </build>
+     </profile>
++
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-auth</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++          <type>test-jar</type>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-minicluster</artifactId>
++          <scope>test</scope>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
+index dee4277..70cf649 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
+@@ -124,7 +124,13 @@ abstract public class MapreduceTestingShim {
+     
+     public JobConf obtainJobConf(MiniMRCluster cluster) {
+       try {
+-        Method meth = MiniMRCluster.class.getMethod("getJobTrackerConf", emptyParam);
++        // CLOUDERA-SPECIFIC-NOTE: We revert to the old way of calling createJobConf() API rather
++        // than the new getJobTrackerConf() API (which is used upstream). This is done because in
++        // CDH5, we are building against MR1 by default. These two APIs are exactly the
++        // same in MR2 and hadoop2, but different in MR1. For eg, mapred.job.tracker was not being
++        // set properly in MR1 with the new API. The fix is to revert to the old way of getting the
++        // conf.
++        Method meth = MiniMRCluster.class.getMethod("createJobConf", emptyParam);
+         return (JobConf) meth.invoke(cluster, new Object []{});
+       } catch (NoSuchMethodException nsme) {
+         return null;
+diff --git a/hbase-shell/pom.xml b/hbase-shell/pom.xml
+index 338d8d4..218a219 100644
+--- a/hbase-shell/pom.xml
++++ b/hbase-shell/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-shell</artifactId>
+@@ -181,7 +181,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+@@ -292,7 +292,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -360,6 +360,71 @@
+         </plugins>
+       </build>
+     </profile>
++
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-auth</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-hdfs</artifactId>
++          <type>test-jar</type>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-minicluster</artifactId>
++          <scope>test</scope>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/hbase-testing-util/pom.xml b/hbase-testing-util/pom.xml
+index 7c8c5ff..2dd0b60 100644
+--- a/hbase-testing-util/pom.xml
++++ b/hbase-testing-util/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>0.98.1</version>
++        <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+     <artifactId>hbase-testing-util</artifactId>
+@@ -92,13 +92,13 @@
+         </dependency>
+         <dependency>
+             <groupId>org.apache.hbase</groupId>
+-            <artifactId>${compat.module}</artifactId>
++            <artifactId>hbase-hadoop2-compat</artifactId>
+             <type>jar</type>
+             <scope>compile</scope>
+         </dependency>
+         <dependency>
+             <groupId>org.apache.hbase</groupId>
+-            <artifactId>${compat.module}</artifactId>
++            <artifactId>hbase-hadoop2-compat</artifactId>
+             <type>test-jar</type>
+             <scope>compile</scope>
+         </dependency>
+@@ -167,7 +167,7 @@
+             <activation>
+                 <property>
+                     <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-                    <!--h2--><name>!hadoop.profile</name>
++                    <!--h2--><name>hadoop.profile</name><value>2.0</value>
+                 </property>
+             </activation>
+             <dependencies>
+@@ -219,6 +219,54 @@
+                 </dependency>
+             </dependencies>
+         </profile>
++
++        <profile>
++            <id>cdh5</id>
++            <activation>
++                <property>
++                    <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++                    <!--h2--><name>!hadoop.profile</name>
++                </property>
++            </activation>
++            <dependencies>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-common</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-auth</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-core</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-hdfs</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-hdfs</artifactId>
++                    <type>test-jar</type>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-annotations</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++                <dependency>
++                    <groupId>org.apache.hadoop</groupId>
++                    <artifactId>hadoop-minicluster</artifactId>
++                    <scope>compile</scope>
++                </dependency>
++            </dependencies>
++        </profile>
+         <!--
+           profile for building against Hadoop 3.0.x. Activate using:
+            mvn -Dhadoop.profile=3.0
+diff --git a/hbase-thrift/pom.xml b/hbase-thrift/pom.xml
+index 328ff09..5a13007 100644
+--- a/hbase-thrift/pom.xml
++++ b/hbase-thrift/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>0.98.1</version>
++    <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-thrift</artifactId>
+@@ -185,7 +185,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+@@ -266,7 +266,7 @@ the same time. -->
+       <activation>
+         <property>
+           <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-          <!--h2--><name>!hadoop.profile</name>
++          <!--h2--><name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <dependencies>
+@@ -322,6 +322,58 @@ the same time. -->
+       </build>
+     </profile>
+ 
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++          <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++          <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-annotations</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-minicluster</artifactId>
++          <scope>test</scope>
++        </dependency>
++      </dependencies>
++      <build>
++        <plugins>
++          <plugin>
++            <artifactId>maven-dependency-plugin</artifactId>
++            <executions>
++              <execution>
++                <id>create-mrapp-generated-classpath</id>
++                <phase>generate-test-resources</phase>
++                <goals>
++                  <goal>build-classpath</goal>
++                </goals>
++                <configuration>
++                  <!-- needed to run the unit test for DS to generate
++                  the required classpath that is required in the env
++                  of the launch container in the mini mr/yarn cluster
++                  -->
++                  <outputFile>${project.build.directory}/test-classes/mrapp-generated-classpath</outputFile>
++                </configuration>
++              </execution>
++            </executions>
++          </plugin>
++        </plugins>
++      </build>
++    </profile>
++
+     <!--
+       profile for building against Hadoop 3.0.x. Activate using:
+        mvn -Dhadoop.profile=3.0
+diff --git a/pom.xml b/pom.xml
+index e00c4a5..99ba3cc 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -30,16 +30,16 @@
+ -->
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+-    <groupId>org.apache</groupId>
+-    <artifactId>apache</artifactId>
+-    <version>12</version>
++    <groupId>com.cloudera.cdh</groupId>
++    <artifactId>cdh-root</artifactId>
++    <version>5.1.0-SNAPSHOT</version>
+     <relativePath/>
+     <!-- no parent resolution -->
+   </parent>
+   <groupId>org.apache.hbase</groupId>
+   <artifactId>hbase</artifactId>
+   <packaging>pom</packaging>
+-  <version>0.98.1</version>
++  <version>0.98.1-cdh5.1.0-SNAPSHOT</version>
+   <name>HBase</name>
+   <description>
+     Apache HBase is the Hadoop database. Use it when you need
+@@ -385,6 +385,29 @@
+   </developers>
+   <repositories>
+     <repository>
++      <id>cdh.repo</id>
++      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
++      <name>Cloudera Repositories</name>
++      <snapshots>
++        <enabled>false</enabled>
++      </snapshots>
++    </repository>
++    <repository>
++      <id>cdh.snapshots.repo</id>
++      <url>https://repository.cloudera.com/artifactory/libs-snapshot-local</url>
++      <name>Cloudera Snapshots Repository</name>
++      <snapshots>
++        <enabled>true</enabled>
++      </snapshots>
++      <releases>
++        <enabled>false</enabled>
++      </releases>
++    </repository>
++    <repository>
++      <id>cloudbees netty</id>
++      <url>http://repository-netty.forge.cloudbees.com/snapshot/</url>
++    </repository>
++    <repository>
+       <id>apache release</id>
+       <url>https://repository.apache.org/content/repositories/releases/</url>
+     </repository>
+@@ -475,8 +498,8 @@
+           <artifactId>maven-compiler-plugin</artifactId>
+           <version>2.5.1</version>
+           <configuration>
+-            <source>${compileSource}</source>
+-            <target>${compileSource}</target>
++            <source>${sourceJavaVersion}</source>
++            <target>${targetJavaVersion}</target>
+             <showWarnings>true</showWarnings>
+             <showDeprecation>false</showDeprecation>
+             <compilerArgument>-Xlint:-options</compilerArgument>
+@@ -511,6 +534,19 @@
+             <forkedProcessTimeoutInSeconds>${surefire.timeout}</forkedProcessTimeoutInSeconds>
+             <argLine>-enableassertions -Xmx1900m -XX:MaxPermSize=100m -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true -Djava.awt.headless=true</argLine>
+             <redirectTestOutputToFile>${test.output.tofile}</redirectTestOutputToFile>
++            <includes>
++              <include>${unittest.include}</include>
++            </includes>
++            <excludes>
++              <exclude>${integrationtest.include}</exclude>
++              <exclude>**/*$*</exclude>
++              <exclude>${test.exclude.pattern}</exclude>
++            </excludes>
++            <environmentVariables>
++              <LD_LIBRARY_PATH>${env.LD_LIBRARY_PATH}:${project.build.directory}/nativelib</LD_LIBRARY_PATH>
++              <DYLD_LIBRARY_PATH>${env.DYLD_LIBRARY_PATH}:${project.build.directory}/nativelib</DYLD_LIBRARY_PATH>
++              <MALLOC_ARENA_MAX>4</MALLOC_ARENA_MAX>
++            </environmentVariables>
+           </configuration>
+           <executions>
+             <execution>
+@@ -676,6 +712,8 @@
+               <exclude>.git/**</exclude>
+               <exclude>.svn/**</exclude>
+               <exclude>**/.settings/**</exclude>
++              <exclude>**/cloudera/**</exclude>
++              <exclude>**/debian/**</exclude>
+             </excludes>
+           </configuration>
+         </plugin>
+@@ -853,6 +891,45 @@
+       </plugin>
+       <plugin>
+         <groupId>org.apache.maven.plugins</groupId>
++        <artifactId>maven-enforcer-plugin</artifactId>
++        <version>1.0</version>
++        <inherited>false</inherited>
++        <configuration>
++          <rules>
++            <!--<requireMavenVersion>-->
++              <!--<version>[3.0.0,)</version>-->
++            <!--</requireMavenVersion>-->
++            <requireJavaVersion>
++              <version>[${javaVersion}.0,${javaVersion}.1000}]</version>
++            </requireJavaVersion>
++          </rules>
++        </configuration>
++        <executions>
++          <execution>
++            <id>clean</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-clean</phase>
++          </execution>
++          <execution>
++            <id>default</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>validate</phase>
++          </execution>
++          <execution>
++            <id>site</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-site</phase>
++          </execution>
++        </executions>
++      </plugin>
++      <plugin>
++        <groupId>org.apache.maven.plugins</groupId>
+         <artifactId>maven-site-plugin</artifactId>
+         <version>${maven.site.version}</version>
+         <inherited>false</inherited>
+@@ -879,9 +956,28 @@
+       yyyy-MM-dd'T'HH:mm
+     </maven.build.timestamp.format>
+     <buildDate>${maven.build.timestamp}</buildDate>
+-    <compileSource>1.6</compileSource>
+     <!-- Dependencies -->
+-    <hadoop-two.version>2.2.0</hadoop-two.version>
++    <javaVersion>1.7</javaVersion>
++    <targetJavaVersion>1.6</targetJavaVersion>
++    <sourceJavaVersion>${targetJavaVersion}</sourceJavaVersion>
++    <hadoop-two.version>${cdh.hadoop.version}</hadoop-two.version>
++    <!-- CLOUDERA-SPECIFIC-NOTE: This is Cloudera specific build param, and is used for building
++      hbase against mr1 profile.
++      In CDH5, hbase is built against the MR1 profile by default (See CDH-16257 for more ref).
++      This basically means that we now have a mix of modules from mr1 and mr2.
++     
++      The following is the breakup of various dependencies b/w mr1 and mr2 modules:
++     
++      a) hadoop1mr1 dependencies: org.apache.hadoop:hadoop-core, org.apache-hadoop:hadoop-client,
++      org.apache.hadoop:hadoop-minicluster
++      b) hadoop2 dependencies: org.apache.hadoop:hadoop-common, org.apache.hadoop:hadoop-annotations,
++      org.apache.hadoop:hadoop-auth, org.apache.hadoop:hadoop-hdfs.
++     
++      This also means we removed all mr2 specific dependencies (hadoop-mapreduce-client-core,
++      hadoop-mapreduce-client-jobclient) from the client.
++    -->
++    <hadoop-two.mr1.version>${cdh.mr1.version}</hadoop-two.mr1.version>
++    <hadoop-two.yarn.version>${cdh.hadoop.version}</hadoop-two.yarn.version>
+     <hadoop-one.version>1.2.1</hadoop-one.version>
+     <commons-cli.version>1.2</commons-cli.version>
+     <commons-codec.version>1.7</commons-codec.version>
+@@ -896,8 +992,8 @@
+     <guava.version>12.0.1</guava.version>
+     <jackson.version>1.8.8</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+-    <jaxb-api.version>2.2.2</jaxb-api.version>
+-    <jetty.version>6.1.26</jetty.version>
++    <jaxb-api.version>2.1</jaxb-api.version>
++    <jetty.version>6.1.26.cloudera.2</jetty.version>
+     <jetty.jspapi.version>6.1.14</jetty.jspapi.version>
+     <jersey.version>1.8</jersey.version>
+     <jruby.version>1.6.8</jruby.version>
+@@ -907,9 +1003,10 @@
+     <mockito-all.version>1.9.0</mockito-all.version>
+     <protobuf.version>2.5.0</protobuf.version>
+     <thrift.version>0.9.0</thrift.version>
+-    <zookeeper.version>3.4.6</zookeeper.version>
+-    <slf4j.version>1.6.4</slf4j.version>
+-    <hadoop-snappy.version>0.0.1-SNAPSHOT</hadoop-snappy.version>
++    <slf4j.version>${cdh.slf4j.version}</slf4j.version>
++    <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
++    <jets3.version>0.9.0</jets3.version>
++    <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
+     <clover.version>2.6.3</clover.version>
+     <jamon-runtime.version>2.3.1</jamon-runtime.version>
+     <jettison.version>1.3.1</jettison.version>
+@@ -951,6 +1048,12 @@
+     <surefire.testFailureIgnore>false</surefire.testFailureIgnore>
+     <test.output.tofile>true</test.output.tofile>
+     <surefire.timeout>900</surefire.timeout>
++    <!-- For flaky tests exclusion -->
++    <test.exclude></test.exclude>
++    <test.exclude.pattern>**/${test.exclude}.java</test.exclude.pattern>
++    <!-- Test inclusion patterns -->
++    <unittest.include>**/Test*.java</unittest.include>
++    <integrationtest.include>**/IntegrationTest*.java</integrationtest.include>
+   </properties>
+   <!-- Sorted by groups of dependencies then groupId and artifactId -->
+   <dependencyManagement>
+@@ -994,12 +1097,12 @@
+       </dependency>
+       <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+         <type>test-jar</type>
+         <scope>test</scope>
+@@ -1358,6 +1461,11 @@
+         <artifactId>htrace-core</artifactId>
+         <version>${htrace.version}</version>
+       </dependency>
++      <dependency>
++        <groupId>net.java.dev.jets3t</groupId>
++        <artifactId>jets3t</artifactId>
++        <version>${jets3.version}</version>
++      </dependency>
+     </dependencies>
+   </dependencyManagement>
+   <!-- Dependencies needed by subprojects -->
+@@ -1524,10 +1632,6 @@
+                 <artifactId>core</artifactId>
+               </exclusion>
+               <exclusion>
+-                <groupId>net.java.dev.jets3t</groupId>
+-                <artifactId>jets3t</artifactId>
+-              </exclusion>
+-              <exclusion>
+                 <groupId>oro</groupId>
+                 <artifactId>oro</artifactId>
+               </exclusion>
+@@ -1584,10 +1688,6 @@
+                 <artifactId>core</artifactId>
+               </exclusion>
+               <exclusion>
+-                <groupId>net.java.dev.jets3t</groupId>
+-                <artifactId>jets3t</artifactId>
+-              </exclusion>
+-              <exclusion>
+                 <groupId>oro</groupId>
+                 <artifactId>oro</artifactId>
+               </exclusion>
+@@ -1612,11 +1712,11 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <name>hadoop.profile</name><value>2.0</value>
+         </property>
+       </activation>
+       <modules>
+-        <module>hbase-hadoop2-compat</module>
++         <module>hbase-hadoop2-compat</module>
+       </modules>
+       <properties>
+         <hadoop.version>${hadoop-two.version}</hadoop.version>
+@@ -1738,6 +1838,75 @@
+         </dependencies>
+       </dependencyManagement>
+     </profile>
++
++    <!-- profile for building against CDH5. This is the default profile. -->
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <modules>
++        <module>hbase-hadoop2-compat</module>
++      </modules>
++      <properties>
++        <hadoop.version>${hadoop-two.yarn.version}</hadoop.version>
++        <compat.module>hbase-hadoop2-compat</compat.module>
++        <assembly.file>src/main/assembly/hadoop-two-compat.xml</assembly.file>
++      </properties>
++      <!--  Please see the CLOUDERA-SPECIFIC-NOTE above on why we have a mix of mr1 and mr2
++       dependencies here. -->
++      <dependencyManagement>
++        <dependencies>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-core</artifactId>
++            <version>${hadoop-two.mr1.version}</version>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-hdfs</artifactId>
++            <version>${hadoop-two.yarn.version}</version>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-hdfs</artifactId>
++            <version>${hadoop-two.yarn.version}</version>
++            <type>test-jar</type>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-auth</artifactId>
++            <version>${hadoop-two.yarn.version}</version>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-common</artifactId>
++            <version>${hadoop-two.yarn.version}</version>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-client</artifactId>
++            <version>${hadoop-two.mr1.version}</version>
++          </dependency>
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-annotations</artifactId>
++            <version>${hadoop-two.yarn.version}</version>
++          </dependency>
++          <!-- This was marked as test dep in earlier pom, but was scoped compile.
++            Where do we actually need it? -->
++          <dependency>
++            <groupId>org.apache.hadoop</groupId>
++            <artifactId>hadoop-minicluster</artifactId>
++            <version>${hadoop-two.mr1.version}</version>
++          </dependency>
++        </dependencies>
++      </dependencyManagement>
++    </profile>
++
+     <!--
+       profile for building against Hadoop 3.0.0. Activate using:
+        mvn -Dhadoop.profile=3.0
+-- 
+1.7.0.4
+

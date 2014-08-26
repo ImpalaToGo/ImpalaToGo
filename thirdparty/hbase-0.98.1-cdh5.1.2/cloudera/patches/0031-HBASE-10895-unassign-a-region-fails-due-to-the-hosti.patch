@@ -1,0 +1,50 @@
+From ed02084e1de0603e89dd9b1e0bd1d75fe78bd5ef Mon Sep 17 00:00:00 2001
+From: jeffreyz <jeffreyz@unknown>
+Date: Sat, 5 Apr 2014 01:23:16 +0000
+Subject: [PATCH 31/70] HBASE-10895: unassign a region fails due to the hosting region server is in FailedServerList - part2
+
+Reason: Bug
+Author: Jeffrey Zhong
+Ref: CDH-19314
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1584950 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/master/AssignmentManager.java     |    3 +--
+ .../master/TestAssignmentManagerOnCluster.java     |    4 ++--
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index dba5cec..218ca02 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -1698,8 +1698,7 @@ public class AssignmentManager extends ZooKeeperListener {
+         boolean logRetries = true;
+         if (t instanceof NotServingRegionException
+             || t instanceof RegionServerStoppedException
+-            || t instanceof ServerNotRunningYetException
+-            || t instanceof FailedServerException) {
++            || t instanceof ServerNotRunningYetException) {
+           LOG.debug("Offline " + region.getRegionNameAsString()
+             + ", it's not any more on " + server, t);
+           if (transitionInZK) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+index 79af067..b126f98 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+@@ -754,11 +754,11 @@ public class TestAssignmentManagerOnCluster {
+       // You can't assign a dead region before SSH
+       am.assign(hri, true, true);
+       RegionState state = regionStates.getRegionState(hri);
+-      assertTrue(state.isOffline());
++      assertTrue(state.isFailedClose());
+ 
+       // You can't unassign a dead region before SSH either
+       am.unassign(hri, true);
+-      assertTrue(state.isOffline());
++      assertTrue(state.isFailedClose());
+ 
+       // Enable SSH so that log can be split
+       master.enableSSH(true);
+-- 
+1.7.0.4
+

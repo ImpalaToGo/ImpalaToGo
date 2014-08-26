@@ -1,0 +1,239 @@
+From 602f3ceff452479d805e789e927240c89cbb2b9a Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Thu, 22 May 2014 18:46:37 -0700
+Subject: [PATCH 35/70] HBASE-11149 Wire encryption is broken (Devaraj Das)
+
+Reason: Bug
+Author: Andrew Purtell
+Ref: CDH-19125
+---
+ .../org/apache/hadoop/hbase/ipc/RpcClient.java     |    5 ++-
+ .../hadoop/hbase/security/HBaseSaslRpcClient.java  |   27 +++++++++++++++-
+ .../org/apache/hadoop/hbase/security/SaslUtil.java |   32 +++++++++++++++++++
+ .../hadoop/hbase/security/HBaseSaslRpcServer.java  |   33 ++------------------
+ .../hbase/security/TestHBaseSaslRpcClient.java     |   18 +++++++++++
+ 5 files changed, 83 insertions(+), 32 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
+index 3d81800..534a3c1 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
+@@ -73,6 +73,7 @@ import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.UserInformation;
+ import org.apache.hadoop.hbase.protobuf.generated.TracingProtos.RPCTInfo;
+ import org.apache.hadoop.hbase.security.AuthMethod;
+ import org.apache.hadoop.hbase.security.HBaseSaslRpcClient;
++import org.apache.hadoop.hbase.security.SaslUtil.QualityOfProtection;
+ import org.apache.hadoop.hbase.security.SecurityInfo;
+ import org.apache.hadoop.hbase.security.User;
+ import org.apache.hadoop.hbase.security.UserProvider;
+@@ -764,7 +765,9 @@ public class RpcClient {
+ 
+     private synchronized boolean setupSaslConnection(final InputStream in2,
+         final OutputStream out2) throws IOException {
+-      saslRpcClient = new HBaseSaslRpcClient(authMethod, token, serverPrincipal, fallbackAllowed);
++      saslRpcClient = new HBaseSaslRpcClient(authMethod, token, serverPrincipal, fallbackAllowed,
++          conf.get("hbase.rpc.protection", 
++              QualityOfProtection.AUTHENTICATION.name().toLowerCase()));
+       return saslRpcClient.saslConnect(in2, out2);
+     }
+ 
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcClient.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcClient.java
+index 9bbba53..95cac0e 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcClient.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcClient.java
+@@ -57,7 +57,6 @@ public class HBaseSaslRpcClient {
+ 
+   private final SaslClient saslClient;
+   private final boolean fallbackAllowed;
+-
+   /**
+    * Create a HBaseSaslRpcClient for an authentication method
+    * 
+@@ -65,11 +64,37 @@ public class HBaseSaslRpcClient {
+    *          the requested authentication method
+    * @param token
+    *          token to use if needed by the authentication method
++   * @param serverPrincipal
++   *          the server principal that we are trying to set the connection up to
++   * @param fallbackAllowed
++   *          does the client allow fallback to simple authentication
++   * @throws IOException
+    */
+   public HBaseSaslRpcClient(AuthMethod method,
+       Token<? extends TokenIdentifier> token, String serverPrincipal, boolean fallbackAllowed)
+       throws IOException {
++    this(method, token, serverPrincipal, fallbackAllowed, "authentication"); 
++  }
++  /**
++   * Create a HBaseSaslRpcClient for an authentication method
++   * 
++   * @param method
++   *          the requested authentication method
++   * @param token
++   *          token to use if needed by the authentication method
++   * @param serverPrincipal
++   *          the server principal that we are trying to set the connection up to
++   * @param fallbackAllowed
++   *          does the client allow fallback to simple authentication
++   * @param rpcProtection
++   *          the protection level ("authentication", "integrity" or "privacy")
++   * @throws IOException
++   */
++  public HBaseSaslRpcClient(AuthMethod method,
++      Token<? extends TokenIdentifier> token, String serverPrincipal, boolean fallbackAllowed,
++      String rpcProtection) throws IOException {
+     this.fallbackAllowed = fallbackAllowed;
++    SaslUtil.initSaslProperties(rpcProtection);
+     switch (method) {
+     case DIGEST:
+       if (LOG.isDebugEnabled())
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/SaslUtil.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/SaslUtil.java
+index 42e21be..351052b 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/SaslUtil.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/SaslUtil.java
+@@ -23,12 +23,30 @@ import org.apache.commons.codec.binary.Base64;
+ import java.util.Map;
+ import java.util.TreeMap;
+ 
++import javax.security.sasl.Sasl;
++
+ public class SaslUtil {
+   public static final String SASL_DEFAULT_REALM = "default";
+   public static final Map<String, String> SASL_PROPS =
+       new TreeMap<String, String>();
+   public static final int SWITCH_TO_SIMPLE_AUTH = -88;
+ 
++  public static enum QualityOfProtection {
++    AUTHENTICATION("auth"),
++    INTEGRITY("auth-int"),
++    PRIVACY("auth-conf");
++
++    public final String saslQop;
++
++    private QualityOfProtection(String saslQop) {
++      this.saslQop = saslQop;
++    }
++
++    public String getSaslQop() {
++      return saslQop;
++    }
++  }
++
+   /** Splitting fully qualified Kerberos name into parts */
+   public static String[] splitKerberosName(String fullName) {
+     return fullName.split("[/@]");
+@@ -45,4 +63,18 @@ public class SaslUtil {
+   static char[] encodePassword(byte[] password) {
+     return new String(Base64.encodeBase64(password)).toCharArray();
+   }
++
++  static void initSaslProperties(String rpcProtection) {
++    QualityOfProtection saslQOP = QualityOfProtection.AUTHENTICATION;
++    if (QualityOfProtection.INTEGRITY.name().toLowerCase()
++        .equals(rpcProtection)) {
++      saslQOP = QualityOfProtection.INTEGRITY;
++    } else if (QualityOfProtection.PRIVACY.name().toLowerCase().equals(
++        rpcProtection)) {
++      saslQOP = QualityOfProtection.PRIVACY;
++    }
++
++    SaslUtil.SASL_PROPS.put(Sasl.QOP, saslQOP.getSaslQop());
++    SaslUtil.SASL_PROPS.put(Sasl.SERVER_AUTH, "true");
++  }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcServer.java
+index 514fee3..2dd94d6 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/HBaseSaslRpcServer.java
+@@ -29,12 +29,12 @@ import javax.security.auth.callback.PasswordCallback;
+ import javax.security.auth.callback.UnsupportedCallbackException;
+ import javax.security.sasl.AuthorizeCallback;
+ import javax.security.sasl.RealmCallback;
+-import javax.security.sasl.Sasl;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.ipc.RpcServer;
++import org.apache.hadoop.hbase.security.SaslUtil.QualityOfProtection;
+ import org.apache.hadoop.security.UserGroupInformation;
+ import org.apache.hadoop.security.token.SecretManager;
+ import org.apache.hadoop.security.token.TokenIdentifier;
+@@ -46,36 +46,9 @@ import org.apache.hadoop.security.token.SecretManager.InvalidToken;
+ public class HBaseSaslRpcServer {
+   public static final Log LOG = LogFactory.getLog(HBaseSaslRpcServer.class);
+ 
+-  public static enum QualityOfProtection {
+-    AUTHENTICATION("auth"),
+-    INTEGRITY("auth-int"),
+-    PRIVACY("auth-conf");
+-
+-    public final String saslQop;
+-
+-    private QualityOfProtection(String saslQop) {
+-      this.saslQop = saslQop;
+-    }
+-
+-    public String getSaslQop() {
+-      return saslQop;
+-    }
+-  }
+-
+   public static void init(Configuration conf) {
+-    QualityOfProtection saslQOP = QualityOfProtection.AUTHENTICATION;
+-    String rpcProtection = conf.get("hbase.rpc.protection",
+-        QualityOfProtection.AUTHENTICATION.name().toLowerCase());
+-    if (QualityOfProtection.INTEGRITY.name().toLowerCase()
+-        .equals(rpcProtection)) {
+-      saslQOP = QualityOfProtection.INTEGRITY;
+-    } else if (QualityOfProtection.PRIVACY.name().toLowerCase().equals(
+-        rpcProtection)) {
+-      saslQOP = QualityOfProtection.PRIVACY;
+-    }
+-
+-    SaslUtil.SASL_PROPS.put(Sasl.QOP, saslQOP.getSaslQop());
+-    SaslUtil.SASL_PROPS.put(Sasl.SERVER_AUTH, "true");
++    SaslUtil.initSaslProperties(conf.get("hbase.rpc.protection", 
++          QualityOfProtection.AUTHENTICATION.name().toLowerCase()));
+   }
+ 
+   public static <T extends TokenIdentifier> T getIdentifier(String id,
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
+index 466b2d9..4d4b54b 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
+@@ -38,6 +38,7 @@ import javax.security.auth.callback.NameCallback;
+ import javax.security.auth.callback.PasswordCallback;
+ import javax.security.auth.callback.TextOutputCallback;
+ import javax.security.auth.callback.UnsupportedCallbackException;
++import javax.security.sasl.Sasl;
+ import javax.security.sasl.RealmCallback;
+ import javax.security.sasl.RealmChoiceCallback;
+ import javax.security.sasl.SaslClient;
+@@ -76,6 +77,23 @@ public class TestHBaseSaslRpcClient {
+   }
+ 
+   @Test
++  public void testSaslQOPNotEmpty() throws Exception {
++    // default QOP is authentication
++    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false);
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.AUTHENTICATION.getSaslQop()));
++
++    // check with specific QOPs
++    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "authentication");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.AUTHENTICATION.getSaslQop()));
++
++    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "privacy");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.PRIVACY.getSaslQop()));
++
++    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "integrity");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.INTEGRITY.getSaslQop()));
++  }
++
++  @Test
+   public void testSaslClientCallbackHandler() throws UnsupportedCallbackException {
+     final Token<? extends TokenIdentifier> token = createTokenMock();
+     when(token.getIdentifier()).thenReturn(DEFAULT_USER_NAME.getBytes());
+-- 
+1.7.0.4
+

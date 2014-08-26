@@ -1,0 +1,42 @@
+From 772bad07fe6e6a3129efca8882823e5d437ded2d Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Fri, 13 Jun 2014 08:52:09 -0700
+Subject: [PATCH 42/70] HBASE-10871 Indefinite OPEN/CLOSE wait on busy RegionServers (Esteban)
+
+Ref: CDH-19815
+Reason: Bug
+Author: Esteban Gutierrez
+
+(cherry picked from commit 7ffc454ccc64f095d8992f03edeb3aacd83de92e)
+---
+ .../hadoop/hbase/master/AssignmentManager.java     |    7 +++++--
+ 1 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index 218ca02..415ff01 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -1603,6 +1603,9 @@ public class AssignmentManager extends ZooKeeperListener {
+                     + " has timed out, but the regions might"
+                     + " already be opened on it.", e);
+                 }
++                // wait and reset the re-try count, server might be just busy.
++                Thread.sleep(100);
++                i--;
+                 continue;
+               }
+               throw e;
+@@ -2020,8 +2023,8 @@ public class AssignmentManager extends ZooKeeperListener {
+             }
+           } else if (retry) {
+             needNewPlan = false;
+-            LOG.warn(assignMsg + ", trying to assign to the same region server " +
+-                "try=" + i + " of " + this.maximumAttempts, t);
++            i--; // we want to retry as many times as needed as long as the RS is not dead.
++            LOG.warn(assignMsg + ", trying to assign to the same region server due ", t);
+           } else {
+             needNewPlan = true;
+             LOG.warn(assignMsg + ", trying to assign elsewhere instead;" +
+-- 
+1.7.0.4
+

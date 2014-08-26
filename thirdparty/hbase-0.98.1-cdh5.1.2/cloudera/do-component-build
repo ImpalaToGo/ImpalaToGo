@@ -1,0 +1,50 @@
+#!/bin/bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+if [ -z "$GIT_REPO" ]; then
+    if [ -z "${DO_MAVEN_DEPLOY}" ]; then
+        MAVEN_INST_DEPLOY=install
+    else
+        MAVEN_INST_DEPLOY=$DO_MAVEN_DEPLOY
+    fi
+    build_args="clean -DskipTests $MAVEN_INST_DEPLOY -Dmaven.repo.local=${HOME}/.m2/repository"
+
+    if [ -z "${MAVEN_ONLY}" ]; then
+        build_args="${build_args} source:jar site javadoc:aggregate assembly:single"
+    fi
+    
+    set -ex
+    
+    mvn $build_args "$@"
+
+    if [ -z "${MAVEN_ONLY}" ]; then
+        mkdir -p build
+        for x in hbase-assembly/target/*.tar.gz ; do
+            tar -C build -xzf $x
+        done
+        
+        cp hbase-hadoop*-compat/target/hbase-hadoop*-compat-*-tests.jar build/hbase-${FULL_VERSION}/lib/
+        cp -r target/site/apidocs build/hbase-${FULL_VERSION}/docs
+
+        (cd build && tar --exclude='*/native/lib*' --exclude='*/lib/native/*' -czf hbase-${FULL_VERSION}.tar.gz hbase-${FULL_VERSION})
+    fi
+else
+    git add .
+    git commit -a -m "Temporary commit for tarball"
+    mkdir -p build
+    git archive --prefix=hbase-${FULL_VERSION}/ --format=tar HEAD |gzip > build/hbase-${FULL_VERSION}.tar.gz
+fi
+    

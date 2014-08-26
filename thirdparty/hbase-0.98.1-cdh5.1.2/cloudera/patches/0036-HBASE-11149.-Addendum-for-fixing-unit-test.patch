@@ -1,0 +1,58 @@
+From 7e707d8b50d86e85e4813378a4f856a4f85392e5 Mon Sep 17 00:00:00 2001
+From: Devaraj Das <ddas@Devaraj-Dass-MacBook-Pro-2.local>
+Date: Fri, 23 May 2014 15:42:07 -0700
+Subject: [PATCH 36/70] HBASE-11149. Addendum for fixing unit test
+
+Reason: Bug
+Author: Devaraj Das
+Ref: CDH-19125
+---
+ .../hbase/security/TestHBaseSaslRpcClient.java     |   25 +++++++++++++------
+ 1 files changed, 17 insertions(+), 8 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
+index 4d4b54b..a93aecc 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestHBaseSaslRpcClient.java
+@@ -78,19 +78,28 @@ public class TestHBaseSaslRpcClient {
+ 
+   @Test
+   public void testSaslQOPNotEmpty() throws Exception {
++    Token<? extends TokenIdentifier> token = createTokenMockWithCredentials(DEFAULT_USER_NAME,
++        DEFAULT_USER_PASSWORD);
+     // default QOP is authentication
+-    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false);
+-    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.AUTHENTICATION.getSaslQop()));
++    new HBaseSaslRpcClient(AuthMethod.DIGEST, token, "principal/host@DOMAIN.COM", false);
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.
++        AUTHENTICATION.getSaslQop()));
+ 
+     // check with specific QOPs
+-    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "authentication");
+-    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.AUTHENTICATION.getSaslQop()));
+-
+-    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "privacy");
+-    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.PRIVACY.getSaslQop()));
+-
+-    new HBaseSaslRpcClient(AuthMethod.KERBEROS, createTokenMock(), "principal/host@DOMAIN.COM", false, "integrity");
+-    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.INTEGRITY.getSaslQop()));
++    new HBaseSaslRpcClient(AuthMethod.DIGEST, token, "principal/host@DOMAIN.COM", false,
++        "authentication");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.
++        AUTHENTICATION.getSaslQop()));
++
++    new HBaseSaslRpcClient(AuthMethod.DIGEST, token, "principal/host@DOMAIN.COM", false,
++        "privacy");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.
++        PRIVACY.getSaslQop()));
++
++    new HBaseSaslRpcClient(AuthMethod.DIGEST, token, "principal/host@DOMAIN.COM", false,
++        "integrity");
++    assertTrue(SaslUtil.SASL_PROPS.get(Sasl.QOP).equals(SaslUtil.QualityOfProtection.
++        INTEGRITY.getSaslQop()));
+   }
+ 
+   @Test
+-- 
+1.7.0.4
+

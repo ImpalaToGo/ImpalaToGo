@@ -1,0 +1,27 @@
+From 4f17f8331626fd869ee6963f0495f5e119fef4f5 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 25 Jun 2014 16:28:18 +0200
+Subject: [PATCH 60/70] HBASE-11326 Use an InputFormat for ExportSnapshot (addendum)
+
+Reason: Improvement
+Author: Matteo Bertozzi
+Ref: CDH-19741
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index e6f0e3d..2b71907 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -796,6 +796,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+         outputRoot = new Path(args[++i]);
+       } else if (cmd.equals("-copy-from")) {
+         inputRoot = new Path(args[++i]);
++        FSUtils.setRootDir(conf, inputRoot);
+       } else if (cmd.equals("-no-checksum-verify")) {
+         verifyChecksum = false;
+       } else if (cmd.equals("-no-target-verify")) {
+-- 
+1.7.0.4
+

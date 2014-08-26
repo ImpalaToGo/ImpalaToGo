@@ -1,0 +1,83 @@
+From fcada6cd75f47bcd811120339df09cd759580554 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Thu, 3 Apr 2014 22:56:28 +0000
+Subject: [PATCH 09/70] HBASE-10890 ExportSnapshot needs to add acquired token to job (Jerry He)
+
+Reason: Bug
+Author: Jerry He
+Ref: CDH-18237
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1584448 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   18 +++++-------------
+ 1 files changed, 5 insertions(+), 13 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index aae63e9..40abeae 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -51,8 +51,6 @@ import org.apache.hadoop.hbase.mapreduce.JobUtil;
+ import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.regionserver.StoreFileInfo;
+-import org.apache.hadoop.hbase.security.UserProvider;
+-import org.apache.hadoop.hbase.security.token.FsDelegationToken;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.Pair;
+@@ -63,6 +61,7 @@ import org.apache.hadoop.mapreduce.Job;
+ import org.apache.hadoop.mapreduce.Mapper;
+ import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
+ import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
++import org.apache.hadoop.mapreduce.security.TokenCache;
+ import org.apache.hadoop.util.StringUtils;
+ import org.apache.hadoop.util.Tool;
+ import org.apache.hadoop.util.ToolRunner;
+@@ -583,8 +582,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+   /**
+    * Run Map-Reduce Job to perform the files copy.
+    */
+-  private void runCopyJob(final FileSystem inputFs, final Path inputRoot,
+-      final FileSystem outputFs, final Path outputRoot,
++  private void runCopyJob(final Path inputRoot, final Path outputRoot,
+       final List<Pair<Path, Long>> snapshotFiles, final boolean verifyChecksum,
+       final String filesUser, final String filesGroup, final int filesMode,
+       final int mappers) throws IOException, InterruptedException, ClassNotFoundException {
+@@ -614,13 +612,10 @@ public final class ExportSnapshot extends Configured implements Tool {
+       SequenceFileInputFormat.addInputPath(job, path);
+     }
+ 
+-    UserProvider userProvider = UserProvider.instantiate(job.getConfiguration());
+-    FsDelegationToken inputFsToken = new FsDelegationToken(userProvider, "irenewer");
+-    FsDelegationToken outputFsToken = new FsDelegationToken(userProvider, "orenewer");
+     try {
+       // Acquire the delegation Tokens
+-      inputFsToken.acquireDelegationToken(inputFs);
+-      outputFsToken.acquireDelegationToken(outputFs);
++      TokenCache.obtainTokensForNamenodes(job.getCredentials(),
++        new Path[] { inputRoot, outputRoot }, conf);
+ 
+       // Run the MR Job
+       if (!job.waitForCompletion(true)) {
+@@ -629,9 +624,6 @@ public final class ExportSnapshot extends Configured implements Tool {
+         throw new ExportSnapshotException("Copy Files Map-Reduce Job failed");
+       }
+     } finally {
+-      inputFsToken.releaseDelegationToken();
+-      outputFsToken.releaseDelegationToken();
+-
+       // Remove MR Input
+       try {
+         inputFolderPath.getFileSystem(conf).delete(inputFolderPath, true);
+@@ -780,7 +772,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+       if (files.size() == 0) {
+         LOG.warn("There are 0 store file to be copied. There may be no data in the table.");
+       } else {
+-        runCopyJob(inputFs, inputRoot, outputFs, outputRoot, files, verifyChecksum,
++        runCopyJob(inputRoot, outputRoot, files, verifyChecksum,
+                    filesUser, filesGroup, filesMode, mappers);
+       }
+ 
+-- 
+1.7.0.4
+

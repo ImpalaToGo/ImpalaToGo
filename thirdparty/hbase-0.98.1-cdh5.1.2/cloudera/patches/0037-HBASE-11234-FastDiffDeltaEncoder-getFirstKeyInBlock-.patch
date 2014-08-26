@@ -1,0 +1,168 @@
+From 5869d2c25127e3783ae329e25a583f7405ff9b6e Mon Sep 17 00:00:00 2001
+From: Ted Yu <tedyu@apache.org>
+Date: Tue, 27 May 2014 14:40:17 +0000
+Subject: [PATCH 37/70] HBASE-11234 FastDiffDeltaEncoder#getFirstKeyInBlock returns wrong result
+
+Reason: Bug
+Author: Chunhui Shen
+Ref: CDH-19342
+---
+ .../org/apache/hadoop/hbase/CellComparator.java    |    7 +++-
+ .../hbase/io/encoding/FastDiffDeltaEncoder.java    |    3 +-
+ .../hbase/io/encoding/PrefixKeyDeltaEncoder.java   |    3 +-
+ .../prefixtree/decode/PrefixTreeArrayScanner.java  |    2 +-
+ .../hbase/regionserver/StoreFileScanner.java       |    4 +-
+ .../hbase/regionserver/TestReversibleScanners.java |   43 +++++++++++---------
+ 6 files changed, 37 insertions(+), 25 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/CellComparator.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/CellComparator.java
+index 05c19de..cebdb04 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/CellComparator.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/CellComparator.java
+@@ -48,8 +48,11 @@ public class CellComparator implements Comparator<Cell>, Serializable{
+     return compareStatic(a, b);
+   }
+ 
+-
+   public static int compareStatic(Cell a, Cell b) {
++    return compareStatic(a, b, false);
++  }
++  
++  public static int compareStatic(Cell a, Cell b, boolean onlyKey) {
+     //row
+     int c = Bytes.compareTo(
+         a.getRowArray(), a.getRowOffset(), a.getRowLength(),
+@@ -89,6 +92,8 @@ public class CellComparator implements Comparator<Cell>, Serializable{
+     c = (0xff & b.getTypeByte()) - (0xff & a.getTypeByte());
+     if (c != 0) return c;
+ 
++    if (onlyKey) return c;
++
+     //mvccVersion: later sorts first
+     return Longs.compare(b.getMvccVersion(), a.getMvccVersion());
+   }
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/FastDiffDeltaEncoder.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/FastDiffDeltaEncoder.java
+index 0346b20..c4260c3 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/FastDiffDeltaEncoder.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/FastDiffDeltaEncoder.java
+@@ -389,7 +389,8 @@ public class FastDiffDeltaEncoder extends BufferedDataBlockEncoder {
+     ByteBufferUtils.readCompressedInt(block); // commonLength
+     int pos = block.position();
+     block.reset();
+-    return ByteBuffer.wrap(block.array(), pos, keyLength).slice();
++    return ByteBuffer.wrap(block.array(), block.arrayOffset() + pos, keyLength)
++        .slice();
+   }
+ 
+   @Override
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/PrefixKeyDeltaEncoder.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/PrefixKeyDeltaEncoder.java
+index f57ff4f..df2688a 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/PrefixKeyDeltaEncoder.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/encoding/PrefixKeyDeltaEncoder.java
+@@ -154,7 +154,8 @@ public class PrefixKeyDeltaEncoder extends BufferedDataBlockEncoder {
+     }
+     int pos = block.position();
+     block.reset();
+-    return ByteBuffer.wrap(block.array(), pos, keyLength).slice();
++    return ByteBuffer.wrap(block.array(), block.arrayOffset() + pos, keyLength)
++        .slice();
+   }
+ 
+   @Override
+diff --git a/hbase-prefix-tree/src/main/java/org/apache/hadoop/hbase/codec/prefixtree/decode/PrefixTreeArrayScanner.java b/hbase-prefix-tree/src/main/java/org/apache/hadoop/hbase/codec/prefixtree/decode/PrefixTreeArrayScanner.java
+index 1326983..587350b 100644
+--- a/hbase-prefix-tree/src/main/java/org/apache/hadoop/hbase/codec/prefixtree/decode/PrefixTreeArrayScanner.java
++++ b/hbase-prefix-tree/src/main/java/org/apache/hadoop/hbase/codec/prefixtree/decode/PrefixTreeArrayScanner.java
+@@ -420,7 +420,7 @@ public class PrefixTreeArrayScanner extends PrefixTreeCell implements CellScanne
+ 
+   protected int populateNonRowFieldsAndCompareTo(int cellNum, Cell key) {
+     populateNonRowFields(cellNum);
+-    return CellComparator.compareStatic(this, key);
++    return CellComparator.compareStatic(this, key, true);
+   }
+ 
+   protected void populateFirstNonRowFields() {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileScanner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileScanner.java
+index 6c48596..142c414 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileScanner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileScanner.java
+@@ -468,8 +468,8 @@ public class StoreFileScanner implements KeyValueScanner {
+   public boolean backwardSeek(KeyValue key) throws IOException {
+     seek(key);
+     if (cur == null
+-        || getComparator().compareRows(cur.getBuffer(), cur.getRowOffset(),
+-            cur.getRowLength(), key.getBuffer(), key.getRowOffset(),
++        || getComparator().compareRows(cur.getRowArray(), cur.getRowOffset(),
++            cur.getRowLength(), key.getRowArray(), key.getRowOffset(),
+             key.getRowLength()) > 0) {
+       return seekToPreviousRow(key);
+     }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestReversibleScanners.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestReversibleScanners.java
+index 8842b90..fa09263 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestReversibleScanners.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestReversibleScanners.java
+@@ -51,6 +51,7 @@ import org.apache.hadoop.hbase.filter.FilterList;
+ import org.apache.hadoop.hbase.filter.FilterList.Operator;
+ import org.apache.hadoop.hbase.filter.PageFilter;
+ import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
++import org.apache.hadoop.hbase.io.encoding.DataBlockEncoding;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+ import org.apache.hadoop.hbase.io.hfile.HFileContext;
+ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+@@ -88,28 +89,32 @@ public class TestReversibleScanners {
+         TEST_UTIL.getDataTestDir("testReversibleStoreFileScanner"),
+         "regionname"), "familyname");
+     CacheConfig cacheConf = new CacheConfig(TEST_UTIL.getConfiguration());
+-    HFileContextBuilder hcBuilder = new HFileContextBuilder();
+-    hcBuilder.withBlockSize(2 * 1024);
+-    HFileContext hFileContext = hcBuilder.build();
+-    StoreFile.Writer writer = new StoreFile.WriterBuilder(
+-        TEST_UTIL.getConfiguration(), cacheConf, fs).withOutputDir(
+-        hfilePath).withFileContext(hFileContext).build();
+-    writeStoreFile(writer);
+-
+-    StoreFile sf = new StoreFile(fs, writer.getPath(),
+-        TEST_UTIL.getConfiguration(), cacheConf, BloomType.NONE);
+-
+-    List<StoreFileScanner> scanners = StoreFileScanner
+-        .getScannersForStoreFiles(Collections.singletonList(sf), false, true,
+-            false, Long.MAX_VALUE);
+-    StoreFileScanner scanner = scanners.get(0);
+-    seekTestOfReversibleKeyValueScanner(scanner);
+-    for (int readPoint = 0; readPoint < MAXMVCC; readPoint++) {
+-      LOG.info("Setting read point to " + readPoint);
+-      scanners = StoreFileScanner.getScannersForStoreFiles(
+-          Collections.singletonList(sf), false, true, false, readPoint);
+-      seekTestOfReversibleKeyValueScannerWithMVCC(scanners.get(0), readPoint);
++    for (DataBlockEncoding encoding : DataBlockEncoding.values()) {
++      HFileContextBuilder hcBuilder = new HFileContextBuilder();
++      hcBuilder.withBlockSize(2 * 1024);
++      hcBuilder.withDataBlockEncoding(encoding);
++      HFileContext hFileContext = hcBuilder.build();
++      StoreFile.Writer writer = new StoreFile.WriterBuilder(
++          TEST_UTIL.getConfiguration(), cacheConf, fs).withOutputDir(hfilePath)
++          .withFileContext(hFileContext).build();
++      writeStoreFile(writer);
++
++      StoreFile sf = new StoreFile(fs, writer.getPath(),
++          TEST_UTIL.getConfiguration(), cacheConf, BloomType.NONE);
++
++      List<StoreFileScanner> scanners = StoreFileScanner
++          .getScannersForStoreFiles(Collections.singletonList(sf), false, true,
++              false, Long.MAX_VALUE);
++      StoreFileScanner scanner = scanners.get(0);
++      seekTestOfReversibleKeyValueScanner(scanner);
++      for (int readPoint = 0; readPoint < MAXMVCC; readPoint++) {
++        LOG.info("Setting read point to " + readPoint);
++        scanners = StoreFileScanner.getScannersForStoreFiles(
++            Collections.singletonList(sf), false, true, false, readPoint);
++        seekTestOfReversibleKeyValueScannerWithMVCC(scanners.get(0), readPoint);
++      }
+     }
++
+   }
+ 
+   @Test
+-- 
+1.7.0.4
+

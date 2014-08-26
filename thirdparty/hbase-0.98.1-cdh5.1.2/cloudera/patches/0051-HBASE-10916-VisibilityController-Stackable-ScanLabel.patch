@@ -1,0 +1,355 @@
+From fcb715e4271586fbc351cb5d992a7dcfe23b76e1 Mon Sep 17 00:00:00 2001
+From: anoopsamjohn <anoopsamjohn@unknown>
+Date: Wed, 23 Apr 2014 17:40:10 +0000
+Subject: [PATCH 51/70] HBASE-10916 [VisibilityController] Stackable ScanLabelGenerators.(Anoop)
+
+Reason: Improvement
+Author: anoopsamjohn
+Ref: CDH-19470
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1589462 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../security/visibility/VisibilityController.java  |   37 +++---
+ .../hbase/security/visibility/VisibilityUtils.java |   35 +++++-
+ .../LabelFilteringScanLabelGenerator.java          |   55 ++++++++
+ .../TestVisibilityLabelsWithSLGStack.java          |  132 ++++++++++++++++++++
+ 4 files changed, 238 insertions(+), 21 deletions(-)
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/LabelFilteringScanLabelGenerator.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabelsWithSLGStack.java
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
+index 9a79dfa..ad15466 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
+@@ -140,7 +140,7 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+   private VisibilityLabelsManager visibilityManager;
+   // defined only for Endpoint implementation, so it can have way to access region services.
+   private RegionCoprocessorEnvironment regionEnv;
+-  private ScanLabelGenerator scanLabelGenerator;
++  private List<ScanLabelGenerator> scanLabelGenerators;
+   
+   private volatile int ordinalCounter = -1;
+   // flags if we are running on a region of the 'labels' table
+@@ -200,7 +200,7 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+     }
+     if (env instanceof RegionCoprocessorEnvironment) {
+       // ScanLabelGenerator to be instantiated only with Region Observer.
+-      scanLabelGenerator = VisibilityUtils.getScanLabelGenerator(this.conf);
++      scanLabelGenerators = VisibilityUtils.getScanLabelGenerators(this.conf);
+     }
+   }
+ 
+@@ -988,28 +988,33 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+     }
+     if (authorizations == null) {
+       // No Authorizations present for this scan/Get!
+-      // In case of "labels" table and user tables, create an empty auth set. In other system tables
+-      // just scan with out visibility check and filtering. Checking visibility labels for META and
+-      // NAMESPACE table is not needed.
++      // In case of system tables other than "labels" just scan with out visibility check and
++      // filtering. Checking visibility labels for META and NAMESPACE table is not needed.
+       TableName table = region.getRegionInfo().getTable();
+       if (table.isSystemTable() && !table.equals(LABELS_TABLE_NAME)) {
+         return null;
+       }
+-      return new VisibilityLabelFilter(new BitSet(0), cfVsMaxVersions);
+-    }
+-    for (String label : authorizations.getLabels()) {
+-      if (!VisibilityLabelsValidator.isValidLabel(label)) {
+-        throw new IllegalArgumentException("Invalid authorization label : " + label
+-            + ". Authorizations cannot contain '(', ')' ,'&' ,'|', '!'" + " and cannot be empty");
++    } else {
++      for (String label : authorizations.getLabels()) {
++        if (!VisibilityLabelsValidator.isValidLabel(label)) {
++          throw new IllegalArgumentException("Invalid authorization label : " + label
++              + ". Authorizations cannot contain '(', ')' ,'&' ,'|', '!'" + " and cannot be empty");
++        }
+       }
+     }
+     Filter visibilityLabelFilter = null;
+-    if (this.scanLabelGenerator != null) {
++    if (this.scanLabelGenerators != null) {
+       List<String> labels = null;
+-      try {
+-        labels = this.scanLabelGenerator.getLabels(getActiveUser(), authorizations);
+-      } catch (Throwable t) {
+-        LOG.error(t);
++      for (ScanLabelGenerator scanLabelGenerator : this.scanLabelGenerators) {
++        try {
++          // null authorizations to be handled inside SLG impl.
++          labels = scanLabelGenerator.getLabels(getActiveUser(), authorizations);
++          labels = (labels == null) ? new ArrayList<String>() : labels;
++          authorizations = new Authorizations(labels);
++        } catch (Throwable t) {
++          LOG.error(t);
++          throw new IOException(t);
++        }
+       }
+       int labelsCount = this.visibilityManager.getLabelsCount();
+       BitSet bs = new BitSet(labelsCount + 1); // ordinal is index 1 based
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityUtils.java
+index 23267d8..0c7764f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityUtils.java
+@@ -17,11 +17,15 @@
+  */
+ package org.apache.hadoop.hbase.security.visibility;
+ 
++import java.io.IOException;
++import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Map.Entry;
+ 
+ import com.google.protobuf.HBaseZeroCopyByteString;
++
++import org.apache.commons.lang.StringUtils;
+ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.TagType;
+@@ -46,6 +50,7 @@ public class VisibilityUtils {
+       "hbase.regionserver.scan.visibility.label.generator.class";
+   public static final byte VISIBILITY_TAG_TYPE = TagType.VISIBILITY_TAG_TYPE;
+   public static final String SYSTEM_LABEL = "system";
++  private static final String COMMA = ",";
+ 
+   /**
+    * Creates the labels data to be written to zookeeper.
+@@ -125,10 +130,30 @@ public class VisibilityUtils {
+     return null;
+   }
+ 
+-  public static ScanLabelGenerator getScanLabelGenerator(Configuration conf) {
+-    Class<? extends ScanLabelGenerator> scanLabelGeneratorKlass = conf
+-        .getClass(VISIBILITY_LABEL_GENERATOR_CLASS, DefaultScanLabelGenerator.class,
+-            ScanLabelGenerator.class);
+-    return ReflectionUtils.newInstance(scanLabelGeneratorKlass, conf);
++  public static List<ScanLabelGenerator> getScanLabelGenerators(Configuration conf)
++      throws IOException {
++    // There can be n SLG specified as comma separated in conf
++    String slgClassesCommaSeparated = conf.get(VISIBILITY_LABEL_GENERATOR_CLASS);
++    // We have only System level SLGs now. The order of execution will be same as the order in the
++    // comma separated config value
++    List<ScanLabelGenerator> slgs = new ArrayList<ScanLabelGenerator>();
++    if (StringUtils.isNotEmpty(slgClassesCommaSeparated)) {
++      String[] slgClasses = slgClassesCommaSeparated.split(COMMA);
++      for (String slgClass : slgClasses) {
++        Class<? extends ScanLabelGenerator> slgKlass;
++        try {
++          slgKlass = (Class<? extends ScanLabelGenerator>) conf.getClassByName(slgClass.trim());
++          slgs.add(ReflectionUtils.newInstance(slgKlass, conf));
++        } catch (ClassNotFoundException e) {
++          throw new IOException(e);
++        }
++      }
++    }
++    // If the conf is not configured by default we need to have one SLG to be used
++    // ie. DefaultScanLabelGenerator
++    if (slgs.isEmpty()) {
++      slgs.add(ReflectionUtils.newInstance(DefaultScanLabelGenerator.class, conf));
++    }
++    return slgs;
+   }
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/LabelFilteringScanLabelGenerator.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/LabelFilteringScanLabelGenerator.java
+new file mode 100644
+index 0000000..1e2939e
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/LabelFilteringScanLabelGenerator.java
+@@ -0,0 +1,55 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.security.visibility;
++
++import java.util.ArrayList;
++import java.util.List;
++
++import org.apache.hadoop.classification.InterfaceAudience;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.security.User;
++
++// Strictly removes a specified label
++@InterfaceAudience.Private
++public class LabelFilteringScanLabelGenerator implements ScanLabelGenerator {
++
++  public static String labelToFilter = null;
++
++  @Override
++  public Configuration getConf() {
++    return null;
++  }
++
++  @Override
++  public void setConf(Configuration conf) {
++
++  }
++
++  @Override
++  public List<String> getLabels(User user, Authorizations authorizations) {
++    if (authorizations != null) {
++      if (labelToFilter == null) return authorizations.getLabels();
++      List<String> newAuths = new ArrayList<String>();
++      for (String auth : authorizations.getLabels()) {
++        if (!labelToFilter.equals(auth)) newAuths.add(auth);
++      }
++      return newAuths;
++    }
++    return null;
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabelsWithSLGStack.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabelsWithSLGStack.java
+new file mode 100644
+index 0000000..4461519
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabelsWithSLGStack.java
+@@ -0,0 +1,132 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.security.visibility;
++
++import static org.apache.hadoop.hbase.security.visibility.VisibilityConstants.LABELS_TABLE_NAME;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNull;
++
++import java.io.IOException;
++import java.security.PrivilegedExceptionAction;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.ResultScanner;
++import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.protobuf.generated.VisibilityLabelsProtos.VisibilityLabelsResponse;
++import org.apache.hadoop.hbase.security.User;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.junit.AfterClass;
++import org.junit.BeforeClass;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++import org.junit.rules.TestName;
++
++@Category(MediumTests.class)
++public class TestVisibilityLabelsWithSLGStack {
++
++  public static final String CONFIDENTIAL = "confidential";
++  private static final String SECRET = "secret";
++  public static final HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
++  private static final byte[] ROW_1 = Bytes.toBytes("row1");
++  private final static byte[] CF = Bytes.toBytes("f");
++  private final static byte[] Q1 = Bytes.toBytes("q1");
++  private final static byte[] Q2 = Bytes.toBytes("q2");
++  private final static byte[] value = Bytes.toBytes("value");
++  public static Configuration conf;
++
++  @Rule
++  public final TestName TEST_NAME = new TestName();
++  public static User SUPERUSER;
++
++  @BeforeClass
++  public static void setupBeforeClass() throws Exception {
++    // setup configuration
++    conf = TEST_UTIL.getConfiguration();
++    conf.setInt("hfile.format.version", 3);
++    conf.set("hbase.coprocessor.master.classes", VisibilityController.class.getName());
++    conf.set("hbase.coprocessor.region.classes", VisibilityController.class.getName());
++    String classes = SimpleScanLabelGenerator.class.getCanonicalName() + " , "
++        + LabelFilteringScanLabelGenerator.class.getCanonicalName();
++    conf.setStrings(VisibilityUtils.VISIBILITY_LABEL_GENERATOR_CLASS, classes);
++    conf.set("hbase.superuser", "admin");
++    TEST_UTIL.startMiniCluster(1);
++    SUPERUSER = User.createUserForTesting(conf, "admin", new String[] { "supergroup" });
++
++    // Wait for the labels table to become available
++    TEST_UTIL.waitTableEnabled(LABELS_TABLE_NAME.getName(), 50000);
++    addLabels();
++  }
++
++  @Test
++  public void testWithSAGStack() throws Exception {
++    TableName tableName = TableName.valueOf(TEST_NAME.getMethodName());
++    HTable table = null;
++    try {
++      table = TEST_UTIL.createTable(tableName, CF);
++      Put put = new Put(ROW_1);
++      put.add(CF, Q1, HConstants.LATEST_TIMESTAMP, value);
++      put.setCellVisibility(new CellVisibility(SECRET));
++      table.put(put);
++      put = new Put(ROW_1);
++      put.add(CF, Q2, HConstants.LATEST_TIMESTAMP, value);
++      put.setCellVisibility(new CellVisibility(CONFIDENTIAL));
++      table.put(put);
++
++      LabelFilteringScanLabelGenerator.labelToFilter = CONFIDENTIAL;
++      Scan s = new Scan();
++      s.setAuthorizations(new Authorizations(SECRET, CONFIDENTIAL));
++      ResultScanner scanner = table.getScanner(s);
++      Result next = scanner.next();
++      assertNotNull(next.getColumnLatestCell(CF, Q1));
++      assertNull(next.getColumnLatestCell(CF, Q2));
++    } finally {
++      if (table != null) {
++        table.close();
++      }
++    }
++  }
++
++  private static void addLabels() throws Exception {
++    PrivilegedExceptionAction<VisibilityLabelsResponse> action = 
++        new PrivilegedExceptionAction<VisibilityLabelsResponse>() {
++      public VisibilityLabelsResponse run() throws Exception {
++        String[] labels = { SECRET, CONFIDENTIAL };
++        try {
++          VisibilityClient.addLabels(conf, labels);
++        } catch (Throwable t) {
++          throw new IOException(t);
++        }
++        return null;
++      }
++    };
++    SUPERUSER.runAs(action);
++  }
++
++  @AfterClass
++  public static void tearDownAfterClass() throws Exception {
++    TEST_UTIL.shutdownMiniCluster();
++  }
++}
+-- 
+1.7.0.4
+

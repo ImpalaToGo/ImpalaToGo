@@ -1,0 +1,147 @@
+From b9c0b9f3d80dc4cde225c3382a95379354f1e59f Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Sat, 31 May 2014 15:01:49 -0700
+Subject: [PATCH 57/70] HBASE-11275 [AccessController] postCreateTable hook fails when another CP creates table on their startup (Anoop Sam John)
+
+Reason: Bug
+Author: Andrew Purtell
+Ref: CDH-19470
+---
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    2 +
+ .../hbase/security/access/AccessControlLists.java  |    5 +-
+ .../hbase/security/access/AccessController.java    |   59 +++++++++++++++----
+ 3 files changed, 49 insertions(+), 17 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index 0988210..85240bd 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -1188,6 +1188,8 @@ MasterServices, Server {
+    // We depend on there being only one instance of this executor running
+    // at a time.  To do concurrency, would need fencing of enable/disable of
+    // tables.
++   // Any time changing this maxThreads to > 1, pls see the comment at
++   // AccessController#postCreateTableHandler
+    this.executorService.startExecutorService(ExecutorType.MASTER_TABLE_OPERATIONS, 1);
+ 
+    // Start log cleaner thread
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+index af35c8d..8baa34b 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+@@ -43,7 +43,6 @@ import org.apache.hadoop.hbase.NamespaceDescriptor;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.Tag;
+ import org.apache.hadoop.hbase.TagType;
+-import org.apache.hadoop.hbase.catalog.MetaReader;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.Get;
+ import org.apache.hadoop.hbase.client.HTable;
+@@ -135,9 +134,7 @@ public class AccessControlLists {
+    * @param master reference to HMaster
+    */
+   static void init(MasterServices master) throws IOException {
+-    if (!MetaReader.tableExists(master.getCatalogTracker(), ACL_TABLE_NAME)) {
+-      master.createTable(ACL_TABLEDESC, null);
+-    }
++    master.createTable(ACL_TABLEDESC, null);
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index 537b0d2..95e28fc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -48,6 +48,7 @@ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.TableNotDisabledException;
+ import org.apache.hadoop.hbase.TableNotFoundException;
+ import org.apache.hadoop.hbase.Tag;
++import org.apache.hadoop.hbase.catalog.MetaReader;
+ import org.apache.hadoop.hbase.client.Append;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.Durability;
+@@ -178,6 +179,9 @@ public class AccessController extends BaseRegionObserver
+ 
+   private volatile boolean initialized = false;
+ 
++  // This boolean having relevance only in the Master.
++  private volatile boolean aclTabAvailable = false;
++
+   public HRegion getRegion() {
+     return regionEnv != null ? regionEnv.getRegion() : null;
+   }
+@@ -838,20 +842,44 @@ public class AccessController extends BaseRegionObserver
+ 
+   @Override
+   public void postCreateTable(ObserverContext<MasterCoprocessorEnvironment> c,
+-      HTableDescriptor desc, HRegionInfo[] regions) throws IOException {
+-    if (!AccessControlLists.isAclTable(desc)) {
+-      String owner = desc.getOwnerString();
+-      // default the table owner to current user, if not specified.
+-      if (owner == null) owner = getActiveUser().getShortName();
+-      UserPermission userperm = new UserPermission(Bytes.toBytes(owner), desc.getTableName(), null,
+-          Action.values());
+-      AccessControlLists.addUserPermission(c.getEnvironment().getConfiguration(), userperm);
+-    }
+-  }
++      HTableDescriptor desc, HRegionInfo[] regions) throws IOException {}
+ 
+   @Override
+   public void postCreateTableHandler(ObserverContext<MasterCoprocessorEnvironment> c,
+-      HTableDescriptor desc, HRegionInfo[] regions) throws IOException {}
++      HTableDescriptor desc, HRegionInfo[] regions) throws IOException {
++    // When AC is used, it should be configured as the 1st CP.
++    // In Master, the table operations like create, are handled by a Thread pool but the max size
++    // for this pool is 1. So if multiple CPs create tables on startup, these creations will happen
++    // sequentially only.
++    // Related code in HMaster#startServiceThreads
++    // {code}
++    //   // We depend on there being only one instance of this executor running
++    //   // at a time. To do concurrency, would need fencing of enable/disable of
++    //   // tables.
++    //   this.service.startExecutorService(ExecutorType.MASTER_TABLE_OPERATIONS, 1);
++    // {code}
++    // In future if we change this pool to have more threads, then there is a chance for thread,
++    // creating acl table, getting delayed and by that time another table creation got over and
++    // this hook is getting called. In such a case, we will need a wait logic here which will
++    // wait till the acl table is created.
++    if (AccessControlLists.isAclTable(desc)) {
++      this.aclTabAvailable = true;
++    } else if (!(TableName.NAMESPACE_TABLE_NAME.equals(desc.getTableName()))) {
++      if (!aclTabAvailable) {
++        LOG.warn("Not adding owner permission for table " + desc.getTableName() + ". "
++            + AccessControlLists.ACL_TABLE_NAME + " is not yet created. "
++            + getClass().getSimpleName() + " should be configured as the first Coprocessor");
++      } else {
++        String owner = desc.getOwnerString();
++        // default the table owner to current user, if not specified.
++        if (owner == null)
++          owner = getActiveUser().getShortName();
++        UserPermission userperm = new UserPermission(Bytes.toBytes(owner), desc.getTableName(),
++            null, Action.values());
++        AccessControlLists.addUserPermission(c.getEnvironment().getConfiguration(), userperm);
++      }
++    }
++  }
+ 
+   @Override
+   public void preDeleteTable(ObserverContext<MasterCoprocessorEnvironment> c, TableName tableName)
+@@ -1073,8 +1101,13 @@ public class AccessController extends BaseRegionObserver
+   @Override
+   public void postStartMaster(ObserverContext<MasterCoprocessorEnvironment> ctx)
+       throws IOException {
+-    // initialize the ACL storage table
+-    AccessControlLists.init(ctx.getEnvironment().getMasterServices());
++    if (!MetaReader.tableExists(ctx.getEnvironment().getMasterServices().getCatalogTracker(),
++        AccessControlLists.ACL_TABLE_NAME)) {
++      // initialize the ACL storage table
++      AccessControlLists.init(ctx.getEnvironment().getMasterServices());
++    } else {
++      aclTabAvailable = true;
++    }
+   }
+ 
+   @Override
+-- 
+1.7.0.4
+

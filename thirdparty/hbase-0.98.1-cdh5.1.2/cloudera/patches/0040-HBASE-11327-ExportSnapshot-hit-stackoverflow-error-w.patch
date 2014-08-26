@@ -1,0 +1,28 @@
+From 4e0b1a01c89681bcecaebc6793a99d6e95954253 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Thu, 12 Jun 2014 08:09:37 +0100
+Subject: [PATCH 40/70] HBASE-11327 ExportSnapshot hit stackoverflow error when target snapshotDir doesn't contain uri
+
+Reason: Bug
+Author: Demai Ni
+Ref: CDH-19735
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index d854bc6..3918267 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -663,7 +663,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+     // Update the conf with the current root dir, since may be a different cluster
+     Configuration conf = new Configuration(baseConf);
+     FSUtils.setRootDir(conf, rootDir);
+-    FSUtils.setFsDefault(conf, snapshotDir);
++    FSUtils.setFsDefault(conf, FSUtils.getRootDir(conf));
+     SnapshotDescription snapshotDesc = SnapshotDescriptionUtils.readSnapshotInfo(fs, snapshotDir);
+     SnapshotReferenceUtil.verifySnapshot(conf, fs, snapshotDir, snapshotDesc);
+   }
+-- 
+1.7.0.4
+

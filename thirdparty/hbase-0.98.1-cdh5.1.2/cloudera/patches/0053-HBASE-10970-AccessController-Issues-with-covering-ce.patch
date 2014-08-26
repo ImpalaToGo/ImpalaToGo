@@ -1,0 +1,33 @@
+From 976c2fd079404e4addf8de4693e38302e9f28a63 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Thu, 24 Apr 2014 16:05:20 +0000
+Subject: [PATCH 53/70] HBASE-10970 [AccessController] Issues with covering cell permission checks - addendum
+
+Reason: Bug
+Author: Zhihong Yu
+Ref: CDH-19470
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1589781 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/CellUtil.java     |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/CellUtil.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/CellUtil.java
+index 950464c..0d0e038 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/CellUtil.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/CellUtil.java
+@@ -333,6 +333,11 @@ public final class CellUtil {
+         buf, 0, buf.length);
+   }
+ 
++  public static boolean matchingColumn(final Cell left, final Cell right) {
++    if (!matchingFamily(left, right))
++      return false;
++    return matchingQualifier(left, right);
++  }
+ 
+   public static boolean matchingValue(final Cell left, final Cell right) {
+     return Bytes.equals(left.getValueArray(), left.getValueOffset(), left.getValueLength(),
+-- 
+1.7.0.4
+

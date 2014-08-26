@@ -1,0 +1,134 @@
+From b967bd01ab89d8eab60b14ce473097cd9824296b Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Thu, 8 May 2014 17:24:29 +0000
+Subject: [PATCH 16/70] HBASE-11119 Update ExportSnapShot to optionally not use a tmp file on external file system
+
+Reason: Improvement
+Author: Ted Malaska
+Ref: CDH-19025
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1593339 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   45 ++++++++++++-------
+ .../hadoop/hbase/snapshot/TestExportSnapshot.java  |    6 +++
+ 2 files changed, 34 insertions(+), 17 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index 40abeae..1a0478a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -86,6 +86,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+   private static final String CONF_INPUT_ROOT = "snapshot.export.input.root";
+   private static final String CONF_BUFFER_SIZE = "snapshot.export.buffer.size";
+   private static final String CONF_MAP_GROUP = "snapshot.export.default.map.group";
++  protected static final String CONF_SKIP_TMP = "snapshot.export.skip.tmp";
+ 
+   static final String CONF_TEST_FAILURE = "test.snapshot.export.failure";
+   static final String CONF_TEST_RETRY = "test.snapshot.export.failure.retry";
+@@ -713,9 +714,12 @@ public final class ExportSnapshot extends Configured implements Tool {
+     FileSystem outputFs = FileSystem.get(outputRoot.toUri(), conf);
+     LOG.debug("outputFs=" + outputFs.getUri().toString() + " outputRoot=" + outputRoot.toString());
+ 
++    boolean skipTmp = conf.getBoolean(CONF_SKIP_TMP, false);
++
+     Path snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, inputRoot);
+     Path snapshotTmpDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(snapshotName, outputRoot);
+     Path outputSnapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName, outputRoot);
++    Path initialOutputSnapshotDir = skipTmp ? outputSnapshotDir : snapshotTmpDir;
+ 
+     // Check if the snapshot already exists
+     if (outputFs.exists(outputSnapshotDir)) {
+@@ -731,18 +735,20 @@ public final class ExportSnapshot extends Configured implements Tool {
+       }
+     }
+ 
+-    // Check if the snapshot already in-progress
+-    if (outputFs.exists(snapshotTmpDir)) {
+-      if (overwrite) {
+-        if (!outputFs.delete(snapshotTmpDir, true)) {
+-          System.err.println("Unable to remove existing snapshot tmp directory: " + snapshotTmpDir);
++    if (!skipTmp) {
++      // Check if the snapshot already in-progress
++      if (outputFs.exists(snapshotTmpDir)) {
++        if (overwrite) {
++          if (!outputFs.delete(snapshotTmpDir, true)) {
++            System.err.println("Unable to remove existing snapshot tmp directory: "+snapshotTmpDir);
++            return 1;
++          }
++        } else {
++          System.err.println("A snapshot with the same name '"+snapshotName+"' may be in-progress");
++          System.err.println("Please check "+snapshotTmpDir+". If the snapshot has completed, ");
++          System.err.println("consider removing "+snapshotTmpDir+" by using the -overwrite option");
+           return 1;
+         }
+-      } else {
+-        System.err.println("A snapshot with the same name '"+ snapshotName +"' may be in-progress");
+-        System.err.println("Please check " + snapshotTmpDir + ". If the snapshot has completed, ");
+-        System.err.println("consider removing "+ snapshotTmpDir +" by using the -overwrite option");
+-        return 1;
+       }
+     }
+ 
+@@ -759,10 +765,10 @@ public final class ExportSnapshot extends Configured implements Tool {
+     // will remove them because they are unreferenced.
+     try {
+       LOG.info("Copy Snapshot Manifest");
+-      FileUtil.copy(inputFs, snapshotDir, outputFs, snapshotTmpDir, false, false, conf);
++      FileUtil.copy(inputFs, snapshotDir, outputFs, initialOutputSnapshotDir, false, false, conf);
+     } catch (IOException e) {
+       throw new ExportSnapshotException("Failed to copy the snapshot directory: from=" +
+-        snapshotDir + " to=" + snapshotTmpDir, e);
++        snapshotDir + " to=" + initialOutputSnapshotDir, e);
+     }
+ 
+     // Step 2 - Start MR Job to copy files
+@@ -776,11 +782,14 @@ public final class ExportSnapshot extends Configured implements Tool {
+                    filesUser, filesGroup, filesMode, mappers);
+       }
+ 
+-      // Step 3 - Rename fs2:/.snapshot/.tmp/<snapshot> fs2:/.snapshot/<snapshot>
++
+       LOG.info("Finalize the Snapshot Export");
+-      if (!outputFs.rename(snapshotTmpDir, outputSnapshotDir)) {
+-        throw new ExportSnapshotException("Unable to rename snapshot directory from=" +
+-          snapshotTmpDir + " to=" + outputSnapshotDir);
++      if (!skipTmp) {
++        // Step 3 - Rename fs2:/.snapshot/.tmp/<snapshot> fs2:/.snapshot/<snapshot>
++        if (!outputFs.rename(snapshotTmpDir, outputSnapshotDir)) {
++          throw new ExportSnapshotException("Unable to rename snapshot directory from=" +
++            snapshotTmpDir + " to=" + outputSnapshotDir);
++        }
+       }
+ 
+       // Step 4 - Verify snapshot validity
+@@ -791,7 +800,9 @@ public final class ExportSnapshot extends Configured implements Tool {
+       return 0;
+     } catch (Exception e) {
+       LOG.error("Snapshot export failed", e);
+-      outputFs.delete(snapshotTmpDir, true);
++      if (!skipTmp) {
++        outputFs.delete(snapshotTmpDir, true);
++      }
+       outputFs.delete(outputSnapshotDir, true);
+       return 1;
+     }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
+index 9b21f36..ec22af8 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestExportSnapshot.java
+@@ -178,6 +178,12 @@ public class TestExportSnapshot {
+   }
+ 
+   @Test
++  public void testExportFileSystemStateWithSkipTmp() throws Exception {
++    TEST_UTIL.getConfiguration().setBoolean(ExportSnapshot.CONF_SKIP_TMP, true);
++    testExportFileSystemState(tableName, snapshotName, 2);
++  }
++
++  @Test
+   public void testEmptyExportFileSystemState() throws Exception {
+     testExportFileSystemState(tableName, emptySnapshotName, 1);
+   }
+-- 
+1.7.0.4
+

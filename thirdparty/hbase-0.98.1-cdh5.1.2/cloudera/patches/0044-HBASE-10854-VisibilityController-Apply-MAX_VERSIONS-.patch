@@ -1,0 +1,259 @@
+From a59b5fe5960896fdb71ec4fff644b11339b1aaa8 Mon Sep 17 00:00:00 2001
+From: anoopsamjohn <anoopsamjohn@unknown>
+Date: Thu, 3 Apr 2014 09:28:55 +0000
+Subject: [PATCH 44/70] HBASE-10854 [VisibilityController] Apply MAX_VERSIONS from schema or request when scanning. (Anoop)
+
+Reason: Bug
+Author: anoopsamjohn
+Ref: CDH-19470
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1584328 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../security/visibility/VisibilityController.java  |   10 ++-
+ .../security/visibility/VisibilityLabelFilter.java |   48 +++++++++-
+ .../security/visibility/TestVisibilityLabels.java  |   99 ++++++++++++++++++++
+ 3 files changed, 153 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
+index 4926e57..2a41d3a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityController.java
+@@ -108,8 +108,10 @@ import org.apache.hadoop.hbase.security.visibility.expression.ExpressionNode;
+ import org.apache.hadoop.hbase.security.visibility.expression.LeafExpressionNode;
+ import org.apache.hadoop.hbase.security.visibility.expression.NonLeafExpressionNode;
+ import org.apache.hadoop.hbase.security.visibility.expression.Operator;
++import org.apache.hadoop.hbase.util.ByteRange;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Pair;
++import org.apache.hadoop.hbase.util.SimpleByteRange;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ 
+ import com.google.common.collect.Lists;
+@@ -979,6 +981,10 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+   }
+ 
+   private Filter createVisibilityLabelFilter(HRegion region, Authorizations authorizations) {
++    Map<ByteRange, Integer> cfVsMaxVersions = new HashMap<ByteRange, Integer>();
++    for (HColumnDescriptor hcd : region.getTableDesc().getFamilies()) {
++      cfVsMaxVersions.put(new SimpleByteRange(hcd.getName()), hcd.getMaxVersions());
++    }
+     if (authorizations == null) {
+       // No Authorizations present for this scan/Get!
+       // In case of "labels" table and user tables, create an empty auth set. In other system tables
+@@ -988,7 +994,7 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+       if (table.isSystemTable() && !table.equals(LABELS_TABLE_NAME)) {
+         return null;
+       }
+-      return new VisibilityLabelFilter(new BitSet(0));
++      return new VisibilityLabelFilter(new BitSet(0), cfVsMaxVersions);
+     }
+     Filter visibilityLabelFilter = null;
+     if (this.scanLabelGenerator != null) {
+@@ -1008,7 +1014,7 @@ public class VisibilityController extends BaseRegionObserver implements MasterOb
+           }
+         }
+       }
+-      visibilityLabelFilter = new VisibilityLabelFilter(bs);
++      visibilityLabelFilter = new VisibilityLabelFilter(bs, cfVsMaxVersions);
+     }
+     return visibilityLabelFilter;
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityLabelFilter.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityLabelFilter.java
+index 9db424e..0ff8d67 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityLabelFilter.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/visibility/VisibilityLabelFilter.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.security.visibility;
+ import java.io.IOException;
+ import java.util.BitSet;
+ import java.util.Iterator;
++import java.util.Map;
+ 
+ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.hbase.Cell;
+@@ -27,7 +28,10 @@ import org.apache.hadoop.hbase.CellUtil;
+ import org.apache.hadoop.hbase.Tag;
+ import org.apache.hadoop.hbase.filter.FilterBase;
+ import org.apache.hadoop.hbase.io.util.StreamUtils;
++import org.apache.hadoop.hbase.util.ByteRange;
++import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Pair;
++import org.apache.hadoop.hbase.util.SimpleByteRange;
+ 
+ /**
+  * This Filter checks the visibility expression with each KV against visibility labels associated
+@@ -36,14 +40,46 @@ import org.apache.hadoop.hbase.util.Pair;
+ @InterfaceAudience.Private
+ class VisibilityLabelFilter extends FilterBase {
+ 
+-  private BitSet authLabels;
++  private final BitSet authLabels;
++  private final Map<ByteRange, Integer> cfVsMaxVersions;
++  private final ByteRange curFamily;
++  private final ByteRange curQualifier;
++  private int curFamilyMaxVersions;
++  private int curQualMetVersions;
+ 
+-  public VisibilityLabelFilter(BitSet authLabels) {
++  public VisibilityLabelFilter(BitSet authLabels, Map<ByteRange, Integer> cfVsMaxVersions) {
+     this.authLabels = authLabels;
++    this.cfVsMaxVersions = cfVsMaxVersions;
++    this.curFamily = new SimpleByteRange();
++    this.curQualifier = new SimpleByteRange();
+   }
+ 
+   @Override
+   public ReturnCode filterKeyValue(Cell cell) throws IOException {
++    if (curFamily.getBytes() == null
++        || (Bytes.compareTo(curFamily.getBytes(), curFamily.getOffset(), curFamily.getLength(),
++            cell.getFamilyArray(), cell.getFamilyOffset(), cell.getFamilyLength()) != 0)) {
++      curFamily.set(cell.getFamilyArray(), cell.getFamilyOffset(), cell.getFamilyLength());
++      // For this family, all the columns can have max of curFamilyMaxVersions versions. No need to
++      // consider the older versions for visibility label check.
++      // Ideally this should have been done at a lower layer by HBase (?)
++      curFamilyMaxVersions = cfVsMaxVersions.get(curFamily);
++      // Family is changed. Just unset curQualifier.
++      curQualifier.unset();
++    }
++    if (curQualifier.getBytes() == null
++        || (Bytes.compareTo(curQualifier.getBytes(), curQualifier.getOffset(),
++            curQualifier.getLength(), cell.getQualifierArray(), cell.getQualifierOffset(),
++            cell.getQualifierLength()) != 0)) {
++      curQualifier.set(cell.getQualifierArray(), cell.getQualifierOffset(),
++          cell.getQualifierLength());
++      curQualMetVersions = 0;
++    }
++    curQualMetVersions++;
++    if (curQualMetVersions > curFamilyMaxVersions) {
++      return ReturnCode.SKIP;
++    }
++
+     Iterator<Tag> tagsItr = CellUtil.tagsIterator(cell.getTagsArray(), cell.getTagsOffset(),
+         cell.getTagsLength());
+     boolean visibilityTagPresent = false;
+@@ -82,4 +118,12 @@ class VisibilityLabelFilter extends FilterBase {
+     }
+     return visibilityTagPresent ? ReturnCode.SKIP : ReturnCode.INCLUDE;
+   }
++
++  @Override
++  public void reset() throws IOException {
++    this.curFamily.unset();
++    this.curQualifier.unset();
++    this.curFamilyMaxVersions = 0;
++    this.curQualMetVersions = 0;
++  }
+ }
+\ No newline at end of file
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabels.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabels.java
+index 45671bc..31e38b4 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabels.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/visibility/TestVisibilityLabels.java
+@@ -764,6 +764,105 @@ public class TestVisibilityLabels {
+     }
+   }
+ 
++  @Test
++  public void testMultipleVersions() throws Exception {
++    final byte[] r1 = Bytes.toBytes("row1");
++    final byte[] r2 = Bytes.toBytes("row2");
++    final byte[] v1 = Bytes.toBytes("100");
++    final byte[] v2 = Bytes.toBytes("101");
++    final byte[] fam2 = Bytes.toBytes("info2");
++    final byte[] qual2 = Bytes.toBytes("qual2");
++    TableName tableName = TableName.valueOf(TEST_NAME.getMethodName());
++    HTableDescriptor desc = new HTableDescriptor(tableName);
++    HColumnDescriptor col = new HColumnDescriptor(fam);// Default max versions is 1.
++    desc.addFamily(col);
++    col = new HColumnDescriptor(fam2);
++    col.setMaxVersions(5);
++    desc.addFamily(col);
++    TEST_UTIL.getHBaseAdmin().createTable(desc);
++    HTable table = null;
++    try {
++      table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++      Put put = new Put(r1);
++      put.add(fam, qual, 3l, v1);
++      put.add(fam, qual2, 3l, v1);
++      put.add(fam2, qual, 3l, v1);
++      put.add(fam2, qual2, 3l, v1);
++      put.setCellVisibility(new CellVisibility(SECRET));
++      table.put(put);
++      put = new Put(r1);
++      put.add(fam, qual, 4l, v2);
++      put.add(fam, qual2, 4l, v2);
++      put.add(fam2, qual, 4l, v2);
++      put.add(fam2, qual2, 4l, v2);
++      put.setCellVisibility(new CellVisibility(PRIVATE));
++      table.put(put);
++
++      put = new Put(r2);
++      put.add(fam, qual, 3l, v1);
++      put.add(fam, qual2, 3l, v1);
++      put.add(fam2, qual, 3l, v1);
++      put.add(fam2, qual2, 3l, v1);
++      put.setCellVisibility(new CellVisibility(SECRET));
++      table.put(put);
++      put = new Put(r2);
++      put.add(fam, qual, 4l, v2);
++      put.add(fam, qual2, 4l, v2);
++      put.add(fam2, qual, 4l, v2);
++      put.add(fam2, qual2, 4l, v2);
++      put.setCellVisibility(new CellVisibility(SECRET));
++      table.put(put);
++
++      // TEST_UTIL.getHBaseAdmin().flush(tableName.getNameAsString());
++      Scan s = new Scan();
++      s.setMaxVersions(1);
++      s.setAuthorizations(new Authorizations(SECRET));
++      ResultScanner scanner = table.getScanner(s);
++      Result result = scanner.next();
++      assertTrue(Bytes.equals(r1, result.getRow()));
++      // for cf 'fam' max versions in HCD is 1. So the old version cells, which are having matching
++      // CellVisibility with Authorizations, should not get considered in the label evaluation at
++      // all.
++      assertNull(result.getColumnLatestCell(fam, qual));
++      assertNull(result.getColumnLatestCell(fam, qual2));
++      // for cf 'fam2' max versions in HCD is > 1. So we can consider the old version cells, which
++      // are having matching CellVisibility with Authorizations, in the label evaluation. It can
++      // just skip those recent versions for which visibility is not there as per the new version's
++      // CellVisibility. The old versions which are having visibility can be send back
++      Cell cell = result.getColumnLatestCell(fam2, qual);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v1, 0, v1.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++      cell = result.getColumnLatestCell(fam2, qual2);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v1, 0, v1.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++
++      result = scanner.next();
++      assertTrue(Bytes.equals(r2, result.getRow()));
++      cell = result.getColumnLatestCell(fam, qual);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v2, 0, v2.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++      cell = result.getColumnLatestCell(fam, qual2);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v2, 0, v2.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++      cell = result.getColumnLatestCell(fam2, qual);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v2, 0, v2.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++      cell = result.getColumnLatestCell(fam2, qual2);
++      assertNotNull(cell);
++      assertTrue(Bytes.equals(v2, 0, v2.length, cell.getValueArray(), cell.getValueOffset(),
++          cell.getValueLength()));
++    } finally {
++      if (table != null) {
++        table.close();
++      }
++    }
++  }
++
+   private static HTable createTableAndWriteDataWithLabels(TableName tableName, String... labelExps)
+       throws Exception {
+     HTable table = null;
+-- 
+1.7.0.4
+

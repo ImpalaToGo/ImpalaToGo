@@ -1,0 +1,57 @@
+From e59defa8256c36f23695e29d2acfcf9781d1895f Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 30 Jul 2014 08:41:58 +0100
+Subject: [PATCH 68/70] HBASE-11609 LoadIncrementalHFiles fails if the namespace is specified
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-20550
+---
+ .../hbase/mapreduce/LoadIncrementalHFiles.java     |   10 +++++-----
+ 1 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/LoadIncrementalHFiles.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/LoadIncrementalHFiles.java
+index fc3d39b..6d3cab7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/LoadIncrementalHFiles.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/LoadIncrementalHFiles.java
+@@ -92,6 +92,8 @@ import com.google.common.collect.Multimap;
+ import com.google.common.collect.Multimaps;
+ import com.google.common.util.concurrent.ThreadFactoryBuilder;
+ 
++import java.util.UUID;
++
+ /**
+  * Tool to load the output of HFileOutputFormat into an existing table.
+  * @see #usage()
+@@ -100,7 +102,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
+ @InterfaceStability.Stable
+ public class LoadIncrementalHFiles extends Configured implements Tool {
+   private static final Log LOG = LogFactory.getLog(LoadIncrementalHFiles.class);
+-  static final AtomicLong regionCount = new AtomicLong(0);
+   private HBaseAdmin hbAdmin;
+ 
+   public static final String NAME = "completebulkload";
+@@ -453,9 +454,8 @@ public class LoadIncrementalHFiles extends Configured implements Tool {
+   }
+ 
+   // unique file name for the table
+-  String getUniqueName(TableName tableName) {
+-    String name = tableName + "," + regionCount.incrementAndGet();
+-    return name;
++  private String getUniqueName() {
++    return UUID.randomUUID().toString().replaceAll("-", "");
+   }
+ 
+   protected List<LoadQueueItem> splitStoreFile(final LoadQueueItem item,
+@@ -470,7 +470,7 @@ public class LoadIncrementalHFiles extends Configured implements Tool {
+     LOG.info("HFile at " + hfilePath + " no longer fits inside a single " +
+     "region. Splitting...");
+ 
+-    String uniqueName = getUniqueName(table.getName());
++    String uniqueName = getUniqueName();
+     HColumnDescriptor familyDesc = table.getTableDescriptor().getFamily(item.family);
+     Path botOut = new Path(tmpDir, uniqueName + ".bottom");
+     Path topOut = new Path(tmpDir, uniqueName + ".top");
+-- 
+1.7.0.4
+

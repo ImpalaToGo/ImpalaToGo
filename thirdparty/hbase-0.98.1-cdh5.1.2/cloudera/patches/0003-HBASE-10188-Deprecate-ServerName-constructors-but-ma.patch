@@ -1,0 +1,53 @@
+From 3a3229d760b9c47039a3b1a75620466317573db9 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Tue, 17 Dec 2013 19:28:59 +0000
+Subject: [PATCH 03/70] HBASE-10188 Deprecate ServerName constructors, but make it public (Nicolas Liochon)
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/tags/0.96.1@1551662 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/ServerName.java   |   18 +++++++++++++++---
+ 1 files changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+index acd6ee7..9f9174b 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+@@ -96,7 +96,11 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+   private byte [] bytes;
+   public static final List<ServerName> EMPTY_SERVER_LIST = new ArrayList<ServerName>(0);
+ 
+-  private ServerName(final String hostname, final int port, final long startcode) {
++  /**
++   * @deprecated since 0.96, made private in 0.98. use {@link #valueOf(String, int, long)} instead.
++   */
++  @Deprecated
++  public ServerName(final String hostname, final int port, final long startcode) {
+     // Drop the domain is there is one; no need of it in a local cluster.  With it, we get long
+     // unwieldy names.
+     this.hostnameOnly = hostname;
+@@ -116,12 +120,20 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+     return parts[0];
+   }
+ 
+-  private ServerName(final String serverName) {
++  /**
++   * @deprecated since 0.96, made private in 0.98. use {@link #valueOf(String)} instead.
++   */
++  @Deprecated
++  public ServerName(final String serverName) {
+     this(parseHostname(serverName), parsePort(serverName),
+       parseStartcode(serverName));
+   }
+ 
+-  private ServerName(final String hostAndPort, final long startCode) {
++  /**
++   * @deprecated since 0.96, made private in 0.98+. use {@link #valueOf(String, long)} instead.
++   */
++  @Deprecated
++  public ServerName(final String hostAndPort, final long startCode) {
+     this(Addressing.parseHostname(hostAndPort),
+       Addressing.parsePort(hostAndPort), startCode);
+   }
+-- 
+1.7.0.4
+

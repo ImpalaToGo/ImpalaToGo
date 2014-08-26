@@ -1,0 +1,67 @@
+From 3b365083325ff59907b97c3d56c61eb7bf5ec0a4 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Tue, 1 Apr 2014 16:08:09 +0000
+Subject: [PATCH 06/70] HBASE-10879 user_permission shell command on namespace doesn't work
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1583724 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit aa4f0d0eb2d992533905d3f0e88cf374feca9665)
+---
+ .../apache/hadoop/hbase/protobuf/ProtobufUtil.java |   28 ++++++++++++++++++++
+ hbase-shell/src/main/ruby/hbase/security.rb        |    2 +-
+ 2 files changed, 29 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+index 954ffa1..3e00637 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+@@ -2201,6 +2201,34 @@ public final class ProtobufUtil {
+   }
+ 
+   /**
++   * A utility used to get permissions for selected namespace.
++   * <p>
++   * It's also called by the shell, in case you want to find references.
++   *
++   * @param protocol the AccessControlService protocol proxy
++   * @param namespace name of the namespace
++   * @throws ServiceException
++   */
++  public static List<UserPermission> getUserPermissions(
++      AccessControlService.BlockingInterface protocol,
++      byte[] namespace) throws ServiceException {
++    AccessControlProtos.GetUserPermissionsRequest.Builder builder =
++      AccessControlProtos.GetUserPermissionsRequest.newBuilder();
++    if (namespace != null) {
++      builder.setNamespaceName(HBaseZeroCopyByteString.wrap(namespace));
++    }
++    builder.setType(AccessControlProtos.Permission.Type.Namespace);
++    AccessControlProtos.GetUserPermissionsRequest request = builder.build();
++    AccessControlProtos.GetUserPermissionsResponse response =
++      protocol.getUserPermissions(null, request);
++    List<UserPermission> perms = new ArrayList<UserPermission>();
++    for (AccessControlProtos.UserPermission perm: response.getUserPermissionList()) {
++      perms.add(ProtobufUtil.toUserPermission(perm));
++    }
++    return perms;
++  }
++
++  /**
+    * Convert a protobuf UserTablePermissions to a
+    * ListMultimap<String, TablePermission> where key is username.
+    *
+diff --git a/hbase-shell/src/main/ruby/hbase/security.rb b/hbase-shell/src/main/ruby/hbase/security.rb
+index fa9c319..322fc98 100644
+--- a/hbase-shell/src/main/ruby/hbase/security.rb
++++ b/hbase-shell/src/main/ruby/hbase/security.rb
+@@ -168,7 +168,7 @@ module Hbase
+             raise(ArgumentError, "Can't find a namespace: #{namespace_name}") unless namespace_exists?(namespace_name)
+             # invoke cp endpoint to perform access controls
+             perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
+-              protocol, table_name.to_java_bytes)
++              protocol, namespace_name.to_java_bytes)
+           else
+              raise(ArgumentError, "Can't find table: #{table_name}") unless exists?(table_name)
+              perms = org.apache.hadoop.hbase.protobuf.ProtobufUtil.getUserPermissions(
+-- 
+1.7.0.4
+

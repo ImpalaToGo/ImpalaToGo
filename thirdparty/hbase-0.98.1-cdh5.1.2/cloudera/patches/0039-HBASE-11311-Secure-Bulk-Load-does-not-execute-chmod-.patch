@@ -1,0 +1,30 @@
+From 8fb146bcda2ce12bf87e7dcddd8cceae7e14a046 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Mon, 9 Jun 2014 22:30:19 +0100
+Subject: [PATCH 39/70] HBASE-11311 Secure Bulk Load does not execute chmod 777 on the files
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-19587
+---
+ .../security/access/SecureBulkLoadEndpoint.java    |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+index 1ce5a50..d41ec0c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+@@ -250,6 +250,10 @@ public class SecureBulkLoadEndpoint extends SecureBulkLoadService
+             Configuration conf = env.getConfiguration();
+             fs = FileSystem.get(conf);
+             for(Pair<byte[], String> el: familyPaths) {
++              Path p = new Path(el.getSecond());
++              LOG.trace("Setting permission for: " + p);
++              fs.setPermission(p, PERM_ALL_ACCESS);
++
+               Path stageFamily = new Path(bulkToken, Bytes.toString(el.getFirst()));
+               if(!fs.exists(stageFamily)) {
+                 fs.mkdirs(stageFamily);
+-- 
+1.7.0.4
+

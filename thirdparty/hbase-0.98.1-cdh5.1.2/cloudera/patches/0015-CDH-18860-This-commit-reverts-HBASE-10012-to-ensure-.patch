@@ -1,0 +1,1828 @@
+From 1a9aaedad5ef174034cbf3a6deba66a7d622076a Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Mon, 28 Apr 2014 14:30:48 -0700
+Subject: [PATCH 15/70] CDH-18860 This commit reverts HBASE-10012 to ensure CDH5.1 ABI comptability.
+
+Reason: ABI Compatiblity
+Author: Srikanth Srungarapu
+Ref: CDH-18860
+---
+ .../java/org/apache/hadoop/hbase/HRegionInfo.java  |    2 +-
+ .../java/org/apache/hadoop/hbase/ServerName.java   |   36 ++++++-------------
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |    8 ++--
+ .../hbase/exceptions/RegionMovedException.java     |    3 +-
+ .../apache/hadoop/hbase/protobuf/ProtobufUtil.java |    2 +-
+ .../hadoop/hbase/protobuf/RequestConverter.java    |    2 +-
+ .../hadoop/hbase/client/TestAsyncProcess.java      |    4 +-
+ .../hadoop/hbase/client/TestClientNoCluster.java   |    4 +-
+ .../chaos/actions/RollingBatchRestartRsAction.java |    2 +-
+ .../hadoop/hbase/master/AssignmentManager.java     |    2 +-
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    4 +-
+ .../hbase/master/RegionPlacementMaintainer.java    |   15 ++++----
+ .../apache/hadoop/hbase/master/ServerManager.java  |    2 +-
+ .../master/balancer/FavoredNodeLoadBalancer.java   |   10 +++---
+ .../hadoop/hbase/migration/NamespaceUpgrade.java   |    2 +-
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    8 ++--
+ .../regionserver/ReplicationSyncUp.java            |    2 +-
+ .../hbase/zookeeper/DrainingServerTracker.java     |    4 +-
+ .../apache/hadoop/hbase/TestDrainingServer.java    |   18 +++++-----
+ .../apache/hadoop/hbase/TestHRegionLocation.java   |   10 +++---
+ .../org/apache/hadoop/hbase/TestSerialization.java |    2 +-
+ .../org/apache/hadoop/hbase/TestServerName.java    |   18 +++++-----
+ .../hadoop/hbase/catalog/TestCatalogTracker.java   |    6 ++--
+ .../catalog/TestMetaReaderEditorNoCluster.java     |    2 +-
+ .../org/apache/hadoop/hbase/client/TestHCM.java    |   18 +++++-----
+ .../hadoop/hbase/client/TestMetaScanner.java       |    2 +-
+ .../apache/hadoop/hbase/ipc/TestDelayedRpc.java    |    8 ++--
+ .../apache/hadoop/hbase/ipc/TestProtoBufRpc.java   |    2 +-
+ .../TestLoadIncrementalHFilesSplitRecovery.java    |    2 +-
+ .../hbase/master/TestActiveMasterManager.java      |    6 ++--
+ .../hadoop/hbase/master/TestAssignmentManager.java |    6 ++--
+ .../master/TestAssignmentManagerOnCluster.java     |    4 +-
+ .../hadoop/hbase/master/TestCatalogJanitor.java    |    4 +-
+ .../hbase/master/TestClusterStatusPublisher.java   |    4 +-
+ .../apache/hadoop/hbase/master/TestDeadServer.java |   12 +++---
+ .../hadoop/hbase/master/TestMasterFileSystem.java  |    6 ++-
+ .../hadoop/hbase/master/TestMasterNoCluster.java   |   12 +++---
+ .../hbase/master/TestMasterStatusServlet.java      |   16 ++++----
+ .../hadoop/hbase/master/TestRegionPlacement.java   |    2 +-
+ .../hadoop/hbase/master/TestRestartCluster.java    |    4 +-
+ .../hadoop/hbase/master/TestSplitLogManager.java   |   24 ++++++------
+ .../hadoop/hbase/master/TestTableLockManager.java  |    2 +-
+ .../hbase/master/balancer/BalancerTestBase.java    |    2 +-
+ .../master/balancer/TestBaseLoadBalancer.java      |    6 ++--
+ .../balancer/TestFavoredNodeAssignmentHelper.java  |    2 +-
+ .../balancer/TestStochasticLoadBalancer.java       |    4 +-
+ .../hbase/master/cleaner/TestHFileCleaner.java     |    2 +-
+ .../hbase/master/cleaner/TestHFileLinkCleaner.java |    2 +-
+ .../hbase/master/cleaner/TestLogsCleaner.java      |    3 +-
+ .../regionserver/TestMasterAddressTracker.java     |    2 +-
+ .../hbase/regionserver/TestRSStatusServlet.java    |    4 +-
+ .../regionserver/TestRegionServerNoMaster.java     |    2 +-
+ .../hbase/regionserver/TestSplitLogWorker.java     |   28 ++++++++--------
+ .../TestSplitTransactionOnCluster.java             |    2 +-
+ .../hadoop/hbase/regionserver/wal/TestHLog.java    |    8 ++++-
+ .../replication/TestReplicationStateBasic.java     |   10 +++--
+ .../replication/TestReplicationStateZKImpl.java    |    2 +-
+ .../replication/TestReplicationTrackerZKImpl.java  |    2 +-
+ .../regionserver/TestReplicationSourceManager.java |    2 +-
+ .../hadoop/hbase/security/TestSecureRPC.java       |    2 +-
+ .../security/token/TestTokenAuthentication.java    |    7 ++--
+ .../org/apache/hadoop/hbase/util/MockServer.java   |    2 +-
+ .../apache/hadoop/hbase/util/TestHBaseFsck.java    |    2 +-
+ .../hbase/zookeeper/TestZooKeeperNodeTracker.java  |    7 +++-
+ 64 files changed, 205 insertions(+), 200 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/HRegionInfo.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/HRegionInfo.java
+index 78e175d..bb8fe08 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/HRegionInfo.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/HRegionInfo.java
+@@ -1056,7 +1056,7 @@ public class HRegionInfo implements Comparable<HRegionInfo> {
+     cell = r.getColumnLatestCell(HConstants.CATALOG_FAMILY,
+       HConstants.STARTCODE_QUALIFIER);
+     if (cell == null || cell.getValueLength() == 0) return null;
+-    return ServerName.valueOf(hostAndPort,
++    return new ServerName(hostAndPort,
+         Bytes.toLong(cell.getValueArray(), cell.getValueOffset(), cell.getValueLength()));
+   }
+ 
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+index 9f9174b..a783b32 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+@@ -97,9 +97,9 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+   public static final List<ServerName> EMPTY_SERVER_LIST = new ArrayList<ServerName>(0);
+ 
+   /**
+-   * @deprecated since 0.96, made private in 0.98. use {@link #valueOf(String, int, long)} instead.
++   * CLOUDERA-SPECIFIC-NOTE: This was originally deprecated since 0.96 and was made private in 0.98, 
++   * but we reverted back for ensuring CDH5.1 ABI compatibility.
+    */
+-  @Deprecated
+   public ServerName(final String hostname, final int port, final long startcode) {
+     // Drop the domain is there is one; no need of it in a local cluster.  With it, we get long
+     // unwieldy names.
+@@ -121,18 +121,18 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+   }
+ 
+   /**
+-   * @deprecated since 0.96, made private in 0.98. use {@link #valueOf(String)} instead.
++   * CLOUDERA-SPECIFIC-NOTE: This was originally deprecated since 0.96 and was made private in 0.98, 
++   * but we reverted back for ensuring CDH5.1 ABI compatibility.
+    */
+-  @Deprecated
+   public ServerName(final String serverName) {
+     this(parseHostname(serverName), parsePort(serverName),
+       parseStartcode(serverName));
+   }
+ 
+   /**
+-   * @deprecated since 0.96, made private in 0.98+. use {@link #valueOf(String, long)} instead.
++   * CLOUDERA-SPECIFIC-NOTE: This was originally deprecated since 0.96 and was made private in 0.98, 
++   * but we reverted back for ensuring CDH5.1 ABI compatibility.
+    */
+-  @Deprecated
+   public ServerName(final String hostAndPort, final long startCode) {
+     this(Addressing.parseHostname(hostAndPort),
+       Addressing.parsePort(hostAndPort), startCode);
+@@ -159,18 +159,6 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+     return Long.parseLong(serverName.substring(index + 1));
+   }
+ 
+-  public static ServerName valueOf(final String hostname, final int port, final long startcode) {
+-    return new ServerName(hostname, port, startcode);
+-  }
+-
+-  public static ServerName valueOf(final String serverName) {
+-    return new ServerName(serverName);
+-  }
+-
+-  public static ServerName valueOf(final String hostAndPort, final long startCode) {
+-    return new ServerName(hostAndPort, startCode);
+-  }
+-
+   @Override
+   public String toString() {
+     return getServerName();
+@@ -325,11 +313,11 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+     short version = Bytes.toShort(versionedBytes);
+     if (version == VERSION) {
+       int length = versionedBytes.length - Bytes.SIZEOF_SHORT;
+-      return valueOf(Bytes.toString(versionedBytes, Bytes.SIZEOF_SHORT, length));
++      return new ServerName(Bytes.toString(versionedBytes, Bytes.SIZEOF_SHORT, length));
+     }
+     // Presume the bytes were written with an old version of hbase and that the
+     // bytes are actually a String of the form "'<hostname>' ':' '<port>'".
+-    return valueOf(Bytes.toString(versionedBytes), NON_STARTCODE);
++    return new ServerName(Bytes.toString(versionedBytes), NON_STARTCODE);
+   }
+ 
+   /**
+@@ -338,8 +326,8 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+    * @return A ServerName instance.
+    */
+   public static ServerName parseServerName(final String str) {
+-    return SERVERNAME_PATTERN.matcher(str).matches()? valueOf(str) :
+-        valueOf(str, NON_STARTCODE);
++    return SERVERNAME_PATTERN.matcher(str).matches()? new ServerName(str):
++      new ServerName(str, NON_STARTCODE);
+   }
+ 
+ 
+@@ -370,7 +358,7 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+         MetaRegionServer rss =
+           MetaRegionServer.PARSER.parseFrom(data, prefixLen, data.length - prefixLen);
+         org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.ServerName sn = rss.getServer();
+-        return valueOf(sn.getHostName(), sn.getPort(), sn.getStartCode());
++        return new ServerName(sn.getHostName(), sn.getPort(), sn.getStartCode());
+       } catch (InvalidProtocolBufferException e) {
+         // A failed parse of the znode is pretty catastrophic. Rather than loop
+         // retrying hoping the bad bytes will changes, and rather than change
+@@ -392,6 +380,6 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+     // Presume it a hostname:port format.
+     String hostname = Addressing.parseHostname(str);
+     int port = Addressing.parsePort(str);
+-    return valueOf(hostname, port, -1L);
++    return new ServerName(hostname, port, -1L);
+   }
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index df5d295..87022b7 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -1332,7 +1332,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+         if (pair == null || pair.getFirst() == null) {
+           throw new UnknownRegionException(Bytes.toStringBinary(regionname));
+         } else {
+-          closeRegion(ServerName.valueOf(serverName), pair.getFirst());
++          closeRegion(new ServerName(serverName), pair.getFirst());
+         }
+       } else {
+         Pair<HRegionInfo, ServerName> pair = MetaReader.getRegion(ct, regionname);
+@@ -1376,7 +1376,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+       throw new IllegalArgumentException(
+           "The servername cannot be null or empty.");
+     }
+-    ServerName sn = ServerName.valueOf(serverName);
++    ServerName sn = new ServerName(serverName);
+     AdminService.BlockingInterface admin = this.connection.getAdmin(sn);
+     // Close the region without updating zk state.
+     CloseRegionRequest request =
+@@ -2143,7 +2143,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+     String hostname = Addressing.parseHostname(hostnamePort);
+     int port = Addressing.parsePort(hostnamePort);
+     AdminService.BlockingInterface admin =
+-      this.connection.getAdmin(ServerName.valueOf(hostname, port, 0));
++      this.connection.getAdmin(new ServerName(hostname, port, 0));
+     StopServerRequest request = RequestConverter.buildStopServerRequest(
+       "Called by admin client " + this.connection.toString());
+     try {
+@@ -2443,7 +2443,7 @@ public class HBaseAdmin implements Abortable, Closeable {
+    */
+  public synchronized  byte[][] rollHLogWriter(String serverName)
+       throws IOException, FailedLogCloseException {
+-    ServerName sn = ServerName.valueOf(serverName);
++    ServerName sn = new ServerName(serverName);
+     AdminService.BlockingInterface admin = this.connection.getAdmin(sn);
+     RollWALWriterRequest request = RequestConverter.buildRollWALWriterRequest();
+     try {
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/exceptions/RegionMovedException.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/exceptions/RegionMovedException.java
+index cab1ff9..2ba9d16 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/exceptions/RegionMovedException.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/exceptions/RegionMovedException.java
+@@ -24,6 +24,7 @@ import org.apache.hadoop.classification.InterfaceStability;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.NotServingRegionException;
+ import org.apache.hadoop.hbase.ServerName;
++import org.apache.hadoop.ipc.RemoteException;
+ 
+ /**
+  * Subclass if the server knows the region is now on another server.
+@@ -62,7 +63,7 @@ public class RegionMovedException extends NotServingRegionException {
+   }
+ 
+   public ServerName getServerName(){
+-    return ServerName.valueOf(hostname, port, startCode);
++    return new ServerName(hostname, port, startCode);
+   }
+ 
+   public long getLocationSeqNum() {
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+index 3e00637..817a9c5 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+@@ -325,7 +325,7 @@ public final class ProtobufUtil {
+     if (proto.hasStartCode()) {
+       startCode = proto.getStartCode();
+     }
+-    return ServerName.valueOf(hostName, port, startCode);
++    return new ServerName(hostName, port, startCode);
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/RequestConverter.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/RequestConverter.java
+index 685fd47..5be7c2f 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/RequestConverter.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/RequestConverter.java
+@@ -1017,7 +1017,7 @@ public final class RequestConverter {
+       buildRegionSpecifier(RegionSpecifierType.ENCODED_REGION_NAME,encodedRegionName));
+     if (destServerName != null) {
+       builder.setDestServerName(
+-        ProtobufUtil.toServerName(ServerName.valueOf(Bytes.toString(destServerName))));
++        ProtobufUtil.toServerName(new ServerName(Bytes.toString(destServerName))));
+     }
+     return builder.build();
+   }
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
+index 362b183..0d0c435 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
+@@ -58,8 +58,8 @@ public class TestAsyncProcess {
+   private static final byte[] FAILS = "FAILS".getBytes();
+   private static final Configuration conf = new Configuration();
+ 
+-  private static ServerName sn = ServerName.valueOf("localhost:10,1254");
+-  private static ServerName sn2 = ServerName.valueOf("localhost:140,12540");
++  private static ServerName sn = new ServerName("localhost:10,1254");
++  private static ServerName sn2 = new ServerName("localhost:140,12540");
+   private static HRegionInfo hri1 =
+       new HRegionInfo(DUMMY_TABLE, DUMMY_BYTES_1, DUMMY_BYTES_2, false, 1);
+   private static HRegionInfo hri2 =
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestClientNoCluster.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestClientNoCluster.java
+index 7ee4476..0f739dc 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestClientNoCluster.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestClientNoCluster.java
+@@ -95,7 +95,7 @@ public class TestClientNoCluster extends Configured implements Tool {
+   private static final Log LOG = LogFactory.getLog(TestClientNoCluster.class);
+   private Configuration conf;
+   public static final ServerName META_SERVERNAME =
+-      ServerName.valueOf("meta.example.org", 60010, 12345);
++    new ServerName("meta.example.org", 60010, 12345);
+ 
+   @Before
+   public void setUp() throws Exception {
+@@ -651,7 +651,7 @@ public class TestClientNoCluster extends Configured implements Tool {
+   private static ServerName [] makeServerNames(final int count) {
+     ServerName [] sns = new ServerName[count];
+     for (int i = 0; i < count; i++) {
+-      sns[i] = ServerName.valueOf("" + i + ".example.org", 60010, i);
++      sns[i] = new ServerName("" + i + ".example.org", 60010, i);
+     }
+     return sns;
+   }
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RollingBatchRestartRsAction.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RollingBatchRestartRsAction.java
+index 6df10cb..a4eefe7 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RollingBatchRestartRsAction.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RollingBatchRestartRsAction.java
+@@ -99,7 +99,7 @@ public class RollingBatchRestartRsAction extends BatchRestartRsAction {
+         final int count = 4;
+         List<ServerName> serverNames = new ArrayList<ServerName>(count);
+         for (int i = 0; i < 4; i++) {
+-          serverNames.add(ServerName.valueOf(i + ".example.org", i, i));
++          serverNames.add(new ServerName(i + ".example.org", i, i));
+         }
+         return serverNames.toArray(new ServerName [] {});
+       }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index 7309325..5d4091f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -109,7 +109,7 @@ import com.google.common.collect.LinkedHashMultimap;
+ public class AssignmentManager extends ZooKeeperListener {
+   private static final Log LOG = LogFactory.getLog(AssignmentManager.class);
+ 
+-  public static final ServerName HBCK_CODE_SERVERNAME = ServerName.valueOf(HConstants.HBCK_CODE_NAME,
++  public static final ServerName HBCK_CODE_SERVERNAME = new ServerName(HConstants.HBCK_CODE_NAME,
+       -1, -1L);
+ 
+   public static final String ASSIGNMENT_TIMEOUT = "hbase.master.assignment.timeoutmonitor.timeout";
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index 9ec1a01..0988210 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -451,7 +451,7 @@ MasterServices, Server {
+     // Set our address.
+     this.isa = this.rpcServer.getListenerAddress();
+     // We don't want to pass isa's hostname here since it could be 0.0.0.0
+-    this.serverName = ServerName.valueOf(hostname, this.isa.getPort(), System.currentTimeMillis());
++    this.serverName = new ServerName(hostname, this.isa.getPort(), System.currentTimeMillis());
+     this.rsFatals = new MemoryBoundedLogMessageBuffer(
+       conf.getLong("hbase.master.buffer.for.rs.fatals", 1*1024*1024));
+ 
+@@ -1700,7 +1700,7 @@ MasterServices, Server {
+         regionState.getServerName());
+       dest = balancer.randomAssignment(hri, destServers);
+     } else {
+-      dest = ServerName.valueOf(Bytes.toString(destServerName));
++      dest = new ServerName(Bytes.toString(destServerName));
+       if (dest.equals(regionState.getServerName())) {
+         LOG.debug("Skipping move of region " + hri.getRegionNameAsString()
+           + " because region already assigned to the same server " + dest + ".");
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionPlacementMaintainer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionPlacementMaintainer.java
+index 848ce7a..2335b4f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionPlacementMaintainer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionPlacementMaintainer.java
+@@ -54,6 +54,7 @@ import org.apache.hadoop.hbase.master.balancer.FavoredNodeAssignmentHelper;
+ import org.apache.hadoop.hbase.master.balancer.FavoredNodesPlan;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.RequestConverter;
++import org.apache.hadoop.hbase.protobuf.generated.AdminProtos.OpenRegionRequest;
+ import org.apache.hadoop.hbase.protobuf.generated.AdminProtos.AdminService.BlockingInterface;
+ import org.apache.hadoop.hbase.protobuf.generated.AdminProtos.UpdateFavoredNodesRequest;
+ import org.apache.hadoop.hbase.protobuf.generated.AdminProtos.UpdateFavoredNodesResponse;
+@@ -400,15 +401,15 @@ public class RegionPlacementMaintainer {
+           List<ServerName> favoredServers =
+             new ArrayList<ServerName>(FavoredNodeAssignmentHelper.FAVORED_NODES_NUM);
+           ServerName s = servers.get(primaryAssignment[i] / slotsPerServer);
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+ 
+           s = servers.get(secondaryAssignment[i] / slotsPerServer);
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+ 
+           s = servers.get(tertiaryAssignment[i] / slotsPerServer);
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+           // Update the assignment plan
+           plan.updateAssignmentPlan(regions.get(i), favoredServers);
+@@ -433,17 +434,17 @@ public class RegionPlacementMaintainer {
+             new ArrayList<ServerName>(FavoredNodeAssignmentHelper.FAVORED_NODES_NUM);
+           HRegionInfo currentRegion = regions.get(i);
+           ServerName s = primaryRSMap.get(currentRegion);
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+ 
+           ServerName[] secondaryAndTertiary =
+               secondaryAndTertiaryMap.get(currentRegion);
+           s = secondaryAndTertiary[0];
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+ 
+           s = secondaryAndTertiary[1];
+-          favoredServers.add(ServerName.valueOf(s.getHostname(), s.getPort(),
++          favoredServers.add(new ServerName(s.getHostname(), s.getPort(),
+               ServerName.NON_STARTCODE));
+           // Update the assignment plan
+           plan.updateAssignmentPlan(regions.get(i), favoredServers);
+@@ -942,7 +943,7 @@ public class RegionPlacementMaintainer {
+ 
+     List<ServerName> serverList = new ArrayList<ServerName>();
+     for (String hostNameAndPort : favoredNodesArray) {
+-      serverList.add(ServerName.valueOf(hostNameAndPort, ServerName.NON_STARTCODE));
++      serverList.add(new ServerName(hostNameAndPort, ServerName.NON_STARTCODE));
+     }
+     return serverList;
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ServerManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ServerManager.java
+index 09cfee1..61df739 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ServerManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ServerManager.java
+@@ -212,7 +212,7 @@ public class ServerManager {
+     // is, reject the server and trigger its expiration. The next time it comes
+     // in, it should have been removed from serverAddressToServerInfo and queued
+     // for processing by ProcessServerShutdown.
+-    ServerName sn = ServerName.valueOf(ia.getHostName(), port, serverStartcode);
++    ServerName sn = new ServerName(ia.getHostName(), port, serverStartcode);
+     checkClockSkew(sn, serverCurrentTime);
+     checkIsDead(sn, "STARTUP");
+     if (!checkAndRecordNewServer(sn, ServerLoad.EMPTY_SERVERLOAD)) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/balancer/FavoredNodeLoadBalancer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/balancer/FavoredNodeLoadBalancer.java
+index b564462..147f196 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/balancer/FavoredNodeLoadBalancer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/balancer/FavoredNodeLoadBalancer.java
+@@ -88,14 +88,14 @@ public class FavoredNodeLoadBalancer extends BaseLoadBalancer {
+         new HashMap<ServerName, ServerName>();
+     ServerManager serverMgr = super.services.getServerManager();
+     for (ServerName sn: serverMgr.getOnlineServersList()) {
+-      ServerName s = ServerName.valueOf(sn.getHostname(), sn.getPort(), ServerName.NON_STARTCODE);
++      ServerName s = new ServerName(sn.getHostname(), sn.getPort(), ServerName.NON_STARTCODE);
+       serverNameToServerNameWithoutCode.put(sn, s);
+       serverNameWithoutCodeToServerName.put(s, sn);
+     }
+     for (Map.Entry<ServerName, List<HRegionInfo>> entry : clusterState.entrySet()) {
+       ServerName currentServer = entry.getKey();
+       //get a server without the startcode for the currentServer
+-      ServerName currentServerWithoutStartCode = ServerName.valueOf(currentServer.getHostname(),
++      ServerName currentServerWithoutStartCode = new ServerName(currentServer.getHostname(),
+           currentServer.getPort(), ServerName.NON_STARTCODE);
+       List<HRegionInfo> list = entry.getValue();
+       for (HRegionInfo region : list) {
+@@ -332,13 +332,13 @@ public class FavoredNodeLoadBalancer extends BaseLoadBalancer {
+       // We don't care about the startcode; but only the hostname really
+       List<ServerName> favoredNodesForRegion = new ArrayList<ServerName>(3);
+       ServerName sn = primaryRSMap.get(region);
+-      favoredNodesForRegion.add(ServerName.valueOf(sn.getHostname(), sn.getPort(),
++      favoredNodesForRegion.add(new ServerName(sn.getHostname(), sn.getPort(),
+           ServerName.NON_STARTCODE));
+       ServerName[] secondaryAndTertiaryNodes = secondaryAndTertiaryRSMap.get(region);
+       if (secondaryAndTertiaryNodes != null) {
+-        favoredNodesForRegion.add(ServerName.valueOf(secondaryAndTertiaryNodes[0].getHostname(),
++        favoredNodesForRegion.add(new ServerName(secondaryAndTertiaryNodes[0].getHostname(),
+             secondaryAndTertiaryNodes[0].getPort(), ServerName.NON_STARTCODE));
+-        favoredNodesForRegion.add(ServerName.valueOf(secondaryAndTertiaryNodes[1].getHostname(),
++        favoredNodesForRegion.add(new ServerName(secondaryAndTertiaryNodes[1].getHostname(),
+             secondaryAndTertiaryNodes[1].getPort(), ServerName.NON_STARTCODE));
+       }
+       globalFavoredNodesAssignmentPlan.updateFavoredNodesMap(region, favoredNodesForRegion);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
+index b054813..b2f2aa7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
+@@ -378,7 +378,7 @@ public class NamespaceUpgrade implements Tool {
+     }
+ 
+ 
+-    ServerName fakeServer = ServerName.valueOf("nsupgrade", 96, 123);
++    ServerName fakeServer = new ServerName("nsupgrade",96,123);
+     String metaLogName = HLogUtil.getHLogDirectoryName(fakeServer.toString());
+     HLog metaHLog = HLogFactory.createMetaHLog(fs, rootDir,
+         metaLogName, conf, null,
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index 16bc420..2f8dabe 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -761,7 +761,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+       this.abort("Failed to reach zk cluster when creating procedure handler.", e);
+     }
+     this.tableLockManager = TableLockManager.createTableLockManager(conf, zooKeeper,
+-        ServerName.valueOf(isa.getHostName(), isa.getPort(), startcode));
++        new ServerName(isa.getHostName(), isa.getPort(), startcode));
+ 
+     // register watcher for recovering regions
+     if(this.distributedLogReplay) {
+@@ -1219,8 +1219,8 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+         // The hostname the master sees us as.
+         if (key.equals(HConstants.KEY_FOR_HOSTNAME_SEEN_BY_MASTER)) {
+           String hostnameFromMasterPOV = e.getValue();
+-          this.serverNameFromMasterPOV = ServerName.valueOf(hostnameFromMasterPOV,
+-              this.isa.getPort(), this.startcode);
++          this.serverNameFromMasterPOV = new ServerName(hostnameFromMasterPOV,
++            this.isa.getPort(), this.startcode);
+           if (!hostnameFromMasterPOV.equals(this.isa.getHostName())) {
+             LOG.info("Master passed us a different hostname to use; was=" +
+               this.isa.getHostName() + ", but now=" + hostnameFromMasterPOV);
+@@ -2251,7 +2251,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+   public ServerName getServerName() {
+     // Our servername could change after we talk to the master.
+     return this.serverNameFromMasterPOV == null?
+-        ServerName.valueOf(this.isa.getHostName(), this.isa.getPort(), this.startcode) :
++      new ServerName(this.isa.getHostName(), this.isa.getPort(), this.startcode):
+         this.serverNameFromMasterPOV;
+   }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSyncUp.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSyncUp.java
+index 59b7f07..351bc21 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSyncUp.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSyncUp.java
+@@ -151,7 +151,7 @@ public class ReplicationSyncUp extends Configured implements Tool {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf(hostname, 1234, 1L);
++      return new ServerName(hostname, 1234, 1L);
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/DrainingServerTracker.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/DrainingServerTracker.java
+index 4e4c92f..77710f9 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/DrainingServerTracker.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/DrainingServerTracker.java
+@@ -77,7 +77,7 @@ public class DrainingServerTracker extends ZooKeeperListener {
+     synchronized(this.drainingServers) {
+       this.drainingServers.clear();
+       for (String n: servers) {
+-        final ServerName sn = ServerName.valueOf(ZKUtil.getNodeName(n));
++        final ServerName sn = new ServerName(ZKUtil.getNodeName(n));
+         this.drainingServers.add(sn);
+         this.serverManager.addServerToDrainList(sn);
+         LOG.info("Draining RS node created, adding to list [" +
+@@ -97,7 +97,7 @@ public class DrainingServerTracker extends ZooKeeperListener {
+   @Override
+   public void nodeDeleted(final String path) {
+     if(path.startsWith(watcher.drainingZNode)) {
+-      final ServerName sn = ServerName.valueOf(ZKUtil.getNodeName(path));
++      final ServerName sn = new ServerName(ZKUtil.getNodeName(path));
+       LOG.info("Draining RS node deleted, removing from list [" +
+           sn + "]");
+       remove(sn);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestDrainingServer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestDrainingServer.java
+index 9a51729..4af52cb 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestDrainingServer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestDrainingServer.java
+@@ -89,8 +89,8 @@ public class TestDrainingServer {
+     final HMaster master = Mockito.mock(HMaster.class);
+     final Server server = Mockito.mock(Server.class);
+     final ServerManager serverManager = Mockito.mock(ServerManager.class);
+-    final ServerName SERVERNAME_A = ServerName.valueOf("mockserver_a.org", 1000, 8000);
+-    final ServerName SERVERNAME_B = ServerName.valueOf("mockserver_b.org", 1001, 8000);
++    final ServerName SERVERNAME_A = new ServerName("mockserver_a.org", 1000, 8000);
++    final ServerName SERVERNAME_B = new ServerName("mockserver_b.org", 1001, 8000);
+     LoadBalancer balancer = LoadBalancerFactory.getLoadBalancer(conf);
+     CatalogTracker catalogTracker = Mockito.mock(CatalogTracker.class);
+     final HRegionInfo REGIONINFO = new HRegionInfo(TableName.valueOf("table_test"),
+@@ -105,7 +105,7 @@ public class TestDrainingServer {
+     onlineServers.put(SERVERNAME_B, ServerLoad.EMPTY_SERVERLOAD);
+ 
+     Mockito.when(server.getConfiguration()).thenReturn(conf);
+-    Mockito.when(server.getServerName()).thenReturn(ServerName.valueOf("masterMock,1,1"));
++    Mockito.when(server.getServerName()).thenReturn(new ServerName("masterMock,1,1"));
+     Mockito.when(server.getZooKeeper()).thenReturn(zkWatcher);
+ 
+     Mockito.when(serverManager.getOnlineServers()).thenReturn(onlineServers);
+@@ -163,11 +163,11 @@ public class TestDrainingServer {
+     final HMaster master = Mockito.mock(HMaster.class);
+     final Server server = Mockito.mock(Server.class);
+     final ServerManager serverManager = Mockito.mock(ServerManager.class);
+-    final ServerName SERVERNAME_A = ServerName.valueOf("mockserverbulk_a.org", 1000, 8000);
+-    final ServerName SERVERNAME_B = ServerName.valueOf("mockserverbulk_b.org", 1001, 8000);
+-    final ServerName SERVERNAME_C = ServerName.valueOf("mockserverbulk_c.org", 1002, 8000);
+-    final ServerName SERVERNAME_D = ServerName.valueOf("mockserverbulk_d.org", 1003, 8000);
+-    final ServerName SERVERNAME_E = ServerName.valueOf("mockserverbulk_e.org", 1004, 8000);
++    final ServerName SERVERNAME_A = new ServerName("mockserverbulk_a.org", 1000, 8000);
++    final ServerName SERVERNAME_B = new ServerName("mockserverbulk_b.org", 1001, 8000);
++    final ServerName SERVERNAME_C = new ServerName("mockserverbulk_c.org", 1002, 8000);
++    final ServerName SERVERNAME_D = new ServerName("mockserverbulk_d.org", 1003, 8000);
++    final ServerName SERVERNAME_E = new ServerName("mockserverbulk_e.org", 1004, 8000);
+     final Map<HRegionInfo, ServerName> bulk = new HashMap<HRegionInfo, ServerName>();
+ 
+     Set<ServerName> bunchServersAssigned = new HashSet<ServerName>();
+@@ -202,7 +202,7 @@ public class TestDrainingServer {
+         "zkWatcher-BulkAssignTest", abortable, true);
+ 
+     Mockito.when(server.getConfiguration()).thenReturn(conf);
+-    Mockito.when(server.getServerName()).thenReturn(ServerName.valueOf("masterMock,1,1"));
++    Mockito.when(server.getServerName()).thenReturn(new ServerName("masterMock,1,1"));
+     Mockito.when(server.getZooKeeper()).thenReturn(zkWatcher);
+ 
+     Mockito.when(serverManager.getOnlineServers()).thenReturn(onlineServers);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHRegionLocation.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHRegionLocation.java
+index 628feba..bf7ac6b 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHRegionLocation.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHRegionLocation.java
+@@ -35,7 +35,7 @@ public class TestHRegionLocation {
+    */
+   @Test
+   public void testHashAndEqualsCode() {
+-    ServerName hsa1 = ServerName.valueOf("localhost", 1234, -1L);
++    ServerName hsa1 = new ServerName("localhost", 1234, -1L);
+     HRegionLocation hrl1 = new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa1);
+     HRegionLocation hrl2 = new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa1);
+     assertEquals(hrl1.hashCode(), hrl2.hashCode());
+@@ -45,7 +45,7 @@ public class TestHRegionLocation {
+     // They are equal because they have same location even though they are
+     // carrying different regions or timestamp.
+     assertTrue(hrl1.equals(hrl3));
+-    ServerName hsa2 = ServerName.valueOf("localhost", 12345, -1L);
++    ServerName hsa2 = new ServerName("localhost", 12345, -1L);
+     HRegionLocation hrl4 = new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa2);
+     // These have same HRI but different locations so should be different.
+     assertFalse(hrl3.equals(hrl4));
+@@ -56,17 +56,17 @@ public class TestHRegionLocation {
+ 
+   @Test
+   public void testToString() {
+-    ServerName hsa1 = ServerName.valueOf("localhost", 1234, -1L);
++    ServerName hsa1 = new ServerName("localhost", 1234, -1L);
+     HRegionLocation hrl1 = new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa1);
+     System.out.println(hrl1.toString());
+   }
+ 
+   @Test
+   public void testCompareTo() {
+-    ServerName hsa1 = ServerName.valueOf("localhost", 1234, -1L);
++    ServerName hsa1 = new ServerName("localhost", 1234, -1L);
+     HRegionLocation hsl1 =
+       new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa1);
+-    ServerName hsa2 = ServerName.valueOf("localhost", 1235, -1L);
++    ServerName hsa2 = new ServerName("localhost", 1235, -1L);
+     HRegionLocation hsl2 =
+       new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO, hsa2);
+     assertTrue(hsl1.compareTo(hsl1) == 0);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestSerialization.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestSerialization.java
+index d7082ed..c9e58bd 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestSerialization.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestSerialization.java
+@@ -120,7 +120,7 @@ public class TestSerialization {
+ 
+   @Test
+   public void testSplitLogTask() throws DeserializationException {
+-    SplitLogTask slt = new SplitLogTask.Unassigned(ServerName.valueOf("mgr,1,1"));
++    SplitLogTask slt = new SplitLogTask.Unassigned(new ServerName("mgr,1,1"));
+     byte [] bytes = slt.toByteArray();
+     SplitLogTask sltDeserialized = SplitLogTask.parseFrom(bytes);
+     assertTrue(slt.equals(sltDeserialized));
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestServerName.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestServerName.java
+index 9ac69cd..453123a 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestServerName.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestServerName.java
+@@ -41,17 +41,17 @@ public class TestServerName {
+     assertEquals("x", ServerName.getHostNameMinusDomain("x"));
+     assertEquals("x", ServerName.getHostNameMinusDomain("x.y.z"));
+     assertEquals("asf000", ServerName.getHostNameMinusDomain("asf000.sp2.ygridcore.net"));
+-    ServerName sn = ServerName.valueOf("asf000.sp2.ygridcore.net", 1, 1);
++    ServerName sn = new ServerName("asf000.sp2.ygridcore.net", 1, 1);
+     assertEquals("asf000.sp2.ygridcore.net,1,1", sn.toString());
+   }
+ 
+   @Test
+   public void testShortString() {
+-    ServerName sn = ServerName.valueOf("asf000.sp2.ygridcore.net", 1, 1);
++    ServerName sn = new ServerName("asf000.sp2.ygridcore.net", 1, 1);
+     assertEquals("asf000:1", sn.toShortString());
+-    sn = ServerName.valueOf("2607:f0d0:1002:0051:0000:0000:0000:0004", 1, 1);
++    sn = new ServerName("2607:f0d0:1002:0051:0000:0000:0000:0004", 1, 1);
+     assertEquals("2607:f0d0:1002:0051:0000:0000:0000:0004:1", sn.toShortString());
+-    sn = ServerName.valueOf("1.1.1.1", 1, 1);
++    sn = new ServerName("1.1.1.1", 1, 1);
+     assertEquals("1.1.1.1:1", sn.toShortString());
+   }
+ 
+@@ -68,7 +68,7 @@ public class TestServerName {
+ 
+   @Test public void testParseOfBytes() {
+     final String snStr = "www.example.org,1234,5678";
+-    ServerName sn = ServerName.valueOf(snStr);
++    ServerName sn = new ServerName(snStr);
+     byte [] versionedBytes = sn.getVersionedBytes();
+     assertEquals(sn.toString(), ServerName.parseVersionedServerName(versionedBytes).toString());
+     final String hostnamePortStr = sn.getHostAndPort();
+@@ -81,9 +81,9 @@ public class TestServerName {
+ 
+   @Test
+   public void testServerName() {
+-    ServerName sn = ServerName.valueOf("www.example.org", 1234, 5678);
+-    ServerName sn2 = ServerName.valueOf("www.example.org", 1234, 5678);
+-    ServerName sn3 = ServerName.valueOf("www.example.org", 1234, 56789);
++    ServerName sn = new ServerName("www.example.org", 1234, 5678);
++    ServerName sn2 = new ServerName("www.example.org", 1234, 5678);
++    ServerName sn3 = new ServerName("www.example.org", 1234, 56789);
+     assertTrue(sn.equals(sn2));
+     assertFalse(sn.equals(sn3));
+     assertEquals(sn.hashCode(), sn2.hashCode());
+@@ -99,7 +99,7 @@ public class TestServerName {
+ 
+   @Test
+   public void getServerStartcodeFromServerName() {
+-    ServerName sn = ServerName.valueOf("www.example.org", 1234, 5678);
++    ServerName sn = new ServerName("www.example.org", 1234, 5678);
+     assertEquals(5678,
+       ServerName.getServerStartcodeFromServerName(sn.toString()));
+     assertNotSame(5677,
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
+index caeafbd..594de36 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestCatalogTracker.java
+@@ -72,7 +72,7 @@ public class TestCatalogTracker {
+   private static final Log LOG = LogFactory.getLog(TestCatalogTracker.class);
+   private static final HBaseTestingUtility UTIL = new HBaseTestingUtility();
+   private static final ServerName SN =
+-      ServerName.valueOf("example.org", 1234, System.currentTimeMillis());
++    new ServerName("example.org", 1234, System.currentTimeMillis());
+   private ZooKeeperWatcher watcher;
+   private Abortable abortable;
+ 
+@@ -137,7 +137,7 @@ public class TestCatalogTracker {
+     constructAndStartCatalogTracker(connection);
+ 
+     MetaRegionTracker.setMetaLocation(this.watcher,
+-        ServerName.valueOf("example.com", 1234, System.currentTimeMillis()));
++        new ServerName("example.com", 1234, System.currentTimeMillis()));
+   }
+ 
+   /**
+@@ -251,7 +251,7 @@ public class TestCatalogTracker {
+     final CatalogTracker ct = constructAndStartCatalogTracker(connection);
+ 
+     MetaRegionTracker.setMetaLocation(this.watcher,
+-        ServerName.valueOf("example.com", 1234, System.currentTimeMillis()));
++        new ServerName("example.com", 1234, System.currentTimeMillis()));
+     Assert.assertFalse(ct.verifyMetaRegionLocation(100));
+   }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestMetaReaderEditorNoCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestMetaReaderEditorNoCluster.java
+index 6ae0ecd..3261052 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestMetaReaderEditorNoCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/catalog/TestMetaReaderEditorNoCluster.java
+@@ -137,7 +137,7 @@ public class TestMetaReaderEditorNoCluster {
+     ZooKeeperWatcher zkw = new ZooKeeperWatcher(UTIL.getConfiguration(),
+       this.getClass().getSimpleName(), ABORTABLE, true);
+     // This is a servername we use in a few places below.
+-    ServerName sn = ServerName.valueOf("example.com", 1234, System.currentTimeMillis());
++    ServerName sn = new ServerName("example.com", 1234, System.currentTimeMillis());
+ 
+     HConnection connection;
+     CatalogTracker ct = null;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+index 3f28acb..0738e4a 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+@@ -362,8 +362,8 @@ public class TestHCM {
+ 
+     final int nextPort = conn.getCachedLocation(TABLE_NAME, ROW).getPort() + 1;
+     HRegionLocation loc = conn.getCachedLocation(TABLE_NAME, ROW);
+-    conn.updateCachedLocation(loc.getRegionInfo(), loc, ServerName.valueOf("127.0.0.1", nextPort,
+-        HConstants.LATEST_TIMESTAMP), HConstants.LATEST_TIMESTAMP);
++    conn.updateCachedLocation(loc.getRegionInfo(), loc, new ServerName("127.0.0.1", nextPort,
++      HConstants.LATEST_TIMESTAMP), HConstants.LATEST_TIMESTAMP);
+     Assert.assertEquals(conn.getCachedLocation(TABLE_NAME, ROW).getPort(), nextPort);
+ 
+     conn.forceDeleteCachedLocation(TABLE_NAME, ROW.clone());
+@@ -555,34 +555,34 @@ public class TestHCM {
+     HRegionLocation location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     assertNotNull(location);
+ 
+-    HRegionLocation anySource = new HRegionLocation(location.getRegionInfo(), ServerName.valueOf(
++    HRegionLocation anySource = new HRegionLocation(location.getRegionInfo(), new ServerName(
+         location.getHostname(), location.getPort() - 1, 0L));
+ 
+     // Same server as already in cache reporting - overwrites any value despite seqNum.
+     int nextPort = location.getPort() + 1;
+     conn.updateCachedLocation(location.getRegionInfo(), location,
+-        ServerName.valueOf("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
++        new ServerName("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
+     location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     Assert.assertEquals(nextPort, location.getPort());
+ 
+     // No source specified - same.
+     nextPort = location.getPort() + 1;
+     conn.updateCachedLocation(location.getRegionInfo(), location,
+-        ServerName.valueOf("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
++        new ServerName("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
+     location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     Assert.assertEquals(nextPort, location.getPort());
+ 
+     // Higher seqNum - overwrites lower seqNum.
+     nextPort = location.getPort() + 1;
+     conn.updateCachedLocation(location.getRegionInfo(), anySource,
+-        ServerName.valueOf("127.0.0.1", nextPort, 0), location.getSeqNum() + 1);
++        new ServerName("127.0.0.1", nextPort, 0), location.getSeqNum() + 1);
+     location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     Assert.assertEquals(nextPort, location.getPort());
+ 
+     // Lower seqNum - does not overwrite higher seqNum.
+     nextPort = location.getPort() + 1;
+     conn.updateCachedLocation(location.getRegionInfo(), anySource,
+-        ServerName.valueOf("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
++        new ServerName("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
+     location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     Assert.assertEquals(nextPort - 1, location.getPort());
+     table.close();
+@@ -871,8 +871,8 @@ public class TestHCM {
+     // TODO: This test would seem to presume hardcoded RETRY_BACKOFF which it should not.
+     final long ANY_PAUSE = 100;
+     HRegionInfo ri = new HRegionInfo(TABLE_NAME);
+-    HRegionLocation location = new HRegionLocation(ri, ServerName.valueOf("127.0.0.1", 1, 0));
+-    HRegionLocation diffLocation = new HRegionLocation(ri, ServerName.valueOf("127.0.0.1", 2, 0));
++    HRegionLocation location = new HRegionLocation(ri, new ServerName("127.0.0.1", 1, 0));
++    HRegionLocation diffLocation = new HRegionLocation(ri, new ServerName("127.0.0.1", 2, 0));
+ 
+     ManualEnvironmentEdge timeMachine = new ManualEnvironmentEdge();
+     EnvironmentEdgeManager.injectEdge(timeMachine);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
+index 4e5a656..182c32d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
+@@ -169,7 +169,7 @@ public class TestMetaScanner {
+               Bytes.toBytes(midKey),
+               end);
+ 
+-            MetaEditor.splitRegion(catalogTracker, parent, splita, splitb, ServerName.valueOf("fooserver", 1, 0));
++            MetaEditor.splitRegion(catalogTracker, parent, splita, splitb, new ServerName("fooserver", 1, 0));
+ 
+             Threads.sleep(random.nextInt(200));
+           } catch (Throwable e) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestDelayedRpc.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestDelayedRpc.java
+index 11bc431..c9a3cd0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestDelayedRpc.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestDelayedRpc.java
+@@ -91,7 +91,7 @@ public class TestDelayedRpc {
+     RpcClient rpcClient = new RpcClient(conf, HConstants.DEFAULT_CLUSTER_ID.toString());
+     try {
+       BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(
+-          ServerName.valueOf(rpcServer.getListenerAddress().getHostName(),
++          new ServerName(rpcServer.getListenerAddress().getHostName(),
+               rpcServer.getListenerAddress().getPort(), System.currentTimeMillis()),
+           User.getCurrent(), RPC_CLIENT_TIMEOUT);
+       TestDelayedRpcProtos.TestDelayedService.BlockingInterface stub =
+@@ -172,7 +172,7 @@ public class TestDelayedRpc {
+     RpcClient rpcClient = new RpcClient(conf, HConstants.DEFAULT_CLUSTER_ID.toString());
+     try {
+       BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(
+-          ServerName.valueOf(rpcServer.getListenerAddress().getHostName(),
++          new ServerName(rpcServer.getListenerAddress().getHostName(),
+               rpcServer.getListenerAddress().getPort(), System.currentTimeMillis()),
+           User.getCurrent(), RPC_CLIENT_TIMEOUT);
+       TestDelayedRpcProtos.TestDelayedService.BlockingInterface stub =
+@@ -295,8 +295,8 @@ public class TestDelayedRpc {
+     RpcClient rpcClient = new RpcClient(conf, HConstants.DEFAULT_CLUSTER_ID.toString());
+     try {
+       BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(
+-          ServerName.valueOf(rpcServer.getListenerAddress().getHostName(),
+-              rpcServer.getListenerAddress().getPort(), System.currentTimeMillis()),
++        new ServerName(rpcServer.getListenerAddress().getHostName(),
++          rpcServer.getListenerAddress().getPort(), System.currentTimeMillis()),
+         User.getCurrent(), 1000);
+       TestDelayedRpcProtos.TestDelayedService.BlockingInterface stub =
+         TestDelayedRpcProtos.TestDelayedService.newBlockingStub(channel);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestProtoBufRpc.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestProtoBufRpc.java
+index 335aaa6..65d6c84 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestProtoBufRpc.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestProtoBufRpc.java
+@@ -114,7 +114,7 @@ public class TestProtoBufRpc {
+     RpcClient rpcClient = new RpcClient(conf, HConstants.CLUSTER_ID_DEFAULT);
+     try {
+       BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(
+-          ServerName.valueOf(this.isa.getHostName(), this.isa.getPort(), System.currentTimeMillis()),
++        new ServerName(this.isa.getHostName(), this.isa.getPort(), System.currentTimeMillis()),
+         User.getCurrent(), 0);
+       TestRpcServiceProtos.TestProtobufRpcProto.BlockingInterface stub =
+         TestRpcServiceProtos.TestProtobufRpcProto.newBlockingStub(channel);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFilesSplitRecovery.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFilesSplitRecovery.java
+index e107b7c..264ff22 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFilesSplitRecovery.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFilesSplitRecovery.java
+@@ -305,7 +305,7 @@ public class TestLoadIncrementalHFilesSplitRecovery {
+     Mockito.doNothing().when(c).close();
+     // Make it so we return a particular location when asked.
+     final HRegionLocation loc = new HRegionLocation(HRegionInfo.FIRST_META_REGIONINFO,
+-        ServerName.valueOf("example.org", 1234, 0));
++        new ServerName("example.org", 1234, 0));
+     Mockito.when(c.getRegionLocation((TableName) Mockito.any(),
+         (byte[]) Mockito.any(), Mockito.anyBoolean())).
+       thenReturn(loc);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestActiveMasterManager.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestActiveMasterManager.java
+index bbb9337..1a7b047 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestActiveMasterManager.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestActiveMasterManager.java
+@@ -73,7 +73,7 @@ public class TestActiveMasterManager {
+     } catch(KeeperException.NoNodeException nne) {}
+ 
+     // Create the master node with a dummy address
+-    ServerName master = ServerName.valueOf("localhost", 1, System.currentTimeMillis());
++    ServerName master = new ServerName("localhost", 1, System.currentTimeMillis());
+     // Should not have a master yet
+     DummyMaster dummyMaster = new DummyMaster(zk,master);
+     ClusterStatusTracker clusterStatusTracker =
+@@ -116,9 +116,9 @@ public class TestActiveMasterManager {
+ 
+     // Create the master node with a dummy address
+     ServerName firstMasterAddress =
+-        ServerName.valueOf("localhost", 1, System.currentTimeMillis());
++      new ServerName("localhost", 1, System.currentTimeMillis());
+     ServerName secondMasterAddress =
+-        ServerName.valueOf("localhost", 2, System.currentTimeMillis());
++      new ServerName("localhost", 2, System.currentTimeMillis());
+ 
+     // Should not have a master yet
+     DummyMaster ms1 = new DummyMaster(zk,firstMasterAddress);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManager.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManager.java
+index 8ba8012..fd2b163 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManager.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManager.java
+@@ -101,9 +101,9 @@ import com.google.protobuf.ServiceException;
+ public class TestAssignmentManager {
+   private static final HBaseTestingUtility HTU = new HBaseTestingUtility();
+   private static final ServerName SERVERNAME_A =
+-      ServerName.valueOf("example.org", 1234, 5678);
++    new ServerName("example.org", 1234, 5678);
+   private static final ServerName SERVERNAME_B =
+-      ServerName.valueOf("example.org", 0, 5678);
++    new ServerName("example.org", 0, 5678);
+   private static final HRegionInfo REGIONINFO =
+     new HRegionInfo(TableName.valueOf("t"),
+       HConstants.EMPTY_START_ROW, HConstants.EMPTY_START_ROW);
+@@ -136,7 +136,7 @@ public class TestAssignmentManager {
+     // If abort is called, be sure to fail the test (don't just swallow it
+     // silently as is mockito default).
+     this.server = Mockito.mock(Server.class);
+-    Mockito.when(server.getServerName()).thenReturn(ServerName.valueOf("master,1,1"));
++    Mockito.when(server.getServerName()).thenReturn(new ServerName("master,1,1"));
+     Mockito.when(server.getConfiguration()).thenReturn(HTU.getConfiguration());
+     this.watcher =
+       new ZooKeeperWatcher(HTU.getConfiguration(), "mockedServer", this.server, true);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+index baa458d..3d96c25 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+@@ -165,8 +165,8 @@ public class TestAssignmentManagerOnCluster {
+       ServerName destServer = onlineServers.iterator().next();
+ 
+       // Created faked dead server
+-      deadServer = ServerName.valueOf(destServer.getHostname(),
+-          destServer.getPort(), destServer.getStartcode() - 100L);
++      deadServer = new ServerName(destServer.getHostname(),
++        destServer.getPort(), destServer.getStartcode() - 100L);
+       master.serverManager.recordNewServerWithLock(deadServer, ServerLoad.EMPTY_SERVERLOAD);
+ 
+       final AssignmentManager am = master.getAssignmentManager();
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
+index 9037bb3..fbe6dc3 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestCatalogJanitor.java
+@@ -111,7 +111,7 @@ public class TestCatalogJanitor {
+       this.connection =
+         HConnectionTestingUtility.getMockedConnectionAndDecorate(this.c,
+           Mockito.mock(AdminProtos.AdminService.BlockingInterface.class), ri,
+-            ServerName.valueOf("example.org,12345,6789"),
++          new ServerName("example.org,12345,6789"),
+           HRegionInfo.FIRST_META_REGIONINFO);
+       // Set hbase.rootdir into test dir.
+       FileSystem fs = FileSystem.get(this.c);
+@@ -136,7 +136,7 @@ public class TestCatalogJanitor {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf("mockserver.example.org", 1234, -1L);
++      return new ServerName("mockserver.example.org", 1234, -1L);
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestClusterStatusPublisher.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestClusterStatusPublisher.java
+index c9fde2d..4fcfc92 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestClusterStatusPublisher.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestClusterStatusPublisher.java
+@@ -63,7 +63,7 @@ public class TestClusterStatusPublisher {
+         List<Pair<ServerName, Long>> res = new ArrayList<Pair<ServerName, Long>>();
+         switch ((int) EnvironmentEdgeManager.currentTimeMillis()) {
+           case 2:
+-            res.add(new Pair<ServerName, Long>(ServerName.valueOf("hn", 10, 10), 1L));
++            res.add(new Pair<ServerName, Long>(new ServerName("hn", 10, 10), 1L));
+             break;
+           case 1000:
+             break;
+@@ -88,7 +88,7 @@ public class TestClusterStatusPublisher {
+       protected List<Pair<ServerName, Long>> getDeadServers(long since) {
+         List<Pair<ServerName, Long>> res = new ArrayList<Pair<ServerName, Long>>();
+         for (int i = 0; i < 25; i++) {
+-          res.add(new Pair<ServerName, Long>(ServerName.valueOf("hn" + i, 10, 10), 20L));
++          res.add(new Pair<ServerName, Long>(new ServerName("hn" + i, 10, 10), 20L));
+         }
+ 
+         return res;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestDeadServer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestDeadServer.java
+index 27b8e8c..40ca9f9 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestDeadServer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestDeadServer.java
+@@ -34,10 +34,10 @@ import static org.junit.Assert.assertTrue;
+ 
+ @Category(MediumTests.class)
+ public class TestDeadServer {
+-  final ServerName hostname123 = ServerName.valueOf("127.0.0.1", 123, 3L);
+-  final ServerName hostname123_2 = ServerName.valueOf("127.0.0.1", 123, 4L);
+-  final ServerName hostname1234 = ServerName.valueOf("127.0.0.2", 1234, 4L);
+-  final ServerName hostname12345 = ServerName.valueOf("127.0.0.2", 12345, 4L);
++  final ServerName hostname123 = new ServerName("127.0.0.1", 123, 3L);
++  final ServerName hostname123_2 = new ServerName("127.0.0.1", 123, 4L);
++  final ServerName hostname1234 = new ServerName("127.0.0.2", 1234, 4L);
++  final ServerName hostname12345 = new ServerName("127.0.0.2", 12345, 4L);
+ 
+   @Test public void testIsDead() {
+     DeadServer ds = new DeadServer();
+@@ -59,7 +59,7 @@ public class TestDeadServer {
+     // Already dead =       127.0.0.1,9090,112321
+     // Coming back alive =  127.0.0.1,9090,223341
+ 
+-    final ServerName deadServer = ServerName.valueOf("127.0.0.1", 9090, 112321L);
++    final ServerName deadServer = new ServerName("127.0.0.1", 9090, 112321L);
+     assertFalse(ds.cleanPreviousInstance(deadServer));
+     ds.add(deadServer);
+     assertTrue(ds.isDeadServer(deadServer));
+@@ -68,7 +68,7 @@ public class TestDeadServer {
+       Assert.assertNotNull(ds.getTimeOfDeath(eachDeadServer));
+     }
+     final ServerName deadServerHostComingAlive =
+-        ServerName.valueOf("127.0.0.1", 9090, 223341L);
++      new ServerName("127.0.0.1", 9090, 223341L);
+     assertTrue(ds.cleanPreviousInstance(deadServerHostComingAlive));
+     assertFalse(ds.isDeadServer(deadServer));
+     assertFalse(ds.cleanPreviousInstance(deadServerHostComingAlive));
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterFileSystem.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterFileSystem.java
+index 2fbb849..adf047a 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterFileSystem.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterFileSystem.java
+@@ -26,11 +26,13 @@ import java.util.Set;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.MiniHBaseCluster;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.SplitLogTask;
+ import org.apache.hadoop.hbase.util.FSUtils;
+@@ -87,8 +89,8 @@ public class TestMasterFileSystem {
+ 
+     String failedRegion = "failedRegoin1";
+     String staleRegion = "staleRegion";
+-    ServerName inRecoveryServerName = ServerName.valueOf("mgr,1,1");
+-    ServerName previouselyFaildServerName = ServerName.valueOf("previous,1,1");
++    ServerName inRecoveryServerName = new ServerName("mgr,1,1");
++    ServerName previouselyFaildServerName = new ServerName("previous,1,1");
+     String walPath = "/hbase/data/.logs/" + inRecoveryServerName.getServerName()
+         + "-splitting/test";
+     // Create a ZKW to use in the test
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterNoCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterNoCluster.java
+index 50678da..8a90432 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterNoCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterNoCluster.java
+@@ -145,9 +145,9 @@ public class TestMasterNoCluster {
+     final long now = System.currentTimeMillis();
+     // Names for our three servers.  Make the port numbers match hostname.
+     // Will come in use down in the server when we need to figure how to respond.
+-    final ServerName sn0 = ServerName.valueOf("0.example.org", 0, now);
+-    final ServerName sn1 = ServerName.valueOf("1.example.org", 1, now);
+-    final ServerName sn2 = ServerName.valueOf("2.example.org", 2, now);
++    final ServerName sn0 = new ServerName("0.example.org", 0, now);
++    final ServerName sn1 = new ServerName("1.example.org", 1, now);
++    final ServerName sn2 = new ServerName("2.example.org", 2, now);
+     final ServerName [] sns = new ServerName [] {sn0, sn1, sn2};
+     // Put up the mock servers
+     final Configuration conf = TESTUTIL.getConfiguration();
+@@ -257,7 +257,7 @@ public class TestMasterNoCluster {
+ 
+     final long now = System.currentTimeMillis();
+     // Name for our single mocked up regionserver.
+-    final ServerName sn = ServerName.valueOf("0.example.org", 0, now);
++    final ServerName sn = new ServerName("0.example.org", 0, now);
+     // Here is our mocked up regionserver.  Create it now.  Need it setting up
+     // master next.
+     final MockRegionServer rs0 = new MockRegionServer(conf, sn);
+@@ -358,8 +358,8 @@ public class TestMasterNoCluster {
+   public void testNotPullingDeadRegionServerFromZK()
+       throws IOException, KeeperException, InterruptedException {
+     final Configuration conf = TESTUTIL.getConfiguration();
+-    final ServerName newServer = ServerName.valueOf("test.sample", 1, 101);
+-    final ServerName deadServer = ServerName.valueOf("test.sample", 1, 100);
++    final ServerName newServer = new ServerName("test.sample", 1, 101);
++    final ServerName deadServer = new ServerName("test.sample", 1, 100);
+     final MockRegionServer rs0 = new MockRegionServer(conf, newServer);
+ 
+     HMaster master = new HMaster(conf) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterStatusServlet.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterStatusServlet.java
+index b351d94..e47c687 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterStatusServlet.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterStatusServlet.java
+@@ -55,8 +55,8 @@ public class TestMasterStatusServlet {
+   private Configuration conf;
+   private HBaseAdmin admin;
+ 
+-  static final ServerName FAKE_HOST =
+-      ServerName.valueOf("fakehost", 12345, 1234567890);
++  static final ServerName FAKE_HOST = 
++    new ServerName("fakehost", 12345, 1234567890);
+   static final HTableDescriptor FAKE_TABLE =
+     new HTableDescriptor(TableName.valueOf("mytable"));
+   static final HRegionInfo FAKE_HRI =
+@@ -124,7 +124,7 @@ public class TestMasterStatusServlet {
+     setupMockTables();
+     
+     new MasterStatusTmpl()
+-      .setMetaLocation(ServerName.valueOf("metaserver:123,12345"))
++      .setMetaLocation(new ServerName("metaserver:123,12345"))
+       .render(new StringWriter(),
+         master, admin);
+   }
+@@ -134,16 +134,16 @@ public class TestMasterStatusServlet {
+     setupMockTables();
+     
+     List<ServerName> servers = Lists.newArrayList(
+-        ServerName.valueOf("rootserver:123,12345"),
+-        ServerName.valueOf("metaserver:123,12345"));
++        new ServerName("rootserver:123,12345"),
++        new ServerName("metaserver:123,12345"));
+     Set<ServerName> deadServers = new HashSet<ServerName>(
+         Lists.newArrayList(
+-            ServerName.valueOf("badserver:123,12345"),
+-            ServerName.valueOf("uglyserver:123,12345"))
++        new ServerName("badserver:123,12345"),
++        new ServerName("uglyserver:123,12345"))
+     );
+ 
+     new MasterStatusTmpl()
+-      .setMetaLocation(ServerName.valueOf("metaserver:123,12345"))
++      .setMetaLocation(new ServerName("metaserver:123,12345"))
+       .setServers(servers)
+       .setDeadServers(deadServers)
+       .render(new StringWriter(),
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRegionPlacement.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRegionPlacement.java
+index 9d93bcb..7c76d3e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRegionPlacement.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRegionPlacement.java
+@@ -622,7 +622,7 @@ public class TestRegionPlacement {
+             totalRegionNum.incrementAndGet();
+             if (server != null) {
+               ServerName serverName =
+-                  ServerName.valueOf(Bytes.toString(server), -1);
++                  new ServerName(Bytes.toString(server), -1);
+               if (favoredNodes != null) {
+                 String placement = "[NOT FAVORED NODE]";
+                 for (int i = 0; i < favoredServerList.length; i++) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRestartCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRestartCluster.java
+index 2cda4e9..e538b86 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRestartCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestRestartCluster.java
+@@ -66,7 +66,7 @@ public class TestRestartCluster {
+     String unassignedZNode = zooKeeper.assignmentZNode;
+     ZKUtil.createAndFailSilent(zooKeeper, unassignedZNode);
+ 
+-    ServerName sn = ServerName.valueOf(HMaster.MASTER, 1, System.currentTimeMillis());
++    ServerName sn = new ServerName(HMaster.MASTER, 1, System.currentTimeMillis());
+ 
+     ZKAssign.createNodeOffline(zooKeeper, HRegionInfo.FIRST_META_REGIONINFO, sn);
+ 
+@@ -127,4 +127,4 @@ public class TestRestartCluster {
+       UTIL.waitTableAvailable(TABLE);
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
+index 82b8673..b1a8705 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestSplitLogManager.java
+@@ -77,7 +77,7 @@ import org.mockito.Mockito;
+ @Category(MediumTests.class)
+ public class TestSplitLogManager {
+   private static final Log LOG = LogFactory.getLog(TestSplitLogManager.class);
+-  private final ServerName DUMMY_MASTER = ServerName.valueOf("dummy-master,1,1");
++  private final ServerName DUMMY_MASTER = new ServerName("dummy-master,1,1");
+   private final ServerManager sm = Mockito.mock(ServerManager.class);
+   private final MasterServices master =  Mockito.mock(MasterServices.class);
+ 
+@@ -271,9 +271,9 @@ public class TestSplitLogManager {
+ 
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+     int version = ZKUtil.checkExists(zkw, tasknode);
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
+-    final ServerName worker2 = ServerName.valueOf("worker2,1,1");
+-    final ServerName worker3 = ServerName.valueOf("worker3,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
++    final ServerName worker2 = new ServerName("worker2,1,1");
++    final ServerName worker3 = new ServerName("worker3,1,1");
+     SplitLogTask slt = new SplitLogTask.Owned(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+     waitForCounter(tot_mgr_heartbeat, 0, 1, to/2);
+@@ -303,7 +303,7 @@ public class TestSplitLogManager {
+ 
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+     int version = ZKUtil.checkExists(zkw, tasknode);
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     SplitLogTask slt = new SplitLogTask.Owned(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+     waitForCounter(tot_mgr_heartbeat, 0, 1, to/2);
+@@ -330,7 +330,7 @@ public class TestSplitLogManager {
+     slm = new SplitLogManager(zkw, conf, stopper, master, DUMMY_MASTER);
+     TaskBatch batch = new TaskBatch();
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     SplitLogTask slt = new SplitLogTask.Done(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+     synchronized (batch) {
+@@ -351,7 +351,7 @@ public class TestSplitLogManager {
+     TaskBatch batch = new TaskBatch();
+ 
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     SplitLogTask slt = new SplitLogTask.Err(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+ 
+@@ -374,7 +374,7 @@ public class TestSplitLogManager {
+     TaskBatch batch = new TaskBatch();
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+     assertEquals(tot_mgr_resubmit.get(), 0);
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     assertEquals(tot_mgr_resubmit.get(), 0);
+     SplitLogTask slt = new SplitLogTask.Resigned(worker1);
+     assertEquals(tot_mgr_resubmit.get(), 0);
+@@ -398,7 +398,7 @@ public class TestSplitLogManager {
+ 
+     // create an orphan task in OWNED state
+     String tasknode1 = ZKSplitLog.getEncodedNodeName(zkw, "orphan/1");
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     SplitLogTask slt = new SplitLogTask.Owned(worker1);
+     zkw.getRecoverableZooKeeper().create(tasknode1, slt.toByteArray(), Ids.OPEN_ACL_UNSAFE,
+         CreateMode.PERSISTENT);
+@@ -413,7 +413,7 @@ public class TestSplitLogManager {
+     // keep updating the orphan owned node every to/2 seconds
+     for (int i = 0; i < (3 * to)/100; i++) {
+       Thread.sleep(100);
+-      final ServerName worker2 = ServerName.valueOf("worker1,1,1");
++      final ServerName worker2 = new ServerName("worker1,1,1");
+       slt = new SplitLogTask.Owned(worker2);
+       ZKUtil.setData(zkw, tasknode1, slt.toByteArray());
+     }
+@@ -437,7 +437,7 @@ public class TestSplitLogManager {
+ 
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+     int version = ZKUtil.checkExists(zkw, tasknode);
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+     SplitLogTask slt = new SplitLogTask.Owned(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+     if (tot_mgr_heartbeat.get() == 0) waitForCounter(tot_mgr_heartbeat, 0, 1, to/2);
+@@ -461,7 +461,7 @@ public class TestSplitLogManager {
+     TaskBatch batch = new TaskBatch();
+ 
+     String tasknode = submitTaskAndWait(batch, "foo/1");
+-    final ServerName worker1 = ServerName.valueOf("worker1,1,1");
++    final ServerName worker1 = new ServerName("worker1,1,1");
+ 
+     SplitLogTask slt = new SplitLogTask.Owned(worker1);
+     ZKUtil.setData(zkw, tasknode, slt.toByteArray());
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestTableLockManager.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestTableLockManager.java
+index cfe5c51..d2a87b9 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestTableLockManager.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestTableLockManager.java
+@@ -268,7 +268,7 @@ public class TestTableLockManager {
+   @Test(timeout = 600000)
+   public void testReapAllTableLocks() throws Exception {
+     prepareMiniZkCluster();
+-    ServerName serverName = ServerName.valueOf("localhost:10000", 0);
++    ServerName serverName = new ServerName("localhost:10000", 0);
+     final TableLockManager lockManager = TableLockManager.createTableLockManager(
+         TEST_UTIL.getConfiguration(), TEST_UTIL.getZooKeeperWatcher(), serverName);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/BalancerTestBase.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/BalancerTestBase.java
+index 310ae90..9440b71 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/BalancerTestBase.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/BalancerTestBase.java
+@@ -220,7 +220,7 @@ public class BalancerTestBase {
+     String host = "srv" + rand.nextInt(100000);
+     int port = rand.nextInt(60000);
+     long startCode = rand.nextLong();
+-    ServerName sn = ServerName.valueOf(host, port, startCode);
++    ServerName sn = new ServerName(host, port, startCode);
+     return new ServerAndLoad(sn, numRegionsPerServer);
+   }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestBaseLoadBalancer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestBaseLoadBalancer.java
+index a98a65a..98699c0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestBaseLoadBalancer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestBaseLoadBalancer.java
+@@ -156,7 +156,7 @@ public class TestBaseLoadBalancer extends BalancerTestBase {
+       // The old server would have had same host and port, but different
+       // start code!
+       ServerName snWithOldStartCode =
+-          ServerName.valueOf(sn.getHostname(), sn.getPort(), sn.getStartcode() - 10);
++          new ServerName(sn.getHostname(), sn.getPort(), sn.getStartcode() - 10);
+       existing.put(regions.get(i), snWithOldStartCode);
+     }
+     List<ServerName> listOfServerNames = getListOfServerNames(servers);
+@@ -249,7 +249,7 @@ public class TestBaseLoadBalancer extends BalancerTestBase {
+     List<ServerName> oldServers = new ArrayList<ServerName>(servers.size());
+     for (ServerName sn : servers) {
+       // The old server would have had same host and port, but different start code!
+-      oldServers.add(ServerName.valueOf(sn.getHostname(), sn.getPort(), sn.getStartcode() - 10));
++      oldServers.add(new ServerName(sn.getHostname(), sn.getPort(), sn.getStartcode() - 10));
+     }
+ 
+     regions = randomRegions(9); // some more regions
+@@ -296,7 +296,7 @@ public class TestBaseLoadBalancer extends BalancerTestBase {
+     when(locationFinder.getTopBlockLocations(regions.get(42))).thenReturn(
+       Lists.newArrayList(servers.get(4), servers.get(9), servers.get(5)));
+     when(locationFinder.getTopBlockLocations(regions.get(43))).thenReturn(
+-      Lists.newArrayList(ServerName.valueOf("foo", 0, 0))); // this server does not exists in clusterStatus
++      Lists.newArrayList(new ServerName("foo", 0, 0))); // this server does not exists in clusterStatus
+ 
+     BaseLoadBalancer.Cluster cluster = new Cluster(clusterState, null, locationFinder);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestFavoredNodeAssignmentHelper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestFavoredNodeAssignmentHelper.java
+index c5c46de..b9d6ed1 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestFavoredNodeAssignmentHelper.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestFavoredNodeAssignmentHelper.java
+@@ -54,7 +54,7 @@ public class TestFavoredNodeAssignmentHelper {
+     // Set up some server -> rack mappings
+     // Have three racks in the cluster with 10 hosts each.
+     for (int i = 0; i < 40; i++) {
+-      ServerName server = ServerName.valueOf("foo" + i + ":1234", -1);
++      ServerName server = new ServerName("foo"+i+":1234",-1);
+       if (i < 10) {
+         Mockito.when(rackManager.getRack(server)).thenReturn("rack1");
+         if (rackToServers.get("rack1") == null) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestStochasticLoadBalancer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestStochasticLoadBalancer.java
+index 162a257..0d8b641 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestStochasticLoadBalancer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/balancer/TestStochasticLoadBalancer.java
+@@ -121,7 +121,7 @@ public class TestStochasticLoadBalancer extends BalancerTestBase {
+   @Test
+   public void testKeepRegionLoad() throws Exception {
+ 
+-    ServerName sn = ServerName.valueOf("test:8080", 100);
++    ServerName sn = new ServerName("test:8080", 100);
+     int numClusterStatusToAdd = 20000;
+     for (int i = 0; i < numClusterStatusToAdd; i++) {
+       ServerLoad sl = mock(ServerLoad.class);
+@@ -267,7 +267,7 @@ public class TestStochasticLoadBalancer extends BalancerTestBase {
+ 
+     ServerName sn = serverMap.keySet().toArray(new ServerName[serverMap.size()])[0];
+ 
+-    ServerName deadSn = ServerName.valueOf(sn.getHostname(), sn.getPort(), sn.getStartcode() - 100);
++    ServerName deadSn = new ServerName(sn.getHostname(), sn.getPort(), sn.getStartcode() -100);
+ 
+     serverMap.put(deadSn, new ArrayList<HRegionInfo>(0));
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileCleaner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileCleaner.java
+index 7842be4..7b0048d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileCleaner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileCleaner.java
+@@ -215,7 +215,7 @@ public class TestHFileCleaner {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf("regionserver,60020,000000");
++      return new ServerName("regionserver,60020,000000");
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileLinkCleaner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileLinkCleaner.java
+index 6d9ca4c..e74093d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileLinkCleaner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestHFileLinkCleaner.java
+@@ -151,7 +151,7 @@ public class TestHFileLinkCleaner {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf("regionserver,60020,000000");
++      return new ServerName("regionserver,60020,000000");
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestLogsCleaner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestLogsCleaner.java
+index d203b58..d17efeb 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestLogsCleaner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/cleaner/TestLogsCleaner.java
+@@ -28,6 +28,7 @@ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.*;
+ import org.apache.hadoop.hbase.catalog.CatalogTracker;
++import org.apache.hadoop.hbase.master.cleaner.LogCleaner;
+ import org.apache.hadoop.hbase.replication.ReplicationFactory;
+ import org.apache.hadoop.hbase.replication.ReplicationQueues;
+ import org.apache.hadoop.hbase.replication.regionserver.Replication;
+@@ -157,7 +158,7 @@ public class TestLogsCleaner {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf("regionserver,60020,000000");
++      return new ServerName("regionserver,60020,000000");
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMasterAddressTracker.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMasterAddressTracker.java
+index cb5b556..8170d04 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMasterAddressTracker.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMasterAddressTracker.java
+@@ -75,7 +75,7 @@ public class TestMasterAddressTracker {
+     // Create the master node with a dummy address
+     String host = "localhost";
+     int port = 1234;
+-    ServerName sn = ServerName.valueOf(host, port, System.currentTimeMillis());
++    ServerName sn = new ServerName(host, port, System.currentTimeMillis());
+     LOG.info("Creating master node");
+     MasterAddressTracker.setMasterAddress(zk, zk.getMasterAddressZNode(), sn);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSStatusServlet.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSStatusServlet.java
+index 15e55bb..1546ff6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSStatusServlet.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSStatusServlet.java
+@@ -56,12 +56,12 @@ public class TestRSStatusServlet {
+   static final int FAKE_WEB_PORT = 1586;
+   
+   private final ServerName fakeServerName =
+-      ServerName.valueOf("localhost", FAKE_IPC_PORT, 11111);
++    new ServerName("localhost", FAKE_IPC_PORT, 11111);
+   private final GetServerInfoResponse fakeResponse =
+     ResponseConverter.buildGetServerInfoResponse(fakeServerName, FAKE_WEB_PORT);
+ 
+   private final ServerName fakeMasterAddress =
+-      ServerName.valueOf("localhost", 60010, 1212121212);
++    new ServerName("localhost", 60010, 1212121212);
+ 
+   @Before
+   public void setupBasicMocks() throws IOException, ServiceException {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerNoMaster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerNoMaster.java
+index 42e9e8f..f141e7f 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerNoMaster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerNoMaster.java
+@@ -389,7 +389,7 @@ public class TestRegionServerNoMaster {
+     Assert.assertTrue(getRS().getRegion(regionName).isAvailable());
+ 
+     ServerName sn = getRS().getServerName();
+-    ServerName earlierServerName = ServerName.valueOf(sn.getHostname(), sn.getPort(), 1);
++    ServerName earlierServerName = new ServerName(sn.getHostname(), sn.getPort(), 1);
+ 
+     try {
+       CloseRegionRequest request = RequestConverter.buildCloseRegionRequest(earlierServerName, regionName, true);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
+index eaf5547..34a8684 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitLogWorker.java
+@@ -55,7 +55,7 @@ import org.junit.experimental.categories.Category;
+ public class TestSplitLogWorker {
+   private static final Log LOG = LogFactory.getLog(TestSplitLogWorker.class);
+   private static final int WAIT_TIME = 15000;
+-  private final ServerName MANAGER = ServerName.valueOf("manager,1,1");
++  private final ServerName MANAGER = new ServerName("manager,1,1");
+   static {
+     Logger.getLogger("org.apache.hadoop.hbase").setLevel(Level.DEBUG);
+   }
+@@ -146,10 +146,10 @@ public class TestSplitLogWorker {
+     LOG.info("testAcquireTaskAtStartup");
+     SplitLogCounters.resetCounters();
+     final String TATAS = "tatas";
+-    final ServerName RS = ServerName.valueOf("rs,1,1");
++    final ServerName RS = new ServerName("rs,1,1");
+     RegionServerServices mockedRS = getRegionServer(RS);
+     zkw.getRecoverableZooKeeper().create(ZKSplitLog.getEncodedNodeName(zkw, TATAS),
+-      new SplitLogTask.Unassigned(ServerName.valueOf("mgr,1,1")).toByteArray(), Ids.OPEN_ACL_UNSAFE,
++      new SplitLogTask.Unassigned(new ServerName("mgr,1,1")).toByteArray(), Ids.OPEN_ACL_UNSAFE,
+         CreateMode.PERSISTENT);
+ 
+     SplitLogWorker slw =
+@@ -181,8 +181,8 @@ public class TestSplitLogWorker {
+     LOG.info("testRaceForTask");
+     SplitLogCounters.resetCounters();
+     final String TRFT = "trft";
+-    final ServerName SVR1 = ServerName.valueOf("svr1,1,1");
+-    final ServerName SVR2 = ServerName.valueOf("svr2,1,1");
++    final ServerName SVR1 = new ServerName("svr1,1,1");
++    final ServerName SVR2 = new ServerName("svr2,1,1");
+     zkw.getRecoverableZooKeeper().create(ZKSplitLog.getEncodedNodeName(zkw, TRFT),
+       new SplitLogTask.Unassigned(MANAGER).toByteArray(), Ids.OPEN_ACL_UNSAFE,
+         CreateMode.PERSISTENT);
+@@ -214,7 +214,7 @@ public class TestSplitLogWorker {
+   public void testPreemptTask() throws Exception {
+     LOG.info("testPreemptTask");
+     SplitLogCounters.resetCounters();
+-    final ServerName SRV = ServerName.valueOf("tpt_svr,1,1");
++    final ServerName SRV = new ServerName("tpt_svr,1,1");
+     final String PATH = ZKSplitLog.getEncodedNodeName(zkw, "tpt_task");
+     RegionServerServices mockedRS = getRegionServer(SRV);
+     SplitLogWorker slw =
+@@ -247,7 +247,7 @@ public class TestSplitLogWorker {
+   public void testMultipleTasks() throws Exception {
+     LOG.info("testMultipleTasks");
+     SplitLogCounters.resetCounters();
+-    final ServerName SRV = ServerName.valueOf("tmt_svr,1,1");
++    final ServerName SRV = new ServerName("tmt_svr,1,1");
+     final String PATH1 = ZKSplitLog.getEncodedNodeName(zkw, "tmt_task");
+     RegionServerServices mockedRS = getRegionServer(SRV);
+     SplitLogWorker slw =
+@@ -271,7 +271,7 @@ public class TestSplitLogWorker {
+         Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+ 
+       // preempt the first task, have it owned by another worker
+-      final ServerName anotherWorker = ServerName.valueOf("another-worker,1,1");
++      final ServerName anotherWorker = new ServerName("another-worker,1,1");
+       SplitLogTask slt = new SplitLogTask.Owned(anotherWorker);
+       ZKUtil.setData(zkw, PATH1, slt.toByteArray());
+       waitForCounter(SplitLogCounters.tot_wkr_preempt_task, 0, 1, WAIT_TIME);
+@@ -290,7 +290,7 @@ public class TestSplitLogWorker {
+   public void testRescan() throws Exception {
+     LOG.info("testRescan");
+     SplitLogCounters.resetCounters();
+-    final ServerName SRV = ServerName.valueOf("svr,1,1");
++    final ServerName SRV = new ServerName("svr,1,1");
+     RegionServerServices mockedRS = getRegionServer(SRV);
+     slw = new SplitLogWorker(zkw, TEST_UTIL.getConfiguration(), mockedRS, neverEndingTask);
+     slw.start();
+@@ -343,7 +343,7 @@ public class TestSplitLogWorker {
+     LOG.info("testAcquireMultiTasks");
+     SplitLogCounters.resetCounters();
+     final String TATAS = "tatas";
+-    final ServerName RS = ServerName.valueOf("rs,1,1");
++    final ServerName RS = new ServerName("rs,1,1");
+     final int maxTasks = 3;
+     Configuration testConf = HBaseConfiguration.create(TEST_UTIL.getConfiguration());
+     testConf.setInt("hbase.regionserver.wal.max.splitters", maxTasks);
+@@ -351,7 +351,7 @@ public class TestSplitLogWorker {
+ 
+     for (int i = 0; i < maxTasks; i++) {
+       zkw.getRecoverableZooKeeper().create(ZKSplitLog.getEncodedNodeName(zkw, TATAS + i),
+-        new SplitLogTask.Unassigned(ServerName.valueOf("mgr,1,1")).toByteArray(),
++        new SplitLogTask.Unassigned(new ServerName("mgr,1,1")).toByteArray(),
+         Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+     }
+ 
+@@ -379,8 +379,8 @@ public class TestSplitLogWorker {
+     LOG.info("testAcquireMultiTasks");
+     SplitLogCounters.resetCounters();
+     final String TATAS = "tatas";
+-    final ServerName RS = ServerName.valueOf("rs,1,1");
+-    final ServerName RS2 = ServerName.valueOf("rs,1,2");
++    final ServerName RS = new ServerName("rs,1,1");
++    final ServerName RS2 = new ServerName("rs,1,2");
+     final int maxTasks = 3;
+     Configuration testConf = HBaseConfiguration.create(TEST_UTIL.getConfiguration());
+     testConf.setInt("hbase.regionserver.wal.max.splitters", maxTasks);
+@@ -394,7 +394,7 @@ public class TestSplitLogWorker {
+ 
+     for (int i = 0; i < maxTasks; i++) {
+       zkw.getRecoverableZooKeeper().create(ZKSplitLog.getEncodedNodeName(zkw, TATAS + i),
+-        new SplitLogTask.Unassigned(ServerName.valueOf("mgr,1,1")).toByteArray(),
++        new SplitLogTask.Unassigned(new ServerName("mgr,1,1")).toByteArray(),
+         Ids.OPEN_ACL_UNSAFE,
+         CreateMode.PERSISTENT);
+     }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitTransactionOnCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitTransactionOnCluster.java
+index 6e0995c..d1e756b 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitTransactionOnCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestSplitTransactionOnCluster.java
+@@ -419,7 +419,7 @@ public class TestSplitTransactionOnCluster {
+       int regionCount = ProtobufUtil.getOnlineRegions(server).size();
+       // Insert into zk a blocking znode, a znode of same name as region
+       // so it gets in way of our splitting.
+-      ServerName fakedServer = ServerName.valueOf("any.old.server", 1234, -1);
++      ServerName fakedServer = new ServerName("any.old.server", 1234, -1);
+       ZKAssign.createNodeClosing(TESTING_UTIL.getZooKeeperWatcher(),
+         hri, fakedServer);
+       // Now try splitting.... should fail.  And each should successfully
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/wal/TestHLog.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/wal/TestHLog.java
+index 94cfe69..c70aa27 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/wal/TestHLog.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/wal/TestHLog.java
+@@ -23,8 +23,11 @@ import static org.junit.Assert.*;
+ import java.io.IOException;
+ import java.lang.reflect.Method;
+ import java.net.BindException;
++import java.util.Arrays;
++import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.HashMap;
++import java.util.TreeMap;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.atomic.AtomicLong;
+@@ -60,6 +63,9 @@ import org.junit.Before;
+ import org.junit.BeforeClass;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
++import org.mockito.Mockito;
++import org.mockito.invocation.InvocationOnMock;
++import org.mockito.stubbing.Answer;
+ 
+ /** JUnit test case for HLog */
+ @Category(LargeTests.class)
+@@ -710,7 +716,7 @@ public class TestHLog  {
+ 
+   @Test
+   public void testGetServerNameFromHLogDirectoryName() throws IOException {
+-    ServerName sn = ServerName.valueOf("hn", 450, 1398);
++    ServerName sn = new ServerName("hn", 450, 1398);
+     String hl = FSUtils.getRootDir(conf) + "/" + HLogUtil.getHLogDirectoryName(sn.toString());
+ 
+     // Must not throw exception
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateBasic.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateBasic.java
+index fd003ad..80f1c43 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateBasic.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateBasic.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.replication;
+ 
+ import static org.junit.Assert.*;
+ 
++import java.io.IOException;
+ import java.util.List;
+ import java.util.SortedMap;
+ import java.util.SortedSet;
+@@ -28,6 +29,7 @@ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.zookeeper.ZKUtil;
++import org.apache.zookeeper.KeeperException;
+ import org.junit.Before;
+ import org.junit.Test;
+ 
+@@ -41,9 +43,9 @@ public abstract class TestReplicationStateBasic {
+   protected ReplicationQueues rq2;
+   protected ReplicationQueues rq3;
+   protected ReplicationQueuesClient rqc;
+-  protected String server1 = ServerName.valueOf("hostname1.example.org", 1234, -1L).toString();
+-  protected String server2 = ServerName.valueOf("hostname2.example.org", 1234, -1L).toString();
+-  protected String server3 = ServerName.valueOf("hostname3.example.org", 1234, -1L).toString();
++  protected String server1 = new ServerName("hostname1.example.org", 1234, -1L).toString();
++  protected String server2 = new ServerName("hostname2.example.org", 1234, -1L).toString();
++  protected String server3 = new ServerName("hostname3.example.org", 1234, -1L).toString();
+   protected ReplicationPeers rp;
+   protected static final String ID_ONE = "1";
+   protected static final String ID_TWO = "2";
+@@ -122,7 +124,7 @@ public abstract class TestReplicationStateBasic {
+     assertNull(rq1.getAllQueues());
+     assertEquals(0, rq1.getLogPosition("bogus", "bogus"));
+     assertNull(rq1.getLogsInQueue("bogus"));
+-    assertEquals(0, rq1.claimQueues(ServerName.valueOf("bogus", 1234, -1L).toString()).size());
++    assertEquals(0, rq1.claimQueues(new ServerName("bogus", 1234, -1L).toString()).size());
+ 
+     rq1.setLogPosition("bogus", "bogus", 5L);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateZKImpl.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateZKImpl.java
+index 3ef57a5..8b53569 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateZKImpl.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationStateZKImpl.java
+@@ -148,7 +148,7 @@ public class TestReplicationStateZKImpl extends TestReplicationStateBasic {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf(this.serverName);
++      return new ServerName(this.serverName);
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationTrackerZKImpl.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationTrackerZKImpl.java
+index d073726..696cf8c 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationTrackerZKImpl.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/TestReplicationTrackerZKImpl.java
+@@ -224,7 +224,7 @@ public class TestReplicationTrackerZKImpl {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf(this.serverName);
++      return new ServerName(this.serverName);
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
+index b9e4d8f..602539e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/replication/regionserver/TestReplicationSourceManager.java
+@@ -397,7 +397,7 @@ public class TestReplicationSourceManager {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf(hostname, 1234, 1L);
++      return new ServerName(hostname, 1234, 1L);
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestSecureRPC.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestSecureRPC.java
+index ab16bcb..e21bf8d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestSecureRPC.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/TestSecureRPC.java
+@@ -101,7 +101,7 @@ public class TestSecureRPC {
+     RpcClient rpcClient = new RpcClient(conf, HConstants.DEFAULT_CLUSTER_ID.toString());
+     try {
+       BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(
+-          ServerName.valueOf(rpcServer.getListenerAddress().getHostName(),
++          new ServerName(rpcServer.getListenerAddress().getHostName(),
+               rpcServer.getListenerAddress().getPort(), System.currentTimeMillis()),
+           User.getCurrent(), 1000);
+       TestDelayedRpcProtos.TestDelayedService.BlockingInterface stub =
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/token/TestTokenAuthentication.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/token/TestTokenAuthentication.java
+index baf9cf4..a331434 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/token/TestTokenAuthentication.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/token/TestTokenAuthentication.java
+@@ -52,6 +52,7 @@ import org.apache.hadoop.hbase.ipc.RpcServer;
+ import org.apache.hadoop.hbase.ipc.RpcServer.BlockingServiceAndInterface;
+ import org.apache.hadoop.hbase.ipc.RpcServerInterface;
+ import org.apache.hadoop.hbase.ipc.ServerRpcController;
++import org.apache.hadoop.hbase.ipc.SimpleRpcScheduler;
+ import org.apache.hadoop.hbase.protobuf.generated.AuthenticationProtos;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.RegionServerServices;
+@@ -159,7 +160,7 @@ public class TestTokenAuthentication {
+ 
+     @Override
+     public ServerName getServerName() {
+-      return ServerName.valueOf(isa.getHostName(), isa.getPort(), startcode);
++      return new ServerName(isa.getHostName(), isa.getPort(), startcode);
+     }
+ 
+     @Override
+@@ -387,8 +388,8 @@ public class TestTokenAuthentication {
+         Configuration c = server.getConfiguration();
+         RpcClient rpcClient = new RpcClient(c, clusterId.toString());
+         ServerName sn =
+-            ServerName.valueOf(server.getAddress().getHostName(), server.getAddress().getPort(),
+-                System.currentTimeMillis());
++          new ServerName(server.getAddress().getHostName(), server.getAddress().getPort(),
++            System.currentTimeMillis());
+         try {
+           BlockingRpcChannel channel = rpcClient.createBlockingRpcChannel(sn,
+             User.getCurrent(), HConstants.DEFAULT_HBASE_RPC_TIMEOUT);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/MockServer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/MockServer.java
+index 21671d1..50cef63 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/MockServer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/MockServer.java
+@@ -34,7 +34,7 @@ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+  */
+ public class MockServer implements Server {
+   static final Log LOG = LogFactory.getLog(MockServer.class);
+-  final static ServerName NAME = ServerName.valueOf("MockServer", 123, -1);
++  final static ServerName NAME = new ServerName("MockServer", 123, -1);
+   
+   boolean stopped;
+   boolean aborted;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+index b815c54..1b239c6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestHBaseFsck.java
+@@ -2056,7 +2056,7 @@ public class TestHBaseFsck {
+     HBaseFsck hbck = doFsck(conf, false);
+     assertNoErrors(hbck);
+ 
+-    ServerName mockName = ServerName.valueOf("localhost", 60000, 1);
++    ServerName mockName = new ServerName("localhost", 60000, 1);
+ 
+     // obtain one lock
+     final TableLockManager tableLockManager = TableLockManager.createTableLockManager(conf, TEST_UTIL.getZooKeeperWatcher(), mockName);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperNodeTracker.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperNodeTracker.java
+index 50f7c70..3050a9f 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperNodeTracker.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/zookeeper/TestZooKeeperNodeTracker.java
+@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNull;
+ import static org.junit.Assert.assertTrue;
+ 
+ import java.io.IOException;
++import java.lang.reflect.Method;
+ import java.util.Random;
+ import java.util.concurrent.Semaphore;
+ 
+@@ -32,10 +33,12 @@ import junit.framework.Assert;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.hbase.*;
++import org.apache.hadoop.hbase.client.HConnectionManager;
+ import org.apache.hadoop.hbase.master.TestActiveMasterManager.NodeDeletionListener;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.zookeeper.CreateMode;
++import org.apache.zookeeper.KeeperException;
+ import org.apache.zookeeper.WatchedEvent;
+ import org.apache.zookeeper.Watcher;
+ import org.apache.zookeeper.ZooDefs.Ids;
+@@ -318,7 +321,7 @@ public class TestZooKeeperNodeTracker {
+     ZooKeeperWatcher zkw = new ZooKeeperWatcher(TEST_UTIL.getConfiguration(),
+         "testNodeTracker", new TestZooKeeperNodeTracker.StubAbortable());
+ 
+-    final ServerName sn = ServerName.valueOf("127.0.0.1:52", 45L);
++    final ServerName sn = new ServerName("127.0.0.1:52",45L);
+ 
+     ZKUtil.createAndFailSilent(zkw,
+         TEST_UTIL.getConfiguration().get(HConstants.ZOOKEEPER_ZNODE_PARENT,
+@@ -333,7 +336,7 @@ public class TestZooKeeperNodeTracker {
+ 
+     // Check that we don't delete if we're not supposed to
+     ZKUtil.setData(zkw, nodeName, MasterAddressTracker.toByteArray(sn));
+-    MasterAddressTracker.deleteIfEquals(zkw, ServerName.valueOf("127.0.0.2:52", 45L).toString());
++    MasterAddressTracker.deleteIfEquals(zkw, new ServerName("127.0.0.2:52",45L).toString());
+     Assert.assertFalse(ZKUtil.getData(zkw, nodeName) == null);
+ 
+     // Check that we delete when we're supposed to
+-- 
+1.7.0.4
+

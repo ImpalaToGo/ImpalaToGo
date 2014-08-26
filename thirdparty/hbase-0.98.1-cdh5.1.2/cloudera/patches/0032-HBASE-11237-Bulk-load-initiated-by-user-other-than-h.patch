@@ -1,0 +1,32 @@
+From d298bef294ec7f253b53172ee3ff7448c6569d67 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Thu, 22 May 2014 15:27:34 -0700
+Subject: [PATCH 32/70] HBASE-11237 Bulk load initiated by user other than hbase fails
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-19108
+---
+ .../security/access/SecureBulkLoadEndpoint.java    |    6 +++++-
+ 1 files changed, 5 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+index 7f845cc..1ce5a50 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+@@ -236,7 +236,11 @@ public class SecureBulkLoadEndpoint extends SecureBulkLoadService
+         done.run(null);
+         return;
+       }
+-      ugi.addToken(targetfsDelegationToken.getUserToken());
++      Token<?> targetFsToken = targetfsDelegationToken.getUserToken();
++      if (targetFsToken != null && (userToken == null
++          || !targetFsToken.getService().equals(userToken.getService()))) {
++        ugi.addToken(targetFsToken);
++      }
+ 
+       loaded = ugi.doAs(new PrivilegedAction<Boolean>() {
+         @Override
+-- 
+1.7.0.4
+

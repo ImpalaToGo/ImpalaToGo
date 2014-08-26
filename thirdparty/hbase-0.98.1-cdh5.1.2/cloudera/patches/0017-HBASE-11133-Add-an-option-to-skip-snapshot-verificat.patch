@@ -1,0 +1,64 @@
+From 6cfffcaec6e93fc04a64ca693c1a6ed126189e9e Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Sun, 11 May 2014 10:57:28 +0000
+Subject: [PATCH 17/70] HBASE-11133 Add an option to skip snapshot verification after ExportSnapshot
+
+Reason: Improvement
+Author: Matteo Bertozzi
+Ref: CDH-19025
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1593770 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   15 +++++++++++----
+ 1 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index 1a0478a..d2ba528 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -650,6 +650,7 @@ public final class ExportSnapshot extends Configured implements Tool {
+    */
+   @Override
+   public int run(String[] args) throws IOException {
++    boolean verifyTarget = true;
+     boolean verifyChecksum = true;
+     String snapshotName = null;
+     boolean overwrite = false;
+@@ -676,6 +677,8 @@ public final class ExportSnapshot extends Configured implements Tool {
+           FSUtils.setRootDir(conf, sourceDir);
+         } else if (cmd.equals("-no-checksum-verify")) {
+           verifyChecksum = false;
++        } else if (cmd.equals("-no-target-verify")) {
++          verifyTarget = false;
+         } else if (cmd.equals("-mappers")) {
+           mappers = Integer.parseInt(args[++i]);
+         } else if (cmd.equals("-chuser")) {
+@@ -792,9 +795,11 @@ public final class ExportSnapshot extends Configured implements Tool {
+         }
+       }
+ 
+-      // Step 4 - Verify snapshot validity
+-      LOG.info("Verify snapshot validity");
+-      verifySnapshot(conf, outputFs, outputRoot, outputSnapshotDir);
++      // Step 4 - Verify snapshot integrity
++      if (verifyTarget) {
++        LOG.info("Verify snapshot integrity");
++        verifySnapshot(conf, outputFs, outputRoot, outputSnapshotDir);
++      }
+ 
+       LOG.info("Export Completed: " + snapshotName);
+       return 0;
+@@ -816,7 +821,9 @@ public final class ExportSnapshot extends Configured implements Tool {
+     System.err.println("  -snapshot NAME          Snapshot to restore.");
+     System.err.println("  -copy-to NAME           Remote destination hdfs://");
+     System.err.println("  -copy-from NAME         Input folder hdfs:// (default hbase.rootdir)");
+-    System.err.println("  -no-checksum-verify     Do not verify checksum.");
++    System.err.println("  -no-checksum-verify     Do not verify checksum, use name+length only.");
++    System.err.println("  -no-target-verify       Do not verify the integrity of the \\" +
++        "exported snapshot.");
+     System.err.println("  -overwrite              Rewrite the snapshot manifest if already exists");
+     System.err.println("  -chuser USERNAME        Change the owner of the files to the specified one.");
+     System.err.println("  -chgroup GROUP          Change the group of the files to the specified one.");
+-- 
+1.7.0.4
+

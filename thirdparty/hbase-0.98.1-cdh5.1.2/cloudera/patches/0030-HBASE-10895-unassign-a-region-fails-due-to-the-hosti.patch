@@ -1,0 +1,106 @@
+From d96851961e68bef16f16944094286f79f69d2778 Mon Sep 17 00:00:00 2001
+From: jeffreyz <jeffreyz@unknown>
+Date: Sat, 5 Apr 2014 01:05:25 +0000
+Subject: [PATCH 30/70] HBASE-10895: unassign a region fails due to the hosting region server is in FailedServerList
+
+Reason: Bug
+Author: Jeffrey Zhong
+Ref: CDH-19314
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1584948 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/master/AssignmentManager.java     |   43 +++++++++++++------
+ .../master/TestAssignmentManagerOnCluster.java     |    2 +-
+ 2 files changed, 30 insertions(+), 15 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+index 5d4091f..dba5cec 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/AssignmentManager.java
+@@ -1695,6 +1695,7 @@ public class AssignmentManager extends ZooKeeperListener {
+         if (t instanceof RemoteException) {
+           t = ((RemoteException)t).unwrapRemoteException();
+         }
++        boolean logRetries = true;
+         if (t instanceof NotServingRegionException
+             || t instanceof RegionServerStoppedException
+             || t instanceof ServerNotRunningYetException
+@@ -1708,34 +1709,48 @@ public class AssignmentManager extends ZooKeeperListener {
+             regionOffline(region);
+           }
+           return;
+-        } else if (state != null
+-            && t instanceof RegionAlreadyInTransitionException) {
+-          // RS is already processing this region, only need to update the timestamp
+-          LOG.debug("update " + state + " the timestamp.");
+-          state.updateTimestampToNow();
+-          if (maxWaitTime < 0) {
+-            maxWaitTime = EnvironmentEdgeManager.currentTimeMillis()
+-              + this.server.getConfiguration().getLong(ALREADY_IN_TRANSITION_WAITTIME,
+-                DEFAULT_ALREADY_IN_TRANSITION_WAITTIME);
+-          }
+-          try {
++        } else if ((t instanceof FailedServerException) || (state != null && 
++            t instanceof RegionAlreadyInTransitionException)) {
++          long sleepTime = 0;
++          Configuration conf = this.server.getConfiguration();
++          if(t instanceof FailedServerException) {
++            sleepTime = 1 + conf.getInt(RpcClient.FAILED_SERVER_EXPIRY_KEY, 
++                  RpcClient.FAILED_SERVER_EXPIRY_DEFAULT);
++          } else {
++            // RS is already processing this region, only need to update the timestamp
++            LOG.debug("update " + state + " the timestamp.");
++            state.updateTimestampToNow();
++            if (maxWaitTime < 0) {
++              maxWaitTime =
++                  EnvironmentEdgeManager.currentTimeMillis()
++                      + conf.getLong(ALREADY_IN_TRANSITION_WAITTIME,
++                        DEFAULT_ALREADY_IN_TRANSITION_WAITTIME);
++            }
+             long now = EnvironmentEdgeManager.currentTimeMillis();
+             if (now < maxWaitTime) {
+               LOG.debug("Region is already in transition; "
+                 + "waiting up to " + (maxWaitTime - now) + "ms", t);
+-              Thread.sleep(100);
++              sleepTime = 100;
+               i--; // reset the try count
++              logRetries = false;
++            }
++          }
++          try {
++            if (sleepTime > 0) {
++              Thread.sleep(sleepTime);
+             }
+           } catch (InterruptedException ie) {
+             LOG.warn("Failed to unassign "
+               + region.getRegionNameAsString() + " since interrupted", ie);
+             Thread.currentThread().interrupt();
+-            if (!tomActivated) {
++            if (!tomActivated && state != null) {
+               regionStates.updateRegionState(region, State.FAILED_CLOSE);
+             }
+             return;
+           }
+-        } else {
++        }
++
++        if (logRetries) {
+           LOG.info("Server " + server + " returned " + t + " for "
+             + region.getRegionNameAsString() + ", try=" + i
+             + " of " + this.maximumAttempts, t);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+index 3d96c25..79af067 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestAssignmentManagerOnCluster.java
+@@ -141,7 +141,7 @@ public class TestAssignmentManagerOnCluster {
+   @Test (timeout=120000)
+   public void testAssignRegionOnRestartedServer() throws Exception {
+     String table = "testAssignRegionOnRestartedServer";
+-    TEST_UTIL.getMiniHBaseCluster().getConf().setInt("hbase.assignment.maximum.attempts", 40);
++    TEST_UTIL.getMiniHBaseCluster().getConf().setInt("hbase.assignment.maximum.attempts", 20);
+     TEST_UTIL.getMiniHBaseCluster().stopMaster(0);
+     TEST_UTIL.getMiniHBaseCluster().startMaster(); //restart the master so that conf take into affect
+ 
+-- 
+1.7.0.4
+

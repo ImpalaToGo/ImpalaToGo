@@ -1,0 +1,48 @@
+From 127ef9aa895f63b696011105da40127242e34886 Mon Sep 17 00:00:00 2001
+From: anoopsamjohn <anoopsamjohn@unknown>
+Date: Sat, 12 Apr 2014 03:17:02 +0000
+Subject: [PATCH 48/70] HBASE-10964 Delete mutation is not consistent with Put wrt timestamp.(Anoop)
+
+Reason: Bug
+Author: anoopsamjohn
+Ref: CDH-19470
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1586809 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../org/apache/hadoop/hbase/client/Delete.java     |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
+index 2b35827..24ce293 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
+@@ -180,7 +180,7 @@ public class Delete extends Mutation implements Comparable<Row> {
+    * @return this for invocation chaining
+    */
+   public Delete deleteFamily(byte [] family) {
+-    this.deleteFamily(family, HConstants.LATEST_TIMESTAMP);
++    this.deleteFamily(family, this.ts);
+     return this;
+   }
+ 
+@@ -237,7 +237,7 @@ public class Delete extends Mutation implements Comparable<Row> {
+    * @return this for invocation chaining
+    */
+   public Delete deleteColumns(byte [] family, byte [] qualifier) {
+-    this.deleteColumns(family, qualifier, HConstants.LATEST_TIMESTAMP);
++    this.deleteColumns(family, qualifier, this.ts);
+     return this;
+   }
+ 
+@@ -274,7 +274,7 @@ public class Delete extends Mutation implements Comparable<Row> {
+    * @return this for invocation chaining
+    */
+   public Delete deleteColumn(byte [] family, byte [] qualifier) {
+-    this.deleteColumn(family, qualifier, HConstants.LATEST_TIMESTAMP);
++    this.deleteColumn(family, qualifier, this.ts);
+     return this;
+   }
+ 
+-- 
+1.7.0.4
+

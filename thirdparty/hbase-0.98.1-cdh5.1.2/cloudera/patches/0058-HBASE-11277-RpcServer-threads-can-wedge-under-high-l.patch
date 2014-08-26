@@ -1,0 +1,30 @@
+From 93068e433008ae88e422c61fa15269e6f035e287 Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Sat, 31 May 2014 15:24:06 -0700
+Subject: [PATCH 58/70] HBASE-11277 RpcServer threads can wedge under high load
+
+Reason: Bug
+Author: Andrew Purtell
+Ref: CDH-19470
+---
+ .../org/apache/hadoop/hbase/ipc/RpcServer.java     |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/RpcServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/RpcServer.java
+index e79098e..1c12e2d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/RpcServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/RpcServer.java
+@@ -1506,8 +1506,8 @@ public class RpcServer implements RpcServerInterface {
+           if (!headerRead) {
+             continue;
+           }
+-        } else {
+-          // More to read still; go around again.
++        } else if (count > 0) {
++          // We got some data and there is more to read still; go around again.
+           if (LOG.isTraceEnabled()) LOG.trace("Continue to read rest of data " + data.remaining());
+           continue;
+         }
+-- 
+1.7.0.4
+

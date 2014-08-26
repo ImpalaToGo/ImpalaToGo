@@ -1,0 +1,390 @@
+From 0637f56dee09064bb691eb6aa4878d48074a75ac Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Sat, 28 Dec 2013 04:40:02 +0000
+Subject: [PATCH 20/70] HBASE-10246 Wrap long lines in recently added source files
+
+Reason: Improvement
+Author: Ted Yu
+Ref: CDH-18297
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1553786 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../IntegrationTestTableSnapshotInputFormat.java   |   16 ++++++----
+ .../hbase/client/ClientSideRegionScanner.java      |    3 +-
+ .../hbase/mapreduce/TableSnapshotInputFormat.java  |   28 ++++++++++-------
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   14 +++++---
+ .../apache/hadoop/hbase/PerformanceEvaluation.java |    7 ++--
+ .../hbase/client/TestTableSnapshotScanner.java     |   10 ++++--
+ .../mapreduce/TestTableSnapshotInputFormat.java    |   32 ++++++++++++-------
+ .../hadoop/hbase/rest/PerformanceEvaluation.java   |   24 ++++++++------
+ 8 files changed, 82 insertions(+), 52 deletions(-)
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/mapreduce/IntegrationTestTableSnapshotInputFormat.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/mapreduce/IntegrationTestTableSnapshotInputFormat.java
+index d996383..b98e214 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/mapreduce/IntegrationTestTableSnapshotInputFormat.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/mapreduce/IntegrationTestTableSnapshotInputFormat.java
+@@ -51,14 +51,17 @@ import org.junit.experimental.categories.Category;
+  *
+  * Then the test creates a snapshot from this table, and overrides the values in the original
+  * table with values 'after_snapshot_value'. The test, then runs a mapreduce job over the snapshot
+- * with a scan start row 'bbb' and stop row 'yyy'. The data is saved in a single reduce output file, and
++ * with a scan start row 'bbb' and stop row 'yyy'. The data is saved in a single reduce output 
++ * file, and
+  * inspected later to verify that the MR job has seen all the values from the snapshot.
+  *
+  * <p> These parameters can be used to configure the job:
+  * <br>"IntegrationTestTableSnapshotInputFormat.table" =&gt; the name of the table
+  * <br>"IntegrationTestTableSnapshotInputFormat.snapshot" =&gt; the name of the snapshot
+- * <br>"IntegrationTestTableSnapshotInputFormat.numRegions" =&gt; number of regions in the table to be created
+- * <br>"IntegrationTestTableSnapshotInputFormat.tableDir" =&gt; temporary directory to restore the snapshot files
++ * <br>"IntegrationTestTableSnapshotInputFormat.numRegions" =&gt; number of regions in the table 
++ * to be created
++ * <br>"IntegrationTestTableSnapshotInputFormat.tableDir" =&gt; temporary directory to restore the
++ * snapshot files
+  *
+  */
+ @Category(IntegrationTests.class)
+@@ -70,10 +73,11 @@ public class IntegrationTestTableSnapshotInputFormat extends IntegrationTestBase
+   private static final String TABLE_NAME_KEY = "IntegrationTestTableSnapshotInputFormat.table";
+   private static final String DEFAULT_TABLE_NAME = "IntegrationTestTableSnapshotInputFormat";
+ 
+-  private static final String SNAPSHOT_NAME_KEY = "IntegrationTestTableSnapshotInputFormat.snapshot";
++  private static final String SNAPSHOT_NAME_KEY = 
++      "IntegrationTestTableSnapshotInputFormat.snapshot";
++  private static final String NUM_REGIONS_KEY = 
++      "IntegrationTestTableSnapshotInputFormat.numRegions";
+ 
+-
+-  private static final String NUM_REGIONS_KEY = "IntegrationTestTableSnapshotInputFormat.numRegions";
+   private static final int DEFAULT_NUM_REGIONS = 32;
+ 
+   private static final String TABLE_DIR_KEY = "IntegrationTestTableSnapshotInputFormat.tableDir";
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/client/ClientSideRegionScanner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/client/ClientSideRegionScanner.java
+index a1e2fd9..2dab8e7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/client/ClientSideRegionScanner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/client/ClientSideRegionScanner.java
+@@ -48,7 +48,8 @@ public class ClientSideRegionScanner extends AbstractClientScanner {
+   List<Cell> values;
+ 
+   public ClientSideRegionScanner(Configuration conf, FileSystem fs,
+-      Path rootDir, HTableDescriptor htd, HRegionInfo hri, Scan scan, ScanMetrics scanMetrics) throws IOException {
++      Path rootDir, HTableDescriptor htd, HRegionInfo hri, Scan scan, ScanMetrics scanMetrics) 
++          throws IOException {
+ 
+     this.scan = scan;
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
+index 4fb5a56..e37bb42 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableSnapshotInputFormat.java
+@@ -82,7 +82,8 @@ import com.google.common.annotations.VisibleForTesting;
+  * while there are jobs reading from snapshot files.
+  * <p>
+  * Usage is similar to TableInputFormat, and
+- * {@link TableMapReduceUtil#initTableSnapshotMapperJob(String, Scan, Class, Class, Class, Job, boolean, Path)}
++ * {@link TableMapReduceUtil#initTableSnapshotMapperJob(String, Scan, Class, Class, Class, Job,
++ *   boolean, Path)}
+  * can be used to configure the job.
+  * <pre>{@code
+  * Job job = new Job(conf);
+@@ -100,12 +101,13 @@ import com.google.common.annotations.VisibleForTesting;
+  * <p>
+  * HBase owns all the data and snapshot files on the filesystem. Only the HBase user can read from
+  * snapshot files and data files. HBase also enforces security because all the requests are handled
+- * by the server layer, and the user cannot read from the data files directly. To read from snapshot
+- * files directly from the file system, the user who is running the MR job must have sufficient
+- * permissions to access snapshot and reference files. This means that to run mapreduce over
+- * snapshot files, the MR job has to be run as the HBase user or the user must have group or other
+- * priviledges in the filesystem (See HBASE-8369). Note that, given other users access to read from
+- * snapshot/data files will completely circumvent the access control enforced by HBase.
++ * by the server layer, and the user cannot read from the data files directly.
++ * To read from snapshot files directly from the file system, the user who is running the MR job
++ * must have sufficient permissions to access snapshot and reference files.
++ * This means that to run mapreduce over snapshot files, the MR job has to be run as the HBase
++ * user or the user must have group or other priviledges in the filesystem (See HBASE-8369).
++ * Note that, given other users access to read from snapshot/data files will completely circumvent
++ * the access control enforced by HBase.
+  * @see TableSnapshotScanner
+  */
+ @InterfaceAudience.Public
+@@ -117,7 +119,8 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+   private static final Log LOG = LogFactory.getLog(TableSnapshotInputFormat.class);
+ 
+   /** See {@link #getBestLocations(Configuration, HDFSBlocksDistribution)} */
+-  private static final String LOCALITY_CUTOFF_MULTIPLIER = "hbase.tablesnapshotinputformat.locality.cutoff.multiplier";
++  private static final String LOCALITY_CUTOFF_MULTIPLIER =
++      "hbase.tablesnapshotinputformat.locality.cutoff.multiplier";
+   private static final float DEFAULT_LOCALITY_CUTOFF_MULTIPLIER = 0.8f;
+ 
+   private static final String SNAPSHOT_NAME_KEY = "hbase.TableSnapshotInputFormat.snapshot.name";
+@@ -177,7 +180,8 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+       int len = in.readInt();
+       byte[] buf = new byte[len];
+       in.readFully(buf);
+-      MapReduceProtos.TableSnapshotRegionSplit split = MapReduceProtos.TableSnapshotRegionSplit.PARSER.parseFrom(buf);
++      MapReduceProtos.TableSnapshotRegionSplit split =
++          MapReduceProtos.TableSnapshotRegionSplit.PARSER.parseFrom(buf);
+       this.regionName = Bytes.toString(split.getRegion().getValue().toByteArray());
+       List<String> locationsList = split.getLocationsList();
+       this.locations = locationsList.toArray(new String[locationsList.size()]);
+@@ -185,7 +189,8 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+   }
+ 
+   @VisibleForTesting
+-  static class TableSnapshotRegionRecordReader extends RecordReader<ImmutableBytesWritable, Result> {
++  static class TableSnapshotRegionRecordReader extends
++    RecordReader<ImmutableBytesWritable, Result> {
+     private TableSnapshotRegionSplit split;
+     private Scan scan;
+     private Result result = null;
+@@ -339,7 +344,8 @@ public class TableSnapshotInputFormat extends InputFormat<ImmutableBytesWritable
+    * weights into account, thus will treat every location passed from the input split as equal. We
+    * do not want to blindly pass all the locations, since we are creating one split per region, and
+    * the region's blocks are all distributed throughout the cluster unless favorite node assignment
+-   * is used. On the expected stable case, only one location will contain most of the blocks as local.
++   * is used. On the expected stable case, only one location will contain most of the blocks as
++   * local.
+    * On the other hand, in favored node assignment, 3 nodes will contain highly local blocks. Here
+    * we are doing a simple heuristic, where we will pass all hosts which have at least 80%
+    * (hbase.tablesnapshotinputformat.locality.cutoff.multiplier) as much block locality as the top
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index 6997de1..5e81c61 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -841,11 +841,15 @@ public final class ExportSnapshot extends Configured implements Tool {
+     System.err.println("  -no-checksum-verify     Do not verify checksum, use name+length only.");
+     System.err.println("  -no-target-verify       Do not verify the integrity of the \\" +
+         "exported snapshot.");
+-    System.err.println("  -overwrite              Rewrite the snapshot manifest if already exists");
+-    System.err.println("  -chuser USERNAME        Change the owner of the files to the specified one.");
+-    System.err.println("  -chgroup GROUP          Change the group of the files to the specified one.");
+-    System.err.println("  -chmod MODE             Change the permission of the files to the specified one.");
+-    System.err.println("  -mappers                Number of mappers to use during the copy (mapreduce.job.maps).");
++    System.err.println("  -no-checksum-verify     Do not verify checksum.");
++    System.err.println("  -chuser USERNAME        Change the owner of the files " +
++        "to the specified one.");
++    System.err.println("  -chgroup GROUP          Change the group of the files to " +
++        "the specified one.");
++    System.err.println("  -chmod MODE             Change the permission of the files " +
++        "to the specified one.");
++    System.err.println("  -mappers                Number of mappers to use during the " +
++        "copy (mapreduce.job.maps).");
+     System.err.println();
+     System.err.println("Examples:");
+     System.err.println("  hbase " + getClass().getName() + " \\");
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
+index ea74b5b..b4dab24 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/PerformanceEvaluation.java
+@@ -159,7 +159,8 @@ public class PerformanceEvaluation extends Configured implements Tool {
+     addCommandDescriptor(ScanTest.class, "scan",
+         "Run scan test (read every row)");
+     addCommandDescriptor(FilteredScanTest.class, "filterScan",
+-        "Run scan test using a filter to find a specific row based on it's value (make sure to use --rows=20)");
++        "Run scan test using a filter to find a specific row based on it's value " +
++        "(make sure to use --rows=20)");
+   }
+ 
+   protected void addCommandDescriptor(Class<? extends Test> cmdClass,
+@@ -1208,13 +1209,13 @@ public class PerformanceEvaluation extends Configured implements Tool {
+           opts.useTags = Boolean.parseBoolean(cmd.substring(useTags.length()));
+           continue;
+         }
+-        
++
+         final String noOfTags = "--nooftags=";
+         if (cmd.startsWith(noOfTags)) {
+           opts.noOfTags = Integer.parseInt(cmd.substring(noOfTags.length()));
+           continue;
+         }
+-        
++
+         Class<? extends Test> cmdClass = determineCommandClass(cmd);
+         if (cmdClass != null) {
+           opts.numClientThreads = getNumClients(i + 1, args);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestTableSnapshotScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestTableSnapshotScanner.java
+index 34edae2..277a458 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestTableSnapshotScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestTableSnapshotScanner.java
+@@ -124,8 +124,8 @@ public class TestTableSnapshotScanner {
+     testScanner(UTIL, "testWithMultiRegion", 20, true);
+   }
+ 
+-  private void testScanner(HBaseTestingUtility util, String snapshotName, int numRegions, boolean shutdownCluster)
+-      throws Exception {
++  private void testScanner(HBaseTestingUtility util, String snapshotName, int numRegions, 
++      boolean shutdownCluster) throws Exception {
+     setupCluster();
+     TableName tableName = TableName.valueOf("testScanner");
+     try {
+@@ -138,7 +138,8 @@ public class TestTableSnapshotScanner {
+       Path restoreDir = util.getDataTestDirOnTestFS(snapshotName);
+       Scan scan = new Scan(bbb, yyy); // limit the scan
+ 
+-      TableSnapshotScanner scanner = new TableSnapshotScanner(UTIL.getConfiguration(), restoreDir, snapshotName, scan);
++      TableSnapshotScanner scanner = new TableSnapshotScanner(UTIL.getConfiguration(), restoreDir, 
++        snapshotName, scan);
+ 
+       verifyScanner(scanner, bbb, yyy);
+       scanner.close();
+@@ -154,7 +155,8 @@ public class TestTableSnapshotScanner {
+   private void verifyScanner(ResultScanner scanner, byte[] startRow, byte[] stopRow)
+       throws IOException, InterruptedException {
+ 
+-    HBaseTestingUtility.SeenRowTracker rowTracker = new HBaseTestingUtility.SeenRowTracker(startRow, stopRow);
++    HBaseTestingUtility.SeenRowTracker rowTracker = 
++        new HBaseTestingUtility.SeenRowTracker(startRow, stopRow);
+ 
+     while (true) {
+       Result result = scanner.next();
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestTableSnapshotInputFormat.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestTableSnapshotInputFormat.java
+index b8f8230..e02d504 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestTableSnapshotInputFormat.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestTableSnapshotInputFormat.java
+@@ -125,15 +125,18 @@ public class TestTableSnapshotInputFormat {
+     Assert.assertEquals(Lists.newArrayList("h1"), tsif.getBestLocations(conf, blockDistribution));
+ 
+     blockDistribution.addHostsAndBlockWeight(new String[] {"h2"}, 2);
+-    Assert.assertEquals(Lists.newArrayList("h1", "h2"), tsif.getBestLocations(conf, blockDistribution));
++    Assert.assertEquals(Lists.newArrayList("h1", "h2"), 
++      tsif.getBestLocations(conf, blockDistribution));
+ 
+     blockDistribution.addHostsAndBlockWeight(new String[] {"h2"}, 3);
+-    Assert.assertEquals(Lists.newArrayList("h2", "h1"), tsif.getBestLocations(conf, blockDistribution));
++    Assert.assertEquals(Lists.newArrayList("h2", "h1"), 
++      tsif.getBestLocations(conf, blockDistribution));
+ 
+     blockDistribution.addHostsAndBlockWeight(new String[] {"h3"}, 6);
+     blockDistribution.addHostsAndBlockWeight(new String[] {"h4"}, 9);
+ 
+-    Assert.assertEquals(Lists.newArrayList("h2", "h3", "h4", "h1"), tsif.getBestLocations(conf, blockDistribution));
++    Assert.assertEquals(Lists.newArrayList("h2", "h3", "h4", "h1"), 
++      tsif.getBestLocations(conf, blockDistribution));
+   }
+ 
+   public static enum TestTableSnapshotCounters {
+@@ -153,7 +156,8 @@ public class TestTableSnapshotInputFormat {
+ 
+   public static class TestTableSnapshotReducer
+     extends Reducer<ImmutableBytesWritable, NullWritable, NullWritable, NullWritable> {
+-    HBaseTestingUtility.SeenRowTracker rowTracker = new HBaseTestingUtility.SeenRowTracker(bbb, yyy);
++    HBaseTestingUtility.SeenRowTracker rowTracker = 
++        new HBaseTestingUtility.SeenRowTracker(bbb, yyy);
+     @Override
+     protected void reduce(ImmutableBytesWritable key, Iterable<NullWritable> values,
+        Context context) throws IOException, InterruptedException {
+@@ -246,8 +250,8 @@ public class TestTableSnapshotInputFormat {
+     testWithMockedMapReduce(UTIL, "testWithMockedMapReduceMultiRegion", 10, 8);
+   }
+ 
+-  public void testWithMockedMapReduce(HBaseTestingUtility util, String snapshotName, int numRegions, int expectedNumSplits)
+-      throws Exception {
++  public void testWithMockedMapReduce(HBaseTestingUtility util, String snapshotName, 
++      int numRegions, int expectedNumSplits) throws Exception {
+     setupCluster();
+     TableName tableName = TableName.valueOf("testWithMockedMapReduce");
+     try {
+@@ -278,7 +282,8 @@ public class TestTableSnapshotInputFormat {
+ 
+     Assert.assertEquals(expectedNumSplits, splits.size());
+ 
+-    HBaseTestingUtility.SeenRowTracker rowTracker = new HBaseTestingUtility.SeenRowTracker(startRow, stopRow);
++    HBaseTestingUtility.SeenRowTracker rowTracker = 
++        new HBaseTestingUtility.SeenRowTracker(startRow, stopRow);
+ 
+     for (int i = 0; i < splits.size(); i++) {
+       // validate input split
+@@ -288,7 +293,8 @@ public class TestTableSnapshotInputFormat {
+       // validate record reader
+       TaskAttemptContext taskAttemptContext = mock(TaskAttemptContext.class);
+       when(taskAttemptContext.getConfiguration()).thenReturn(job.getConfiguration());
+-      RecordReader<ImmutableBytesWritable, Result> rr = tsif.createRecordReader(split, taskAttemptContext);
++      RecordReader<ImmutableBytesWritable, Result> rr = 
++          tsif.createRecordReader(split, taskAttemptContext);
+       rr.initialize(split, taskAttemptContext);
+ 
+       // validate we can read all the data back
+@@ -305,7 +311,8 @@ public class TestTableSnapshotInputFormat {
+     rowTracker.validate();
+   }
+ 
+-  public static void verifyRowFromMap(ImmutableBytesWritable key, Result result) throws IOException {
++  public static void verifyRowFromMap(ImmutableBytesWritable key, Result result) 
++      throws IOException {
+     byte[] row = key.get();
+     CellScanner scanner = result.cellScanner();
+     while (scanner.advance()) {
+@@ -356,8 +363,8 @@ public class TestTableSnapshotInputFormat {
+ 
+   // this is also called by the IntegrationTestTableSnapshotInputFormat
+   public static void doTestWithMapReduce(HBaseTestingUtility util, TableName tableName,
+-      String snapshotName, Path tableDir, int numRegions, int expectedNumSplits, boolean shutdownCluster)
+-          throws Exception {
++      String snapshotName, Path tableDir, int numRegions, int expectedNumSplits, 
++      boolean shutdownCluster) throws Exception {
+ 
+     //create the table and snapshot
+     createTableAndSnapshot(util, tableName, snapshotName, numRegions);
+@@ -372,7 +379,8 @@ public class TestTableSnapshotInputFormat {
+       Scan scan = new Scan(bbb, yyy); // limit the scan
+ 
+       job.setJarByClass(util.getClass());
+-      TableMapReduceUtil.addDependencyJars(job.getConfiguration(), TestTableSnapshotInputFormat.class);
++      TableMapReduceUtil.addDependencyJars(job.getConfiguration(), 
++        TestTableSnapshotInputFormat.class);
+ 
+       TableMapReduceUtil.initTableSnapshotMapperJob(snapshotName,
+         scan, TestTableSnapshotMapper.class, ImmutableBytesWritable.class,
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/PerformanceEvaluation.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/PerformanceEvaluation.java
+index bd65bc4..61f3dbc 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/PerformanceEvaluation.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/PerformanceEvaluation.java
+@@ -192,7 +192,8 @@ public class PerformanceEvaluation extends Configured implements Tool {
+     addCommandDescriptor(ScanTest.class, "scan",
+         "Run scan test (read every row)");
+     addCommandDescriptor(FilteredScanTest.class, "filterScan",
+-        "Run scan test using a filter to find a specific row based on it's value (make sure to use --rows=20)");
++        "Run scan test using a filter to find a specific row based " +
++        "on it's value (make sure to use --rows=20)");
+   }
+ 
+   protected void addCommandDescriptor(Class<? extends Test> cmdClass,
+@@ -1336,7 +1337,8 @@ public class PerformanceEvaluation extends Configured implements Tool {
+     }
+     System.err.println("Usage: java " + this.getClass().getName() + " \\");
+     System.err.println("  [--nomapred] [--rows=ROWS] [--table=NAME] \\");
+-    System.err.println("  [--compress=TYPE] [--blockEncoding=TYPE] [-D<property=value>]* <command> <nclients>");
++    System.err.println("  [--compress=TYPE] [--blockEncoding=TYPE] " +
++      "[-D<property=value>]* <command> <nclients>");
+     System.err.println();
+     System.err.println("Options:");
+     System.err.println(" nomapred        Run multiple clients using threads " +
+@@ -1344,15 +1346,17 @@ public class PerformanceEvaluation extends Configured implements Tool {
+     System.err.println(" rows            Rows each client runs. Default: One million");
+     System.err.println(" table           Alternate table name. Default: 'TestTable'");
+     System.err.println(" compress        Compression type to use (GZ, LZO, ...). Default: 'NONE'");
+-    System.err.println(" flushCommits    Used to determine if the test should flush the table.  Default: false");
++    System.err.println(" flushCommits    Used to determine if the test should flush the table. " +
++      "Default: false");
+     System.err.println(" writeToWAL      Set writeToWAL on puts. Default: True");
+-    System.err.println(" presplit        Create presplit table. Recommended for accurate perf analysis (see guide).  Default: disabled");
+-    System.err
+-        .println(" inmemory        Tries to keep the HFiles of the CF inmemory as far as possible.  Not " +
+-            "guaranteed that reads are always served from inmemory.  Default: false");
+-    System.err.println(" usetags         Writes tags along with KVs.  Use with HFile V3.  Default : false");
+-    System.err
+-        .println(" numoftags        Specify the no of tags that would be needed.  This works only if usetags is true.");
++    System.err.println(" presplit        Create presplit table. Recommended for accurate perf " +
++      "analysis (see guide).  Default: disabled");
++    System.err.println(" inmemory        Tries to keep the HFiles of the CF inmemory as far as " +
++      "possible.  Not guaranteed that reads are always served from inmemory.  Default: false");
++    System.err.println(" usetags         Writes tags along with KVs.  Use with HFile V3. " +
++      "Default : false");
++    System.err.println(" numoftags        Specify the no of tags that would be needed. " +
++      "This works only if usetags is true.");
+     System.err.println();
+     System.err.println(" Note: -D properties will be applied to the conf used. ");
+     System.err.println("  For example: ");
+-- 
+1.7.0.4
+

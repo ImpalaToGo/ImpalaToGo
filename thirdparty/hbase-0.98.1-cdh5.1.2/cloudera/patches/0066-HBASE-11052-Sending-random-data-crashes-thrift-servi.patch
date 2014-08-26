@@ -1,0 +1,98 @@
+From b7992c3c90d8363ceb04003f57baddbc00261ecb Mon Sep 17 00:00:00 2001
+From: Ted Yu <tedyu@apache.org>
+Date: Wed, 18 Jun 2014 01:03:03 +0000
+Subject: [PATCH 66/70] HBASE-11052 Sending random data crashes thrift service (Adrian Muraru)
+
+Ref: CDH-18784
+Reason: Bug
+Author: Adrian Muraru
+
+(cherry picked from commit 1c4cdefe21b5bf45aac223a359e807845670bed3)
+---
+ hbase-common/src/main/resources/hbase-default.xml  |   19 +++++++++++++++++++
+ .../hadoop/hbase/thrift/ThriftServerRunner.java    |    4 +++-
+ .../apache/hadoop/hbase/thrift2/ThriftServer.java  |    7 ++++---
+ 3 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-common/src/main/resources/hbase-default.xml b/hbase-common/src/main/resources/hbase-default.xml
+index 8933a9f..f2c43f9 100644
+--- a/hbase-common/src/main/resources/hbase-default.xml
++++ b/hbase-common/src/main/resources/hbase-default.xml
+@@ -924,6 +924,25 @@ possible configurations would overwhelm and obscure the important.
+     </description>
+   </property>
+   <property>
++    <name>hbase.regionserver.thrift.framed</name>
++    <value>false</value>
++    <description>Use Thrift TFramedTransport on the server side.
++      This is the recommended transport for thrift servers and requires a similar setting
++      on the client side. Changing this to false will select the default transport,
++      vulnerable to DoS when malformed requests are issued due to THRIFT-601.
++    </description>
++  </property>
++  <property>
++   <name>hbase.regionserver.thrift.framed.max_frame_size_in_mb</name>
++    <value>2</value>
++    <description>Default frame size when using framed transport</description>
++  </property>
++  <property>
++    <name>hbase.regionserver.thrift.compact</name>
++    <value>false</value>
++    <description>Use Thrift TCompactProtocol binary serialization protocol.</description>
++  </property>
++  <property>
+     <name>hbase.offheapcache.percentage</name>
+     <value>0</value>
+     <description>The amount of off heap space to be allocated towards the experimental
+diff --git a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftServerRunner.java b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftServerRunner.java
+index 5114602..c97b026 100644
+--- a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftServerRunner.java
++++ b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftServerRunner.java
+@@ -118,6 +118,7 @@ public class ThriftServerRunner implements Runnable {
+   static final String BIND_CONF_KEY = "hbase.regionserver.thrift.ipaddress";
+   static final String COMPACT_CONF_KEY = "hbase.regionserver.thrift.compact";
+   static final String FRAMED_CONF_KEY = "hbase.regionserver.thrift.framed";
++  static final String MAX_FRAME_SIZE_CONF_KEY = "hbase.regionserver.thrift.framed.max_frame_size_in_mb";
+   static final String PORT_CONF_KEY = "hbase.regionserver.thrift.port";
+   static final String COALESCE_INC_KEY = "hbase.regionserver.thrift.coalesceIncrement";
+ 
+@@ -283,7 +284,8 @@ public class ThriftServerRunner implements Runnable {
+     // Construct correct TransportFactory
+     TTransportFactory transportFactory;
+     if (conf.getBoolean(FRAMED_CONF_KEY, false) || implType.isAlwaysFramed) {
+-      transportFactory = new TFramedTransport.Factory();
++      transportFactory = new TFramedTransport.Factory(
++          conf.getInt(MAX_FRAME_SIZE_CONF_KEY, 2)  * 1024 * 1024);
+       LOG.debug("Using framed transport");
+     } else {
+       transportFactory = new TTransportFactory();
+diff --git a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift2/ThriftServer.java b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift2/ThriftServer.java
+index cbd636c..c2fed8f 100644
+--- a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift2/ThriftServer.java
++++ b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift2/ThriftServer.java
+@@ -125,10 +125,10 @@ public class ThriftServer {
+     }
+   }
+ 
+-  private static TTransportFactory getTTransportFactory(boolean framed) {
++  private static TTransportFactory getTTransportFactory(boolean framed, int frameSize) {
+     if (framed) {
+       log.debug("Using framed transport");
+-      return new TFramedTransport.Factory();
++      return new TFramedTransport.Factory(frameSize);
+     } else {
+       return new TTransportFactory();
+     }
+@@ -274,7 +274,8 @@ public class ThriftServer {
+ 
+     boolean framed = cmd.hasOption("framed") ||
+         conf.getBoolean("hbase.regionserver.thrift.framed", false) || nonblocking || hsha;
+-    TTransportFactory transportFactory = getTTransportFactory(framed);
++    TTransportFactory transportFactory = getTTransportFactory(framed,
++        conf.getInt("hbase.regionserver.thrift.framed.max_frame_size_in_mb", 2) * 1024 * 1024);
+     InetSocketAddress inetSocketAddress = bindToPort(cmd.getOptionValue("bind"), listenPort);
+     conf.setBoolean("hbase.regionserver.thrift.framed", framed);
+ 
+-- 
+1.7.0.4
+

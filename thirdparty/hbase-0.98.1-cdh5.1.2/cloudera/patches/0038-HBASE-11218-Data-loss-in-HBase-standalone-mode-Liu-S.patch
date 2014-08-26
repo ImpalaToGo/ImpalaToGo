@@ -1,0 +1,160 @@
+From dfaf5712f145a8f5463148416890f6fa5c0150e6 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@duboce.net>
+Date: Wed, 28 May 2014 10:48:48 -0700
+Subject: [PATCH 38/70] HBASE-11218 Data loss in HBase standalone mode (Liu Shaohui)
+
+(cherry picked from commit 86ab435b8cd4d77ad4b90cd43fd5acd8579b60a4)
+
+Ref: CDH-19423
+---
+ .../org/apache/hadoop/hbase/fs/HFileSystem.java    |    7 +++++++
+ .../hadoop/hbase/master/HMasterCommandLine.java    |    2 ++
+ .../hbase/zookeeper/MiniZooKeeperCluster.java      |   13 +++++--------
+ .../apache/hadoop/hbase/HBaseTestingUtility.java   |   14 ++++++++++++++
+ .../util/hbck/TestOfflineMetaRebuildBase.java      |    4 ++--
+ .../util/hbck/TestOfflineMetaRebuildHole.java      |    3 +--
+ .../util/hbck/TestOfflineMetaRebuildOverlap.java   |    3 +--
+ 7 files changed, 32 insertions(+), 14 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/fs/HFileSystem.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/fs/HFileSystem.java
+index 8178787..f8cf7b3 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/fs/HFileSystem.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/fs/HFileSystem.java
+@@ -81,6 +81,13 @@ public class HFileSystem extends FilterFileSystem {
+     this.useHBaseChecksum = useHBaseChecksum;
+     
+     fs.initialize(getDefaultUri(conf), conf);
++    
++    // disable checksum verification for local fileSystem, see HBASE-11218
++    if (fs instanceof LocalFileSystem) {
++      fs.setWriteChecksum(false);
++      fs.setVerifyChecksum(false);
++    }
++
+     addLocationsOrderInterceptor(conf);
+ 
+     // If hbase checksum verification is switched on, then create a new
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
+index 886fde6..e56ab6f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMasterCommandLine.java
+@@ -30,6 +30,7 @@ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.hbase.MasterNotRunningException;
+ import org.apache.hadoop.hbase.ZNodeClearer;
+ import org.apache.hadoop.hbase.HConstants;
+@@ -172,6 +173,7 @@ public class HMasterCommandLine extends ServerCommandLine {
+         }
+         conf.set(HConstants.ZOOKEEPER_CLIENT_PORT,
+                  Integer.toString(clientPort));
++        conf.setInt(HConstants.ZK_SESSION_TIMEOUT, 10 *1000);
+         // Need to have the zk cluster shutdown when master is shutdown.
+         // Run a subclass that does the zk cluster shutdown on its way out.
+         LocalHBaseCluster cluster = new LocalHBaseCluster(conf, conf.getInt("hbase.masters", 1),
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
+index 3a42ea0..69a7cba 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/zookeeper/MiniZooKeeperCluster.java
+@@ -152,7 +152,7 @@ public class MiniZooKeeperCluster {
+     // running all the ZK servers
+     for (int i = 0; i < numZooKeeperServers; i++) {
+       File dir = new File(baseDir, "zookeeper_"+i).getAbsoluteFile();
+-      recreateDir(dir);
++      createDir(dir);
+       int tickTimeToUse;
+       if (this.tickTime > 0) {
+         tickTimeToUse = this.tickTime;
+@@ -202,14 +202,11 @@ public class MiniZooKeeperCluster {
+     return clientPort;
+   }
+ 
+-  private void recreateDir(File dir) throws IOException {
+-    if (dir.exists()) {
+-      if(!FileUtil.fullyDelete(dir)) {
+-        throw new IOException("Could not delete zk base directory: " + dir);
+-      }
+-    }
++  private void createDir(File dir) throws IOException {
+     try {
+-      dir.mkdirs();
++      if (!dir.exists()) {
++        dir.mkdirs();
++      }
+     } catch (SecurityException e) {
+       throw new IOException("creating dir: " + dir, e);
+     }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+index 6372ab1..e52d692 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+@@ -951,6 +951,20 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
+     miniClusterRunning = false;
+     LOG.info("Minicluster is down");
+   }
++  
++  /**
++   * @return True if we removed the test dirs
++   * @throws IOException
++   */
++  @Override
++  public boolean cleanupTestDir() throws IOException {
++    boolean ret = super.cleanupTestDir();
++    if (deleteDir(this.clusterTestDir)) {
++      this.clusterTestDir = null;
++      return ret & true;
++    }
++    return false;
++  }
+ 
+   /**
+    * Shutdown HBase mini cluster.  Does not shutdown zk or dfs if running.
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildBase.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildBase.java
+index 1a85bc5..7a075a6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildBase.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildBase.java
+@@ -65,9 +65,9 @@ public class TestOfflineMetaRebuildBase extends OfflineMetaRebuildTestCore {
+     assertTrue(fsck.rebuildMeta(false));
+ 
+     // bring up the minicluster
+-    TEST_UTIL.startMiniZKCluster(); // tables seem enabled by default
++    TEST_UTIL.startMiniZKCluster();
+     TEST_UTIL.restartHBaseCluster(3);
+-    
++    TEST_UTIL.getHBaseAdmin().enableTable(table);
+     ZooKeeperWatcher zkw = HBaseTestingUtility.getZooKeeperWatcher(TEST_UTIL);
+     
+     LOG.info("Waiting for no more RIT");
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildHole.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildHole.java
+index 9cf8516..a3225bd 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildHole.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildHole.java
+@@ -96,8 +96,7 @@ public class TestOfflineMetaRebuildHole extends OfflineMetaRebuildTestCore {
+     assertErrors(doFsck(conf, false), new ERROR_CODE[] {
+         ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+         ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+-        ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+-        ERROR_CODE.HOLE_IN_REGION_CHAIN});
++        ERROR_CODE.NOT_IN_META_OR_DEPLOYED});
+   }
+ 
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildOverlap.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildOverlap.java
+index 34098ba..9a17948 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildOverlap.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/hbck/TestOfflineMetaRebuildOverlap.java
+@@ -107,8 +107,7 @@ public class TestOfflineMetaRebuildOverlap extends OfflineMetaRebuildTestCore {
+             ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+             ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+             ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+-            ERROR_CODE.NOT_IN_META_OR_DEPLOYED,
+-            ERROR_CODE.HOLE_IN_REGION_CHAIN});
++            ERROR_CODE.NOT_IN_META_OR_DEPLOYED});
+   }
+ 
+ }
+-- 
+1.7.0.4
+

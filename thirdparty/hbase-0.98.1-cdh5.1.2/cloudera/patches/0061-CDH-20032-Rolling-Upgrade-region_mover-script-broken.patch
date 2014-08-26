@@ -1,0 +1,28 @@
+From 5eb3d6215c262f58f596eb4449e40d116f9f4ef0 Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Thu, 26 Jun 2014 15:32:42 -0700
+Subject: [PATCH 61/70] CDH-20032 [Rolling Upgrade]: region_mover script broken by incompatible change.
+
+Ref: CDH-20032
+Author: Srikanth Srungarapu
+Reason: Compatibility issue
+---
+ bin/region_mover.rb |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/bin/region_mover.rb b/bin/region_mover.rb
+index 1ff0da2..304c8ea 100644
+--- a/bin/region_mover.rb
++++ b/bin/region_mover.rb
+@@ -281,7 +281,7 @@ end
+ # Now get list of regions on targetServer
+ def getRegions(config, servername)
+   connection = HConnectionManager::getConnection(config);
+-  return ProtobufUtil::getOnlineRegions(connection.getAdmin(ServerName.valueOf(servername)));
++  return ProtobufUtil::getOnlineRegions(connection.getAdmin(ServerName.new(servername)));
+ end
+ 
+ def deleteFile(filename)
+-- 
+1.7.0.4
+

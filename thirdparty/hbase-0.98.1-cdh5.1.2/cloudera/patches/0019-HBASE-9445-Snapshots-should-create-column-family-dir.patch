@@ -1,0 +1,196 @@
+From 155966b5d085561164cc0c2eaf7b7968cabb9d09 Mon Sep 17 00:00:00 2001
+From: Enis Soztutar <enis@apache.org>
+Date: Fri, 2 May 2014 17:32:05 +0000
+Subject: [PATCH 19/70] HBASE-9445 Snapshots should create column family dirs for empty regions
+
+Reason: Improvement
+Author: Enis Soztutar
+Ref: CDH-18297
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1591981 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../org/apache/hadoop/hbase/util/FSVisitor.java    |   29 +++++++++--
+ .../hbase/client/TestSnapshotFromClient.java       |   54 ++++++++++++++++++++
+ .../hbase/snapshot/SnapshotTestingUtils.java       |   17 +++---
+ 3 files changed, 88 insertions(+), 12 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSVisitor.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSVisitor.java
+index fdc9f29..75729b6 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSVisitor.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSVisitor.java
+@@ -29,11 +29,7 @@ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.fs.PathFilter;
+ import org.apache.hadoop.hbase.HConstants;
+-import org.apache.hadoop.hbase.HRegionInfo;
+-import org.apache.hadoop.hbase.io.Reference;
+-import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.wal.HLogUtil;
+-import org.apache.hadoop.hbase.util.FSUtils;
+ 
+ /**
+  * Utility methods for interacting with the hbase.root file system.
+@@ -42,6 +38,10 @@ import org.apache.hadoop.hbase.util.FSUtils;
+ public final class FSVisitor {
+   private static final Log LOG = LogFactory.getLog(FSVisitor.class);
+ 
++  public interface RegionVisitor {
++    void region(final String region) throws IOException;
++  }
++
+   public interface StoreFileVisitor {
+     void storeFile(final String region, final String family, final String hfileName)
+        throws IOException;
+@@ -69,6 +69,27 @@ public final class FSVisitor {
+    * @param visitor callback object to get the store files
+    * @throws IOException if an error occurred while scanning the directory
+    */
++  public static void visitRegions(final FileSystem fs, final Path tableDir,
++      final RegionVisitor visitor) throws IOException {
++    FileStatus[] regions = FSUtils.listStatus(fs, tableDir, new FSUtils.RegionDirFilter(fs));
++    if (regions == null) {
++      LOG.info("No regions under directory:" + tableDir);
++      return;
++    }
++
++    for (FileStatus region: regions) {
++      visitor.region(region.getPath().getName());
++    }
++  }
++
++  /**
++   * Iterate over the table store files
++   *
++   * @param fs {@link FileSystem}
++   * @param tableDir {@link Path} to the table directory
++   * @param visitor callback object to get the store files
++   * @throws IOException if an error occurred while scanning the directory
++   */
+   public static void visitTableStoreFiles(final FileSystem fs, final Path tableDir,
+       final StoreFileVisitor visitor) throws IOException {
+     FileStatus[] regions = FSUtils.listStatus(fs, tableDir, new FSUtils.RegionDirFilter(fs));
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestSnapshotFromClient.java
+index 3195abe..ef53ad2 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestSnapshotFromClient.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestSnapshotFromClient.java
+@@ -49,6 +49,8 @@ import org.junit.BeforeClass;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
++import com.google.common.collect.Lists;
++
+ /**
+  * Test create/using/deleting snapshots from the client
+  * <p>
+@@ -252,4 +254,56 @@ public class TestSnapshotFromClient {
+       LOG.info("Correctly failed to snapshot a non-existant table:" + e.getMessage());
+     }
+   }
++
++  @Test (timeout=300000)
++  public void testOfflineTableSnapshotWithEmptyRegions() throws Exception {
++    // test with an empty table with one region
++
++    HBaseAdmin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // get the name of all the regionservers hosting the snapshotted table
++    Set<String> snapshotServers = new HashSet<String>();
++    List<RegionServerThread> servers = UTIL.getMiniHBaseCluster().getLiveRegionServerThreads();
++    for (RegionServerThread server : servers) {
++      if (server.getRegionServer().getOnlineRegions(TABLE_NAME).size() > 0) {
++        snapshotServers.add(server.getRegionServer().getServerName().toString());
++      }
++    }
++
++    LOG.debug("FS state before disable:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++    admin.disableTable(TABLE_NAME);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the disabled table
++    byte[] snapshot = Bytes.toBytes("testOfflineTableSnapshotWithEmptyRegions");
++    admin.snapshot(snapshot, TABLE_NAME);
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++      snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    List<byte[]> emptyCfs = Lists.newArrayList(TEST_FAM); // no file in the region
++    List<byte[]> nonEmptyCfs = Lists.newArrayList();
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, nonEmptyCfs, emptyCfs, rootDir,
++      admin, fs, false, new Path(rootDir, HConstants.HREGION_LOGDIR_NAME), snapshotServers);
++
++    admin.deleteSnapshot(snapshot);
++    snapshots = admin.listSnapshots();
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++  }
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+index 681fbba..476da37 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+@@ -210,10 +210,16 @@ public class SnapshotTestingUtils {
+     // Extract regions and families with store files
+     final Set<String> snapshotRegions = new HashSet<String>();
+     final Set<byte[]> snapshotFamilies = new TreeSet<byte[]>(Bytes.BYTES_COMPARATOR);
++    FSVisitor.visitRegions(fs, snapshotDir, new FSVisitor.RegionVisitor() {
++      @Override
++      public void region(String region) throws IOException {
++        snapshotRegions.add(region);
++      }
++    });
+     FSVisitor.visitTableStoreFiles(fs, snapshotDir, new FSVisitor.StoreFileVisitor() {
++      @Override
+       public void storeFile(final String region, final String family, final String hfileName)
+           throws IOException {
+-        snapshotRegions.add(region);
+         snapshotFamilies.add(Bytes.toBytes(family));
+       }
+     });
+@@ -232,13 +238,6 @@ public class SnapshotTestingUtils {
+       }
+     }
+ 
+-    // Avoid checking regions if the request is for an empty snapshot
+-    if ((nonEmptyTestFamilies == null || nonEmptyTestFamilies.size() == 0) &&
+-        (emptyTestFamilies != null && emptyTestFamilies.size() > 0)) {
+-      assertEquals(0, snapshotRegions.size());
+-      return;
+-    }
+-
+     // check the region snapshot for all the regions
+     List<HRegionInfo> regions = admin.getTableRegions(tableName);
+     assertEquals(regions.size(), snapshotRegions.size());
+@@ -349,6 +348,7 @@ public class SnapshotTestingUtils {
+       throws IOException {
+     final ArrayList<Path> hfiles = new ArrayList<Path>();
+     FSVisitor.visitTableStoreFiles(fs, tableDir, new FSVisitor.StoreFileVisitor() {
++      @Override
+       public void storeFile(final String region, final String family, final String hfileName)
+           throws IOException {
+         hfiles.add(new Path(tableDir, new Path(region, new Path(family, hfileName))));
+@@ -421,6 +421,7 @@ public class SnapshotTestingUtils {
+ 
+     final ArrayList corruptedFiles = new ArrayList();
+     SnapshotReferenceUtil.visitTableStoreFiles(fs, snapshotDir, new FSVisitor.StoreFileVisitor() {
++      @Override
+       public void storeFile (final String region, final String family, final String hfile)
+           throws IOException {
+         HFileLink link = HFileLink.create(util.getConfiguration(), table, region, family, hfile);
+-- 
+1.7.0.4
+
