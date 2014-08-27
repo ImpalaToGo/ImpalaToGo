@@ -66,6 +66,17 @@ hadoop fs -put ${IMPALA_HOME}/testdata/data/schemas/malformed_decimal_tiny.parqu
 hadoop fs -put ${IMPALA_HOME}/testdata/data/schemas/decimal.parquet \
   /test-warehouse/schemas/
 
+# CHAR and VARCHAR tables written by Hive
+hadoop fs -mkdir /test-warehouse/chars_formats_avro_snap/
+hadoop fs -put ${IMPALA_HOME}/testdata/data/chars-formats.avro \
+  /test-warehouse/chars_formats_avro_snap
+hadoop fs -mkdir /test-warehouse/chars_formats_parquet/
+hadoop fs -put ${IMPALA_HOME}/testdata/data/chars-formats.parquet \
+  /test-warehouse/chars_formats_parquet
+hadoop fs -mkdir /test-warehouse/chars_formats_text/
+hadoop fs -put ${IMPALA_HOME}/testdata/data/chars-formats.txt \
+  /test-warehouse/chars_formats_text
+
 # If a schema change is detected, force load the data.
 set +e
 LOAD_DATA_ARGS=""
