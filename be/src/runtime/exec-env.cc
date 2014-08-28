@@ -139,6 +139,7 @@ ExecEnv::ExecEnv()
     enable_webserver_(FLAGS_enable_webserver),
     tz_database_(TimezoneDatabase()),
     is_fe_tests_(false),
+    backend_address_(MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port)),
     is_pseudo_distributed_llama_(false) {
   if (FLAGS_enable_rm) InitRm();
   // Initialize the scheduler either dynamically (with a statestore) or statically (with
@@ -148,14 +149,13 @@ ExecEnv::ExecEnv()
         MakeNetworkAddress(FLAGS_hostname, FLAGS_state_store_subscriber_port);
     TNetworkAddress statestore_address =
         MakeNetworkAddress(FLAGS_state_store_host, FLAGS_state_store_port);
-    TNetworkAddress backend_address = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        TNetworkAddressToString(backend_address), subscriber_address, statestore_address,
+        TNetworkAddressToString(backend_address_), subscriber_address, statestore_address,
         metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
-        statestore_subscriber_->id(), backend_address, metrics_.get(),
+        statestore_subscriber_->id(), backend_address_, metrics_.get(),
         webserver_.get(), resource_broker_.get(), request_pool_service_.get()));
   } else {
     vector<TNetworkAddress> addresses;
@@ -185,6 +185,7 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
     enable_webserver_(FLAGS_enable_webserver && webserver_port > 0),
     tz_database_(TimezoneDatabase()),
     is_fe_tests_(false),
+    backend_address_(MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port)),
     is_pseudo_distributed_llama_(false) {
   if (FLAGS_enable_rm) InitRm();
 
@@ -193,14 +194,13 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
         MakeNetworkAddress(hostname, subscriber_port);
     TNetworkAddress statestore_address =
         MakeNetworkAddress(statestore_host, statestore_port);
-    TNetworkAddress backend_address = MakeNetworkAddress(hostname, backend_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        TNetworkAddressToString(backend_address), subscriber_address, statestore_address,
+        TNetworkAddressToString(backend_address_), subscriber_address, statestore_address,
         metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
-        statestore_subscriber_->id(), backend_address, metrics_.get(),
+        statestore_subscriber_->id(), backend_address_, metrics_.get(),
         webserver_.get(), resource_broker_.get(), request_pool_service_.get()));
   } else {
     vector<TNetworkAddress> addresses;
