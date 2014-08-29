@@ -1,149 +1,131 @@
 ====
 ---- QUERY: TPCDS-Q89
-select
-  *
-from
-  (select
-    i_category,
-    i_class,
-    i_brand,
-    s_store_name,
-    s_company_name,
-    d_moy,
-    sum(ss_sales_price) sum_sales
-    -- avg(sum(ss_sales_price)) over (partition by i_category, i_brand, s_store_name, s_company_name) avg_monthly_sales
-  from
-    item,
-    store_sales,
-    date_dim,
-    store
-  where
-    ss_item_sk = i_item_sk
-    and ss_sold_date_sk = d_date_sk
-    and ss_store_sk = s_store_sk
-    and d_year in (2000)
-    and ((i_category in ('Home', 'Books', 'Electronics')
-        and i_class in ('wallpaper', 'parenting', 'musical'))
-      or (i_category in ('Shoes', 'Jewelry', 'Men')
-        and i_class in ('womens', 'birdal', 'pants')))
-    and ss_sold_date_sk between 2451545 and 2451910  -- partition key filter
-  group by
-    i_category,
-    i_class,
-    i_brand,
-    s_store_name,
-    s_company_name,
-    d_moy
-  ) tmp1
--- where
---   case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
-order by
-  -- sum_sales - avg_monthly_sales,
-  sum_sales,  -- modification
-  s_store_name,
-  i_category -- modification: added this sorting column to break ties for stable test results
-limit 100;
+select * from (select  *
+from (
+select i_category, i_class, i_brand,
+       s_store_name, s_company_name,
+       d_moy,
+       sum(ss_sales_price) sum_sales,
+       avg(sum(ss_sales_price)) over
+         (partition by i_category, i_brand, s_store_name, s_company_name)
+         avg_monthly_sales
+from item, store_sales, date_dim, store
+where ss_item_sk = i_item_sk and
+      ss_sold_date_sk = d_date_sk and
+      ss_store_sk = s_store_sk and
+      d_year in (1999) and
+        ((i_category in ('Children','Music','Home') and
+          i_class in ('toddlers','pop','lighting')
+         )
+      or (i_category in ('Jewelry','Books','Sports') and
+          i_class in ('costume','travel','football')
+        ))
+group by i_category, i_class, i_brand,
+         s_store_name, s_company_name, d_moy) tmp1
+where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
+order by sum_sales - avg_monthly_sales, s_store_name
+limit 100) tmp2;
 ---- RESULTS
-'Electronics','musical','corpunivamalg #6','ation','Unknown',11,0
-'Books','parenting','corpmaxi #12','bar','Unknown',9,0
-'Home','wallpaper','exportinameless #6','bar','Unknown',7,0
-'Jewelry','birdal','amalgcorp #3','bar','Unknown',9,0
-'Books','parenting','corpmaxi #8','ought','Unknown',4,0.1000000014901161
-'Electronics','musical','corpunivamalg #17','ese','Unknown',9,0.119999997317791
-'Home','wallpaper','exportinameless #1','eing','Unknown',9,0.3400000035762787
-'Jewelry','birdal','amalgcorp #1','eing','Unknown',2,0.3700000047683716
-'Books','parenting','corpmaxi #9','ese','Unknown',4,0.4199999868869781
-'Electronics','musical','corpunivamalg #11','bar','Unknown',12,0.4699999988079071
-'Home','wallpaper','exportinameless #6','eing','Unknown',10,0.5899999737739563
-'Jewelry','birdal','amalgcorp #2','able','Unknown',12,0.7200000286102295
-'Jewelry','birdal','amalgcorp #5','ese','Unknown',4,0.7799999713897705
-'Books','parenting','corpmaxi #9','ese','Unknown',10,0.8299999833106995
-'Jewelry','birdal','amalgcorp #2','able','Unknown',3,0.8899999856948853
-'Electronics','musical','corpunivamalg #6','ought','Unknown',10,0.8899999856948853
-'Electronics','musical','corpunivamalg #8','ation','Unknown',7,0.9700000286102295
-'Jewelry','birdal','amalgcorp #2','ought','Unknown',12,0.9700000286102295
-'Jewelry','birdal','amalgcorp #8','ought','Unknown',6,0.9900000095367432
-'Books','parenting','corpmaxi #6','able','Unknown',4,1.070000052452087
-'Home','wallpaper','exportinameless #7','ation','Unknown',12,1.120000004768372
-'Jewelry','birdal','amalgcorp #4','bar','Unknown',8,1.129999995231628
-'Electronics','musical','corpunivamalg #8','able','Unknown',6,1.149999976158142
-'Home','wallpaper','exportinameless #8','bar','Unknown',10,1.190000057220459
-'Home','wallpaper','exportinameless #3','eing','Unknown',11,1.190000057220459
-'Home','wallpaper','exportinameless #10','bar','Unknown',9,1.240000009536743
-'Home','wallpaper','exportinameless #10','ought','Unknown',6,1.299999952316284
-'Men','pants','exportiimporto #1','able','Unknown',6,1.320000052452087
-'Home','wallpaper','exportinameless #4','ought','Unknown',5,1.519999980926514
-'Home','wallpaper','exportinameless #2','ought','Unknown',6,1.549999952316284
-'Electronics','musical','corpunivamalg #6','ation','Unknown',10,1.570000052452087
-'Jewelry','birdal','amalgcorp #8','eing','Unknown',11,1.620000004768372
-'Home','wallpaper','exportinameless #10','able','Unknown',1,1.639999985694885
-'Books','parenting','corpmaxi #9','bar','Unknown',8,1.690000057220459
-'Shoes','womens','amalgedu pack #2','eing','Unknown',7,1.759999990463257
-'Home','wallpaper','exportinameless #8','ese','Unknown',10,1.850000023841858
-'Books','parenting','corpmaxi #12','ought','Unknown',1,1.870000004768372
-'Electronics','musical','corpunivamalg #6','able','Unknown',9,1.950000047683716
-'Home','wallpaper','exportinameless #6','ation','Unknown',8,2
-'Books','parenting','corpmaxi #8','ought','Unknown',3,2
-'Home','wallpaper','exportinameless #5','ought','Unknown',1,2
-'Electronics','musical','corpunivamalg #2','bar','Unknown',10,2.019999980926514
-'Electronics','musical','corpunivamalg #8','bar','Unknown',7,2.119999885559082
-'Electronics','musical','corpunivamalg #11','able','Unknown',3,2.190000057220459
-'Home','wallpaper','exportinameless #1','ought','Unknown',4,2.339999914169312
-'Men','pants','exportiimporto #1','eing','Unknown',6,2.390000104904175
-'Electronics','musical','corpunivamalg #11','eing','Unknown',11,2.410000085830688
-'Home','wallpaper','exportinameless #8','ought','Unknown',1,2.420000076293945
-'Electronics','musical','corpunivamalg #12','ation','Unknown',9,2.440000057220459
-'Jewelry','birdal','amalgcorp #5','ese','Unknown',5,2.440000057220459
-'Books','parenting','corpmaxi #6','ese','Unknown',12,2.559999942779541
-'Books','parenting','corpmaxi #3','eing','Unknown',1,2.569999933242798
-'Jewelry','birdal','amalgcorp #6','eing','Unknown',11,2.680000066757202
-'Electronics','musical','corpunivamalg #3','able','Unknown',12,2.720000028610229
-'Shoes','womens','amalgedu pack #1','able','Unknown',10,2.940000057220459
-'Jewelry','birdal','amalgcorp #7','ation','Unknown',2,3.069999933242798
-'Electronics','musical','corpunivamalg #7','eing','Unknown',2,3.109999895095825
-'Electronics','musical','corpunivamalg #8','ese','Unknown',11,3.309999942779541
-'Books','parenting','corpmaxi #8','ation','Unknown',10,3.380000114440918
-'Electronics','musical','corpunivamalg #1','able','Unknown',4,3.390000104904175
-'Home','wallpaper','exportinameless #4','ought','Unknown',9,3.460000038146973
-'Books','parenting','corpmaxi #6','bar','Unknown',5,3.519999980926514
-'Home','wallpaper','exportinameless #4','ese','Unknown',12,3.670000076293945
-'Electronics','musical','corpunivamalg #13','ese','Unknown',7,3.720000028610229
-'Electronics','musical','corpunivamalg #5','ought','Unknown',5,3.730000019073486
-'Electronics','musical','corpunivamalg #17','ation','Unknown',10,3.75
-'Home','wallpaper','exportinameless #7','able','Unknown',7,3.799999952316284
-'Books','parenting','corpmaxi #6','able','Unknown',7,3.809999942779541
-'Jewelry','birdal','amalgcorp #8','eing','Unknown',3,3.809999942779541
-'Electronics','musical','corpunivamalg #4','ought','Unknown',10,4.019999980926514
-'Home','wallpaper','exportinameless #2','eing','Unknown',8,4.050000190734863
-'Electronics','musical','corpunivamalg #4','bar','Unknown',1,4.079999923706055
-'Electronics','musical','corpunivamalg #13','able','Unknown',12,4.179999828338623
-'Electronics','musical','corpunivamalg #8','ation','Unknown',10,4.210000038146973
-'Books','parenting','corpmaxi #3','ese','Unknown',9,4.230000019073486
-'Jewelry','birdal','amalgcorp #7','able','Unknown',9,4.409999847412109
-'Jewelry','birdal','amalgcorp #4','able','Unknown',3,4.480000019073486
-'Electronics','musical','corpunivamalg #11','eing','Unknown',9,4.690000057220459
-'Home','wallpaper','exportinameless #9','ought','Unknown',7,4.690000057220459
-'Books','parenting','corpmaxi #5','ation','Unknown',1,4.730000019073486
-'Books','parenting','corpmaxi #2','bar','Unknown',1,4.789999961853027
-'Jewelry','birdal','amalgcorp #5','ation','Unknown',9,4.829999923706055
-'Electronics','musical','corpunivamalg #2','ought','Unknown',1,4.860000133514404
-'Home','wallpaper','exportinameless #8','ought','Unknown',11,4.860000133514404
-'Jewelry','birdal','amalgcorp #7','able','Unknown',8,4.889999866485596
-'Electronics','musical','corpunivamalg #7','bar','Unknown',10,5.199999809265137
-'Electronics','musical','corpunivamalg #7','ought','Unknown',11,5.199999809265137
-'Jewelry','birdal','amalgcorp #7','ation','Unknown',11,5.239999771118164
-'Books','parenting','corpmaxi #12','eing','Unknown',11,5.360000133514404
-'Books','parenting','corpmaxi #6','bar','Unknown',11,5.559999942779541
-'Books','parenting','corpmaxi #9','ese','Unknown',6,5.659999847412109
-'Books','parenting','corpmaxi #6','ese','Unknown',10,5.710000038146973
-'Jewelry','birdal','amalgcorp #5','ation','Unknown',1,5.769999980926514
-'Jewelry','birdal','amalgcorp #1','ation','Unknown',7,6.079999923706055
-'Shoes','womens','amalgedu pack #1','ese','Unknown',6,6.090000152587891
-'Men','pants','exportiimporto #1','ese','Unknown',4,6.139999866485596
-'Electronics','musical','corpunivamalg #6','ese','Unknown',2,6.150000095367432
-'Electronics','musical','corpunivamalg #2','bar','Unknown',11,6.220000088214874
-'Electronics','musical','corpunivamalg #3','ought','Unknown',7,6.25
-'Electronics','musical','corpunivamalg #1','eing','Unknown',11,6.360000133514404
+'Children','toddlers','exportiexporti #1','ought','Unknown',6,19.8899998664856,417.0049994171907
+'Children','toddlers','exportiexporti #1','ought','Unknown',3,57.4900016784668,417.0049994171907
+'Children','toddlers','exportiexporti #1','ese','Unknown',4,27.35999965667725,367.6699999608099
+'Children','toddlers','exportiexporti #1','ation','Unknown',6,25.64999997615814,360.458332931002
+'Children','toddlers','exportiexporti #1','able','Unknown',3,7.399999856948853,340.4024999402463
+'Music','pop','exportischolar #1','bar','Unknown',7,30.79000091552734,349.4858338572085
+'Music','pop','exportischolar #1','ought','Unknown',6,27.34000062942505,343.60833363235
+'Children','toddlers','exportiexporti #1','ese','Unknown',6,57.92999947071075,367.6699999608099
+'Children','toddlers','exportiexporti #1','able','Unknown',5,34.87000000476837,340.4024999402463
+'Children','toddlers','exportiexporti #1','eing','Unknown',2,34.86999976634979,329.9824995845556
+'Children','toddlers','exportiexporti #1','bar','Unknown',4,68.50999879837036,355.8383329647283
+'Children','toddlers','exportiexporti #1','ation','Unknown',2,85.91999983787537,360.458332931002
+'Children','toddlers','exportiexporti #1','ought','Unknown',4,146.1100015640259,417.0049994171907
+'Children','toddlers','exportiexporti #1','ese','Unknown',3,101.240000128746,367.6699999608099
+'Music','pop','exportischolar #1','ation','Unknown',5,77.59000015258789,331.7224978264421
+'Children','toddlers','exportiexporti #1','ation','Unknown',4,109.870001077652,360.458332931002
+'Music','pop','exportischolar #1','ation','Unknown',6,81.25999903678894,331.7224978264421
+'Music','pop','exportischolar #1','able','Unknown',3,175.8299963474274,426.0954516421665
+'Music','pop','exportischolar #1','able','Unknown',4,176.9199981689453,426.0954516421665
+'Children','toddlers','exportiexporti #1','ese','Unknown',7,118.7900023460388,367.6699999608099
+'Music','pop','exportischolar #1','eing','Unknown',5,128.7600021362305,361.8366659681002
+'Music','pop','exportischolar #1','ese','Unknown',4,92.90999889373779,317.8541647990544
+'Children','toddlers','exportiexporti #1','bar','Unknown',7,132.5800013542175,355.8383329647283
+'Music','pop','exportischolar #1','ation','Unknown',4,109.6200008392334,331.7224978264421
+'Music','pop','exportischolar #1','ese','Unknown',6,96.10999727249146,317.8541647990544
+'Children','toddlers','exportiexporti #1','able','Unknown',7,122.169997215271,340.4024999402463
+'Music','pop','exportischolar #1','ought','Unknown',5,129.5200023651123,343.60833363235
+'Children','toddlers','exportiexporti #1','eing','Unknown',3,120.2399985790253,329.9824995845556
+'Children','toddlers','exportiexporti #1','able','Unknown',8,135.8599996566772,340.4024999402463
+'Music','pop','exportischolar #2','ese','Unknown',8,5.679999828338623,209.5258342623711
+'Music','pop','exportischolar #1','eing','Unknown',4,159.7600017786026,361.8366659681002
+'Music','pop','exportischolar #2','able','Unknown',3,27.36999893188477,225.4891668260098
+'Children','toddlers','exportiexporti #1','eing','Unknown',6,133.1000022888184,329.9824995845556
+'Music','pop','exportischolar #1','ese','Unknown',8,125.5599982738495,317.8541647990544
+'Music','pop','exportischolar #2','able','Unknown',2,34.19999969005585,225.4891668260098
+'Children','toddlers','exportiexporti #1','eing','Unknown',5,141.3099994659424,329.9824995845556
+'Music','pop','exportischolar #2','ese','Unknown',7,21.02000045776367,209.5258342623711
+'Music','pop','exportischolar #1','bar','Unknown',6,161.1999996900558,349.4858338572085
+'Music','pop','exportischolar #1','ought','Unknown',9,157.4199979305267,343.60833363235
+'Music','pop','exportischolar #1','eing','Unknown',7,176.3300008773804,361.8366659681002
+'Children','toddlers','exportiexporti #1','ation','Unknown',5,182.180004119873,360.458332931002
+'Music','pop','exportischolar #2','ese','Unknown',4,32.67999994754791,209.5258342623711
+'Children','toddlers','exportiexporti #1','able','Unknown',10,165.2200031280518,340.4024999402463
+'Music','pop','exportischolar #2','ese','Unknown',3,38.04999923706055,209.5258342623711
+'Music','pop','exportischolar #1','eing','Unknown',9,192.3199996948242,361.8366659681002
+'Music','pop','exportischolar #1','bar','Unknown',4,183.5299987792969,349.4858338572085
+'Music','pop','exportischolar #1','ought','Unknown',7,179.8899984359741,343.60833363235
+'Music','pop','exportischolar #1','able','Unknown',7,263.9299964904785,426.0954516421665
+'Children','toddlers','exportiexporti #1','bar','Unknown',5,193.6999983787537,355.8383329647283
+'Music','pop','exportischolar #2','eing','Unknown',3,7.380000114440918,169.2466670597593
+'Children','toddlers','exportiexporti #1','ought','Unknown',5,258.3000049591064,417.0049994171907
+'Music','pop','exportischolar #2','able','Unknown',5,70.71999931335449,225.4891668260098
+'Music','pop','exportischolar #2','eing','Unknown',6,16.1299991607666,169.2466670597593
+'Music','pop','exportischolar #2','eing','Unknown',7,19.54999923706055,169.2466670597593
+'Children','toddlers','exportiexporti #1','ought','Unknown',7,269.6999988555908,417.0049994171907
+'Music','pop','exportischolar #2','ation','Unknown',2,16.40000057220459,163.7000013565024
+'Music','pop','exportischolar #1','eing','Unknown',2,215.2999982833862,361.8366659681002
+'Music','pop','exportischolar #2','eing','Unknown',2,24.03000068664551,169.2466670597593
+'Children','toddlers','exportiexporti #2','able','Unknown',4,18.03000068664551,161.2512494223192
+'Music','pop','exportischolar #1','ation','Unknown',2,190.1199960708618,331.7224978264421
+'Music','pop','exportischolar #1','ese','Unknown',5,176.9200057983398,317.8541647990544
+'Music','pop','exportischolar #2','bar','Unknown',5,25.82999992370605,165.8018194762143
+'Children','toddlers','exportiexporti #1','bar','Unknown',8,220.280003786087,355.8383329647283
+'Music','pop','exportischolar #1','able','Unknown',2,291.650000333786,426.0954516421665
+'Music','pop','exportischolar #2','ation','Unknown',6,29.94000053405762,163.7000013565024
+'Music','pop','exportischolar #1','bar','Unknown',2,219.0400013923645,349.4858338572085
+'Children','toddlers','exportiexporti #1','ese','Unknown',9,237.4100027084351,367.6699999608099
+'Music','pop','exportischolar #2','ese','Unknown',9,80.54999923706055,209.5258342623711
+'Music','pop','exportischolar #2','bar','Unknown',6,37.56000137329102,165.8018194762143
+'Music','pop','exportischolar #1','ese','Unknown',7,193.1699962615967,317.8541647990544
+'Children','toddlers','exportiexporti #1','ese','Unknown',8,246.3800005912781,367.6699999608099
+'Children','toddlers','exportiexporti #2','able','Unknown',1,40.09000018984079,161.2512494223192
+'Music','pop','exportischolar #2','ation','Unknown',3,42.55999946594238,163.7000013565024
+'Music','pop','exportischolar #1','ese','Unknown',2,196.9499969482422,317.8541647990544
+'Children','toddlers','exportiexporti #2','ought','Unknown',4,15.83000040054321,135.7445457360961
+'Children','toddlers','exportiexporti #2','ation','Unknown',5,15.95000004768372,135.5699997761033
+'Children','toddlers','exportiexporti #2','able','Unknown',9,42.13999938964844,161.2512494223192
+'Music','pop','exportischolar #1','bar','Unknown',3,230.9600019454956,349.4858338572085
+'Children','toddlers','exportiexporti #2','eing','Unknown',6,14.02000045776367,129.0363630923358
+'Children','toddlers','exportiexporti #2','eing','Unknown',4,15.38000011444092,129.0363630923358
+'Children','toddlers','exportiexporti #1','ought','Unknown',9,304.3899921178818,417.0049994171907
+'Children','toddlers','exportiexporti #1','ese','Unknown',5,259.9899978637695,367.6699999608099
+'Music','pop','exportischolar #1','ese','Unknown',1,210.2100019454956,317.8541647990544
+'Children','toddlers','exportiexporti #2','ation','Unknown',1,32.4700003862381,135.5699997761033
+'Children','toddlers','exportiexporti #2','ought','Unknown',5,37.34999942779541,135.7445457360961
+'Music','pop','exportischolar #2','able','Unknown',6,127.2399978637695,225.4891668260098
+'Children','toddlers','exportiexporti #1','eing','Unknown',7,236.7999978065491,329.9824995845556
+'Children','toddlers','exportiexporti #2','ese','Unknown',5,20.70999908447266,111.7874992589156
+'Music','pop','exportischolar #2','ought','Unknown',5,73.53000152111053,164.2645477246155
+'Children','toddlers','exportiexporti #2','ought','Unknown',6,45.27999877929688,135.7445457360961
+'Children','toddlers','exportiexporti #2','ation','Unknown',10,45.5,135.5699997761033
+'Music','pop','exportischolar #1','ese','Unknown',3,227.8399972915649,317.8541647990544
+'Children','toddlers','exportiexporti #2','ese','Unknown',2,23.26000022888184,111.7874992589156
+'Children','toddlers','exportiexporti #2','bar','Unknown',8,50.21000003814697,138.7345455776561
+'Sports','football','corpnameless #6','able','Unknown',12,51.77999877929688,139.9966659545898
+'Books','travel','univunivamalg #8','eing','Unknown',10,14.89999961853027,102.6400017738342
+'Home','lighting','namelessbrand #3','ought','Unknown',6,11.28999996185303,98.75000222524007
+'Music','pop','exportischolar #1','ought','Unknown',4,257.0099945068359,343.60833363235
+'Children','toddlers','exportiexporti #1','ation','Unknown',7,274.1700038909912,360.458332931002
+'Children','toddlers','exportiexporti #2','ese','Unknown',8,26.2300009727478,111.7874992589156
 ---- TYPES
-STRING, STRING, STRING, STRING, STRING, INT, DOUBLE
+STRING, STRING, STRING, STRING, STRING, INT, DOUBLE, DOUBLE
 ====

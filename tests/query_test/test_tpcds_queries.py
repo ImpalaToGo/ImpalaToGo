@@ -97,6 +97,14 @@ class TestTpcdsQuery(ImpalaTestSuite):
   def test_tpcds_q98(self, vector):
     self.run_test_case('tpcds-q98', vector)
 
+  def test_tpcds_q47(self, vector):
+    pytest.xfail("IMPALA-1238")
+    self.run_test_case('tpcds-q47', vector)
+
+  def test_tpcds_q6(self, vector):
+    self.run_test_case('tpcds-q6', vector)
+
+
 class TestTpcdsInsert(ImpalaTestSuite):
   @classmethod
   def get_workload(self):
