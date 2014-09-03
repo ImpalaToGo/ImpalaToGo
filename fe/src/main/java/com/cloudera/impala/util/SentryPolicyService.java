@@ -29,7 +29,11 @@ import com.cloudera.impala.authorization.AuthorizeableUri;
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.authorization.SentryConfig;
 import com.cloudera.impala.authorization.User;
+import com.cloudera.impala.catalog.RolePrivilege;
 import com.cloudera.impala.common.InternalException;
+import com.cloudera.impala.thrift.TPrivilege;
+import com.cloudera.impala.thrift.TPrivilegeLevel;
+import com.cloudera.impala.thrift.TPrivilegeScope;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
@@ -266,6 +270,27 @@ public class SentryPolicyService {
     }
   }
 
+  /**
+   * Utility function that converts a TSentryPrivilege to an Impala TPrivilege object.
+   */
+  public static TPrivilege sentryPrivilegeToTPrivilege(TSentryPrivilege sentryPriv) {
+    TPrivilege privilege = new TPrivilege();
+    privilege.setServer_name(sentryPriv.getServerName());
+    if (sentryPriv.isSetDbName()) privilege.setDb_name(sentryPriv.getDbName());
+    if (sentryPriv.isSetTableName()) privilege.setTable_name(sentryPriv.getTableName());
+    if (sentryPriv.isSetURI()) privilege.setUri(sentryPriv.getURI());
+    privilege.setScope(Enum.valueOf(TPrivilegeScope.class,
+        sentryPriv.getPrivilegeScope().toUpperCase()));
+    if (sentryPriv.getAction().equals("*")) {
+      privilege.setPrivilege_level(TPrivilegeLevel.ALL);
+    } else {
+      privilege.setPrivilege_level(Enum.valueOf(TPrivilegeLevel.class,
+          sentryPriv.getAction().toUpperCase()));
+    }
+    privilege.setPrivilege_name(RolePrivilege.buildRolePrivilegeName(privilege));
+    return privilege;
+  }
+
   // Dummy Sentry class to allow compilation on CDH4.
   public static class SentryUserException extends Exception {
     private static final long serialVersionUID = 9012029067485961905L;
@@ -281,7 +306,18 @@ public class SentryPolicyService {
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
-  public static class TSentryPrivilege {
+  public abstract static class TSentryPrivilege {
+    public abstract boolean isSetDbName();
+    public abstract boolean isSetTableName();
+    public abstract boolean isSetServerName();
+    public abstract boolean isSetURI();
+
+    public abstract String getAction();
+    public abstract String getPrivilegeScope();
+    public abstract String getTableName();
+    public abstract String getDbName();
+    public abstract String getServerName();
+    public abstract String getURI();
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
