@@ -77,15 +77,10 @@ class CustomClusterTestSuite(ImpalaTestSuite):
       if arg in method.func_dict:
         cluster_args.append("--%s=\"%s\" " % (arg, method.func_dict[arg]))
     # Start a clean new cluster before each test
-    self.__start_impala_cluster(cluster_args)
-    self.cluster = ImpalaCluster()
-    statestored = self.cluster.statestored
-    statestored.service.wait_for_live_subscribers(NUM_SUBSCRIBERS, timeout=60)
-    for impalad in self.cluster.impalads:
-      impalad.service.wait_for_num_known_live_backends(CLUSTER_SIZE, timeout=60)
+    self._start_impala_cluster(cluster_args)
 
   @classmethod
-  def __stop_impala_cluster(cls):
+  def _stop_impala_cluster(cls):
     # TODO: Figure out a better way to handle case where processes are just starting
     # / cleaning up so that sleeps are not needed.
     sleep(2)
@@ -93,9 +88,14 @@ class CustomClusterTestSuite(ImpalaTestSuite):
     sleep(2)
 
   @classmethod
-  def __start_impala_cluster(cls, options):
+  def _start_impala_cluster(cls, options):
     logdir = os.getenv('LOG_DIR', "/tmp/")
     cmd = [os.path.join(IMPALA_HOME, 'bin/start-impala-cluster.py'),
            '--cluster_size=%d' % CLUSTER_SIZE,
            '--log_dir=%s' % logdir]
     call(cmd + options)
+    cls.cluster = ImpalaCluster()
+    statestored = cls.cluster.statestored
+    statestored.service.wait_for_live_subscribers(NUM_SUBSCRIBERS, timeout=60)
+    for impalad in cls.cluster.impalads:
+      impalad.service.wait_for_num_known_live_backends(CLUSTER_SIZE, timeout=60)
