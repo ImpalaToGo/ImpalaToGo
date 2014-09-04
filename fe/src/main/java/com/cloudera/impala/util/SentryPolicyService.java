@@ -288,6 +288,7 @@ public class SentryPolicyService {
           sentryPriv.getAction().toUpperCase()));
     }
     privilege.setPrivilege_name(RolePrivilege.buildRolePrivilegeName(privilege));
+    privilege.setCreate_time_ms(sentryPriv.getCreateTime());
     return privilege;
   }
 
@@ -302,7 +303,14 @@ public class SentryPolicyService {
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
-  public static class TSentryRole {
+  public abstract static class TSentryRole {
+    public abstract List<TSentryGroup> getGroups();
+    public abstract String getRoleName();
+  }
+
+  //Dummy Sentry class to allow compilation on CDH4.
+  public abstract static class TSentryGroup {
+    public abstract String getGroupName();
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
@@ -318,6 +326,7 @@ public class SentryPolicyService {
     public abstract String getDbName();
     public abstract String getServerName();
     public abstract String getURI();
+    public abstract long getCreateTime();
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
