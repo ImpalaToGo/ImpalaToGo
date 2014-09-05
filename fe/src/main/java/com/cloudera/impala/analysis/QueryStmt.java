@@ -14,7 +14,6 @@
 
 package com.cloudera.impala.analysis;
 
-import java.lang.Math;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -163,7 +162,7 @@ public abstract class QueryStmt extends StatementBase {
       for (int i = 1; i < orderByElements_.size(); ++i) {
         strBuilder.append(", ").append(orderByElements_.get(i).toSql());
       }
-      strBuilder.append("\n.An ORDER BY without a LIMIT or OFFSET appearing in ");
+      strBuilder.append(".\nAn ORDER BY without a LIMIT or OFFSET appearing in ");
       strBuilder.append("an (inline) view, union operand or an INSERT/CTAS statement ");
       strBuilder.append("has no effect on the query result.");
       analyzer.addWarning(strBuilder.toString());
