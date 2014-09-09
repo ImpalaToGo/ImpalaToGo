@@ -62,6 +62,7 @@ struct ColumnType {
   // Only set if type == TYPE_CHAR or type == TYPE_VARCHAR
   int len;
   static const int MAX_VARCHAR_LENGTH = 32672;
+  static const int MAX_CHAR_INLINE_LENGTH = 128;
 
   // Only set if type == TYPE_DECIMAL
   int precision, scale;
@@ -164,7 +165,8 @@ struct ColumnType {
   }
 
   inline bool IsVarLen() const {
-    return type == TYPE_STRING || type == TYPE_VARCHAR;
+    return type == TYPE_STRING || type == TYPE_VARCHAR ||
+        (type == TYPE_CHAR && len > MAX_CHAR_INLINE_LENGTH);
   }
 
   // Returns the byte size of this type.  Returns 0 for variable length types.
@@ -174,6 +176,7 @@ struct ColumnType {
       case TYPE_VARCHAR:
         return 0;
       case TYPE_CHAR:
+        if (IsVarLen()) return 0;
         return len;
       case TYPE_NULL:
       case TYPE_BOOLEAN:
@@ -206,6 +209,9 @@ struct ColumnType {
       case TYPE_STRING:
       case TYPE_VARCHAR:
         return 16;
+      case TYPE_CHAR:
+        if (IsVarLen()) return 16;
+        return len;
       default:
         return GetByteSize();
     }
