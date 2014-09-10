@@ -3015,7 +3015,7 @@ with v1 as (
 |--31:ANALYTIC
 |  |  functions: rank()
 |  |  partition by: i_category, i_brand, s_store_name, s_company_name
-|  |  order by: d_year, d_moy
+|  |  order by: d_year ASC, d_moy ASC
 |  |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |  |
 |  30:SORT
@@ -3053,7 +3053,7 @@ with v1 as (
 |--21:ANALYTIC
 |  |  functions: rank()
 |  |  partition by: i_category, i_brand, s_store_name, s_company_name
-|  |  order by: d_year, d_moy
+|  |  order by: d_year ASC, d_moy ASC
 |  |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |  |
 |  20:SORT
@@ -3088,7 +3088,7 @@ with v1 as (
 11:ANALYTIC
 |  functions: rank()
 |  partition by: i_category, i_brand, s_store_name, s_company_name
-|  order by: d_year, d_moy
+|  order by: d_year ASC, d_moy ASC
 |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |
 10:SORT

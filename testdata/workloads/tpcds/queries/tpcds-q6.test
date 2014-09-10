@@ -1,5 +1,6 @@
 ====
 ---- QUERY: TPCDS-Q6
+-- Modifications: added order by state to break ties for testing.
 select * from (
  select  a.ca_state state, count(*) cnt
  from customer_address a
@@ -24,21 +25,21 @@ select * from (
              where j.i_category = i.i_category)
  group by a.ca_state
  having count(*) >= 10
- order by cnt limit 100) as t
+ order by cnt, state limit 100) as t
 ---- RESULTS
-'OK',10
 'IL',10
-'NY',11
+'OK',10
 '',11
+'NY',11
 'FL',12
 'IA',13
-'TN',13
 'NE',13
+'TN',13
+'CO',15
 'KS',15
 'MO',15
-'CO',15
-'NC',18
 'LA',18
+'NC',18
 'OH',22
 'VA',22
 'TX',24
