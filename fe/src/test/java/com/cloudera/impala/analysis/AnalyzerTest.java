@@ -29,6 +29,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.cloudera.impala.catalog.AggregateFunction;
 import com.cloudera.impala.catalog.Catalog;
 import com.cloudera.impala.catalog.Function;
 import com.cloudera.impala.catalog.ImpaladCatalog;
@@ -104,6 +105,12 @@ public class AnalyzerTest {
     fn.setHasVarArgs(varArgs);
     catalog_.addFunction(fn);
     return fn;
+  }
+
+  protected void addTestUda(String name, Type retType, Type... argTypes) {
+    FunctionName fnName = new FunctionName("default", name);
+    catalog_.addFunction(new AggregateFunction(fnName,
+        new FunctionArgs(Lists.newArrayList(argTypes), false), retType));
   }
 
   /**
