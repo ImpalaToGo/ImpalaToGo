@@ -89,6 +89,10 @@ export IMPALA_PARQUET_HADOOP_VERSION=1.5.0
 export IMPALA_PARQUET_FORMAT_VERSION=2.1.0
 export IMPALA_LLAMA_VERSION=1.0.0-cdh5.0.0-SNAPSHOT
 
+# Sasl has problems with 'make install' if the path contains a ~. In our
+# packaging jobs, the path contains ~ so we'll just install somewhere else.
+export IMPALA_CYRUS_SASL_INSTALL_DIR=/tmp/impala-build/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION}/build
+
 export IMPALA_FE_DIR=$IMPALA_HOME/fe
 export IMPALA_BE_DIR=$IMPALA_HOME/be
 export IMPALA_WORKLOAD_DIR=$IMPALA_HOME/testdata/workloads
