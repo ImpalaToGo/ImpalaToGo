@@ -133,7 +133,7 @@ public abstract class QueryStmt extends StatementBase {
       // create copies, we don't want to modify the original parse node, in case
       // we need to print it
       orderingExprs.add(orderByElement.getExpr().clone());
-      isAscOrder.add(Boolean.valueOf(orderByElement.getIsAsc()));
+      isAscOrder.add(Boolean.valueOf(orderByElement.isAsc()));
       nullsFirstParams.add(orderByElement.getNullsFirstParam());
     }
     substituteOrdinals(orderingExprs, "ORDER BY", analyzer);
