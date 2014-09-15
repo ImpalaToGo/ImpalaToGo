@@ -1,0 +1,53 @@
+From 4c4ca0554721eab1182b1a83797337ab3995113c Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@apache.org>
+Date: Tue, 26 Aug 2014 11:29:33 -0500
+Subject: [PATCH 81/82] HBASE-11828 callers of SeverName.valueOf should use equals and not ==.
+
+Signed-off-by: Andrew Purtell <apurtell@apache.org>
+
+(cherry picked from commit aa60960a355d5ee27c464fe3e00ae0dc4b012437)
+
+Reason: Backward Compatibility
+Author: Sean Busbey
+Ref: CDH-21387
+---
+ .../java/org/apache/hadoop/hbase/ServerName.java   |   15 +++++++++++++++
+ 1 files changed, 15 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+index 9f9174b..5199322 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+@@ -159,14 +159,29 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+     return Long.parseLong(serverName.substring(index + 1));
+   }
+ 
++  /**
++   * Retrieve an instance of ServerName.
++   * Callers should use the equals method to compare returned instances, though we may return
++   * a shared immutable object as an internal optimization.
++   */
+   public static ServerName valueOf(final String hostname, final int port, final long startcode) {
+     return new ServerName(hostname, port, startcode);
+   }
+ 
++  /**
++   * Retrieve an instance of ServerName.
++   * Callers should use the equals method to compare returned instances, though we may return
++   * a shared immutable object as an internal optimization.
++   */
+   public static ServerName valueOf(final String serverName) {
+     return new ServerName(serverName);
+   }
+ 
++  /**
++   * Retrieve an instance of ServerName.
++   * Callers should use the equals method to compare returned instances, though we may return
++   * a shared immutable object as an internal optimization.
++   */
+   public static ServerName valueOf(final String hostAndPort, final long startCode) {
+     return new ServerName(hostAndPort, startCode);
+   }
+-- 
+1.7.0.4
+

@@ -1,0 +1,28 @@
+From 116ddf159ba4c4712cc64d97815809b271124336 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Tue, 8 Jul 2014 13:52:32 -0700
+Subject: [PATCH 78/82] HBASE-11349 Addendum fixes javadoc warning
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-21275
+---
+ .../org/apache/hadoop/hbase/rest/RESTServlet.java  |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
+index 901c005..4ec5b57 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
+@@ -56,7 +56,7 @@ public class RESTServlet implements Constants {
+ 
+   /**
+    * @param conf Existing configuration to use in rest servlet
+-   * @param realUser the login user
++   * @param userProvider the login user provider
+    * @return the RESTServlet singleton instance
+    * @throws IOException
+    */
+-- 
+1.7.0.4
+

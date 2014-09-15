@@ -1,0 +1,58 @@
+From d04cdcd5a71cd68aae7b5e40470a4c66581416d7 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@apache.org>
+Date: Thu, 14 Aug 2014 17:51:10 -0700
+Subject: [PATCH 76/82] HBASE-11627 guard against divide by zero in RegionSplitter logging.
+
+Adds a test for noop rolling splits that fails prior to the addition
+of the guard.
+
+Signed-off-by: Andrew Purtell <apurtell@apache.org>
+
+(cherry picked from commit f7bae0534f483672c8e0a16bf5b87bf574fb35fb)
+
+Reason: Bugfix
+Author: Sean Busbey <busbey@apache.org>
+Ref: CDH-20838
+---
+ .../apache/hadoop/hbase/util/RegionSplitter.java   |    6 ++++--
+ .../hadoop/hbase/util/TestRegionSplitter.java      |    7 +++++++
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
+index 7ed1530..73b5bff 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/RegionSplitter.java
+@@ -584,8 +584,10 @@ public class RegionSplitter {
+       LOG.debug("TOTAL TIME = "
+           + org.apache.hadoop.util.StringUtils.formatTime(tDiff));
+       LOG.debug("Splits = " + splitCount);
+-      LOG.debug("Avg Time / Split = "
+-          + org.apache.hadoop.util.StringUtils.formatTime(tDiff / splitCount));
++      if (0 < splitCount) {
++        LOG.debug("Avg Time / Split = "
++            + org.apache.hadoop.util.StringUtils.formatTime(tDiff / splitCount));
++      }
+ 
+       splitOut.close();
+       if (table != null){
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitter.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitter.java
+index 407be0d..878e109 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitter.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestRegionSplitter.java
+@@ -282,6 +282,13 @@ public class TestRegionSplitter {
+         verifyBounds(expectedBounds, tableName);
+     }
+ 
++  @Test
++  public void noopRollingSplit() throws Exception {
++    final List<byte[]> expectedBounds = new ArrayList<byte[]>();
++    expectedBounds.add(ArrayUtils.EMPTY_BYTE_ARRAY);
++    rollingSplitAndVerify(TestRegionSplitter.class.getSimpleName(), "UniformSplit", expectedBounds);
++  }
++
+     private void rollingSplitAndVerify(String tableName, String splitClass,
+             List<byte[]> expectedBounds)  throws Exception {
+         final Configuration conf = UTIL.getConfiguration();
+-- 
+1.7.0.4
+

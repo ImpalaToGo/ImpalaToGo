@@ -1,0 +1,30 @@
+From 07da1938f0c913621d41a67539eb14ef6643c8a2 Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@cloudera.com>
+Date: Tue, 22 Jul 2014 14:31:35 -0700
+Subject: [PATCH 75/82] HBASE-11565 Stale connection could stay for a while
+
+---
+ .../org/apache/hadoop/hbase/ipc/RpcClient.java     |    7 ++++++-
+ 1 files changed, 6 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
+index 534a3c1..5bb0648 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ipc/RpcClient.java
+@@ -1055,7 +1055,12 @@ public class RpcClient {
+           LOG.debug(getName() + ": wrote request header " + TextFormat.shortDebugString(header));
+         }
+       } catch(IOException e) {
+-        markClosed(e);
++        synchronized (this) {
++          if (!shouldCloseConnection.get()) {
++            markClosed(e);
++            interrupt();
++          }
++        }
+       }
+     }
+ 
+-- 
+1.7.0.4
+
