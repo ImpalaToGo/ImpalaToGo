@@ -23,7 +23,9 @@ import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.authorization.SentryConfig;
 import com.cloudera.impala.authorization.User;
+import com.cloudera.impala.catalog.AuthorizationException;
 import com.cloudera.impala.catalog.RolePrivilege;
+import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.InternalException;
 import com.cloudera.impala.thrift.TPrivilege;
 import com.cloudera.impala.thrift.TPrivilegeLevel;
@@ -35,6 +37,8 @@ import com.google.common.collect.Lists;
  */
 public class SentryPolicyService {
   private final static Logger LOG = LoggerFactory.getLogger(SentryPolicyService.class);
+  private final String ACCESS_DENIED_ERROR_MSG =
+      "User '%s' does not have privileges to execute: %s";
   private final SentryConfig config_;
 
   /**
@@ -90,10 +94,10 @@ public class SentryPolicyService {
    * @param requestingUser - The requesting user.
    * @param roleName - The role to drop.
    * @param ifExists - If true, no error is thrown if the role does not exist.
-   * @throws InternalException - On any error dropping the role.
+   * @throws ImpalaException - On any error dropping the role.
    */
   public void dropRole(User requestingUser, String roleName, boolean ifExists)
-      throws InternalException {
+      throws ImpalaException {
     LOG.trace(String.format("Dropping role: %s on behalf of: %s", roleName,
         requestingUser.getName()));
     SentryServiceClient client = new SentryServiceClient();
@@ -103,6 +107,9 @@ public class SentryPolicyService {
       } else {
         client.get().dropRole(requestingUser.getShortName(), roleName);
       }
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "DROP_ROLE"));
     } catch (SentryUserException e) {
       throw new InternalException("Error dropping role: ", e);
     } finally {
@@ -116,15 +123,18 @@ public class SentryPolicyService {
    * @param requestingUser - The requesting user.
    * @param roleName - The role to create.
    * @param ifNotExists - If true, no error is thrown if the role already exists.
-   * @throws InternalException - On any error creating the role.
+   * @throws ImpalaException - On any error creating the role.
    */
   public void createRole(User requestingUser, String roleName, boolean ifNotExists)
-      throws InternalException {
+      throws ImpalaException {
     LOG.trace(String.format("Creating role: %s on behalf of: %s", roleName,
         requestingUser.getName()));
     SentryServiceClient client = new SentryServiceClient();
     try {
       client.get().createRole(requestingUser.getShortName(), roleName);
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "CREATE_ROLE"));
     } catch (SentryAlreadyExistsException e) {
       if (ifNotExists) return;
       throw new InternalException("Error creating role: ", e);
@@ -141,17 +151,21 @@ public class SentryPolicyService {
    * @param requestingUser - The requesting user.
    * @param roleName - The role to grant to a group. Role must already exist.
    * @param groupName - The group to grant the role to.
-   * @throws InternalException - On any error.
+   * @throws ImpalaException - On any error.
    */
   public void grantRoleToGroup(User requestingUser, String roleName, String groupName)
-      throws InternalException {
+      throws ImpalaException {
     LOG.trace(String.format("Granting role '%s' to group '%s' on behalf of: %s",
         roleName, groupName, requestingUser.getName()));
     SentryServiceClient client = new SentryServiceClient();
     try {
       client.get().grantRoleToGroup(requestingUser.getShortName(), groupName, roleName);
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "GRANT_ROLE"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error granting role to group: ", e);
+      throw new InternalException(
+          "Error making 'grantRoleToGroup' RPC to Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -167,15 +181,19 @@ public class SentryPolicyService {
    * @throws InternalException - On any error.
    */
   public void revokeRoleFromGroup(User requestingUser, String roleName, String groupName)
-      throws InternalException {
+      throws ImpalaException {
     LOG.trace(String.format("Revoking role '%s' from group '%s' on behalf of: %s",
         roleName, groupName, requestingUser.getName()));
     SentryServiceClient client = new SentryServiceClient();
     try {
       client.get().revokeRoleFromGroup(requestingUser.getShortName(),
           groupName, roleName);
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "REVOKE_ROLE"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error revoking role from group: ", e);
+      throw new InternalException(
+          "Error making 'revokeRoleFromGroup' RPC to Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -187,10 +205,10 @@ public class SentryPolicyService {
    * @param requestingUser - The requesting user.
    * @param roleName - The role to grant privileges to (case insensitive).
    * @param privilege - The privilege to grant.
-   * @throws InternalException - On any error
+   * @throws ImpalaException - On any error
    */
   public void grantRolePrivilege(User requestingUser, String roleName,
-      TPrivilege privilege) throws InternalException {
+      TPrivilege privilege) throws ImpalaException {
     LOG.trace(String.format("Granting role '%s' privilege '%s' on '%s' on behalf of: %s",
         roleName, privilege.toString(), privilege.getScope().toString(),
         requestingUser.getName()));
@@ -218,8 +236,12 @@ public class SentryPolicyService {
               roleName, privilege.getServer_name(), privilege.getUri());
           break;
       }
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "GRANT_PRIVILEGE"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error granting privilege: ", e);
+      throw new InternalException(
+          "Error making 'grantPrivilege*' RPC to Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -231,10 +253,10 @@ public class SentryPolicyService {
    * @param requestingUser - The requesting user.
    * @param roleName - The role to grant privileges to (case insensitive).
    * @param privilege - The privilege to grant to the object.
-   * @throws InternalException - On any error
+   * @throws ImpalaException - On any error
    */
   public void revokeRolePrivilege(User requestingUser, String roleName,
-      TPrivilege privilege) throws InternalException {
+      TPrivilege privilege) throws ImpalaException {
     LOG.trace(String.format("Revoking role '%s' privilege '%s' on '%s' on behalf of: %s",
         roleName, privilege.toString(), privilege.getScope().toString(),
         requestingUser.getName()));
@@ -262,8 +284,32 @@ public class SentryPolicyService {
               roleName, privilege.getServer_name(), privilege.getUri());
           break;
       }
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "REVOKE_PRIVILEGE"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error revoking privilege: ", e);
+      throw new InternalException(
+          "Error making 'revokePrivilege*' RPC to Sentry Service: ", e);
+    } finally {
+      client.close();
+    }
+  }
+
+  /**
+   * Lists all roles granted to all groups a user belongs to.
+   */
+  public List<TSentryRole> listUserRoles(User requestingUser)
+      throws ImpalaException {
+    SentryServiceClient client = new SentryServiceClient();
+    try {
+      return Lists.newArrayList(client.get().listUserRoles(
+          requestingUser.getShortName()));
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "LIST_USER_ROLES"));
+    } catch (SentryUserException e) {
+      throw new InternalException(
+          "Error making 'listUserRoles' RPC to Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -272,12 +318,15 @@ public class SentryPolicyService {
   /**
    * Lists all roles.
    */
-  public List<TSentryRole> listAllRoles(User requestingUser) throws InternalException {
+  public List<TSentryRole> listAllRoles(User requestingUser) throws ImpalaException {
     SentryServiceClient client = new SentryServiceClient();
     try {
       return Lists.newArrayList(client.get().listRoles(requestingUser.getShortName()));
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "LIST_ROLES"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error listing roles: ", e);
+      throw new InternalException("Error making 'listRoles' RPC to Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -287,13 +336,17 @@ public class SentryPolicyService {
    * Lists all privileges granted to a role.
    */
   public List<TSentryPrivilege> listRolePrivileges(User requestingUser, String roleName)
-      throws InternalException {
+      throws ImpalaException {
     SentryServiceClient client = new SentryServiceClient();
     try {
       return Lists.newArrayList(client.get().listAllPrivilegesByRoleName(
           requestingUser.getShortName(), roleName));
+    } catch (SentryAccessDeniedException e) {
+      throw new AuthorizationException(String.format(ACCESS_DENIED_ERROR_MSG,
+          requestingUser.getName(), "LIST_ROLE_PRIVILEGES"));
     } catch (SentryUserException e) {
-      throw new InternalException("Error listing privileges by role name: ", e);
+      throw new InternalException("Error making 'listAllPrivilegesByRoleName' RPC to " +
+          "Sentry Service: ", e);
     } finally {
       client.close();
     }
@@ -328,6 +381,11 @@ public class SentryPolicyService {
 
   // Dummy Sentry class to allow compilation on CDH4.
   public static class SentryAlreadyExistsException extends Exception {
+    private static final long serialVersionUID = 9012029067485961905L;
+  }
+
+  //Dummy Sentry class to allow compilation on CDH4.
+  public static class SentryAccessDeniedException extends Exception {
     private static final long serialVersionUID = 9012029067485961905L;
   }
 
@@ -368,7 +426,7 @@ public class SentryPolicyService {
     }
 
     public void createRole(String user, String roleName) throws SentryUserException,
-        SentryAlreadyExistsException {
+        SentryAlreadyExistsException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
@@ -376,54 +434,63 @@ public class SentryPolicyService {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
-    public void dropRoleIfExists(String user, String roleName) {
+    public void dropRoleIfExists(String user, String roleName)
+        throws SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public List<TSentryRole> listRoles(String user)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
+      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
+    }
+
+    public List<TSentryRole> listUserRoles(String user)
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public List<TSentryPrivilege> listAllPrivilegesByRoleName(String user, String role)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantTablePrivilege(String user, String roleName,
         String serverName, String dbName, String tableName, String privilege)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeTablePrivilege(String user, String roleName,
         String serverName, String dbName, String tableName, String privilege)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege) throws SentryUserException {
+        String serverName, String dbName, String privilege)
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege) throws SentryUserException {
+        String serverName, String dbName, String privilege)
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantServerPrivilege(String user, String roleName,
-        String serverName) throws SentryUserException {
+        String serverName) throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeServerPrivilege(String user, String roleName,
-        String serverName) throws SentryUserException {
+        String serverName) throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantURIPrivilege(String user, String roleName,
-        String serverName, String dbName) throws SentryUserException {
+        String serverName, String dbName) throws SentryUserException,
+        SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
@@ -433,12 +500,12 @@ public class SentryPolicyService {
     }
 
     public void grantRoleToGroup(String user, String roleName, String group)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeRoleFromGroup(String user, String role, String group)
-        throws SentryUserException {
+        throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
   }

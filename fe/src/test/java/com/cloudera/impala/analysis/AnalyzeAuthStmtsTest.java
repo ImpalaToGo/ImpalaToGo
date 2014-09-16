@@ -52,11 +52,14 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
     AnalysisError("SHOW ROLES", "Sentry Service is not supported on CDH4");
     AnalysisError("SHOW ROLE GRANT GROUP myGroup",
         "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW CURRENT ROLES", "Sentry Service is not supported on CDH4");
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
     AnalysisError("SHOW ROLES", authDisabledAnalyzer,
         "Authorization is not enabled.");
     AnalysisError("SHOW ROLE GRANT GROUP myGroup", authDisabledAnalyzer,
+        "Authorization is not enabled.");
+    AnalysisError("SHOW CURRENT ROLES", authDisabledAnalyzer,
         "Authorization is not enabled.");
   }
 

@@ -16,6 +16,7 @@ package com.cloudera.impala.authorization;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.lang.reflect.ConstructorUtils;
 import org.apache.sentry.core.Authorizable;
@@ -71,8 +72,15 @@ public class AuthorizationChecker {
   /*
    * Returns the configuration used to create this AuthorizationProvider.
    */
-  public AuthorizationConfig getConfig() {
-    return config_;
+  public AuthorizationConfig getConfig() { return config_; }
+
+  /**
+   * Returns the set of groups this user belongs to. Uses the GroupMappingService
+   * that is in the AuthorizationProvider to properly resolve Hadoop groups or
+   * local group mappings.
+   */
+  public Set<String> getUserGroups(User user) {
+    throw new UnsupportedOperationException("This API is not supported on CDH4.");
   }
 
   /**

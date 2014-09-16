@@ -58,10 +58,12 @@ class TestGrantRevoke(CustomClusterTestSuite, ImpalaTestSuite):
     # db.
     group_name = grp.getgrnam(getuser()).gr_name
     self.client.execute("create role grant_revoke_test_admin")
-    self.client.execute("grant all on server to grant_revoke_test_admin")
-    self.client.execute("grant role grant_revoke_test_admin to group %s" % group_name)
-    self.cleanup_db('grant_rev_db')
-    self.client.execute("drop role grant_revoke_test_admin")
+    try:
+      self.client.execute("grant all on server to grant_revoke_test_admin")
+      self.client.execute("grant role grant_revoke_test_admin to group %s" % group_name)
+      self.cleanup_db('grant_rev_db', sync_ddl=0)
+    finally:
+      self.client.execute("drop role grant_revoke_test_admin")
 
   @pytest.mark.execute_serially
   @CustomClusterTestSuite.with_args(
