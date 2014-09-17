@@ -217,23 +217,26 @@ public class SentryPolicyService {
       switch (privilege.getScope()) {
         case SERVER:
           client.get().grantServerPrivilege(requestingUser.getShortName(), roleName,
-              privilege.getServer_name());
+              privilege.getServer_name(), privilege.isHas_grant_opt());
           break;
         case DATABASE:
           client.get().grantDatabasePrivilege(requestingUser.getShortName(), roleName,
               privilege.getServer_name(), privilege.getDb_name(),
-              privilege.getPrivilege_level().toString());
+              privilege.getPrivilege_level().toString(),
+              privilege.isHas_grant_opt());
           break;
         case TABLE:
           String tblName = privilege.getTable_name();
           String dbName = privilege.getDb_name();
           client.get().grantTablePrivilege(requestingUser.getShortName(), roleName,
-              privilege.getServer_name(),
-              dbName, tblName, privilege.getPrivilege_level().toString());
+              privilege.getServer_name(), dbName, tblName,
+              privilege.getPrivilege_level().toString(),
+              privilege.isHas_grant_opt());
           break;
         case URI:
           client.get().grantURIPrivilege(requestingUser.getShortName(),
-              roleName, privilege.getServer_name(), privilege.getUri());
+              roleName, privilege.getServer_name(), privilege.getUri(),
+              privilege.isHas_grant_opt());
           break;
       }
     } catch (SentryAccessDeniedException e) {
@@ -265,23 +268,25 @@ public class SentryPolicyService {
       switch (privilege.getScope()) {
         case SERVER:
           client.get().revokeServerPrivilege(requestingUser.getShortName(), roleName,
-              privilege.getServer_name());
+              privilege.getServer_name(), privilege.isHas_grant_opt());
           break;
         case DATABASE:
           client.get().revokeDatabasePrivilege(requestingUser.getShortName(), roleName,
               privilege.getServer_name(), privilege.getDb_name(),
-              privilege.getPrivilege_level().toString());
+              privilege.getPrivilege_level().toString(), privilege.isHas_grant_opt());
           break;
         case TABLE:
           String tblName = privilege.getTable_name();
           String dbName = privilege.getDb_name();
           client.get().revokeTablePrivilege(requestingUser.getShortName(), roleName,
               privilege.getServer_name(), dbName, tblName,
-              privilege.getPrivilege_level().toString());
+              privilege.getPrivilege_level().toString(),
+              privilege.isHas_grant_opt());
           break;
         case URI:
           client.get().revokeURIPrivilege(requestingUser.getShortName(),
-              roleName, privilege.getServer_name(), privilege.getUri());
+              roleName, privilege.getServer_name(), privilege.getUri(),
+              privilege.isHas_grant_opt());
           break;
       }
     } catch (SentryAccessDeniedException e) {
@@ -371,6 +376,12 @@ public class SentryPolicyService {
     }
     privilege.setPrivilege_name(RolePrivilege.buildRolePrivilegeName(privilege));
     privilege.setCreate_time_ms(sentryPriv.getCreateTime());
+    if (sentryPriv.isSetGrantOption() &&
+        sentryPriv.getGrantOption() == TSentryGrantOption.TRUE) {
+      privilege.setHas_grant_opt(true);
+    } else {
+      privilege.setHas_grant_opt(false);
+    }
     return privilege;
   }
 
@@ -400,6 +411,13 @@ public class SentryPolicyService {
     public abstract String getGroupName();
   }
 
+  // Dummy Sentry enum to allow compilation on CDH4.
+  enum TSentryGrantOption {
+    TRUE,
+    FALSE,
+    UNSET
+  }
+
   // Dummy Sentry class to allow compilation on CDH4.
   public abstract static class TSentryPrivilege {
     public abstract boolean isSetDbName();
@@ -414,6 +432,8 @@ public class SentryPolicyService {
     public abstract String getServerName();
     public abstract String getURI();
     public abstract long getCreateTime();
+    public abstract boolean isSetGrantOption();
+    public abstract TSentryGrantOption getGrantOption();
   }
 
   // Dummy Sentry class to allow compilation on CDH4.
@@ -455,47 +475,50 @@ public class SentryPolicyService {
     }
 
     public void grantTablePrivilege(String user, String roleName,
-        String serverName, String dbName, String tableName, String privilege)
+        String serverName, String dbName, String tableName, String privilege,
+        Boolean grantOpt)
         throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeTablePrivilege(String user, String roleName,
-        String serverName, String dbName, String tableName, String privilege)
-        throws SentryUserException, SentryAccessDeniedException {
+        String serverName, String dbName, String tableName, String privilege,
+        Boolean grantOpt) throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege)
+        String serverName, String dbName, String privilege, Boolean grantOpt)
         throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege)
+        String serverName, String dbName, String privilege, Boolean grantOpt)
         throws SentryUserException, SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantServerPrivilege(String user, String roleName,
-        String serverName) throws SentryUserException, SentryAccessDeniedException {
+        String serverName, Boolean grantOpt) throws SentryUserException,
+        SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeServerPrivilege(String user, String roleName,
-        String serverName) throws SentryUserException, SentryAccessDeniedException {
+        String serverName, Boolean grantOpt) throws SentryUserException,
+        SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void grantURIPrivilege(String user, String roleName,
-        String serverName, String dbName) throws SentryUserException,
+        String serverName, String dbName, Boolean grantOpt) throws SentryUserException,
         SentryAccessDeniedException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
     public void revokeURIPrivilege(String user, String roleName,
-        String serverName, String dbName) throws SentryUserException {
+        String serverName, String dbName, Boolean grantOpt) throws SentryUserException {
       throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
     }
 
