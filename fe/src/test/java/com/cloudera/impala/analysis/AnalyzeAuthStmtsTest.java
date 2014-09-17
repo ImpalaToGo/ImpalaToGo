@@ -64,6 +64,31 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
   }
 
   @Test
+  public void AnalyzeShowGrantRole() {
+    AnalysisError("SHOW GRANT ROLE myRole", "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE myRole ON SERVER",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE myRole ON DATABASE functional",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE myRole ON TABLE foo",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE myRole ON TABLE functional.alltypes",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE myRole ON URI 'hdfs:////test-warehouse//foo'",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE does_not_exist",
+        "Sentry Service is not supported on CDH4");
+    AnalysisError("SHOW GRANT ROLE does_not_exist ON SERVER",
+        "Sentry Service is not supported on CDH4");
+
+    Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
+    AnalysisError("SHOW GRANT ROLE myRole", authDisabledAnalyzer,
+        "Authorization is not enabled.");
+    AnalysisError("SHOW GRANT ROLE myRole ON SERVER", authDisabledAnalyzer,
+        "Authorization is not enabled.");
+  }
+
+  @Test
   public void AnalyzeCreateDropRole() throws AnalysisException {
     AnalysisError("DROP ROLE myRole", "Sentry Service is not supported on CDH4");
     AnalysisError("CREATE ROLE doesNotExist", "Sentry Service is not supported on CDH4");

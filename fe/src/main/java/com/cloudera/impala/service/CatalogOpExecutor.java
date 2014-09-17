@@ -1822,7 +1822,6 @@ public class CatalogOpExecutor {
       throws ImpalaException {
     Preconditions.checkNotNull(requestingUser);
     verifySentryServiceEnabled();
-
     String roleName = grantRevokePrivParams.getRole_name();
     List<TCatalogObject> updatedPrivs = Lists.newArrayList();
     for (TPrivilege privilege: grantRevokePrivParams.getPrivileges()) {
