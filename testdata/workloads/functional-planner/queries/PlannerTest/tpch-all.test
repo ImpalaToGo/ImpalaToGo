@@ -1666,7 +1666,7 @@ order by
 05:AGGREGATE
 |  group by: p_brand, p_type, p_size, ps_suppkey
 |
-04:HASH JOIN [LEFT ANTI JOIN]
+04:HASH JOIN [NULL AWARE LEFT ANTI JOIN]
 |  hash predicates: ps_suppkey = s_suppkey
 |
 |--02:SCAN HDFS [tpch.supplier]
@@ -1701,7 +1701,7 @@ order by
 05:AGGREGATE
 |  group by: p_brand, p_type, p_size, ps_suppkey
 |
-04:HASH JOIN [LEFT ANTI JOIN, BROADCAST]
+04:HASH JOIN [NULL AWARE LEFT ANTI JOIN, BROADCAST]
 |  hash predicates: ps_suppkey = s_suppkey
 |
 |--09:EXCHANGE [BROADCAST]
