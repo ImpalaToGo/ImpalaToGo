@@ -1741,13 +1741,15 @@ order by
   sum_sales
 limit 100
 ---- PLAN
-10:TOP-N [LIMIT=100]
+11:TOP-N [LIMIT=100]
 |  order by: i_manager_id ASC, avg_monthly_sales ASC, sum_sales ASC
+|
+10:SELECT
+|  predicates: CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1
 |
 09:ANALYTIC
 |  functions: avg(sum(ss_sales_price))
 |  partition by: i_manager_id
-|  predicates: CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1
 |
 08:SORT
 |  order by: i_manager_id ASC NULLS FIRST
@@ -1779,28 +1781,30 @@ limit 100
 01:SCAN HDFS [tpcds.store_sales]
    partitions=24/120 size=4.46MB
 ---- DISTRIBUTEDPLAN
-17:MERGING-EXCHANGE [UNPARTITIONED]
+18:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: i_manager_id ASC, avg_monthly_sales ASC, sum_sales ASC
 |  limit: 100
 |
-10:TOP-N [LIMIT=100]
+11:TOP-N [LIMIT=100]
 |  order by: i_manager_id ASC, avg_monthly_sales ASC, sum_sales ASC
+|
+10:SELECT
+|  predicates: CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1
 |
 09:ANALYTIC
 |  functions: avg(sum(ss_sales_price))
 |  partition by: i_manager_id
-|  predicates: CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1
 |
 08:SORT
 |  order by: i_manager_id ASC NULLS FIRST
 |
-16:EXCHANGE [HASH(i_manager_id)]
+17:EXCHANGE [HASH(i_manager_id)]
 |
-15:AGGREGATE [FINALIZE]
+16:AGGREGATE [FINALIZE]
 |  output: sum:merge(ss_sales_price)
 |  group by: i_manager_id, d_moy
 |
-14:EXCHANGE [HASH(i_manager_id,d_moy)]
+15:EXCHANGE [HASH(i_manager_id,d_moy)]
 |
 07:AGGREGATE
 |  output: sum(ss_sales_price)
@@ -1809,7 +1813,7 @@ limit 100
 06:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_store_sk = s_store_sk
 |
-|--13:EXCHANGE [BROADCAST]
+|--14:EXCHANGE [BROADCAST]
 |  |
 |  03:SCAN HDFS [tpcds.store]
 |     partitions=1/1 size=3.08KB
@@ -1817,7 +1821,7 @@ limit 100
 05:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_sold_date_sk = d_date_sk
 |
-|--12:EXCHANGE [BROADCAST]
+|--13:EXCHANGE [BROADCAST]
 |  |
 |  02:SCAN HDFS [tpcds.date_dim]
 |     partitions=1/1 size=9.84MB
@@ -1826,7 +1830,7 @@ limit 100
 04:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_item_sk = i_item_sk
 |
-|--11:EXCHANGE [BROADCAST]
+|--12:EXCHANGE [BROADCAST]
 |  |
 |  00:SCAN HDFS [tpcds.item]
 |     partitions=1/1 size=4.82MB
@@ -2493,13 +2497,15 @@ where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales
 order by sum_sales - avg_monthly_sales, s_store_name
 limit 100) tmp2
 ---- PLAN
-10:TOP-N [LIMIT=100]
+11:TOP-N [LIMIT=100]
 |  order by: sum_sales - avg_monthly_sales ASC, s_store_name ASC
+|
+10:SELECT
+|  predicates: CASE WHEN (avg(sum(ss_sales_price)) != 0) THEN (abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price))) ELSE NULL END > 0.1
 |
 09:ANALYTIC
 |  functions: avg(sum(ss_sales_price))
 |  partition by: i_category, i_brand, s_store_name, s_company_name
-|  predicates: CASE WHEN (avg(sum(ss_sales_price)) != 0) THEN (abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price))) ELSE NULL END > 0.1
 |
 08:SORT
 |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST
@@ -2531,28 +2537,30 @@ limit 100) tmp2
 01:SCAN HDFS [tpcds.store_sales]
    partitions=120/120 size=22.02MB
 ---- DISTRIBUTEDPLAN
-17:MERGING-EXCHANGE [UNPARTITIONED]
+18:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: sum_sales - avg_monthly_sales ASC, s_store_name ASC
 |  limit: 100
 |
-10:TOP-N [LIMIT=100]
+11:TOP-N [LIMIT=100]
 |  order by: sum_sales - avg_monthly_sales ASC, s_store_name ASC
+|
+10:SELECT
+|  predicates: CASE WHEN (avg(sum(ss_sales_price)) != 0) THEN (abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price))) ELSE NULL END > 0.1
 |
 09:ANALYTIC
 |  functions: avg(sum(ss_sales_price))
 |  partition by: i_category, i_brand, s_store_name, s_company_name
-|  predicates: CASE WHEN (avg(sum(ss_sales_price)) != 0) THEN (abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price))) ELSE NULL END > 0.1
 |
 08:SORT
 |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST
 |
-16:EXCHANGE [HASH(i_category,i_brand,s_store_name,s_company_name)]
+17:EXCHANGE [HASH(i_category,i_brand,s_store_name,s_company_name)]
 |
-15:AGGREGATE [FINALIZE]
+16:AGGREGATE [FINALIZE]
 |  output: sum:merge(ss_sales_price)
 |  group by: i_category, i_class, i_brand, s_store_name, s_company_name, d_moy
 |
-14:EXCHANGE [HASH(i_category,i_class,i_brand,s_store_name,s_company_name,d_moy)]
+15:EXCHANGE [HASH(i_category,i_class,i_brand,s_store_name,s_company_name,d_moy)]
 |
 07:AGGREGATE
 |  output: sum(ss_sales_price)
@@ -2561,7 +2569,7 @@ limit 100) tmp2
 06:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_store_sk = s_store_sk
 |
-|--13:EXCHANGE [BROADCAST]
+|--14:EXCHANGE [BROADCAST]
 |  |
 |  03:SCAN HDFS [tpcds.store]
 |     partitions=1/1 size=3.08KB
@@ -2569,7 +2577,7 @@ limit 100) tmp2
 05:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_sold_date_sk = d_date_sk
 |
-|--12:EXCHANGE [BROADCAST]
+|--13:EXCHANGE [BROADCAST]
 |  |
 |  02:SCAN HDFS [tpcds.date_dim]
 |     partitions=1/1 size=9.84MB
@@ -2578,7 +2586,7 @@ limit 100) tmp2
 04:HASH JOIN [INNER JOIN, BROADCAST]
 |  hash predicates: ss_item_sk = i_item_sk
 |
-|--11:EXCHANGE [BROADCAST]
+|--12:EXCHANGE [BROADCAST]
 |  |
 |  00:SCAN HDFS [tpcds.item]
 |     partitions=1/1 size=4.82MB
@@ -3006,125 +3014,127 @@ with v1 as (
  limit 100
  ) as v3
 ---- PLAN
-34:TOP-N [LIMIT=100]
+35:TOP-N [LIMIT=100]
 |  order by: sum_sales - avg_monthly_sales ASC, d_year ASC
 |
-33:HASH JOIN [INNER JOIN]
+34:HASH JOIN [INNER JOIN]
 |  hash predicates: i_category = i_category, i_brand = i_brand, s_store_name = s_store_name, s_company_name = s_company_name, rank() = rank() - 1
 |
-|--31:ANALYTIC
+|--32:ANALYTIC
 |  |  functions: rank()
 |  |  partition by: i_category, i_brand, s_store_name, s_company_name
 |  |  order by: d_year ASC, d_moy ASC
 |  |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |  |
-|  30:SORT
+|  31:SORT
 |  |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST, d_year ASC, d_moy ASC
 |  |
-|  29:AGGREGATE [FINALIZE]
+|  30:AGGREGATE [FINALIZE]
 |  |  output: sum(ss_sales_price)
 |  |  group by: i_category, i_brand, s_store_name, s_company_name, d_year, d_moy
+|  |
+|  29:HASH JOIN [INNER JOIN]
+|  |  hash predicates: ss_store_sk = s_store_sk
+|  |
+|  |--26:SCAN HDFS [tpcds.store]
+|  |     partitions=1/1 size=3.08KB compact
 |  |
 |  28:HASH JOIN [INNER JOIN]
-|  |  hash predicates: ss_store_sk = s_store_sk
-|  |
-|  |--25:SCAN HDFS [tpcds.store]
-|  |     partitions=1/1 size=3.08KB compact
-|  |
-|  27:HASH JOIN [INNER JOIN]
 |  |  hash predicates: ss_sold_date_sk = d_date_sk
 |  |
-|  |--24:SCAN HDFS [tpcds.date_dim]
+|  |--25:SCAN HDFS [tpcds.date_dim]
 |  |     partitions=1/1 size=9.84MB compact
 |  |     predicates: (d_year = 2000 OR (d_year = 2000 - 1 AND d_moy = 12) OR (d_year = 2000 + 1 AND d_moy = 1))
 |  |
-|  26:HASH JOIN [INNER JOIN]
+|  27:HASH JOIN [INNER JOIN]
 |  |  hash predicates: ss_item_sk = i_item_sk
 |  |
-|  |--22:SCAN HDFS [tpcds.item]
+|  |--23:SCAN HDFS [tpcds.item]
 |  |     partitions=1/1 size=4.82MB compact
 |  |
-|  23:SCAN HDFS [tpcds.store_sales]
+|  24:SCAN HDFS [tpcds.store_sales]
 |     partitions=120/120 size=22.02MB
 |
-32:HASH JOIN [INNER JOIN]
-|  hash predicates: i_category = i_category, i_brand = i_brand, s_store_name = s_store_name, s_company_name = s_company_name, rank() = rank() + 1
+33:HASH JOIN [INNER JOIN]
+|  hash predicates: i_category = i_category, i_brand = i_brand, s_store_name = s_store_name, s_company_name = s_company_name, rank() + 1 = rank()
 |
-|--21:ANALYTIC
+|--12:SELECT
+|  |  predicates: d_year = 2000, CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1, avg(sum(ss_sales_price)) > 0
+|  |
+|  11:ANALYTIC
 |  |  functions: rank()
 |  |  partition by: i_category, i_brand, s_store_name, s_company_name
 |  |  order by: d_year ASC, d_moy ASC
 |  |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |  |
-|  20:SORT
+|  10:SORT
 |  |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST, d_year ASC, d_moy ASC
 |  |
-|  19:AGGREGATE [FINALIZE]
+|  09:ANALYTIC
+|  |  functions: avg(sum(ss_sales_price))
+|  |  partition by: i_category, i_brand, s_store_name, s_company_name, d_year
+|  |
+|  08:SORT
+|  |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST, d_year ASC NULLS FIRST
+|  |
+|  07:AGGREGATE [FINALIZE]
 |  |  output: sum(ss_sales_price)
 |  |  group by: i_category, i_brand, s_store_name, s_company_name, d_year, d_moy
 |  |
-|  18:HASH JOIN [INNER JOIN]
+|  06:HASH JOIN [INNER JOIN]
 |  |  hash predicates: ss_store_sk = s_store_sk
 |  |
-|  |--15:SCAN HDFS [tpcds.store]
+|  |--03:SCAN HDFS [tpcds.store]
 |  |     partitions=1/1 size=3.08KB compact
 |  |
-|  17:HASH JOIN [INNER JOIN]
+|  05:HASH JOIN [INNER JOIN]
 |  |  hash predicates: ss_sold_date_sk = d_date_sk
 |  |
-|  |--14:SCAN HDFS [tpcds.date_dim]
+|  |--02:SCAN HDFS [tpcds.date_dim]
 |  |     partitions=1/1 size=9.84MB compact
 |  |     predicates: (d_year = 2000 OR (d_year = 2000 - 1 AND d_moy = 12) OR (d_year = 2000 + 1 AND d_moy = 1))
 |  |
-|  16:HASH JOIN [INNER JOIN]
+|  04:HASH JOIN [INNER JOIN]
 |  |  hash predicates: ss_item_sk = i_item_sk
 |  |
-|  |--12:SCAN HDFS [tpcds.item]
+|  |--00:SCAN HDFS [tpcds.item]
 |  |     partitions=1/1 size=4.82MB compact
 |  |
-|  13:SCAN HDFS [tpcds.store_sales]
+|  01:SCAN HDFS [tpcds.store_sales]
 |     partitions=120/120 size=22.02MB
 |
-11:ANALYTIC
+22:ANALYTIC
 |  functions: rank()
 |  partition by: i_category, i_brand, s_store_name, s_company_name
 |  order by: d_year ASC, d_moy ASC
 |  window: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 |
-10:SORT
+21:SORT
 |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST, d_year ASC, d_moy ASC
 |
-09:ANALYTIC
-|  functions: avg(sum(ss_sales_price))
-|  partition by: i_category, i_brand, s_store_name, s_company_name, d_year
-|  predicates: CASE WHEN avg(sum(ss_sales_price)) > 0 THEN abs(sum(ss_sales_price) - avg(sum(ss_sales_price))) / avg(sum(ss_sales_price)) ELSE NULL END > 0.1, avg(sum(ss_sales_price)) > 0
-|
-08:SORT
-|  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST, d_year ASC NULLS FIRST
-|
-07:AGGREGATE [FINALIZE]
+20:AGGREGATE [FINALIZE]
 |  output: sum(ss_sales_price)
 |  group by: i_category, i_brand, s_store_name, s_company_name, d_year, d_moy
 |
-06:HASH JOIN [INNER JOIN]
+19:HASH JOIN [INNER JOIN]
 |  hash predicates: ss_store_sk = s_store_sk
 |
-|--03:SCAN HDFS [tpcds.store]
+|--16:SCAN HDFS [tpcds.store]
 |     partitions=1/1 size=3.08KB compact
 |
-05:HASH JOIN [INNER JOIN]
+18:HASH JOIN [INNER JOIN]
 |  hash predicates: ss_sold_date_sk = d_date_sk
 |
-|--02:SCAN HDFS [tpcds.date_dim]
+|--15:SCAN HDFS [tpcds.date_dim]
 |     partitions=1/1 size=9.84MB compact
-|     predicates: (d_year = 2000 OR (d_year = 2000 - 1 AND d_moy = 12) OR (d_year = 2000 + 1 AND d_moy = 1)), tpcds.date_dim.d_year = 2000
+|     predicates: (d_year = 2000 OR (d_year = 2000 - 1 AND d_moy = 12) OR (d_year = 2000 + 1 AND d_moy = 1))
 |
-04:HASH JOIN [INNER JOIN]
+17:HASH JOIN [INNER JOIN]
 |  hash predicates: ss_item_sk = i_item_sk
 |
-|--00:SCAN HDFS [tpcds.item]
+|--13:SCAN HDFS [tpcds.item]
 |     partitions=1/1 size=4.82MB compact
 |
-01:SCAN HDFS [tpcds.store_sales]
+14:SCAN HDFS [tpcds.store_sales]
    partitions=120/120 size=22.02MB
 ====
