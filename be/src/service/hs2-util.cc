@@ -41,33 +41,33 @@ void impala::TColumnValueToHS2TColumn(const TColumnValue& col_val,
   bool is_null;
   switch (type.types[0].scalar_type.type) {
     case TPrimitiveType::BOOLEAN:
-      is_null = col_val.__isset.bool_val;
+      is_null = !col_val.__isset.bool_val;
       column->boolVal.values.push_back(col_val.bool_val);
       nulls = &column->boolVal.nulls;
       break;
     case TPrimitiveType::TINYINT:
-      is_null = col_val.__isset.byte_val;
+      is_null = !col_val.__isset.byte_val;
       column->byteVal.values.push_back(col_val.byte_val);
       nulls = &column->byteVal.nulls;
       break;
     case TPrimitiveType::SMALLINT:
-      is_null = col_val.__isset.short_val;
+      is_null = !col_val.__isset.short_val;
       column->i16Val.values.push_back(col_val.short_val);
       nulls = &column->i16Val.nulls;
       break;
     case TPrimitiveType::INT:
-      is_null = col_val.__isset.int_val;
+      is_null = !col_val.__isset.int_val;
       column->i32Val.values.push_back(col_val.int_val);
       nulls = &column->i32Val.nulls;
       break;
     case TPrimitiveType::BIGINT:
-      is_null = col_val.__isset.long_val;
+      is_null = !col_val.__isset.long_val;
       column->i64Val.values.push_back(col_val.long_val);
       nulls = &column->i64Val.nulls;
       break;
     case TPrimitiveType::FLOAT:
     case TPrimitiveType::DOUBLE:
-      is_null = col_val.__isset.double_val;
+      is_null = !col_val.__isset.double_val;
       column->doubleVal.values.push_back(col_val.double_val);
       nulls = &column->doubleVal.nulls;
       break;
@@ -76,7 +76,7 @@ void impala::TColumnValueToHS2TColumn(const TColumnValue& col_val,
     case TPrimitiveType::STRING:
     case TPrimitiveType::VARCHAR:
     case TPrimitiveType::DECIMAL:
-      is_null = col_val.__isset.string_val;
+      is_null = !col_val.__isset.string_val;
       column->stringVal.values.push_back(col_val.string_val);
       nulls = &column->stringVal.nulls;
       break;
