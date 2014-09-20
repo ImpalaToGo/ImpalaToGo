@@ -1781,7 +1781,7 @@ limit 100
 01:SCAN HDFS [tpcds.store_sales]
    partitions=24/120 size=4.46MB
 ---- DISTRIBUTEDPLAN
-18:MERGING-EXCHANGE [UNPARTITIONED]
+17:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: i_manager_id ASC, avg_monthly_sales ASC, sum_sales ASC
 |  limit: 100
 |
@@ -1798,13 +1798,11 @@ limit 100
 08:SORT
 |  order by: i_manager_id ASC NULLS FIRST
 |
-17:EXCHANGE [HASH(i_manager_id)]
-|
 16:AGGREGATE [FINALIZE]
 |  output: sum:merge(ss_sales_price)
 |  group by: i_manager_id, d_moy
 |
-15:EXCHANGE [HASH(i_manager_id,d_moy)]
+15:EXCHANGE [HASH(i_manager_id)]
 |
 07:AGGREGATE
 |  output: sum(ss_sales_price)
@@ -2537,7 +2535,7 @@ limit 100) tmp2
 01:SCAN HDFS [tpcds.store_sales]
    partitions=120/120 size=22.02MB
 ---- DISTRIBUTEDPLAN
-18:MERGING-EXCHANGE [UNPARTITIONED]
+17:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: sum_sales - avg_monthly_sales ASC, s_store_name ASC
 |  limit: 100
 |
@@ -2554,13 +2552,11 @@ limit 100) tmp2
 08:SORT
 |  order by: i_category ASC NULLS FIRST, i_brand ASC NULLS FIRST, s_store_name ASC NULLS FIRST, s_company_name ASC NULLS FIRST
 |
-17:EXCHANGE [HASH(i_category,i_brand,s_store_name,s_company_name)]
-|
 16:AGGREGATE [FINALIZE]
 |  output: sum:merge(ss_sales_price)
 |  group by: i_category, i_class, i_brand, s_store_name, s_company_name, d_moy
 |
-15:EXCHANGE [HASH(i_category,i_class,i_brand,s_store_name,s_company_name,d_moy)]
+15:EXCHANGE [HASH(i_category,i_brand,s_store_name,s_company_name)]
 |
 07:AGGREGATE
 |  output: sum(ss_sales_price)
@@ -2739,7 +2735,7 @@ limit 1000
    partitions=1/1 size=4.82MB
    predicates: i_category IN ('Jewelry', 'Sports', 'Books')
 ---- DISTRIBUTEDPLAN
-14:MERGING-EXCHANGE [UNPARTITIONED]
+13:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: i_category ASC, i_class ASC, i_item_id ASC, i_item_desc ASC, sum(ss_ext_sales_price) * 100 / sum(sum(ss_ext_sales_price)) ASC
 |  limit: 1000
 |
@@ -2753,13 +2749,11 @@ limit 1000
 06:SORT
 |  order by: i_class ASC NULLS FIRST
 |
-13:EXCHANGE [HASH(i_class)]
-|
 12:AGGREGATE [FINALIZE]
 |  output: sum:merge(ss_ext_sales_price)
 |  group by: i_item_id, i_item_desc, i_category, i_class, i_current_price
 |
-11:EXCHANGE [HASH(i_item_id,i_item_desc,i_category,i_class,i_current_price)]
+11:EXCHANGE [HASH(i_class)]
 |
 05:AGGREGATE
 |  output: sum(ss_ext_sales_price)
