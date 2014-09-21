@@ -1,5 +1,7 @@
 ====
 ---- QUERY: TPCDS-Q89
+/* Modifications: Added Partition Key filter because Impala does not do dynamic partition
+   pruning.*/
 select * from (select  *
 from (
 select i_category, i_class, i_brand,
@@ -13,119 +15,120 @@ from item, store_sales, date_dim, store
 where ss_item_sk = i_item_sk and
       ss_sold_date_sk = d_date_sk and
       ss_store_sk = s_store_sk and
-      d_year in (1999) and
+      d_year in (2000) and
         ((i_category in ('Children','Music','Home') and
           i_class in ('toddlers','pop','lighting')
          )
       or (i_category in ('Jewelry','Books','Sports') and
           i_class in ('costume','travel','football')
         ))
+      and ss_sold_date_sk between 2451545 and 2451910  -- partition key filter
 group by i_category, i_class, i_brand,
          s_store_name, s_company_name, d_moy) tmp1
 where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
 order by sum_sales - avg_monthly_sales, s_store_name
 limit 100) tmp2;
 ---- RESULTS
-'Children','toddlers','exportiexporti #1','ought','Unknown',6,19.8899998664856,417.0049994171907
-'Children','toddlers','exportiexporti #1','ought','Unknown',3,57.4900016784668,417.0049994171907
-'Children','toddlers','exportiexporti #1','ese','Unknown',4,27.35999965667725,367.6699999608099
-'Children','toddlers','exportiexporti #1','ation','Unknown',6,25.64999997615814,360.458332931002
-'Children','toddlers','exportiexporti #1','able','Unknown',3,7.399999856948853,340.4024999402463
-'Music','pop','exportischolar #1','bar','Unknown',7,30.79000091552734,349.4858338572085
-'Music','pop','exportischolar #1','ought','Unknown',6,27.34000062942505,343.60833363235
-'Children','toddlers','exportiexporti #1','ese','Unknown',6,57.92999947071075,367.6699999608099
-'Children','toddlers','exportiexporti #1','able','Unknown',5,34.87000000476837,340.4024999402463
-'Children','toddlers','exportiexporti #1','eing','Unknown',2,34.86999976634979,329.9824995845556
-'Children','toddlers','exportiexporti #1','bar','Unknown',4,68.50999879837036,355.8383329647283
-'Children','toddlers','exportiexporti #1','ation','Unknown',2,85.91999983787537,360.458332931002
-'Children','toddlers','exportiexporti #1','ought','Unknown',4,146.1100015640259,417.0049994171907
-'Children','toddlers','exportiexporti #1','ese','Unknown',3,101.240000128746,367.6699999608099
-'Music','pop','exportischolar #1','ation','Unknown',5,77.59000015258789,331.7224978264421
-'Children','toddlers','exportiexporti #1','ation','Unknown',4,109.870001077652,360.458332931002
-'Music','pop','exportischolar #1','ation','Unknown',6,81.25999903678894,331.7224978264421
-'Music','pop','exportischolar #1','able','Unknown',3,175.8299963474274,426.0954516421665
-'Music','pop','exportischolar #1','able','Unknown',4,176.9199981689453,426.0954516421665
-'Children','toddlers','exportiexporti #1','ese','Unknown',7,118.7900023460388,367.6699999608099
-'Music','pop','exportischolar #1','eing','Unknown',5,128.7600021362305,361.8366659681002
-'Music','pop','exportischolar #1','ese','Unknown',4,92.90999889373779,317.8541647990544
-'Children','toddlers','exportiexporti #1','bar','Unknown',7,132.5800013542175,355.8383329647283
-'Music','pop','exportischolar #1','ation','Unknown',4,109.6200008392334,331.7224978264421
-'Music','pop','exportischolar #1','ese','Unknown',6,96.10999727249146,317.8541647990544
-'Children','toddlers','exportiexporti #1','able','Unknown',7,122.169997215271,340.4024999402463
-'Music','pop','exportischolar #1','ought','Unknown',5,129.5200023651123,343.60833363235
-'Children','toddlers','exportiexporti #1','eing','Unknown',3,120.2399985790253,329.9824995845556
-'Children','toddlers','exportiexporti #1','able','Unknown',8,135.8599996566772,340.4024999402463
-'Music','pop','exportischolar #2','ese','Unknown',8,5.679999828338623,209.5258342623711
-'Music','pop','exportischolar #1','eing','Unknown',4,159.7600017786026,361.8366659681002
-'Music','pop','exportischolar #2','able','Unknown',3,27.36999893188477,225.4891668260098
-'Children','toddlers','exportiexporti #1','eing','Unknown',6,133.1000022888184,329.9824995845556
-'Music','pop','exportischolar #1','ese','Unknown',8,125.5599982738495,317.8541647990544
-'Music','pop','exportischolar #2','able','Unknown',2,34.19999969005585,225.4891668260098
-'Children','toddlers','exportiexporti #1','eing','Unknown',5,141.3099994659424,329.9824995845556
-'Music','pop','exportischolar #2','ese','Unknown',7,21.02000045776367,209.5258342623711
-'Music','pop','exportischolar #1','bar','Unknown',6,161.1999996900558,349.4858338572085
-'Music','pop','exportischolar #1','ought','Unknown',9,157.4199979305267,343.60833363235
-'Music','pop','exportischolar #1','eing','Unknown',7,176.3300008773804,361.8366659681002
-'Children','toddlers','exportiexporti #1','ation','Unknown',5,182.180004119873,360.458332931002
-'Music','pop','exportischolar #2','ese','Unknown',4,32.67999994754791,209.5258342623711
-'Children','toddlers','exportiexporti #1','able','Unknown',10,165.2200031280518,340.4024999402463
-'Music','pop','exportischolar #2','ese','Unknown',3,38.04999923706055,209.5258342623711
-'Music','pop','exportischolar #1','eing','Unknown',9,192.3199996948242,361.8366659681002
-'Music','pop','exportischolar #1','bar','Unknown',4,183.5299987792969,349.4858338572085
-'Music','pop','exportischolar #1','ought','Unknown',7,179.8899984359741,343.60833363235
-'Music','pop','exportischolar #1','able','Unknown',7,263.9299964904785,426.0954516421665
-'Children','toddlers','exportiexporti #1','bar','Unknown',5,193.6999983787537,355.8383329647283
-'Music','pop','exportischolar #2','eing','Unknown',3,7.380000114440918,169.2466670597593
-'Children','toddlers','exportiexporti #1','ought','Unknown',5,258.3000049591064,417.0049994171907
-'Music','pop','exportischolar #2','able','Unknown',5,70.71999931335449,225.4891668260098
-'Music','pop','exportischolar #2','eing','Unknown',6,16.1299991607666,169.2466670597593
-'Music','pop','exportischolar #2','eing','Unknown',7,19.54999923706055,169.2466670597593
-'Children','toddlers','exportiexporti #1','ought','Unknown',7,269.6999988555908,417.0049994171907
-'Music','pop','exportischolar #2','ation','Unknown',2,16.40000057220459,163.7000013565024
-'Music','pop','exportischolar #1','eing','Unknown',2,215.2999982833862,361.8366659681002
-'Music','pop','exportischolar #2','eing','Unknown',2,24.03000068664551,169.2466670597593
-'Children','toddlers','exportiexporti #2','able','Unknown',4,18.03000068664551,161.2512494223192
-'Music','pop','exportischolar #1','ation','Unknown',2,190.1199960708618,331.7224978264421
-'Music','pop','exportischolar #1','ese','Unknown',5,176.9200057983398,317.8541647990544
-'Music','pop','exportischolar #2','bar','Unknown',5,25.82999992370605,165.8018194762143
-'Children','toddlers','exportiexporti #1','bar','Unknown',8,220.280003786087,355.8383329647283
-'Music','pop','exportischolar #1','able','Unknown',2,291.650000333786,426.0954516421665
-'Music','pop','exportischolar #2','ation','Unknown',6,29.94000053405762,163.7000013565024
-'Music','pop','exportischolar #1','bar','Unknown',2,219.0400013923645,349.4858338572085
-'Children','toddlers','exportiexporti #1','ese','Unknown',9,237.4100027084351,367.6699999608099
-'Music','pop','exportischolar #2','ese','Unknown',9,80.54999923706055,209.5258342623711
-'Music','pop','exportischolar #2','bar','Unknown',6,37.56000137329102,165.8018194762143
-'Music','pop','exportischolar #1','ese','Unknown',7,193.1699962615967,317.8541647990544
-'Children','toddlers','exportiexporti #1','ese','Unknown',8,246.3800005912781,367.6699999608099
-'Children','toddlers','exportiexporti #2','able','Unknown',1,40.09000018984079,161.2512494223192
-'Music','pop','exportischolar #2','ation','Unknown',3,42.55999946594238,163.7000013565024
-'Music','pop','exportischolar #1','ese','Unknown',2,196.9499969482422,317.8541647990544
-'Children','toddlers','exportiexporti #2','ought','Unknown',4,15.83000040054321,135.7445457360961
-'Children','toddlers','exportiexporti #2','ation','Unknown',5,15.95000004768372,135.5699997761033
-'Children','toddlers','exportiexporti #2','able','Unknown',9,42.13999938964844,161.2512494223192
-'Music','pop','exportischolar #1','bar','Unknown',3,230.9600019454956,349.4858338572085
-'Children','toddlers','exportiexporti #2','eing','Unknown',6,14.02000045776367,129.0363630923358
-'Children','toddlers','exportiexporti #2','eing','Unknown',4,15.38000011444092,129.0363630923358
-'Children','toddlers','exportiexporti #1','ought','Unknown',9,304.3899921178818,417.0049994171907
-'Children','toddlers','exportiexporti #1','ese','Unknown',5,259.9899978637695,367.6699999608099
-'Music','pop','exportischolar #1','ese','Unknown',1,210.2100019454956,317.8541647990544
-'Children','toddlers','exportiexporti #2','ation','Unknown',1,32.4700003862381,135.5699997761033
-'Children','toddlers','exportiexporti #2','ought','Unknown',5,37.34999942779541,135.7445457360961
-'Music','pop','exportischolar #2','able','Unknown',6,127.2399978637695,225.4891668260098
-'Children','toddlers','exportiexporti #1','eing','Unknown',7,236.7999978065491,329.9824995845556
-'Children','toddlers','exportiexporti #2','ese','Unknown',5,20.70999908447266,111.7874992589156
-'Music','pop','exportischolar #2','ought','Unknown',5,73.53000152111053,164.2645477246155
-'Children','toddlers','exportiexporti #2','ought','Unknown',6,45.27999877929688,135.7445457360961
-'Children','toddlers','exportiexporti #2','ation','Unknown',10,45.5,135.5699997761033
-'Music','pop','exportischolar #1','ese','Unknown',3,227.8399972915649,317.8541647990544
-'Children','toddlers','exportiexporti #2','ese','Unknown',2,23.26000022888184,111.7874992589156
-'Children','toddlers','exportiexporti #2','bar','Unknown',8,50.21000003814697,138.7345455776561
-'Sports','football','corpnameless #6','able','Unknown',12,51.77999877929688,139.9966659545898
-'Books','travel','univunivamalg #8','eing','Unknown',10,14.89999961853027,102.6400017738342
-'Home','lighting','namelessbrand #3','ought','Unknown',6,11.28999996185303,98.75000222524007
-'Music','pop','exportischolar #1','ought','Unknown',4,257.0099945068359,343.60833363235
-'Children','toddlers','exportiexporti #1','ation','Unknown',7,274.1700038909912,360.458332931002
-'Children','toddlers','exportiexporti #2','ese','Unknown',8,26.2300009727478,111.7874992589156
+'Music','pop','exportischolar #2','ation','Unknown',2,13.03999996185303,361.1950007999937
+'Music','pop','exportischolar #2','ought','Unknown',3,70.0600004196167,395.42250046134
+'Music','pop','exportischolar #2','ation','Unknown',4,46.12000107765198,361.1950007999937
+'Music','pop','exportischolar #2','ese','Unknown',7,74.37999844551086,369.7908335415025
+'Music','pop','exportischolar #2','ought','Unknown',4,100.9599962234497,395.42250046134
+'Music','pop','exportischolar #2','ought','Unknown',8,103.9799976348877,395.42250046134
+'Music','pop','exportischolar #2','ese','Unknown',6,89.30999946594238,369.7908335415025
+'Children','toddlers','exportiexporti #2','ese','Unknown',6,4.78000020980835,269.2383319487174
+'Music','pop','exportischolar #2','ation','Unknown',1,106.7700011730194,361.1950007999937
+'Music','pop','exportischolar #1','ought','Unknown',5,14.47000026702881,265.8549980521202
+'Music','pop','exportischolar #1','able','Unknown',2,27.04999923706055,268.6436344005845
+'Music','pop','exportischolar #1','ought','Unknown',7,40.29000091552734,265.8549980521202
+'Children','toddlers','exportiexporti #2','able','Unknown',7,95.24999904632568,319.7050002614657
+'Children','toddlers','exportiexporti #2','eing','Unknown',3,23.47000030428171,247.9236348765818
+'Music','pop','exportischolar #2','ought','Unknown',2,176.3600010871887,395.42250046134
+'Children','toddlers','exportiexporti #2','ought','Unknown',4,60.91999816894531,275.4266658152143
+'Children','toddlers','exportiexporti #1','ese','Unknown',7,4.539999961853027,218.2354562120004
+'Music','pop','exportischolar #2','bar','Unknown',4,52.93000051379204,261.1683334435026
+'Children','toddlers','exportiexporti #2','ation','Unknown',1,53.7599983215332,258.9581829742952
+'Children','toddlers','exportiexporti #1','ation','Unknown',5,31.70999908447266,235.0783330295235
+'Music','pop','exportischolar #2','bar','Unknown',6,58.25,261.1683334435026
+'Music','pop','exportischolar #2','able','Unknown',3,102.739999383688,304.3575004898012
+'Children','toddlers','exportiexporti #1','ation','Unknown',2,41.38000011444092,235.0783330295235
+'Music','pop','exportischolar #1','able','Unknown',7,77.63999938964844,268.6436344005845
+'Children','toddlers','exportiexporti #2','ought','Unknown',6,86.89000034332275,275.4266658152143
+'Children','toddlers','exportiexporti #1','able','Unknown',6,31.31000089645386,218.7708334351579
+'Music','pop','exportischolar #1','bar','Unknown',4,63.02999877929688,250.4545471288941
+'Music','pop','exportischolar #2','ought','Unknown',7,209.3499985933304,395.42250046134
+'Music','pop','exportischolar #2','eing','Unknown',6,133.689998626709,317.7858332643906
+'Children','toddlers','exportiexporti #2','ese','Unknown',2,90.28000277280807,269.2383319487174
+'Children','toddlers','exportiexporti #1','bar','Unknown',5,19.05000019073486,197.743333051602
+'Children','toddlers','exportiexporti #2','ought','Unknown',1,98.26999884843826,275.4266658152143
+'Children','toddlers','exportiexporti #2','bar','Unknown',6,72.1200008392334,249.0066656817993
+'Music','pop','exportischolar #1','eing','Unknown',7,13.1899995803833,187.6033319917818
+'Music','pop','exportischolar #2','eing','Unknown',7,143.5300016403198,317.7858332643906
+'Music','pop','exportischolar #2','ese','Unknown',12,197.8900035619736,369.7908335415025
+'Children','toddlers','exportiexporti #2','eing','Unknown',1,76.19999861717224,247.9236348765818
+'Music','pop','exportischolar #2','bar','Unknown',2,90.52999925613403,261.1683334435026
+'Music','pop','exportischolar #1','eing','Unknown',6,19.39999961853027,187.6033319917818
+'Music','pop','exportischolar #2','able','Unknown',5,136.1900010108948,304.3575004898012
+'Children','toddlers','exportiexporti #2','ation','Unknown',2,92.75,258.9581829742952
+'Music','pop','exportischolar #1','bar','Unknown',2,85.54000091552734,250.4545471288941
+'Children','toddlers','exportiexporti #2','bar','Unknown',4,85.580002784729,249.0066656817993
+'Music','pop','exportischolar #2','able','Unknown',2,141.0600032061338,304.3575004898012
+'Children','toddlers','exportiexporti #2','ought','Unknown',3,114.3700013160706,275.4266658152143
+'Children','toddlers','exportiexporti #2','ese','Unknown',1,110.1699995994568,269.2383319487174
+'Music','pop','exportischolar #1','bar','Unknown',7,95.15000152587891,250.4545471288941
+'Music','pop','exportischolar #1','ought','Unknown',4,111.7999997138977,265.8549980521202
+'Music','pop','exportischolar #1','bar','Unknown',10,96.64000034332275,250.4545471288941
+'Children','toddlers','exportiexporti #1','able','Unknown',5,65.58999824523926,218.7708334351579
+'Children','toddlers','exportiexporti #1','able','Unknown',7,68.58999919891357,218.7708334351579
+'Music','pop','exportischolar #2','eing','Unknown',3,169.5200023651123,317.7858332643906
+'Music','pop','exportischolar #1','ought','Unknown',3,119.1700000762939,265.8549980521202
+'Music','pop','exportischolar #1','bar','Unknown',3,104.6999969482422,250.4545471288941
+'Music','pop','exportischolar #1','ese','Unknown',6,4.019999980926514,148.8654536117207
+'Children','toddlers','exportiexporti #1','able','Unknown',4,74.71000146865845,218.7708334351579
+'Music','pop','exportischolar #2','ought','Unknown',10,253.2299976348877,395.42250046134
+'Children','toddlers','exportiexporti #1','ation','Unknown',7,92.92999649047852,235.0783330295235
+'Music','pop','exportischolar #2','eing','Unknown',4,175.7899990081787,317.7858332643906
+'Children','toddlers','exportiexporti #1','ought','Unknown',9,54.34999862313271,195.4050005922715
+'Children','toddlers','exportiexporti #2','bar','Unknown',5,108.3899965286255,249.0066656817993
+'Music','pop','exportischolar #2','ese','Unknown',3,230.340003952384,369.7908335415025
+'Children','toddlers','exportiexporti #2','bar','Unknown',3,112.7000026702881,249.0066656817993
+'Children','toddlers','exportiexporti #2','ation','Unknown',3,124.7600021362305,258.9581829742952
+'Children','toddlers','exportiexporti #1','ese','Unknown',3,84.61000061035156,218.2354562120004
+'Children','toddlers','exportiexporti #1','ese','Unknown',5,88.61999893188477,218.2354562120004
+'Children','toddlers','exportiexporti #2','bar','Unknown',2,122.1999988555908,249.0066656817993
+'Children','toddlers','exportiexporti #2','bar','Unknown',1,122.2299966812134,249.0066656817993
+'Music','pop','exportischolar #2','bar','Unknown',3,134.6100006103516,261.1683334435026
+'Children','toddlers','exportiexporti #1','bar','Unknown',2,72.54999923706055,197.743333051602
+'Music','pop','exportischolar #1','ought','Unknown',6,143.6900005340576,265.8549980521202
+'Music','pop','exportischolar #2','able','Unknown',1,182.7000004053116,304.3575004898012
+'Music','pop','exportischolar #1','ought','Unknown',8,145.0599980354309,265.8549980521202
+'Children','toddlers','exportiexporti #1','bar','Unknown',3,77.30000305175781,197.743333051602
+'Children','toddlers','exportiexporti #1','ese','Unknown',6,98.33000183105469,218.2354562120004
+'Children','toddlers','exportiexporti #1','eing','Unknown',4,34.63000106811523,153.9791655540466
+'Children','toddlers','exportiexporti #2','eing','Unknown',7,129.8700003623962,247.9236348765818
+'Music','pop','exportischolar #1','able','Unknown',8,151.2599982023239,268.6436344005845
+'Books','travel','univunivamalg #3','able','Unknown',11,8.210000038146973,121.2600011825562
+'Music','pop','exportischolar #1','ese','Unknown',4,37.44000053405762,148.8654536117207
+'Music','pop','exportischolar #1','ese','Unknown',7,38.67000007629395,148.8654536117207
+'Children','toddlers','exportiexporti #1','bar','Unknown',6,87.68000030517578,197.743333051602
+'Music','pop','exportischolar #1','ation','Unknown',2,13.3600001335144,122.7549992352724
+'Children','toddlers','exportiexporti #1','ought','Unknown',2,86.36000061035156,195.4050005922715
+'Music','pop','exportischolar #1','ation','Unknown',7,14.25,122.7549992352724
+'Music','pop','exportischolar #2','bar','Unknown',7,152.6800034046173,261.1683334435026
+'Children','toddlers','exportiexporti #2','ation','Unknown',6,150.9700016975403,258.9581829742952
+'Music','pop','exportischolar #1','ation','Unknown',3,14.86999988555908,122.7549992352724
+'Children','toddlers','exportiexporti #1','ought','Unknown',4,87.96999835968018,195.4050005922715
+'Music','pop','exportischolar #1','able','Unknown',4,162.2799987792969,268.6436344005845
+'Children','toddlers','exportiexporti #1','eing','Unknown',3,48.39999961853027,153.9791655540466
+'Children','toddlers','exportiexporti #2','ese','Unknown',4,163.7900009155273,269.2383319487174
+'Children','toddlers','exportiexporti #2','ese','Unknown',5,164.1500018835068,269.2383319487174
+'Music','pop','exportischolar #2','able','Unknown',7,199.4200007915497,304.3575004898012
+'Children','toddlers','exportiexporti #2','ought','Unknown',9,170.9399976730347,275.4266658152143
+'Music','pop','exportischolar #1','eing','Unknown',5,87.55000257492065,187.6033319917818
+'Children','toddlers','exportiexporti #2','able','Unknown',6,219.680004119873,319.7050002614657
+'Children','toddlers','exportiexporti #2','eing','Unknown',4,149.8499996364117,247.9236348765818
+'Music','pop','exportischolar #1','ese','Unknown',3,51.01000022888184,148.8654536117207
+'Children','toddlers','exportiexporti #1','eing','Unknown',6,56.65999937057495,153.9791655540466
 ---- TYPES
 STRING, STRING, STRING, STRING, STRING, INT, DOUBLE, DOUBLE
 ====
