@@ -2079,7 +2079,7 @@ order by
 |     predicates: p_name LIKE 'forest%'
 |
 02:SCAN HDFS [tpch.partsupp]
-   partitions=1/1 size=112.71MB compact
+   partitions=1/1 size=112.71MB
 ---- DISTRIBUTEDPLAN
 18:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: s_name ASC
@@ -2136,7 +2136,7 @@ order by
 |     predicates: p_name LIKE 'forest%'
 |
 02:SCAN HDFS [tpch.partsupp]
-   partitions=1/1 size=112.71MB compact
+   partitions=1/1 size=112.71MB
 ====
 # TPCH-Q21
 # Q21 - Suppliers Who Kept Orders Waiting Query
@@ -2358,7 +2358,7 @@ order by
 |     predicates: substr(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
 |
 03:SCAN HDFS [tpch.orders]
-   partitions=1/1 size=162.56MB compact
+   partitions=1/1 size=162.56MB
 ---- DISTRIBUTEDPLAN
 15:MERGING-EXCHANGE [UNPARTITIONED]
 |  order by: cntrycode ASC
@@ -2405,5 +2405,5 @@ order by
 11:EXCHANGE [HASH(o_custkey)]
 |
 03:SCAN HDFS [tpch.orders]
-   partitions=1/1 size=162.56MB compact
+   partitions=1/1 size=162.56MB
 ====
