@@ -667,4 +667,6 @@ public class AggregateInfo extends AggregateInfoBase {
     }
     return out.toString();
   }
+
+  protected String tupleDebugName() { return "agg-tuple"; }
 }
