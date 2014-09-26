@@ -61,6 +61,7 @@ import com.google.common.collect.Lists;
  * aggInfo.mergeAggInfo == aggInfo.mergeAggInfo.mergeAggInfo.
  *
  * TODO: move the merge construction logic from SelectStmt into AggregateInfo
+ * TODO: Add query tests for aggregation with intermediate tuples with num_nodes=1.
  */
 public class AggregateInfo extends AggregateInfoBase {
   private final static Logger LOG = LoggerFactory.getLogger(AggregateInfo.class);
@@ -668,5 +669,6 @@ public class AggregateInfo extends AggregateInfoBase {
     return out.toString();
   }
 
+  @Override
   protected String tupleDebugName() { return "agg-tuple"; }
 }
