@@ -1930,6 +1930,29 @@ WRITE TO HDFS [tpch.q20_tmp4, OVERWRITE=true]
 00:SCAN HDFS [tpch.q20_tmp3]
    partitions=1/1 size=94.49KB
    predicates: ps_availqty > sum_quantity
+=======
+07:HASH JOIN [RIGHT SEMI JOIN]
+|  hash predicates: l_suppkey = ps_suppkey, l_partkey = ps_partkey
+|  other join predicates: ps_availqty > 0.5 * sum(l_quantity)
+|
+|--06:HASH JOIN [LEFT SEMI JOIN]
+|  |  hash predicates: ps_partkey = p_partkey
+|  |
+|  |--03:SCAN HDFS [tpch.part]
+|  |     partitions=1/1 size=22.83MB
+|  |     predicates: p_name LIKE 'forest%'
+|  |
+|  02:SCAN HDFS [tpch.partsupp]
+|     partitions=1/1 size=112.71MB
+|
+05:AGGREGATE [FINALIZE]
+|  output: sum(l_quantity)
+|  group by: l_partkey, l_suppkey
+|
+04:SCAN HDFS [tpch.lineitem]
+   partitions=1/1 size=718.94MB
+   predicates: l_shipdate >= '1994-01-01', l_shipdate < '1995-01-01'
+>>>>>>> 39eb2dc... IMPALA-1318: Joins should not return semi-joined tuples.
 ---- DISTRIBUTEDPLAN
 WRITE TO HDFS [tpch.q20_tmp4, OVERWRITE=true]
 |  partitions=1
@@ -2006,6 +2029,39 @@ limit 100
 |
 00:SCAN HDFS [tpch.supplier s]
    partitions=1/1 size=1.33MB
+=======
+07:HASH JOIN [RIGHT SEMI JOIN, PARTITIONED]
+|  hash predicates: l_suppkey = ps_suppkey, l_partkey = ps_partkey
+|  other join predicates: ps_availqty > 0.5 * sum(l_quantity)
+|
+|--14:EXCHANGE [HASH(ps_partkey,ps_suppkey)]
+|  |
+|  06:HASH JOIN [LEFT SEMI JOIN, BROADCAST]
+|  |  hash predicates: ps_partkey = p_partkey
+|  |
+|  |--13:EXCHANGE [BROADCAST]
+|  |  |
+|  |  03:SCAN HDFS [tpch.part]
+|  |     partitions=1/1 size=22.83MB
+|  |     predicates: p_name LIKE 'forest%'
+|  |
+|  02:SCAN HDFS [tpch.partsupp]
+|     partitions=1/1 size=112.71MB
+|
+12:AGGREGATE [FINALIZE]
+|  output: sum:merge(l_quantity)
+|  group by: l_partkey, l_suppkey
+|
+11:EXCHANGE [HASH(l_partkey,l_suppkey)]
+|
+05:AGGREGATE
+|  output: sum(l_quantity)
+|  group by: l_partkey, l_suppkey
+|
+04:SCAN HDFS [tpch.lineitem]
+   partitions=1/1 size=718.94MB
+   predicates: l_shipdate >= '1994-01-01', l_shipdate < '1995-01-01'
+>>>>>>> 39eb2dc... IMPALA-1318: Joins should not return semi-joined tuples.
 ====
 # QUERY_NAME : TPCH-Q21
 # Q21 - Suppliers Who Kept Orders Waiting Query
