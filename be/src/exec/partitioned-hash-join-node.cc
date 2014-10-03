@@ -135,7 +135,7 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
 
     null_probe_rows_ = state->obj_pool()->Add(new BufferedTupleStream(
         state, child(0)->row_desc(), state->block_mgr(), block_mgr_client_,
-        false, true));
+        false, false));
     RETURN_IF_ERROR(null_probe_rows_->Init(runtime_profile(), false));
     null_aware_eval_timer_ = ADD_TIMER(runtime_profile(), "NullAwareAntiJoinEvalTime");
   }
@@ -883,7 +883,7 @@ Status PartitionedHashJoinNode::OutputNullAwareNullProbe(RuntimeState* state,
     RETURN_IF_ERROR(null_probe_rows_->GetNext(probe_batch_.get(), &eos));
     if (probe_batch_->num_rows() == 0) {
       // All done.
-      null_aware_partition_->Close(NULL);
+      null_aware_partition_->Close(out_batch);
       null_aware_partition_ = NULL;
       return Status::OK;
     }
