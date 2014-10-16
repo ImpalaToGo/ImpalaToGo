@@ -56,9 +56,6 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <dirent.h>
-#if !defined(NO_SSL_DL) && !defined(NO_SSL)
-#include <dlfcn.h>
-#endif
 #include <pthread.h>
 #if defined(__MACH__)
 #define SSL_LIB   "libssl.dylib"
@@ -145,96 +142,8 @@ typedef int socklen_t;
 
 static const char *http_500_error = "Internal Server Error";
 
-#if defined(NO_SSL_DL)
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#else
-// SSL loaded dynamically from DLL.
-// I put the prototypes here to be independent from OpenSSL source installation.
-typedef struct ssl_st SSL;
-typedef struct ssl_method_st SSL_METHOD;
-typedef struct ssl_ctx_st SSL_CTX;
-
-struct ssl_func {
-  const char *name;   // SSL function name
-  void  (*ptr)(void); // Function pointer
-};
-
-#define SSL_free (* (void (*)(SSL *)) ssl_sw[0].ptr)
-#define SSL_accept (* (int (*)(SSL *)) ssl_sw[1].ptr)
-#define SSL_connect (* (int (*)(SSL *)) ssl_sw[2].ptr)
-#define SSL_read (* (int (*)(SSL *, void *, int)) ssl_sw[3].ptr)
-#define SSL_write (* (int (*)(SSL *, const void *,int)) ssl_sw[4].ptr)
-#define SSL_get_error (* (int (*)(SSL *, int)) ssl_sw[5].ptr)
-#define SSL_set_fd (* (int (*)(SSL *, SOCKET)) ssl_sw[6].ptr)
-#define SSL_new (* (SSL * (*)(SSL_CTX *)) ssl_sw[7].ptr)
-#define SSL_CTX_new (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[8].ptr)
-#define SSLv23_server_method (* (SSL_METHOD * (*)(void)) ssl_sw[9].ptr)
-#define SSL_library_init (* (int (*)(void)) ssl_sw[10].ptr)
-#define SSL_CTX_use_PrivateKey_file (* (int (*)(SSL_CTX *, \
-        const char *, int)) ssl_sw[11].ptr)
-#define SSL_CTX_use_certificate_file (* (int (*)(SSL_CTX *, \
-        const char *, int)) ssl_sw[12].ptr)
-#define SSL_CTX_set_default_passwd_cb \
-  (* (void (*)(SSL_CTX *, sq_callback_t)) ssl_sw[13].ptr)
-#define SSL_CTX_free (* (void (*)(SSL_CTX *)) ssl_sw[14].ptr)
-#define SSL_load_error_strings (* (void (*)(void)) ssl_sw[15].ptr)
-#define SSL_CTX_use_certificate_chain_file \
-  (* (int (*)(SSL_CTX *, const char *)) ssl_sw[16].ptr)
-#define SSLv23_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[17].ptr)
-#define SSL_pending (* (int (*)(SSL *)) ssl_sw[18].ptr)
-#define SSL_CTX_set_verify (* (void (*)(SSL_CTX *, int, int)) ssl_sw[19].ptr)
-#define SSL_shutdown (* (int (*)(SSL *)) ssl_sw[20].ptr)
-
-#define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
-#define CRYPTO_set_locking_callback \
-  (* (void (*)(void (*)(int, int, const char *, int))) crypto_sw[1].ptr)
-#define CRYPTO_set_id_callback \
-  (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
-#define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[3].ptr)
-#define ERR_error_string (* (char * (*)(unsigned long,char *)) crypto_sw[4].ptr)
-
-// set_ssl_option() function updates this array.
-// It loads SSL library dynamically and changes NULLs to the actual addresses
-// of respective functions. The macros above (like SSL_connect()) are really
-// just calling these functions indirectly via the pointer.
-static struct ssl_func ssl_sw[] = {
-  {"SSL_free",   NULL},
-  {"SSL_accept",   NULL},
-  {"SSL_connect",   NULL},
-  {"SSL_read",   NULL},
-  {"SSL_write",   NULL},
-  {"SSL_get_error",  NULL},
-  {"SSL_set_fd",   NULL},
-  {"SSL_new",   NULL},
-  {"SSL_CTX_new",   NULL},
-  {"SSLv23_server_method", NULL},
-  {"SSL_library_init",  NULL},
-  {"SSL_CTX_use_PrivateKey_file", NULL},
-  {"SSL_CTX_use_certificate_file",NULL},
-  {"SSL_CTX_set_default_passwd_cb",NULL},
-  {"SSL_CTX_free",  NULL},
-  {"SSL_load_error_strings", NULL},
-  {"SSL_CTX_use_certificate_chain_file", NULL},
-  {"SSLv23_client_method", NULL},
-  {"SSL_pending", NULL},
-  {"SSL_CTX_set_verify", NULL},
-  {"SSL_shutdown",   NULL},
-  {NULL,    NULL}
-};
-
-// Similar array as ssl_sw. These functions could be located in different lib.
-#if !defined(NO_SSL)
-static struct ssl_func crypto_sw[] = {
-  {"CRYPTO_num_locks",  NULL},
-  {"CRYPTO_set_locking_callback", NULL},
-  {"CRYPTO_set_id_callback", NULL},
-  {"ERR_get_error",  NULL},
-  {"ERR_error_string", NULL},
-  {NULL,    NULL}
-};
-#endif // NO_SSL
-#endif // NO_SSL_DL
 
 static const char *month_names[] = {
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -2078,8 +1987,6 @@ static SOCKET conn2(const char *host, int port, int use_ssl,
 
   if (host == NULL) {
     snprintf(ebuf, ebuf_len, "%s", "NULL host");
-  } else if (use_ssl && SSLv23_client_method == NULL) {
-    snprintf(ebuf, ebuf_len, "%s", "SSL is not initialized");
     // TODO(lsm): use something threadsafe instead of gethostbyname()
   } else if ((he = gethostbyname(host)) == NULL) {
     snprintf(ebuf, ebuf_len, "gethostbyname(%s): %s", host, strerror(ERRNO));
@@ -4235,34 +4142,6 @@ static unsigned long ssl_id_callback(void) {
   return (unsigned long) pthread_self();
 }
 
-#if !defined(NO_SSL_DL)
-static int load_dll(struct sq_context *ctx, const char *dll_name,
-                    struct ssl_func *sw) {
-  union {void *p; void (*fp)(void);} u;
-  void  *dll_handle;
-  struct ssl_func *fp;
-
-  if ((dll_handle = dlopen(dll_name, RTLD_LAZY)) == NULL) {
-    cry(fc(ctx), "%s: cannot load %s", __func__, dll_name);
-    return 0;
-  }
-
-  for (fp = sw; fp->name != NULL; fp++) {
-    // dlsym() on UNIX returns void *. ISO C forbids casts of data pointers to
-    // function pointers. We need to use a union to make a cast.
-    u.p = dlsym(dll_handle, fp->name);
-    if (u.fp == NULL) {
-      cry(fc(ctx), "%s: %s: cannot find %s", __func__, dll_name, fp->name);
-      return 0;
-    } else {
-      fp->ptr = u.fp;
-    }
-  }
-
-  return 1;
-}
-#endif // NO_SSL_DL
-
 // Dynamically load SSL library. Set up ctx->ssl_ctx pointer.
 static int set_ssl_option(struct sq_context *ctx) {
   int i, size;
@@ -4275,13 +4154,6 @@ static int set_ssl_option(struct sq_context *ctx) {
     return 1;
   }
 
-#if !defined(NO_SSL_DL)
-  if (!load_dll(ctx, SSL_LIB, ssl_sw) ||
-      !load_dll(ctx, CRYPTO_LIB, crypto_sw)) {
-    return 0;
-  }
-#endif // NO_SSL_DL
-
   // Initialize SSL library
   SSL_library_init();
   SSL_load_error_strings();
@@ -4290,6 +4162,8 @@ static int set_ssl_option(struct sq_context *ctx) {
     cry(fc(ctx), "SSL_CTX_new (server) error: %s", ssl_error());
     return 0;
   }
+
+  SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
 
   // If user callback returned non-NULL, that means that user callback has
   // set up certificate itself. In this case, skip sertificate setting.
@@ -4785,10 +4659,6 @@ static void *master_thread(void *thread_func_param) {
   // Stop signal received: somebody called sq_stop. Quit.
   close_all_listening_sockets(ctx);
 
-  // Close the wakeup fds
-  close(ctx->wakeup_fds[0]);
-  close(ctx->wakeup_fds[1]);
-
   // Wakeup workers that are waiting for connections to handle.
   pthread_cond_broadcast(&ctx->sq_full);
 
@@ -4799,21 +4669,18 @@ static void *master_thread(void *thread_func_param) {
   }
   (void) pthread_mutex_unlock(&ctx->mutex);
 
-  // All threads exited, no sync is needed. Destroy mutex and condvars
-  (void) pthread_mutex_destroy(&ctx->mutex);
-  (void) pthread_cond_destroy(&ctx->cond);
-  (void) pthread_cond_destroy(&ctx->sq_empty);
-  (void) pthread_cond_destroy(&ctx->sq_full);
-
 #if !defined(NO_SSL)
   uninitialize_ssl(ctx);
 #endif
   DEBUG_TRACE(("exiting"));
 
   // Signal sq_stop() that we're done.
-  // WARNING: This must be the very last thing this
-  // thread does, as ctx becomes invalid after this line.
+  (void) pthread_mutex_lock(&ctx->mutex);
   ctx->stop_flag = 2;
+  // WARNING: This must be the very last thing this
+  // thread does, as ctx may be freed by sq_stop() as soon as the
+  // mutex is unlocked.
+  (void) pthread_mutex_unlock(&ctx->mutex);
   return NULL;
 }
 
@@ -4837,6 +4704,22 @@ static void free_context(struct sq_context *ctx) {
   }
 #endif // !NO_SSL
 
+  // If the wakeup fds are open, close them
+  if (ctx->wakeup_fds[0] >= 0) {
+    close(ctx->wakeup_fds[0]);
+    ctx->wakeup_fds[0] = -1;
+  }
+  if (ctx->wakeup_fds[1] >= 0) {
+    close(ctx->wakeup_fds[1]);
+    ctx->wakeup_fds[1] = -1;
+  }
+
+  // All threads exited, no sync is needed. Destroy mutex and condvars
+  (void) pthread_cond_destroy(&ctx->cond);
+  (void) pthread_cond_destroy(&ctx->sq_empty);
+  (void) pthread_cond_destroy(&ctx->sq_full);
+  (void) pthread_mutex_destroy(&ctx->mutex);
+
   // Deallocate context itself
   free(ctx);
 }
@@ -4844,16 +4727,24 @@ static void free_context(struct sq_context *ctx) {
 void sq_stop(struct sq_context *ctx) {
   int unused;
   char c = 0;
+
+  (void) pthread_mutex_lock(&ctx->mutex);
   ctx->stop_flag = 1;
+  (void) pthread_mutex_unlock(&ctx->mutex);
 
   if (ctx->wakeup_fds[1] != -1) {
     RETRY_ON_EINTR(unused, write(ctx->wakeup_fds[1], &c, 1));
   }
 
   // Wait until sq_fini() stops
-  while (ctx->stop_flag != 2) {
+  while (1) {
+    (void) pthread_mutex_lock(&ctx->mutex);
+    int should_stop = (ctx->stop_flag == 2);
+    (void) pthread_mutex_unlock(&ctx->mutex);
+    if (should_stop) break;
     (void) sq_sleep(10);
   }
+
   free_context(ctx);
 }
 
@@ -4871,6 +4762,8 @@ struct sq_context *sq_start(const struct sq_callbacks *callbacks,
   }
   ctx->callbacks = *callbacks;
   ctx->user_data = user_data;
+  ctx->wakeup_fds[0] = -1;
+  ctx->wakeup_fds[1] = -1;
 
   while (options && (name = *options++) != NULL) {
     if ((i = get_option_index(name)) == -1) {
