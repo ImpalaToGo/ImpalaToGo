@@ -1,0 +1,214 @@
+/*
+ * cached-file.hpp
+ *
+ *  Created on: Oct 1, 2014
+ *      Author: elenav
+ */
+
+#ifndef COMMON_INCLUDE_HPP_
+#define COMMON_INCLUDE_HPP_
+
+#include <time.h>
+#include <list>
+#include <map>
+#include <utility>
+
+// Leave this include before boost timer include to get defines from multiprecision
+#include "common/multi-precision.h"
+#include <boost/timer/timer.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/function.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
+
+#include "dfs_cache/dfs-types.h"
+
+namespace impala {
+
+typedef void* dfsFSConnection;
+/**
+ * Represents context of File-related operation session.
+ * Context should provide at least the callback and the underlying session entity.
+ */
+typedef void* SessionContext;
+
+namespace status {
+/**
+ * Internal operation status
+ */
+typedef enum {
+	OK,
+	OPERATION_ASYNC_SCHEDULED,
+
+	NAMENODE_IS_NOT_CONFIGURED,
+	NAMENODE_IS_UNREACHABLE,
+	NAMENODE_CONNECTION_FAILED,
+
+	DFS_ADAPTOR_IS_NOT_CONFIGURED,
+	DFS_OBJECT_DOES_NOT_EXIST,
+
+	FILE_OBJECT_OPERATION_FAILURE,
+
+	NOT_IMPLEMENTED,                 /** for developer purposes */
+} StatusInternal;
+}
+
+
+namespace dfs {
+
+/** supported / configured DFS types */
+enum DFS_TYPE {
+	HDFS,
+	S3,
+	OTHER,
+};
+}
+
+/**
+ * Connection details as configured
+ */
+struct NameNodeDescriptor{
+	dfs::DFS_TYPE dfs_type;
+	std::string   host;
+	int           port;
+	std::string   credentials;
+	std::string   password;
+
+	bool          valid;      /** this flag is introduced in order to overcome the non-nullable struct nature.
+	                           *  an object with "valid" = false should be treated as non-usable (nullptr, NULL)
+	                           */
+	static NameNodeDescriptor getNull() {
+		NameNodeDescriptor descriptor;
+		descriptor.valid = false;
+		return descriptor;
+	}
+};
+
+
+typedef NameNodeDescriptor dfsFS;
+
+/**
+ * Represent the single DFS connection
+ */
+typedef struct {
+	typedef enum{
+		NON_INITIALIZED,
+		FREE_INITIALIZED,
+		FREE_FAILURE,
+		BUSY_OK,
+	} ConnectionState;
+
+	dfsFSConnection  connection;      /**< the connection handle */
+	ConnectionState  state;           /**< connection status, to help manage it */
+} dfsConnection;
+
+/**
+ * Remote DFS adaptor. Interface expected - similar to hdfs.h
+ */
+class RemoteAdaptor {
+protected:
+	std::string m_name;         /**< adaptor name */
+	virtual ~RemoteAdaptor() {}
+
+public:
+	inline std::string name() { return m_name; }
+	inline void name(const std::string & name) { m_name = name;}
+
+	virtual int connect(boost::shared_ptr<dfsConnection> & conn) = 0;
+	virtual int disconnect(boost::shared_ptr<dfsConnection> & conn) = 0;
+	virtual int read(boost::shared_ptr<dfsConnection> & conn) = 0;
+	virtual int write(boost::shared_ptr<dfsConnection> & conn) = 0;
+};
+
+
+/**
+ * File progress (prepare or any other operation) status.
+ * Leave old c++98 enum due this file will be included indirectly by other imapla modules
+ * that are still under c++98
+ */
+struct FileProgressStatus {
+	enum fileProgressStatus {
+		FILEPROGRESS_NOT_RUN = 0,
+		FILEPROGRESS_COMPLETED_OK = 1,
+		FILEPROGRESS_IS_MISSED_REMOTELY = 2,
+		FILEPROGRESS_REMOTE_DFS_IS_UNREACHABLE = 3,
+		FILEPROGRESS_GENERAL_FAILURE = 4,
+	};
+};
+
+/**
+ * File progress, defines the status of the file ManagedFile::File in context of warmup request
+ */
+struct FileProgress {
+	std::size_t localBytes;       /**< number of locally existing bytes for this file  */
+	std::size_t estimatedBytes;   /**< size of file, remote, total */
+	std::time_t estimatedTime;    /**< estimated time remained to get the file locally */
+	std::string localPath; 		  /**< file local path */
+	std::string dfsPath; 		  /**< file dfs path */
+    NameNodeDescriptor namenode;  /** focal namenode of the cluster which owns this file */
+	std::time_t processTime; 	  /**< time file operation was actively performed. It can be used to calculate bandwidth used by the operation */
+
+	FileProgressStatus::fileProgressStatus progressStatus; /**< file progress status */
+
+	bool error; /**< flag, indicates file error */
+	std::string errdescr; /**< error description (if any) */
+
+	FileProgress() :
+			localBytes(0), estimatedBytes(-1), estimatedTime(0), localPath(""), dfsPath(
+					""), processTime(0), progressStatus(
+					FileProgressStatus::FILEPROGRESS_NOT_RUN), error(false), errdescr(
+					"") {
+	}
+	/**
+	 * isReady - check whether the file is ready
+	 */
+	bool isReady() {
+		return ((localBytes == estimatedBytes) && !error
+				&& progressStatus
+						== FileProgressStatus::FILEPROGRESS_COMPLETED_OK);
+	}
+
+};
+
+/**
+ * Defines the request performance statistic
+ */
+typedef struct {
+	boost::timer::cpu_times cpu_time;
+
+} request_performance;
+
+
+/**
+ * The callback to the context where the Prepare Operation completion report is expected (coordinator).
+ * @param context     - session context (client context) which requested for prepare operation
+ * @param progress    - list of files scheduled for prepare along with their final progress
+ * @param performance - to hold request current performance statistic
+ * @param overall     - overall status of operation, true - succeed, false - failure.
+ * @param canceled    - flag, indicates whether operation was canceled
+ *
+ * @return operation status
+ */
+typedef boost::function<
+		status::StatusInternal(SessionContext context,
+				const std::list<FileProgress> & progress,
+				request_performance const & performance, bool overall,
+				bool canceled)> PrepareCompletedCallback;
+
+
+/**
+ * The callback to the context where the Estimate Operation completion report is expected.
+ * @param context     - session context (client context) which requested for prepare operation
+ * @param progress    - list of files along with their estimated metrics.
+ * @param time        - overall time required to get the requested dataset locally
+ *
+ * @return operation status
+ */
+
+typedef boost::function<
+		status::StatusInternal(SessionContext context,
+				const std::list<FileProgress> & estimation,
+				time_t const & time)> CacheEstimationCompletedCallback;
+
+}
+#endif /* COMMON_INCLUDE_HPP_ */
