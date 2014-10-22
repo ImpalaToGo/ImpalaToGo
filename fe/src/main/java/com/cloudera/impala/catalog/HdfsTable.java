@@ -34,14 +34,12 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.BlockStorageLocation;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.VolumeId;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
@@ -142,7 +140,7 @@ public class HdfsTable extends Table {
   // address as the host name. Each FileBlock specifies a list of
   // indices within this hostIndex_ to specify which nodes contain
   // replicas of the block.
-  private ListMap<TNetworkAddress> hostIndex_ = new ListMap<TNetworkAddress>();
+  private final ListMap<TNetworkAddress> hostIndex_ = new ListMap<TNetworkAddress>();
 
   // Map of parent directory (partition location) to list of files (FileDescriptors)
   // under that directory. Used to look up/index all files in the table.
@@ -168,7 +166,7 @@ public class HdfsTable extends Table {
   // and its usage in getFileSystem suggests it should be.
   private static final Configuration CONF = new Configuration();
 
-  private static final DistributedFileSystem DFS;
+  private static final FileSystem DFS;
 
   private static final boolean SUPPORTS_VOLUME_ID;
 
@@ -177,6 +175,7 @@ public class HdfsTable extends Table {
       // call newInstance() instead of using a shared instance from a cache
       // to avoid accidentally having it closed by someone else
       FileSystem fs = FileSystem.newInstance(FileSystem.getDefaultUri(CONF), CONF);
+      /*
       if (!(fs instanceof DistributedFileSystem)) {
         String error = "Cannot connect to HDFS. " +
             CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY +
@@ -184,7 +183,9 @@ public class HdfsTable extends Table {
             " might be set incorrectly";
         throw new RuntimeException(error);
       }
-      DFS = (DistributedFileSystem) fs;
+      */
+      DFS = fs;
+
     } catch (IOException e) {
       throw new RuntimeException("couldn't retrieve FileSystem:\n" + e.getMessage(), e);
     }
@@ -298,6 +299,7 @@ public class HdfsTable extends Table {
     // BlockStorageLocations for all the blocks
     // block described by blockMetadataList[i] is located at locations[i]
     BlockStorageLocation[] locations = null;
+    /*
     try {
       // Get the BlockStorageLocations for all the blocks
       locations = DFS.getFileBlockStorageLocations(blockLocations);
@@ -305,7 +307,7 @@ public class HdfsTable extends Table {
       LOG.error("Couldn't determine block storage locations:\n" + e.getMessage());
       return;
     }
-
+   */
     if (locations == null || locations.length == 0) {
       LOG.warn("Attempted to get block locations but the call returned nulls");
       return;

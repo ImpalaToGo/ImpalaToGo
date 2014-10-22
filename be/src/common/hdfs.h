@@ -21,10 +21,13 @@
 // for the typedefs which we will replicate here
 // TODO: is this the cleanest way?  
 #ifdef IR_COMPILE
-  typedef void* hdfsFS;
-  typedef void* hdfsFile;
+// Elena : 08.10.2014 Remove hdfs dependency (2)
+  typedef void* dfsFS;
+  typedef void* dfsFile;
 #else
-#include <hdfs.h>
+  // Elena : 08.10.2014 Remove hdfs dependency (1)
+  // #include <hdfs.h>
+  #include "dfs_cache/dfs-cache.h"
 #endif
 
 #endif

@@ -139,14 +139,16 @@ export IMPALA_BUILD_THREADS=`nproc`
 # When running hive UDFs, this check makes it unacceptably slow (over 100x)
 # Enable if you suspect a JNI issue
 # TODO: figure out how to turn this off only the stuff that can't run with it.
-#LIBHDFS_OPTS="-Xcheck:jni -Xcheck:nabounds"
+# LIBHDFS_OPTS="-Xcheck:jni -Xcheck:nabounds"
 # - Points to the location of libbackend.so.
-LIBHDFS_OPTS="${LIBHDFS_OPTS:-}"
-LIBHDFS_OPTS="${LIBHDFS_OPTS} -Djava.library.path=${HADOOP_HOME}/lib/native/"
+
+# LIBHDFS_OPTS="${LIBHDFS_OPTS:-}"
+# LIBHDFS_OPTS="${LIBHDFS_OPTS} -Djava.library.path=${HADOOP_HOME}/lib/native/"
+
 # READER BEWARE: This always points to the debug build.
 # TODO: Consider having cmake scripts change this value depending on
 # the build type.
-export LIBHDFS_OPTS="${LIBHDFS_OPTS}:${IMPALA_HOME}/be/build/debug/service"
+#export LIBHDFS_OPTS="${LIBHDFS_OPTS}:${IMPALA_HOME}/be/build/debug/service"
 
 export ARTISTIC_STYLE_OPTIONS=$IMPALA_BE_DIR/.astylerc
 
@@ -157,10 +159,10 @@ export JAVA_LIBRARY_PATH=${IMPALA_HOME}/thirdparty/snappy-${IMPALA_SNAPPY_VERSIO
 LIB_JAVA=`find ${JAVA_HOME}/   -name libjava.so | head -1`
 LIB_JSIG=`find ${JAVA_HOME}/   -name libjsig.so | head -1`
 LIB_JVM=` find ${JAVA_HOME}/   -name libjvm.so  | head -1`
-LIB_HDFS=`find ${HADOOP_HOME}/ -name libhdfs.so | head -1`
+#LIB_HDFS=`find ${HADOOP_HOME}/ -name libhdfs.so | head -1`
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}"
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:`dirname ${LIB_JAVA}`:`dirname ${LIB_JSIG}`"
-LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:`dirname ${LIB_JVM}`:`dirname ${LIB_HDFS}`"
+# LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:`dirname ${LIB_JVM}`:`dirname ${LIB_HDFS}`"
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${IMPALA_HOME}/be/build/debug/service"
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${IMPALA_HOME}/thirdparty/snappy-${IMPALA_SNAPPY_VERSION}/build/lib"
 LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$IMPALA_LZO/build"
@@ -168,11 +170,14 @@ export LD_LIBRARY_PATH
 LD_PRELOAD="${LD_PRELOAD-}"
 export LD_PRELOAD="${LD_PRELOAD}:${LIB_JSIG}"
 
+export HADOOP_NATIVE_LIB=${HADOOP_HOME}lib/native
+
 CLASSPATH="${CLASSPATH-}"
 CLASSPATH=$IMPALA_FE_DIR/target/dependency:$CLASSPATH
 CLASSPATH=$IMPALA_FE_DIR/target/classes:$CLASSPATH
 CLASSPATH=$IMPALA_FE_DIR/src/test/resources:$CLASSPATH
 CLASSPATH=$HADOOP_LZO/build/hadoop-lzo-0.4.15.jar:$CLASSPATH
+CLASSPATH=$HADOOP_NATIVE_LIB:$CLASSPATH
 export CLASSPATH
 
 # Setup aliases
@@ -192,7 +197,7 @@ echo "THRIFT_HOME            = $THRIFT_HOME"
 echo "HADOOP_LZO             = $HADOOP_LZO"
 echo "IMPALA_LZO             = $IMPALA_LZO"
 echo "CLASSPATH              = $CLASSPATH"
-echo "LIBHDFS_OPTS           = $LIBHDFS_OPTS"
+# echo "LIBHDFS_OPTS           = $LIBHDFS_OPTS"
 echo "PYTHONPATH             = $PYTHONPATH"
 echo "JAVA_HOME              = $JAVA_HOME"
 echo "LD_LIBRARY_PATH        = $LD_LIBRARY_PATH"

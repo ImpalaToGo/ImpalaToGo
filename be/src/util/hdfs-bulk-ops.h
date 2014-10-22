@@ -89,7 +89,7 @@ class HdfsOperationSet {
   // Constructs a new operation set. The hdfsFS parameter is shared between all
   // operations, and is not owned by this class (and therefore should remain valid until
   // Execute returns).
-  HdfsOperationSet(hdfsFS* hdfs_connection);
+  HdfsOperationSet(dfsFS* hdfs_connection);
 
   // Add an operation that takes only a single 'src' parameter (e.g. DELETE, CREATE_DIR,
   // DELETE_THEN_CREATE)
@@ -113,7 +113,7 @@ class HdfsOperationSet {
   // until Execute has returned.
   const Errors& errors() { return errors_; }
 
-  hdfsFS* hdfs_connection() const { return hdfs_connection_; }
+  dfsFS* hdfs_connection() const { return hdfs_connection_; }
 
  private:
   // The set of operations to be submitted to HDFS
@@ -128,7 +128,7 @@ class HdfsOperationSet {
   AtomicInt<int64_t> num_ops_;
 
   // HDFS connection shared between all operations. Not owned by this class.
-  hdfsFS* hdfs_connection_;
+  dfsFS* hdfs_connection_;
 
   // Protects errors_ and abort_on_error_ during Execute
   boost::mutex errors_lock_;

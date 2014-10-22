@@ -100,8 +100,9 @@ status::StatusInternal cacheShutdown(bool force = true, bool updateClients = tru
  * @param [Out] time        - time required to get all requested files locally (if any).
  * Zero time means all data is in place (if the operation status is "OK")
  *
- * @param [In]  async       - if true, the callback should be passed as well in order to be called on the operation completion.
- * @param [In]  callback    - callback that should be invoked on completion in case if async mode is selected
+ * @param [In]  callback        - callback that should be invoked on completion in case if async mode is selected.
+ * @param [Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
+ * @param [In]  async           - if true, the callback should be passed as well in order to be called on the operation completion.
  * @return Operation status.
  * In async call, in case of successful operation scheduling, the status should be "OPERATION_ASYNC_SCHEDULED".
  *
@@ -109,8 +110,8 @@ status::StatusInternal cacheShutdown(bool force = true, bool updateClients = tru
  * The only accepted result of sync call here is "OK", all other statuses should be treated as failure.
  */
 status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode,
-		const std::list<const char*>& files, time_t& time,
-		CacheEstimationCompletedCallback callback, bool async = true);
+		const DataSet& files, time_t& time,
+		CacheEstimationCompletedCallback callback, requestIdentity & requestIdentity, bool async = true);
 
 /**
  * @fn status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
@@ -124,20 +125,22 @@ status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescr
  * @param [In]  files       - List of files required to be locally.
  * @param [Out] callback    - callback to invoke when prepare is finished (whatever the status).
  *
+ * @param [Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
+ *
  * @return Operation status
  */
 status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
-		const std::list<const char*>& files, PrepareCompletedCallback callback);
+		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity);
 
 /**
  * @fn Status cacheCancelPrepareData(SessionContext session) *
  * @brief cancel prepare data request
  *
- * param [In] session - client's session, prepare request caller
+ * @param [In] requestIdentity - request identity assigned to this request
  *
  * @return Operation status
  */
-status::StatusInternal cacheCancelPrepareData(SessionContext session);
+status::StatusInternal cacheCancelPrepareData(const requestIdentity & requestIdentity);
 
 /**
  * @fn status::StatusInternal cacheCheckPrepareStatus(SessionContext session,
@@ -146,24 +149,14 @@ status::StatusInternal cacheCancelPrepareData(SessionContext session);
  * @brief Check the previously scheduled "Prepare" operation status.
  * This is sync operation.
  *
- * @param [In]   session     - Request session id.
+ * @param [In] requestIdentity - request identity assigned to this request
  * @param [Out]  progress    - Detailed prepare progress. Can be used to present it to the user.
  * @param [Out]  performance - to hold request current performance statistic
  *
  * @return Operation status
  */
-status::StatusInternal cacheCheckPrepareStatus(SessionContext session,
-		std::list<FileProgress*>& progress, request_performance& performance);
-
-/**
- * @fn status::StatusInternal freeFileProgressList(std::list<FileProgress*>& progress)
- * @brief Utility function to free the list of @a FileProgress entities
- *
- * @param [In] progress - list of @a FileProgress entities to cleanup
- *
- * @return Operation status
- */
-status::StatusInternal freeFileProgressList(std::list<FileProgress*>& progress);
+status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestIdentity,
+		std::list<boost::shared_ptr<FileProgress> >& progress, request_performance& performance);
 
 
 /** *********************************************************************************************

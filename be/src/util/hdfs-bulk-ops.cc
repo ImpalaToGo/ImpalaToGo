@@ -50,26 +50,32 @@ HdfsOp::HdfsOp() { }
 
 void HdfsOp::Execute() const {
   if (op_set_->ShouldAbort()) return;
+
+  status::StatusInternal status;
   int err = 0;
-  hdfsFS* hdfs_connection = op_set_->hdfs_connection();
+  dfsFS* hdfs_connection = op_set_->hdfs_connection();
   switch (op_) {
     case DELETE:
-      err = hdfsDelete(*hdfs_connection, src_.c_str(), 1);
+    	status = dfsDelete(*hdfs_connection, src_.c_str(), 1);
       break;
     case CREATE_DIR:
-      err = hdfsCreateDirectory(*hdfs_connection, src_.c_str());
+    	status = dfsCreateDirectory(*hdfs_connection, src_.c_str());
       break;
     case RENAME:
-      err = hdfsRename(*hdfs_connection, src_.c_str(), dst_.c_str());
+    	status = dfsRename(*hdfs_connection, src_.c_str(), dst_.c_str());
       break;
     case DELETE_THEN_CREATE:
-      err = hdfsDelete(*hdfs_connection, src_.c_str(), 1);
-      if (err != -1) err = hdfsCreateDirectory(*hdfs_connection, src_.c_str());
+    	status = dfsDelete(*hdfs_connection, src_.c_str(), 1);
+    	if(status != status::OK)
+    		err = -1;
+      if (err != -1) err = dfsCreateDirectory(*hdfs_connection, src_.c_str());
       break;
     case CHMOD:
-      err = hdfsChmod(*hdfs_connection, src_.c_str(), permissions_);
+    	status = dfsChmod(*hdfs_connection, src_.c_str(), permissions_);
       break;
   }
+	if(status != status::OK)
+		err = -1;
 
   if (err == -1) {
     string error_msg = GetStrErrMsg();
@@ -113,7 +119,7 @@ HdfsOpThreadPool* impala::CreateHdfsOpThreadPool(const string& name, uint32_t nu
       max_queue_length, &HdfsThreadPoolHelper);
 }
 
-HdfsOperationSet::HdfsOperationSet(hdfsFS* hdfs_connection)
+HdfsOperationSet::HdfsOperationSet(dfsFS* hdfs_connection)
     : num_ops_(0L), hdfs_connection_(hdfs_connection) {
 }
 

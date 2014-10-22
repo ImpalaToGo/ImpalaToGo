@@ -363,7 +363,7 @@ class DiskIoMgr {
     // File handle either to hdfs or local fs (FILE*)
     union {
       FILE* local_file_;
-      hdfsFile hdfs_file_;
+      dfsFile hdfs_file_;
     };
 
     // If non-null, this is DN cached buffer. This means the cached read succeeded
@@ -477,7 +477,7 @@ class DiskIoMgr {
   //    used for this reader will be tracked by this. If the limit is exceeded
   //    the reader will be cancelled and MEM_LIMIT_EXCEEDED will be returned via
   //    GetNext().
-  Status RegisterContext(hdfsFS hdfs, RequestContext** request_context,
+  Status RegisterContext(dfsFS hdfs, RequestContext** request_context,
       MemTracker* reader_mem_tracker = NULL);
 
   // Unregisters context from the disk IoMgr. This must be called for every

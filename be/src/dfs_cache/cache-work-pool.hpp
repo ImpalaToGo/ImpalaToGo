@@ -13,6 +13,10 @@
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
+#include <gutil/strings/substitute.h>
+#include <gutil/strings/join.h>
+
+#include "common/logging.h"
 
 /**
  * @namespace impala
@@ -40,6 +44,7 @@ private:
     boost::shared_ptr<boost::asio::io_service::work> m_workCtrl;   /** < communicates io_service in words of "work is started" and "work is finished"
     											                    *  This way we know that io_service will not exit if some work is in progress
     											                    */
+
 public:
 
    /* ctor. Initialize service-bound controller.
@@ -52,6 +57,8 @@ public:
       int workers = boost::thread::hardware_concurrency();
       if(nWorkers > 0)
          workers = nWorkers;
+
+      // LOG (INFO) << "Cache layer : Creating the thread pool";
 
       // Create threads in the pool
       for (std::size_t i = 0; i < workers; ++i)

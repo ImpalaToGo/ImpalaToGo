@@ -14,7 +14,9 @@
 
 #include "exec/hdfs-lzo-text-scanner.h"
 
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include <boost/algorithm/string.hpp>
 #include "common/version.h"
 #include "exec/hdfs-scan-node.h"

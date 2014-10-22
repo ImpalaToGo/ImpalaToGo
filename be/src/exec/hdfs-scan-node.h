@@ -130,7 +130,7 @@ class HdfsScanNode : public ScanNode {
 
   const HdfsTableDescriptor* hdfs_table() { return hdfs_table_; }
 
-  hdfsFS hdfs_connection() { return hdfs_connection_; }
+  dfsFS hdfs_connection() { return hdfs_connection_; }
 
   RuntimeState* runtime_state() { return runtime_state_; }
 
@@ -309,7 +309,7 @@ class HdfsScanNode : public ScanNode {
   AtomicInt<int> num_unqueued_files_;
 
   // Connection to hdfs, established in Open() and closed in Close().
-  hdfsFS hdfs_connection_;
+  dfsFS hdfs_connection_;
 
   // Map of HdfsScanner objects to file types.  Only one scanner object will be
   // created for each file type.  Objects stored in runtime_state's pool.

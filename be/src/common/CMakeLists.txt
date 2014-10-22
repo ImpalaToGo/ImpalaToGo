@@ -24,6 +24,7 @@ add_library(Common
   init.cc
   logging.cc
   status.cc
+  multi-precision.cc
 )
 
 add_library(GlobalFlags

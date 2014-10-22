@@ -136,7 +136,12 @@
   } while (false)
 
 // C linkage for helper functions in hdfsJniHelper.h
-extern  "C" { extern JNIEnv* getJNIEnv(void); }
+// Elena. Cutoff libhdfs along with its JNI environment wrappers. We redefine facilities in Util itself, see replacement-for-hdfs-inherited.cc
+extern JNIEnv* getJNIEnv(void);
+
+
+// typedef JNIEnv* (*getJNIEnvRedirect)();
+// getJNIEnvRedirect getJNIEnv = replacement_for_hdfs::getJNIEnv;
 
 namespace impala {
 

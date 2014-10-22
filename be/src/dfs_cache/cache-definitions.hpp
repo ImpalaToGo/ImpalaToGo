@@ -23,13 +23,22 @@
 #include <boost/thread.hpp>
 
 #include <boost/multi_index_container.hpp>
-#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/random_access_index.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/composite_key.hpp>
+#include <boost/interprocess/smart_ptr/unique_ptr.hpp>
+#include <boost/tuple/tuple.hpp>
+
 
 #include "dfs_cache/task.hpp"
 #include "dfs_cache/managed-file.hpp"
+
+#if !defined(NDEBUG)
+#define BOOST_MULTI_INDEX_ENABLE_INVARIANT_CHECKING
+#define BOOST_MULTI_INDEX_ENABLE_SAFE_MODE
+#endif
 
 /**
  * @namespace impala
@@ -39,24 +48,42 @@ namespace impala {
 /**
  * Type for Registry of managed files
  */
-typedef boost::intrusive::set<ManagedFile::File>  FileRegistry;
+typedef boost::intrusive::set<ManagedFile::File>                    FileRegistry;
+
+/** Represent MonitorRequest, the Client Request to be tracked by client for progress */
+typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;
 
 /**
- * Defines the tag representing session within Prepare Request
+ * Defines the index tag to represent composite "session-timestamp" nature of Client Request
  */
-struct session_tag {};
+struct session_timestamp_tag {};
+
+/** Equal operator to run equality comparison on @a MonitorRequest entity */
+extern bool operator==(MonitorRequest const & request1, MonitorRequest const & request2);
+
+/** hash function defined for @a MonitorRequest type */
+extern std::size_t hash_value(MonitorRequest const& request);
 
 /**
- * Type for Pool of Context Bound Requests. We want this to work fast and contain requests in order as they were received.
+ * Type for Pool of Active (Pending and in Progress) and Pool of History requests.
+ * Have semantics of std::list while serves as a queue of requests.
+ * We want this to work fast and contain requests in order as they were received.
  */
 typedef boost::multi_index::multi_index_container<
-		request::SessionBoundTask*,
+		boost::shared_ptr<MonitorRequest>,
 		boost::multi_index::indexed_by<
-    		boost::multi_index::random_access<>, // this index represents insertion order
-    		boost::multi_index::hashed_unique< boost::multi_index::tag<session_tag>,
-    			boost::multi_index::member<request::SessionBoundTask, SessionContext, &request::SessionBoundTask::m_session> >
+		    boost::multi_index::sequenced<>,
+    		boost::multi_index::hashed_unique<
+    			boost::multi_index::tag<session_timestamp_tag>,
+    			boost::multi_index::composite_key<
+    			    MonitorRequest,
+    				boost::multi_index::const_mem_fun<MonitorRequest, SessionContext, &MonitorRequest::session>,
+    				boost::multi_index::const_mem_fun<request::Task,
+    					std::string, &request::Task::timestampstr> > >
     >
 > ClientRequests;
+
+typedef ClientRequests::index<session_timestamp_tag>::type RequestsBySessionAndTimestampTag;
 
 struct FileProgress;
 
@@ -67,13 +94,13 @@ struct FileProgress;
  *
  * @return operation status
  */
-typedef boost::function<status::StatusInternal (const FileProgress & progress)> SingleFileProgressCompletedCallback;
+typedef boost::function<status::StatusInternal (const boost::shared_ptr<FileProgress>& progress)> SingleFileProgressCompletedCallback;
 
 typedef boost::function<status::StatusInternal (const NameNodeDescriptor & namenode, const char* filepath,
-		request::MakeProgressTask<FileProgress>* const & task)> SingleFileMakeProgressFunctor;
+		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task)> SingleFileMakeProgressFunctor;
 
-typedef boost::function<status::StatusInternal (SessionContext session, const NameNodeDescriptor & namenode, std::list<const char*>& files)> PrepareDatasetFunctor;
-typedef boost::function<status::StatusInternal (SessionContext session, const NameNodeDescriptor & namenode, std::list<const char*>& files)> EstimateDatasetFunctor;
+/** Functor to run on manager when the request is completed */
+typedef boost::function<void (const requestIdentity& requestIdentity, const NameNodeDescriptor & namenode, bool canceled)> DataSetRequestCompletionFunctor;
 
 typedef boost::function<status::StatusInternal (bool async, request::CancellableTask* const & cancellable)> CancellationFunctor;
 

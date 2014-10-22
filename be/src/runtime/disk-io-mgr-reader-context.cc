@@ -137,7 +137,7 @@ DiskIoMgr::RequestContext::RequestContext(DiskIoMgr* parent, int num_disks)
 }
 
 // Resets this object.
-void DiskIoMgr::RequestContext::Reset(hdfsFS hdfs_connection, MemTracker* tracker) {
+void DiskIoMgr::RequestContext::Reset(dfsFS hdfs_connection, MemTracker* tracker) {
   DCHECK_EQ(state_, Inactive);
   status_ = Status::OK;
 

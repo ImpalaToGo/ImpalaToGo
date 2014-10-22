@@ -33,5 +33,3 @@ add_library(dfs_cache
   managed-file.cc
   namenode-descriptor-bound.cc  
 )
-
-ADD_BE_TEST(test-filesystem-mgr)

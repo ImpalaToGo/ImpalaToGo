@@ -15,6 +15,7 @@
 #include "runtime/disk-io-mgr.h"
 #include "runtime/disk-io-mgr-internal.h"
 
+#include <fcntl.h>
 #include <gutil/strings/substitute.h>
 #include <boost/algorithm/string.hpp>
 
@@ -314,7 +315,7 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
   return Status::OK;
 }
 
-Status DiskIoMgr::RegisterContext(hdfsFS hdfs, RequestContext** request_context,
+Status DiskIoMgr::RegisterContext(dfsFS hdfs, RequestContext** request_context,
     MemTracker* mem_tracker) {
   DCHECK(request_context_cache_.get() != NULL) << "Must call Init() first.";
   *request_context = request_context_cache_->GetNewContext();

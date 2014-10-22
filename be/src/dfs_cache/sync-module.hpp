@@ -52,7 +52,7 @@ public:
 	 * @return operation status
 	 */
 	status::StatusInternal estimateTimeToGetFileLocally(const NameNodeDescriptor & namenode, const char* path,
-			request::MakeProgressTask<FileProgress>* const & task);
+			request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task);
 
 	/**
 	 * prepareFile - download file locally and update the registry.
@@ -66,7 +66,7 @@ public:
 	 * @return operation status
 	 */
 	status::StatusInternal prepareFile(const NameNodeDescriptor & namenode, const char* path,
-			request::MakeProgressTask<FileProgress>* const & task);
+			request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task);
 
 	/**
 	 * cancel active "make progress" file request (prepare / estimate) if any, described by its synchronization  context (for re-entrancy)

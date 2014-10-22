@@ -68,29 +68,24 @@ status::StatusInternal cacheShutdown(bool force, bool updateClients) {
 }
 
 status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode,
-		const std::list<const char*>& files, time_t & time,
-		CacheEstimationCompletedCallback callback, bool async) {
+		const DataSet& files, time_t & time, CacheEstimationCompletedCallback callback,
+		requestIdentity & requestIdentity, bool async) {
 	return CacheManager::instance()->cacheEstimate(session, namenode, files, time, callback,
-			async);
+			requestIdentity, async);
 }
 
 status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
-		const std::list<const char*>& files,
-		PrepareCompletedCallback callback) {
-	return CacheManager::instance()->cachePrepareData(session, namenode, files, callback);
+		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity) {
+	return CacheManager::instance()->cachePrepareData(session, namenode, files, callback, requestIdentity);
 }
 
-status::StatusInternal cacheCancelPrepareData(SessionContext session) {
-	return CacheManager::instance()->cacheCancelPrepareData(session);
+status::StatusInternal cacheCancelPrepareData(const requestIdentity & requestIdentity) {
+	return CacheManager::instance()->cacheCancelPrepareData(requestIdentity);
 }
 
-status::StatusInternal cacheCheckPrepareStatus(SessionContext session,
-		std::list<FileProgress*>& progress, request_performance& performance) {
-	return CacheManager::instance()->cacheCheckPrepareStatus(session, progress, performance);
-}
-
-status::StatusInternal freeFileProgressList(std::list<FileProgress*>& progress) {
-	return CacheManager::instance()->freeFileProgressList(progress);
+status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestIdentity,
+		std::list<boost::shared_ptr<FileProgress> >& progress, request_performance& performance) {
+	return CacheManager::instance()->cacheCheckPrepareStatus(requestIdentity, progress, performance);
 }
 
 /** *********************************************************************************************

@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <boost/shared_ptr.hpp>
+#include <boost/smart_ptr/scoped_ptr.hpp>
 
 #include "dfs_cache/cache-definitions.hpp"
 #include "dfs_cache/cache-layer-registry.hpp"

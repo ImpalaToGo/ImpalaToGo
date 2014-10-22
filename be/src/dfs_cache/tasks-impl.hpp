@@ -23,9 +23,17 @@ namespace impala {
  */
 namespace request{
 
-typedef RunnableTask<SingleFileProgressCompletedCallback, SingleFileMakeProgressFunctor, CancellationFunctor, FileProgress> FileProgressTaskType;
-typedef ContextBoundTask<PrepareCompletedCallback, PrepareDatasetFunctor, CancellationFunctor, std::list<FileProgress> > ContextBoundPrepareTaskType;
-typedef ContextBoundTask<CacheEstimationCompletedCallback, EstimateDatasetFunctor, CancellationFunctor, std::list<FileProgress> > ContextBoundEstimateTaskType;
+/** Task is able to make a progress on a single file */
+typedef RunnableTask<SingleFileProgressCompletedCallback, SingleFileMakeProgressFunctor, CancellationFunctor,
+		boost::shared_ptr<FileProgress> > FileProgressTaskType;
+
+/** Prepare Dataset compound task, owns the client's context */
+typedef ContextBoundTask<PrepareCompletedCallback, DataSetRequestCompletionFunctor, DataSetRequestCompletionFunctor,
+		std::list<boost::shared_ptr<FileProgress> > > ContextBoundPrepareTaskType;
+
+/** Estimate Dataset compound task, owns the client's context */
+typedef ContextBoundTask<CacheEstimationCompletedCallback, DataSetRequestCompletionFunctor, DataSetRequestCompletionFunctor,
+		std::list<boost::shared_ptr<FileProgress> > > ContextBoundEstimateTaskType;
 
 /**
  * File download request for Sync module.
@@ -48,8 +56,8 @@ public:
 	FileDownloadTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
 			const NameNodeDescriptor & namenode, const char* path)
 		try : FileProgressTaskType(callback, functor, cancellation){
-             m_progress->namenode = namenode;
-             m_progress->dfsPath = path;
+             this->m_progress->namenode = namenode;
+             this->m_progress->dfsPath = path;
 		}
 		catch(...)
 		{}
@@ -131,10 +139,10 @@ public:
  */
 class PrepareDatasetTask : public ContextBoundPrepareTaskType{
 private:
-	std::list<const char*>   m_files;            /**< requested dataset */
+	DataSet                  m_files;            /**< requested dataset */
 	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
 
-	Sync*                    m_syncModule;       /** reference to Sync module */
+	boost::shared_ptr<Sync>       m_syncModule;       /** reference to Sync module */
 
     std::list<FileDownloadTask*>  m_boundrequests;      /**< list of bound file requests */
     int                           m_remainedFiles;      /**< non-processed yet files */
@@ -147,8 +155,8 @@ protected:
     taskOverallStatus run_internal();
 
 public:
-	PrepareDatasetTask(PrepareCompletedCallback callback, PrepareDatasetFunctor functor, CancellationFunctor cancelation, SessionContext session,
-			const NameNodeDescriptor& namenode, Sync* sync, std::list<const char*> files)
+	PrepareDatasetTask(PrepareCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation, const SessionContext& session,
+			const NameNodeDescriptor& namenode, boost::shared_ptr<Sync> sync, const DataSet& files)
         try : ContextBoundPrepareTaskType(callback, functor, cancelation, session),
         m_files(files), m_namenode(namenode), m_syncModule(sync), m_remainedFiles(0){
 
@@ -159,7 +167,7 @@ public:
 	~PrepareDatasetTask() = default;
 
 	/** report the current progress on demand */
-	std::list<FileProgress> progress();
+	std::list<boost::shared_ptr<FileProgress> > progress();
 
 	/**
 	 * Handler for "single file is ready" completion event expected from @a FileDownloadRequest.
@@ -170,7 +178,7 @@ public:
 		  *
 		  * @param progress - single file progress
 		  */
-		status::StatusInternal reportSingleFileIsCompletedCallback(FileProgress const & progress);
+		status::StatusInternal reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
 
 		 /**
 		  *  Cancel the request's sub requests and once done, move the request along with subrequests statuses to the history.
@@ -201,10 +209,10 @@ public:
  */
 class EstimateDatasetTask : public ContextBoundEstimateTaskType{
 private:
-	std::list<const char*>   m_files;            /**< requested dataset */
+	DataSet                  m_files;            /**< requested dataset */
 	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
 
-	Sync*                    m_syncModule;       /** reference to Sync module */
+	boost::shared_ptr<Sync>  m_syncModule;       /** reference to Sync module */
 
     std::list<FileEstimateTask*>  m_boundrequests;      /**< list of bound file requests */
     int                           m_remainedFiles;      /**< non-processed yet files */
@@ -213,11 +221,11 @@ protected:
     taskOverallStatus run_internal();
 
 public:
-	EstimateDatasetTask(CacheEstimationCompletedCallback callback, EstimateDatasetFunctor functor, CancellationFunctor cancelation, SessionContext session,
-			const NameNodeDescriptor& namenode, Sync* sync, std::list<const char*> files)
+	EstimateDatasetTask(CacheEstimationCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation,
+			const SessionContext& session, const NameNodeDescriptor& namenode, const boost::shared_ptr<Sync> & sync, const DataSet& files)
         try : ContextBoundEstimateTaskType(callback, functor, cancelation, session),
-        m_files(files), m_namenode(namenode), m_syncModule(sync), m_remainedFiles(0){
-
+        m_files(files), m_namenode(namenode), m_remainedFiles(0){
+              m_syncModule = sync;
 		}
 		catch(...)
 		{}
@@ -225,7 +233,7 @@ public:
 	~EstimateDatasetTask() = default;
 
 	/** report the current progress on demand */
-	std::list<FileProgress> progress();
+	std::list<boost::shared_ptr<FileProgress> > progress();
 
 	/**
 	 * Handler for "single file is estimated" completion event expected from @a FileEstimateRequest.
@@ -235,7 +243,7 @@ public:
 	 * "estimate" status report.
 	 * @param progress - single file progress
 	 */
-	status::StatusInternal reportSingleFileIsCompletedCallback(FileProgress const & progress);
+	status::StatusInternal reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
 
 	/**
 	 * Cancel the request's sub requests and once done, move the request along with subrequests statuses to the history.

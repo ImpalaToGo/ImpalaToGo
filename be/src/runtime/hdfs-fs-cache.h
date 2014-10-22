@@ -20,9 +20,16 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/thread/mutex.hpp>
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 
 namespace impala {
+
+// Elena : 08.10.2014 Remove hdfs dependency (0)
+// This class will not be needed when the cache laye rwill be present.
+// All remote connections will be stored in Cache layer.
+// As for connection details, e.g. host/port, this is stored in Configuration.
 
 // A (process-wide) cache of hdfsFS objects.
 // These connections are shared across all threads and kept open until the process
@@ -42,21 +49,21 @@ class HdfsFsCache {
   static void Init();
 
   // Get connection to default fs.
-  hdfsFS GetDefaultConnection();
+  dfsFS GetDefaultConnection();
 
   // Get connection the local filesystem.
-  hdfsFS GetLocalConnection();
+  dfsFS GetLocalConnection();
 
   // Get connection to specific fs by specifying the name node's
   // ipaddress or hostname and port.
-  hdfsFS GetConnection(const std::string& host, int port);
+  dfsFS GetConnection(const std::string& host, int port);
 
  private:
   // Singleton instance. Instantiated in Init().
   static boost::scoped_ptr<HdfsFsCache> instance_;
 
   boost::mutex lock_;  // protects fs_map_
-  typedef boost::unordered_map<std::pair<std::string, int>, hdfsFS> HdfsFsMap;
+  typedef boost::unordered_map<std::pair<std::string, int>, dfsFS> HdfsFsMap;
   HdfsFsMap fs_map_;
 
   HdfsFsCache() { };

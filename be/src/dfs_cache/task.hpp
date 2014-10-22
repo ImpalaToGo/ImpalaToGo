@@ -10,6 +10,16 @@
 #ifndef TASK_H_
 #define TASK_H_
 
+#include <boost/thread/condition_variable.hpp>
+#include <boost/tuple/tuple.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/time_formatters.hpp>
+#include <type_traits>
+
+#include <iostream>
+#include <ctime>
+
+#include "util/runtime-profile.h"
 #include "dfs_cache/common-include.hpp"
 
 /**
@@ -17,22 +27,22 @@
  */
 namespace impala
 {
-
 /**
  * Any task overall status
  */
-enum class taskOverallStatus
-{
-	NOT_RUN      = 0,
-	IN_PROGRESS  = 1,
-    COMPLETED_OK = 2,
-    FAILURE      = 3,
-    CANCELATION_SENT   = 4,
-    CANCELED_CONFIRMED = 5,  /**< task cancellation was performed successfully */
-    NOT_FOUND          = 6,  /**< task not found */
-    IS_NOT_MANAGED     = 7,  /**< task is not managed */
-
+enum taskOverallStatus{
+            NOT_RUN = 0,
+            PENDING,
+            IN_PROGRESS,
+            COMPLETED_OK,
+            FAILURE,
+            CANCELATION_SENT,
+            CANCELED_CONFIRMED,    /**< task cancellation was performed successfully */
+            NOT_FOUND,             /**< task not found */
+            IS_NOT_MANAGED      /**< task is not managed */
 };
+
+extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
 
 /**
  * @namespace request
@@ -40,10 +50,20 @@ enum class taskOverallStatus
 namespace request
 {
 
+/**
+ * Generic Task, supports running via () operator and a callback.
+  */
 class Task{
 protected:
-std::string testm;
+	boost::posix_time::ptime  m_taskCreation;   /**< task creation timestamp */
+	taskOverallStatus         m_status;          /**< overall task status. By default, NOT_RUN */
+
 	virtual ~Task() = default;
+
+	/** Initializes task creation timestamp. */
+	Task() : m_status(taskOverallStatus::NOT_RUN) {
+		m_taskCreation = boost::posix_time::microsec_clock::local_time();
+	}
 
 public:
 	/**
@@ -52,6 +72,15 @@ public:
 	virtual void callback() = 0;
 
     virtual void operator()() = 0;
+
+	/** getter for underlying creation timestamp */
+	boost::posix_time::ptime timestamp() const { return m_taskCreation; }
+
+	/** string representation of timestamp - for hashing */
+	std::string timestampstr() const { return boost::posix_time::to_iso_string(m_taskCreation); }
+
+	/** Getter for task status */
+	taskOverallStatus status() const { return m_status; }
 };
 
 /**
@@ -106,26 +135,38 @@ public:
  * Task that provides the progress
  */
 template<typename Progress_>
-class MakeProgressTask : public virtual CancellableTask{
+class MakeProgressTask : virtual public CancellableTask{
 protected:
-	boost::shared_ptr<Progress_>  m_progress;               /**< progress representation */
+	Progress_  m_progress;               /**< progress representation */
+
     virtual ~MakeProgressTask() = default;
 public:
 
-    MakeProgressTask() {}
-
     /** get the progress */
-	boost::shared_ptr<Progress_> progress() { return m_progress; }
+	Progress_ progress() { return m_progress; }
 };
 
-class SessionBoundTask : virtual public CancellableTask{
+/**
+ * Task bound to calling context and is marked with context to be reffered to later by this context
+ */
+template<typename Progress_>
+class SessionBoundTask : virtual public MakeProgressTask<Progress_>{
 
 protected:
+	SessionContext            m_session;        /**< bound client session descriptor */
+
 	virtual ~SessionBoundTask() = default;
 public:
-	SessionContext           m_session;     /**< bound client session descriptor */
-	SessionContext session() { return m_session; }
-    SessionBoundTask(SessionContext session) : m_session(session){}
+
+	/** getter for underlying client context */
+	SessionContext session() const { return m_session; }
+
+	/**
+	 * Ctor. Created assuming user context.
+	 */
+    SessionBoundTask(const SessionContext& session) : m_session(session){
+
+    }
 };
 
 /**
@@ -136,11 +177,14 @@ public:
  * - synchronization variables required in cancellation scenario
  */
 template<typename CompletionCallback_, typename Functor_, typename Cancellation_, typename Progress_>
-class RunnableTask : public MakeProgressTask<Progress_>
+class RunnableTask : virtual public MakeProgressTask<Progress_>
 {
 private:
-	boost::timer::cpu_timer m_timer;     /** timer to track CPU time */
-	boost::timer::cpu_times m_cputime;   /** CPU time takes to run the request */
+	MonotonicStopWatch      m_sw;        /**< stop watch to measure the time the task is running */
+	int64_t                 m_lifetime;  /**< time which elapsed since the task was started */
+	std::clock_t            m_start;     /**< start time when the task was started */
+    int64_t                 m_cputime;   /**< time which the task spent on CPU */
+
 
 protected:
 	CompletionCallback_      m_callback;    /** < callback to invoke on caller when Prepare request is
@@ -148,8 +192,6 @@ protected:
 	Functor_                 m_functor;     /** functor to run the task */
 
 	Cancellation_            m_cancelation; /** functor to perform the task cancellation */
-
-	taskOverallStatus        m_status;      /**< overall task status. By default, NOT_RUN */
 
 	request_performance      m_performance; /** task performance */
 	/**
@@ -159,31 +201,44 @@ protected:
 
 	virtual ~RunnableTask() = default;
 
+	int64_t cpu_time(){ return m_cputime = (std::clock() - m_start) / (double)(CLOCKS_PER_SEC / 1000); }
+
 public:
 	RunnableTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancellation)
-		: m_callback(callback), m_functor(functor), m_cancelation(cancellation),
-		  m_status(taskOverallStatus::NOT_RUN){}
-
-	/** Getter for task status */
-	taskOverallStatus status() { return m_status; }
+		: m_callback(callback), m_functor(functor), m_cancelation(cancellation), m_lifetime(0), m_cputime(0), m_start(std::clock()){}
 
 	/**
 	 * query request performance
 	 *
 	 */
 	request_performance performance(){
-		m_performance.cpu_time = m_cputime = m_timer.elapsed(); // does not stop, safe to proceed the metric
+		// overall request lifetime and CPU calculations
+		m_performance.lifetime = m_lifetime = m_sw.ElapsedTime();
+		m_performance.cpu_time_miliseconds = cpu_time();
+
 		return m_performance;
 	}
 
 	/**
-	 * Operator overload in order to be callable by boost::asio::io_services
+	 * Operator overload in order to be callable by boost::asio::io_services threadpool (which we do not use right now :) )
 	 */
 	void  operator()(){
-		m_timer.start();
+		m_sw.Start();
+
+		// run internal request
 		run_internal();
-		m_cputime = m_timer.elapsed();
-		this->callback();
+
+		// make measurements
+		m_lifetime = m_sw.ElapsedTime();
+		cpu_time();
+
+		// run client callback on the same thread
+	    this->callback();
+
+	    // make measurements
+	    m_lifetime = m_sw.ElapsedTime();
+	    m_sw.Stop();
+	    cpu_time();
    }
 };
 
@@ -192,17 +247,17 @@ public:
  * It should pass through the session context in its completion callback
  */
 template<typename CompletionCallback_, typename Functor_, typename Cancellation_, typename Progress_> class ContextBoundTask :
-		public RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>, public SessionBoundTask{
+		public RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>, public SessionBoundTask<Progress_>{
 protected:
 	virtual ~ContextBoundTask() = default;
 
 public:
-	ContextBoundTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancelation, SessionContext session ) :
-		RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>(callback, functor, cancelation), SessionBoundTask(session){}
+	ContextBoundTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancelation, const SessionContext& session ) :
+		RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>(callback, functor, cancelation), SessionBoundTask<Progress_>(session){}
 };
 
 
 } /** request */
 } /** impala */
 
-#endif /* TASKS_DEFINITIONS_H_ */
+#endif /* TASK_H_ */

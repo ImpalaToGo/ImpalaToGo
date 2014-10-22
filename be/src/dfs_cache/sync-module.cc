@@ -15,13 +15,26 @@
 namespace impala {
 
 status::StatusInternal Sync::estimateTimeToGetFileLocally(const NameNodeDescriptor & namenode, const char* path,
-		request::MakeProgressTask<FileProgress>* const & task){
+		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
+
+	// Get the Namenode adaptor from the registry for requested namenode:
+	boost::shared_ptr<NameNodeDescriptorBound> namenodeAdaptor = (*m_registry->getNamenode(namenode));
+    if(namenodeAdaptor == nullptr){
+    	// no namenode adaptor configured, go out
+    	return status::StatusInternal::NAMENODE_IS_NOT_CONFIGURED;
+    }
+    boost::shared_ptr<dfsConnection> connection = (*namenodeAdaptor->getFreeConnection());
+    boost::shared_ptr<RemoteAdaptor> adaptor    = namenodeAdaptor->adaptor();
+
+    // get the file progress reference:
+    boost::shared_ptr<FileProgress> fp = task->progress();
 
     // set the progress directly to the task
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal Sync::prepareFile(const NameNodeDescriptor & namenode, const char* path, request::MakeProgressTask<FileProgress>* const & task){
+status::StatusInternal Sync::prepareFile(const NameNodeDescriptor & namenode, const char* path,
+		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
 	// Get the Namenode adaptor from the registry for requested namenode:
 	boost::shared_ptr<NameNodeDescriptorBound> namenodeAdaptor = (*m_registry->getNamenode(namenode));
     if(namenodeAdaptor == nullptr){

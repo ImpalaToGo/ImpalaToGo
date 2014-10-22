@@ -31,8 +31,9 @@ class UnusedClass {
   BOOST_STATIC_ASSERT(offsetof(TimestampValue, date_) == 8);
   BOOST_STATIC_ASSERT(sizeof(boost::posix_time::time_duration) == 8);
   BOOST_STATIC_ASSERT(sizeof(boost::gregorian::date) == 4);
-  BOOST_STATIC_ASSERT(sizeof(hdfsFS) == sizeof(void*));
-  BOOST_STATIC_ASSERT(sizeof(hdfsFile) == sizeof(void*));
+  // Elena : we do not use a void pointer more for dfs connection
+  // BOOST_STATIC_ASSERT(sizeof(dfsFS) == sizeof(void*));
+  BOOST_STATIC_ASSERT(sizeof(dfsFile) == sizeof(void*));
 
   // If the memory layout of any of these types changes, it will be necessary to change
   // LlvmCodeGen::GetUdfValType(), and we may also run into calling convention problems

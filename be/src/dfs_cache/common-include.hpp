@@ -1,7 +1,7 @@
 /*
- * cached-file.hpp
+ * @file cached-file.hpp
  *
- *  Created on: Oct 1, 2014
+ *  on: Oct 1, 2014
  *      Author: elenav
  */
 
@@ -13,14 +13,21 @@
 #include <map>
 #include <utility>
 
-// Leave this include before boost timer include to get defines from multiprecision
 #include "common/multi-precision.h"
-#include <boost/timer/timer.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 
+#include <boost/preprocessor/punctuation/comma.hpp>
+#include <boost/preprocessor/control/iif.hpp>
+#include <boost/preprocessor/comparison/equal.hpp>
+#include <boost/preprocessor/stringize.hpp>
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/seq/size.hpp>
+#include <boost/preprocessor/seq/seq.hpp>
+
+#include "common/logging.h"
 #include "dfs_cache/dfs-types.h"
 
 namespace impala {
@@ -32,6 +39,12 @@ typedef void* dfsFSConnection;
  */
 typedef void* SessionContext;
 
+/** Define request identity */
+typedef struct {
+	SessionContext ctx;          /**< client session context (shell session) */
+	std::string    timestamp;    /**< client request timestamp */
+} requestIdentity;
+
 namespace status {
 /**
  * Internal operation status
@@ -39,6 +52,8 @@ namespace status {
 typedef enum {
 	OK,
 	OPERATION_ASYNC_SCHEDULED,
+
+	REQUEST_IS_NOT_FOUND,           /**< request is not found */
 
 	NAMENODE_IS_NOT_CONFIGURED,
 	NAMENODE_IS_UNREACHABLE,
@@ -49,7 +64,7 @@ typedef enum {
 
 	FILE_OBJECT_OPERATION_FAILURE,
 
-	NOT_IMPLEMENTED,                 /** for developer purposes */
+	NOT_IMPLEMENTED,                 /**< for developer purposes */
 } StatusInternal;
 }
 
@@ -86,6 +101,7 @@ struct NameNodeDescriptor{
 
 
 typedef NameNodeDescriptor dfsFS;
+typedef std::list<const char*> DataSet;
 
 /**
  * Represent the single DFS connection
@@ -174,7 +190,8 @@ struct FileProgress {
  * Defines the request performance statistic
  */
 typedef struct {
-	boost::timer::cpu_times cpu_time;
+	int64_t cpu_time_miliseconds;    /**< time which request spent on CPU */
+	int64_t lifetime;                /**< time which request was active */
 
 } request_performance;
 
@@ -191,7 +208,7 @@ typedef struct {
  */
 typedef boost::function<
 		status::StatusInternal(SessionContext context,
-				const std::list<FileProgress> & progress,
+				const std::list<boost::shared_ptr<FileProgress> > & progress,
 				request_performance const & performance, bool overall,
 				bool canceled)> PrepareCompletedCallback;
 
@@ -207,7 +224,7 @@ typedef boost::function<
 
 typedef boost::function<
 		status::StatusInternal(SessionContext context,
-				const std::list<FileProgress> & estimation,
+				const std::list<boost::shared_ptr<FileProgress> > & estimation,
 				time_t const & time)> CacheEstimationCompletedCallback;
 
 }

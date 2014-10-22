@@ -468,7 +468,7 @@ Status Coordinator::UpdateStatus(const Status& status, const TUniqueId* instance
   return query_status_;
 }
 
-void Coordinator::PopulatePathPermissionCache(hdfsFS fs, const string& path_str,
+void Coordinator::PopulatePathPermissionCache(dfsFS fs, const string& path_str,
     PermissionCache* permissions_cache) {
   // Find out if the path begins with a hdfs:// -style prefix, and remove it and the
   // location (e.g. host:port) if so.
@@ -511,13 +511,13 @@ void Coordinator::PopulatePathPermissionCache(hdfsFS fs, const string& path_str,
   BOOST_FOREACH(const string& path, prefixes) {
     PermissionCache::const_iterator it = permissions_cache->find(path);
     if (it == permissions_cache->end()) {
-      hdfsFileInfo* info = hdfsGetPathInfo(fs, path.c_str());
+      dfsFileInfo* info = dfsGetPathInfo(fs, path.c_str());
       if (info != NULL) {
         // File exists, so fill the cache with its current permissions.
         permissions_cache->insert(
             make_pair(path, make_pair(false, info->mPermissions)));
         permissions = info->mPermissions;
-        hdfsFreeFileInfo(info, 1);
+        dfsFreeFileInfo(fs, info, 1);
       } else {
         // File doesn't exist, so we need to set its permissions to its immediate parent
         // once it's been created.
@@ -530,7 +530,7 @@ void Coordinator::PopulatePathPermissionCache(hdfsFS fs, const string& path_str,
 }
 
 Status Coordinator::FinalizeSuccessfulInsert() {
-  hdfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
+  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   PermissionCache permissions_cache;
 
   // INSERT finalization happens in the five following steps
@@ -575,8 +575,8 @@ Status Coordinator::FinalizeSuccessfulInsert() {
         // files by Hive and Impala, but directories are ignored (and may legitimately
         // be used to store permanent non-table data by other applications).
         int num_files = 0;
-        hdfsFileInfo* existing_files =
-            hdfsListDirectory(hdfs_connection, part_path.c_str(), &num_files);
+        dfsFileInfo* existing_files =
+            dfsListDirectory(hdfs_connection, part_path.c_str(), &num_files);
         if (existing_files == NULL) {
           return GetHdfsErrorMsg("Could not list directory: ", part_path);
         }
@@ -586,7 +586,7 @@ Status Coordinator::FinalizeSuccessfulInsert() {
             partition_create_ops.Add(DELETE, existing_files[i].mName);
           }
         }
-        hdfsFreeFileInfo(existing_files, num_files);
+        dfsFreeFileInfo(hdfs_connection, existing_files, num_files);
       } else {
         // This is a partition directory, not the root directory; we can delete
         // recursively with abandon, after checking that it ever existed.
@@ -595,7 +595,7 @@ Status Coordinator::FinalizeSuccessfulInsert() {
         if (FLAGS_insert_inherit_permissions) {
           PopulatePathPermissionCache(hdfs_connection, part_path, &permissions_cache);
         }
-        if (hdfsExists(hdfs_connection, part_path.c_str()) != -1) {
+        if (dfsExists(hdfs_connection, part_path.c_str()) != -1) {
           partition_create_ops.Add(DELETE_THEN_CREATE, part_path);
         } else {
           // Otherwise just create the directory.
@@ -606,7 +606,7 @@ Status Coordinator::FinalizeSuccessfulInsert() {
       if (FLAGS_insert_inherit_permissions) {
         PopulatePathPermissionCache(hdfs_connection, part_path, &permissions_cache);
       }
-      if (hdfsExists(hdfs_connection, part_path.c_str()) == -1) {
+      if (dfsExists(hdfs_connection, part_path.c_str()) == -1) {
         partition_create_ops.Add(CREATE_DIR, part_path);
       }
     }
@@ -709,11 +709,11 @@ Status Coordinator::FinalizeQuery() {
 
   DCHECK(finalize_params_.__isset.staging_dir);
 
-  hdfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
+  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   stringstream staging_dir;
   staging_dir << finalize_params_.staging_dir << "/" << PrintId(query_id_,"_") << "/";
   VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
-  hdfsDelete(hdfs_connection, staging_dir.str().c_str(), 1);
+  dfsDelete(hdfs_connection, staging_dir.str().c_str(), 1);
 
   return return_status;
 }

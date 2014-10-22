@@ -33,7 +33,9 @@ void HdfsFsCache::Init() {
   HdfsFsCache::instance_.reset(new HdfsFsCache());
 }
 
-hdfsFS HdfsFsCache::GetConnection(const string& host, int port) {
+dfsFS HdfsFsCache::GetConnection(const string& host, int port) {
+	// Elena : 08.10.2014 Remove hdfs dependency (18)
+	/*
   lock_guard<mutex> l(lock_);
   HdfsFsMap::iterator i = fs_map_.find(make_pair(host, port));
   if (i == fs_map_.end()) {
@@ -52,14 +54,32 @@ hdfsFS HdfsFsCache::GetConnection(const string& host, int port) {
   } else {
     return i->second;
   }
+  */
+	lock_guard<mutex> l(lock_);
+	HdfsFsMap::iterator i = fs_map_.find(make_pair(host, port));
+	if (i == fs_map_.end()) {
+		// no connection exists.
+	    // dfsFS conn = getConnection(host, port);
+
+		// ELENA: remove the hdfs connect from impala
+		dfsFS conn;
+		conn.host = host;
+		conn.port = port;
+		conn.valid = true;
+
+	    fs_map_.insert(make_pair(make_pair(host, port), conn));
+	    return conn;
+	  } else {
+	    return i->second;
+	  }
 }
 
-hdfsFS HdfsFsCache::GetDefaultConnection() {
+dfsFS HdfsFsCache::GetDefaultConnection() {
   // "default" uses the default NameNode configuration from the XML configuration files.
   return GetConnection("default", 0);
 }
 
-hdfsFS HdfsFsCache::GetLocalConnection() {
+dfsFS HdfsFsCache::GetLocalConnection() {
   return GetConnection("", 0);
 }
 

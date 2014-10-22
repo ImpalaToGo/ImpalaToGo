@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
   InitCommonRuntime(argc, argv, true);
 
   LlvmCodeGen::InitializeLlvm();
+
   JniUtil::InitLibhdfs();
   EXIT_IF_ERROR(HBaseTableScanner::Init());
   EXIT_IF_ERROR(HBaseTableFactory::Init());

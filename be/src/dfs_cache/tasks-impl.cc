@@ -13,6 +13,25 @@
  * @namespace impala
  */
 namespace impala{
+
+std::ostream& operator<<(std::ostream& out, const taskOverallStatus value){
+    static std::map<taskOverallStatus, std::string> strings;
+    if (strings.size() == 0){
+#define INSERT_ELEMENT(p) strings[p] = #p
+        INSERT_ELEMENT(NOT_RUN);
+        INSERT_ELEMENT(PENDING);
+        INSERT_ELEMENT(IN_PROGRESS);
+        INSERT_ELEMENT(COMPLETED_OK);
+        INSERT_ELEMENT(FAILURE);
+        INSERT_ELEMENT(CANCELATION_SENT);
+        INSERT_ELEMENT(CANCELED_CONFIRMED);
+        INSERT_ELEMENT(NOT_FOUND);
+        INSERT_ELEMENT(IS_NOT_MANAGED);
+#undef INSERT_ELEMENT
+    }
+    return out << strings[value];
+}
+
 /**
  * @namespace request
  */
@@ -36,11 +55,7 @@ taskOverallStatus FileEstimateTask::run_internal(){
 	// check cancellation flag:
 	if(condition() == true)
 		return m_status = taskOverallStatus::CANCELED_CONFIRMED;
-	/*if(status.code() == TStatusCode::OK)
-		return m_status = taskOverallStatus::COMPLETED_OK;
-	else
-		return m_status = taskOverallStatus::FAILURE;
-		*/
+
 	return taskOverallStatus::COMPLETED_OK;
 }
 
@@ -48,8 +63,8 @@ void FileEstimateTask::callback(){
 	if(m_callback == NULL){
 		return;
 	}
-	// copy file progress.
-	m_callback(*(progress().get()));
+    // send file progress
+	m_callback(progress());
 }
 
 taskOverallStatus FileEstimateTask::cancel(bool async){
@@ -101,7 +116,7 @@ void FileDownloadTask::callback(){
 		return;
 	}
 	// copy file progress.
-	m_callback(*(progress().get()));
+	m_callback(progress());
 }
 
 taskOverallStatus FileDownloadTask::cancel(bool async){
@@ -137,8 +152,10 @@ taskOverallStatus EstimateDatasetTask::run_internal(){
 	SingleFileMakeProgressFunctor functor =
 			boost::bind(boost::mem_fn(&Sync::estimateTimeToGetFileLocally), m_syncModule,
 					_1, _2, _3);
+
+	CancellationFunctor cancelation = boost::bind(boost::mem_fn(&Sync::cancelFileMakeProgress), m_syncModule, _1, _2);
 	for(auto file : m_files){
-		FileEstimateTask* task = new FileEstimateTask(callback, functor, m_cancelation, m_namenode, file);
+		FileEstimateTask* task = new FileEstimateTask(callback, functor, cancelation, m_namenode, file);
 		// TODO use scheduler for tasks execution
 		// add "single file estimate" task into the queue.
 	    m_boundrequests.push_back(task);
@@ -147,6 +164,7 @@ taskOverallStatus EstimateDatasetTask::run_internal(){
 	// Send all tasks to a thread pool:
 	// and wait for them to complete:
 
+	// and now call the supplied run functor:
 
    return taskOverallStatus::IN_PROGRESS;
 }
@@ -166,7 +184,9 @@ taskOverallStatus EstimateDatasetTask::cancel(bool async){
 	}
 	m_status = subrequest_failure ? taskOverallStatus::FAILURE : m_status;
 
-    m_cancelation(async, this);
+	// invoke cancellation
+    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, true);
+
     // if async, we will go out from here immediately.
     if(async)
        	return taskOverallStatus::CANCELATION_SENT;
@@ -175,17 +195,21 @@ taskOverallStatus EstimateDatasetTask::cancel(bool async){
 	return taskOverallStatus::CANCELED_CONFIRMED;
 }
 
-std::list<FileProgress> EstimateDatasetTask::progress(){
-	std::list<FileProgress> progress;
+std::list<boost::shared_ptr<FileProgress> > EstimateDatasetTask::progress(){
+	std::list<boost::shared_ptr<FileProgress> > progress;
       for(auto item : m_boundrequests)
-    	  progress.push_back(*(item->progress().get()));
+    	  progress.push_back(item->progress());
       return progress;
 }
-status::StatusInternal EstimateDatasetTask::reportSingleFileIsCompletedCallback(FileProgress const & progress){
+status::StatusInternal EstimateDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
     return status::StatusInternal::OK;
 }
 
 void EstimateDatasetTask::callback(){
+	// callback to the client
+
+	// then callback to the cache manager
+    m_functor(requestIdentity{session(), timestampstr()}, m_namenode, false);
 }
 
 
@@ -197,14 +221,17 @@ taskOverallStatus PrepareDatasetTask::run_internal(){
 
 	SingleFileMakeProgressFunctor functor =
 			boost::bind(boost::mem_fn(&Sync::prepareFile), m_syncModule, _1, _2, _3);
+
+	CancellationFunctor cancelation = boost::bind(boost::mem_fn(&Sync::cancelFileMakeProgress), m_syncModule, _1, _2);
+
 	for(auto file : m_files){
-		FileDownloadTask* task = new FileDownloadTask(callback, functor, m_cancelation, m_namenode, file);
+		FileDownloadTask* task = new FileDownloadTask(callback, functor, cancelation, m_namenode, file);
 		// TODO use scheduler for tasks execution
 		// add "single file download" task into the queue.
 	    m_boundrequests.push_back(task);
 	}
 
-   return taskOverallStatus::IN_PROGRESS;
+   return taskOverallStatus::COMPLETED_OK;
 }
 
 taskOverallStatus PrepareDatasetTask::cancel(bool async){
@@ -222,7 +249,7 @@ taskOverallStatus PrepareDatasetTask::cancel(bool async){
 	}
 	m_status = subrequest_failure ? taskOverallStatus::FAILURE : m_status;
 
-    m_cancelation(async, this);
+    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, true);
     // if async, we will go out from here immediately.
     if(async)
        	return taskOverallStatus::CANCELATION_SENT;
@@ -231,25 +258,28 @@ taskOverallStatus PrepareDatasetTask::cancel(bool async){
 	return taskOverallStatus::CANCELED_CONFIRMED;
 }
 
-std::list<FileProgress> PrepareDatasetTask::progress(){
-	std::list<FileProgress> progress;
+std::list<boost::shared_ptr<FileProgress> > PrepareDatasetTask::progress(){
+	std::list<boost::shared_ptr<FileProgress> > progress;
       for(auto item : m_boundrequests)
-    	  progress.push_back(*(item->progress().get()));
+    	  progress.push_back(item->progress());
       return progress;
 }
 
-status::StatusInternal PrepareDatasetTask::reportSingleFileIsCompletedCallback(FileProgress const & progress){
+status::StatusInternal PrepareDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
     return status::StatusInternal::OK;
 }
 
 void PrepareDatasetTask::callback(){
      // query all subtasks about their status
 	 // call the callback.
-     std::list<FileProgress> progress;
+     std::list<boost::shared_ptr<FileProgress> > progress;
      for(auto item : m_boundrequests){
-    	 progress.push_back(*(item->progress().get()));
+    	 progress.push_back(item->progress());
      }
 	 m_callback(m_session, progress, performance(), (m_status != taskOverallStatus::FAILURE), m_condition);
+
+	 // then callback to the cache manager
+	 m_functor(requestIdentity{session(), timestampstr()}, m_namenode, false);
 }
 
 } // request

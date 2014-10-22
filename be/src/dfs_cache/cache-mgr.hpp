@@ -12,12 +12,15 @@
 #include <deque>
 #include <utility>
 
+#include <boost/mem_fn.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/smart_ptr/scoped_ptr.hpp>
 
 #include <boost/bind.hpp>
 
 #include "util/hash-util.h"
+#include "util/thread-pool.h"
 #include "dfs_cache/cache-definitions.hpp"
 #include "dfs_cache/tasks-impl.hpp"
 #include "dfs_cache/sync-module.hpp"
@@ -26,6 +29,8 @@
  * @namespace impala
  */
 namespace impala {
+
+typedef ThreadPool<boost::shared_ptr<request::Task> > dfsLongRunningThreadPool;
 
 /**
  * Represent Cache Manager.
@@ -40,21 +45,49 @@ private:
 	static boost::scoped_ptr<CacheManager> instance_;
 
 	boost::shared_ptr<CacheLayerRegistry>   m_registry;         /**< reference to metadata registry instance */
-	ClientRequests                          m_clientRequests;   /**< Set of client requests currently managed by module. */
-	Sync                                    m_syncModule;       /**< sync module reference. */
+	ClientRequests                          m_activeRequests;   /**< Set of client requests currently managed by module.
+	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 * contains either "Pending" or "In progress" requests.
+	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 * This set is the subjects pool for scheduling to a thread pool
+	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 */
+	ClientRequests                          m_HistoryRequests;  /**< Set of client requests moved to history. */
 
-	boost::mutex                            m_requestsMux;      /**< mutex to protect client requests */
+	boost::shared_ptr<Sync>                 m_syncModule;       /**< sync module reference. */
+
+	boost::mutex                            m_requestsMux;      /**< mutex to protect active client requests */
+
+	boost::mutex                            m_HistoryMux;       /**< mutex to protect history of client requests */
+
+	dfsLongRunningThreadPool                m_pool;             /**< thread pool for long running async operations */
 
 	/**
 	 * Ctor. Subscribe to Sync's completion routines and pass the credentials mapping to Sync module.
 	 */
-    CacheManager(){
- 	   //m_syncModule.init(config, boost::bind(&CacheManager::reportSingleFileIsCompletedCallback, this, _1));
-    }
+	CacheManager() : m_syncModule(new Sync()),
+			m_pool("CacheManagement", "ClientRequestsPool", 4, 4,
+			          boost::bind<void>(boost::mem_fn(&CacheManager::threadProc), this, _1, _2)){
+	 	   //m_syncModule.init(config, boost::bind(&CacheManager::reportSingleFileIsCompletedCallback, this, _1));
+	}
 
 	CacheManager(CacheManager const& l);            // disable copy constructor
 	CacheManager& operator=(CacheManager const& l); // disable assignment operator
 
+
+	/**
+	 * This routine will be invoked after the task created basing on user's request finished its work.
+	 * Supposed to manage internal data structures representing history and pending/progress collections.
+	 *
+	 * @param requestIdentity - request identity
+	 * @param namenode        - affected dfs focal point
+	 * @param canceled        - flag, indicates whether request was canceled
+	 *
+	 * @return overall status
+	 */
+	void finalizeUserRequest(const requestIdentity& requestIdentity,
+			const NameNodeDescriptor & namenode, bool canceled = false );
+
+	void threadProc(int threadnum, const boost::shared_ptr<request::Task>& task){
+		task->operator ()();
+	}
 public:
 
        ~CacheManager() {
@@ -76,7 +109,7 @@ public:
     	   // become one of owners of the arrived registry:
     	   m_registry = registry;
     	   // pass the registry reference to sync module:
-    	   return m_syncModule.init(registry);
+    	   return m_syncModule->init(registry);
        }
 
        /**
@@ -110,14 +143,15 @@ public:
         * @param[Out] time        - time required to get all requested files locally (if any).
         * Zero time means all data is in place
         *
+        * @param[In]  callback        - callback that should be invoked on completion in case if async mode is selected
+        * @param[Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
         * @param[In]  async       - if true, the callback should be passed as well in order to be called on the operation completion.
-        * @param[In]  callback    - callback that should be invoked on completion in case if async mode is selected
         *
         * @return Operation status. If either file is not available in specified @a cluster
         * the status will be "Canceled"
         */
-       status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode, const std::list<const char*>& files, time_t& time,
-    		   CacheEstimationCompletedCallback callback, bool async = true);
+       status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode, const DataSet& files, time_t& time,
+    		   CacheEstimationCompletedCallback callback, requestIdentity & requestIdentity, bool async = true);
 
        /**
         * @fn Status cachePrepareData(SessionContext session, clusterId cluster, std::list<const char*> files)
@@ -138,41 +172,36 @@ public:
         * @param[In]  files       - List of files required to be locally.
         * @param[Out] callback    - callback to invoke when prepare is finished (whatever the status).
         *
+        * @param[Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
+        *
         * @return Operation status
         */
        status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
-    		   const std::list<const char*>& files,
-    		   PrepareCompletedCallback callback);
+    		   const DataSet& files,
+    		   PrepareCompletedCallback callback, requestIdentity & requestIdentity);
 
        /**
         * @fn Status cacheCancelPrepareData(SessionContext session)
         * @brief cancel prepare data request
-        * param[In] session - client's session, prepare request caller
+        *
+        * @param[In] requestIdentity - request identity assigned to this request,
         *
         * @return Operation status
         */
-       status::StatusInternal cacheCancelPrepareData(SessionContext session);
+       status::StatusInternal cacheCancelPrepareData(const requestIdentity & requestIdentity);
 
        /**
         * @fn Status cachePrepareData(SessionContext session, clusterId cluster, std::list<const char*> files)
         * @brief Run load scenario from specified files list @a files from the @a cluster.
         *
-        * @param[In]   session     - Request session id.
-        * @param[Out]  progress    - Detailed prepare progress. Can be used to present it to the user.
-        * @param[Out]  performance - to hold request current performance statistic
+        * @param[In]   requestIdentity - request identity assigned to this request,
+        * @param[Out]  progress        - Detailed prepare progress. Can be used to present it to the user.
+        * @param[Out]  performance     - to hold request current performance statistic
         *
         * @return Operation status
         */
-       status::StatusInternal cacheCheckPrepareStatus(SessionContext session, std::list<FileProgress*>& progress, request_performance& performance );
-
-       /**
-        * Utility function to free list of @a FileProgress entities
-        *
-        * @param[In] progress - list of @a FileProgress entities to cleanup
-        *
-        * @return Operation status
-        */
-       status::StatusInternal freeFileProgressList(std::list<FileProgress*>& progress);
+       status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestIdentity,
+    		   std::list<boost::shared_ptr<FileProgress> >& progress, request_performance& performance );
 
        /**
         * Get the file.

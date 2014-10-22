@@ -42,7 +42,7 @@
 </property>
 <property>
  <name>javax.jdo.option.ConnectionPassword</name>
- <value>password</value>
+ <value>SunnyDay2015</value>
 </property>
 <property>
   <name>datanucleus.autoCreateSchema</name>

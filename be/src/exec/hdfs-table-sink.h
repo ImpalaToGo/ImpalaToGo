@@ -16,7 +16,9 @@
 #ifndef IMPALA_EXEC_HDFS_TABLE_SINK_H
 #define IMPALA_EXEC_HDFS_TABLE_SINK_H
 
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include <boost/unordered_map.hpp>
 #include <boost/scoped_ptr.hpp>
 
@@ -68,10 +70,10 @@ struct OutputPartition {
   std::string partition_name;
 
   // Connection to hdfs.
-  hdfsFS hdfs_connection;
+  dfsFS hdfs_connection;
 
   // Hdfs file at tmp_hdfs_file_name.
-  hdfsFile tmp_hdfs_file;
+  dfsFile tmp_hdfs_file;
 
   // Records number of rows appended to the current file in this partition.
   int64_t num_rows;
@@ -217,7 +219,7 @@ class HdfsTableSink : public DataSink {
   TupleRow* current_row_;
 
   // Connection to hdfs, established in Open() and closed in Close().
-  hdfsFS hdfs_connection_;
+  dfsFS hdfs_connection_;
 
   // Row descriptor of row batches passed in Send(). Set in c'tor.
   const RowDescriptor& row_desc_;
