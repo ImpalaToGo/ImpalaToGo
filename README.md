@@ -208,7 +208,7 @@ Note that they will be rewritten with default values after frontend build.
 
 1. ####Make changes in configuration files to run impala locally.
     > In core-site.xml, following properties should be set to file:///
-    ```sh
+    ```xml
   <property>
     <name>fs.defaultFS</name>
     <value>file:///</value>
@@ -232,7 +232,6 @@ export BOOST_LIBRARYDIR=/usr/lib64
  . bin/impala-config.sh
 export LD_LIBRARY_PATH=/usr/lib64
 ```
-
 - **start metastore:**
 For the first time, run the script:
 
@@ -248,24 +247,19 @@ start metastore:
 cd thirdparty/hive-0.10.0-cdh4.5.0/
 bin/hive --service metastore
 ```
-    
 - **start statestored:**
-
 ```sh
 ${IMPALA_HOME}/bin/start-statestore.sh
 ```
-    
 - **start catalogd:**
 ```sh
 ${IMPALA_HOME}/bin/start-catalogd.sh
 ```
-    
 - **start impalad:**
 ```sh
 ${IMPALA_HOME}/bin/start-impalad.sh
 ```
-
-3. ####Test impala with the local file via impala shell:
+####Test impala with the local file via impala shell:
 
 - **start impala shell:**
 
