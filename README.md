@@ -265,7 +265,7 @@ ${IMPALA_HOME}/bin/start-catalogd.sh
 ${IMPALA_HOME}/bin/start-impalad.sh
 ```
 
-3. Test impala with the local file via impala shell:
+3. ####Test impala with the local file via impala shell:
 
 - **start impala shell:**
 
@@ -274,15 +274,16 @@ ${IMPALA_HOME}/bin/start-impalad.sh
 ```
 
 When running on the same data node as Impalad, no need to connect explcitly. The prompt is automatically shows the conection to Impalad:
+
 [impalad_hostname:21000] >
 
 Place a csv file to some local directory and run some statements on this location to be sure impala works for you:
 
-```sh
+```sql
 create external table test_table (name string, category string, score double) ROW FORMAT DELIMITED fields terminated BY '\t' lines terminated BY '\n' location '/home/username/src/ImpalaToGo/datastorage/';
 ```
 
-```sh
+```sql
 select * from test_table where category="xyz";
 ```
 
