@@ -77,7 +77,9 @@ Development environment prerequisites (Ubuntu)
 	# define BOOST_DISABLE_THREADS 
 	# endif
 	```
+	
 	To
+	
 	```c
 	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
 	# if defined(_GLIBCXX_HAVE_GTHR_DEFAULT) \ 
@@ -94,7 +96,7 @@ Development environment prerequisites (Ubuntu)
 	# endif
 	```
 	
-    	* Fix in boost/cstdint.hpp:
+	- Fix in boost/cstdint.hpp:
     	
 	```c
 	// typedef  ::boost::long_long_type            int64_t;
@@ -117,9 +119,10 @@ Development environment prerequisites (Ubuntu)
 	```
         
     2. **Fast reference to build the boost.**
-    > Newest boost builds do not contain packages with -mt prefixes as stated by boost.
-    To build libraries with -mt sufix:
-
+    Newest boost builds do not contain packages with -mt prefixes as stated by boost.
+    
+    > To build libraries with -mt sufix:
+     
     ```sh
     ./bootstrap.sh --with-libraries=filesystem, regex, system
     sudo ./bjam --layout=tagged --libdir=/usr/lib64 cxxflags=-fPIC threading=multi install
@@ -221,6 +224,7 @@ Note that they will be rewritten with default values after frontend build.
     
 2. ####Start all services.
 Before to start any impala service(impalad, catalogd, statestored) run prerequisites in shell (for environment variables setup on the shell). Here /usr/lib64 is the boost libraries location, specify yours there:
+
 ```sh
 export JAVA_HOME=/usr/lib/jvm/java-7-oracle
 export IMPALA_HOME=/home/elenav/src/ImpalaToGo
@@ -229,45 +233,51 @@ export BOOST_LIBRARYDIR=/usr/lib64
 export LD_LIBRARY_PATH=/usr/lib64
 ```
 
-	- ####start metastore. 
-    	For the first time, run the script:
-    	```sh
-     	${IMPALA_HOME}/bin/create-test-configuration.sh
-    	```
-    	this will create the hive_impalatogo database and the hiveuser user in postgresql along with all required 		permissions.
-    	Note this is needed only for the first time and is usually done by buildall script.
+- **start metastore:**
+For the first time, run the script:
 
-    start metastore:
-    ```sh
-    cd thirdparty/hive-0.10.0-cdh4.5.0/
-	bin/hive --service metastore
-    ```
-    
-    - ####start statestored:
-    ```sh
-    ${IMPALA_HOME}/bin/start-statestore.sh
-    ```
-    
-    - #### start catalogd:
-    ```sh
-    ${IMPALA_HOME}/bin/start-catalogd.sh
-    ```
-    
-    - #### start impalad:
-    ```sh
-    ${IMPALA_HOME}/bin/start-impalad.sh
-    ```
-     
-3. ####Test impala with the local file via impala shell:
+```sh
+${IMPALA_HOME}/bin/create-test-configuration.sh
+```
+this will create the hive_impalatogo database and the hiveuser user in postgresql along with all required 		permissions.
+Note this is needed only for the first time and is usually done by buildall script.
 
-- start impala shell:
+start metastore:
+
+```sh
+cd thirdparty/hive-0.10.0-cdh4.5.0/
+bin/hive --service metastore
+```
+    
+- **start statestored:**
+
+```sh
+${IMPALA_HOME}/bin/start-statestore.sh
+```
+    
+- **start catalogd:**
+```sh
+${IMPALA_HOME}/bin/start-catalogd.sh
+```
+    
+- **start impalad:**
+```sh
+${IMPALA_HOME}/bin/start-impalad.sh
+```
+
+3. Test impala with the local file via impala shell:
+
+- **start impala shell:**
+
 ```sh
   . bin/impala-shell.sh
 ```
+
 When running on the same data node as Impalad, no need to connect explcitly. The prompt is automatically shows the conection to Impalad:
 [impalad_hostname:21000] >
 
 Place a csv file to some local directory and run some statements on this location to be sure impala works for you:
+
 ```sh
 create external table test_table (name string, category string, score double) ROW FORMAT DELIMITED fields terminated BY '\t' lines terminated BY '\n' location '/home/username/src/ImpalaToGo/datastorage/';
 ```
