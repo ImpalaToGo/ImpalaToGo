@@ -41,30 +41,30 @@ Development environment prerequisites (Ubuntu)
     sudo update-alternatives --config g++
     ```
     
-  - default recent dev boost package is not compatible with impala. Download boost 1.46.1 and build packages required by impala (always can be found in ${IMPALA_HOME}/CMakeLists.txt):
+  - **configure boost.** Default recent dev boost package is not compatible with impala. Download boost 1.46.1 and build packages required by impala (always can be found in ${IMPALA_HOME}/CMakeLists.txt):
     ####thread regex-mt system-mt filesystem-mt date_time
 
-    1. First fix some bugs in boost sources.
-    	1. Being built with gcc, boost thread package encounters the conflict between gcc’s TIME\_UTC  (defined in 		/usr/include/time.h) and      self-defined TIME\_UTC (defined in  “boost path”/boost/thread/xtime.hpp). 	This happens because xtime.hpp includes “boost path”/boost/thread/thread\_time.hpp which in turn reference 		time.h from gcc’s headers.
+    1. **First fix some bugs in boost sources.**
+    	* Being built with gcc, boost thread package encounters the conflict between gcc’s TIME\_UTC  (defined in 		/usr/include/time.h) and      self-defined TIME\_UTC (defined in  “boost path”/boost/thread/xtime.hpp). 	This happens because xtime.hpp includes “boost path”/boost/thread/thread\_time.hpp which in turn reference 		time.h from gcc’s headers.
 	There’s a bug on this that existed for a long time cross release
 	https://svn.boost.org/trac/boost/ticket/6940
 	and was fixed only in latest boost release.
 	To fix this, all TIME\_UTC menions in boost sources should be changed to TIME\_UTC\_ to get the rid of 			conflict with gcc.
-	#####See changelist:
-	https://svn.boost.org/trac/boost/changeset/78973#file3
+	**See changelist:** https://svn.boost.org/trac/boost/changeset/78973#file3
 	To fast apply the fix,
 	in boost sources tree:
 	```sh
 	find . -type f -print0 | xargs -0 sed -i 's/TIME_UTC/TIME_UTC_/g'
 	```
-       	2. If compiled with gcc/g++ 4.7 and higher, where the reference to pthreads have changed to 				GLIBCXX_HAS_GTHREADS, so boost is unable to find pthreads and disable it.
-     	Bug:
-	https://svn.boost.org/trac/boost/ticket/6165
+	
+	* If compiled with gcc/g++ 4.7 and higher, where the reference to pthreads have changed to 				GLIBCXX_HAS_GTHREADS, so boost is unable to find pthreads and disable it.
+     	Bug: https://svn.boost.org/trac/boost/ticket/6165
 	Thus need to patch the file "your boost folder"/boost/config/stdlib/libstdcpp3.hpp
 	Required change is described here: 					
 	https://svn.boost.org/trac/boost/attachment/ticket/6165/libstdcpp3.hpp.patch
 	In short, in file following should be changed:
-	```sh
+
+	```c
 	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
 	# if defined(_GLIBCXX_HAVE_GTHR_DEFAULT) \ 
 	|| defined(_GLIBCXX__PTHREADS) 
@@ -78,7 +78,7 @@ Development environment prerequisites (Ubuntu)
 	# endif
 	```
 	To
-	```sh
+	```c
 	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
 	# if defined(_GLIBCXX_HAVE_GTHR_DEFAULT) \ 
 	|| defined(_GLIBCXX__PTHREADS) \ 
@@ -93,16 +93,20 @@ Development environment prerequisites (Ubuntu)
 	# define BOOST_DISABLE_THREADS 
 	# endif
 	```
-    	3. Fix in boost/cstdint.hpp:
-	```sh
+	
+    	* Fix in boost/cstdint.hpp:
+    	
+	```c
 	// typedef  ::boost::long_long_type            int64_t;
 	typedef long int int64_t;
 	// typedef  ::boost::ulong_long_type   uint64_t;
 	typedef long unsigned int uint64_t;
 	```
+	
 	This will resolve ambiguous definitions (between system sys/types.h and boost’s boost/cstdint.hpp)
 	And another fix here (put new lines instead of commented lines)
-	```sh
+	
+	```c
 	// #if defined(BOOST_HAS_STDINT_H) && (!defined(__GLIBC__) ||
 	// defined(__GLIBC_HAVE_LONG_LONG))
 	# if defined(BOOST_HAS_STDINT_H)					\
@@ -111,25 +115,25 @@ Development environment prerequisites (Ubuntu)
       	|| (defined(__GLIBC__) && ((__GLIBC__ > 2) || ((__GLIBC__ == 2) && 
   	(__GLIBC_MINOR__ >= 17)))))
 	```
-    
-    2. Fast reference to build the boost.
+        
+    2. **Fast reference to build the boost.**
     > Newest boost builds do not contain packages with -mt prefixes as stated by boost.
     To build libraries with -mt sufix:
 
-       ```sh
+    ```sh
     ./bootstrap.sh --with-libraries=filesystem, regex, system
-sudo ./bjam --layout=tagged --libdir=/usr/lib64 cxxflags=-fPIC threading=multi install
+    sudo ./bjam --layout=tagged --libdir=/usr/lib64 cxxflags=-fPIC threading=multi install
     ```
-    
-        > To build libraries without a suffix:  
+     > To build libraries without a suffix:  
 
-        ```sh
+    ```sh
     ./bootstrap.sh --with-libraries=thread, date_time, system
-sudo ./bjam --libdir=/usr/lib64 cxxflags=-fPIC link=static threading=single runtime-link=static install
+    sudo ./bjam --libdir=/usr/lib64 cxxflags=-fPIC link=static threading=single runtime-link=static install
     ```
    
    
 - install hive metastore database, for example, postgres, if going to run it locally
+
 ```sh
 sudo apt-get install postgresql -y
 ```
@@ -225,13 +229,13 @@ export BOOST_LIBRARYDIR=/usr/lib64
 export LD_LIBRARY_PATH=/usr/lib64
 ```
 
-    - ####start metastore. 
-    For the first time, run the script:
-    ```sh
-     ${IMPALA_HOME}/bin/create-test-configuration.sh
-    ```
-    this will create the hive_impalatogo database and the hiveuser user in postgresql along with all required permissions.
-    Note this is needed only for the first time and is usually done by buildall script.
+	- ####start metastore. 
+    	For the first time, run the script:
+    	```sh
+     	${IMPALA_HOME}/bin/create-test-configuration.sh
+    	```
+    	this will create the hive_impalatogo database and the hiveuser user in postgresql along with all required 		permissions.
+    	Note this is needed only for the first time and is usually done by buildall script.
 
     start metastore:
     ```sh
