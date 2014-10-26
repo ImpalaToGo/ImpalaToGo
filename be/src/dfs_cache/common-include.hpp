@@ -52,8 +52,10 @@ namespace status {
 typedef enum {
 	OK,
 	OPERATION_ASYNC_SCHEDULED,
+	FINALIZATION_IN_PROGRESS,
 
 	REQUEST_IS_NOT_FOUND,           /**< request is not found */
+	REQUEST_FAILED,
 
 	NAMENODE_IS_NOT_CONFIGURED,
 	NAMENODE_IS_UNREACHABLE,
@@ -68,6 +70,21 @@ typedef enum {
 } StatusInternal;
 }
 
+/**
+ * Any task overall status
+ */
+enum taskOverallStatus{
+            NOT_RUN = 0,
+            PENDING,
+            IN_PROGRESS,
+            COMPLETED_OK,
+            FAILURE,
+            CANCELATION_SENT,
+            CANCELED_CONFIRMED,    /**< task cancellation was performed successfully */
+            INTERRUPTED_EXTERNAL,  /**< task execution was interrupted because of external reason */
+            NOT_FOUND,             /**< task not found */
+            IS_NOT_MANAGED      /**< task is not managed */
+};
 
 namespace dfs {
 
@@ -207,10 +224,10 @@ typedef struct {
  * @return operation status
  */
 typedef boost::function<
-		status::StatusInternal(SessionContext context,
+		void(SessionContext context,
 				const std::list<boost::shared_ptr<FileProgress> > & progress,
 				request_performance const & performance, bool overall,
-				bool canceled)> PrepareCompletedCallback;
+				bool canceled, taskOverallStatus status)> PrepareCompletedCallback;
 
 
 /**
@@ -223,9 +240,9 @@ typedef boost::function<
  */
 
 typedef boost::function<
-		status::StatusInternal(SessionContext context,
+		void(SessionContext context,
 				const std::list<boost::shared_ptr<FileProgress> > & estimation,
-				time_t const & time)> CacheEstimationCompletedCallback;
+				time_t const & time, bool overall, bool canceled, taskOverallStatus status)> CacheEstimationCompletedCallback;
 
 }
 #endif /* COMMON_INCLUDE_HPP_ */

@@ -11,6 +11,8 @@
 #define TASK_H_
 
 #include <boost/thread/condition_variable.hpp>
+#include <boost/thread/mutex.hpp>
+
 #include <boost/tuple/tuple.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/date_time/posix_time/time_formatters.hpp>
@@ -19,6 +21,7 @@
 #include <iostream>
 #include <ctime>
 
+#include "util/thread-pool.h"
 #include "util/runtime-profile.h"
 #include "dfs_cache/common-include.hpp"
 
@@ -27,22 +30,17 @@
  */
 namespace impala
 {
-/**
- * Any task overall status
- */
-enum taskOverallStatus{
-            NOT_RUN = 0,
-            PENDING,
-            IN_PROGRESS,
-            COMPLETED_OK,
-            FAILURE,
-            CANCELATION_SENT,
-            CANCELED_CONFIRMED,    /**< task cancellation was performed successfully */
-            NOT_FOUND,             /**< task not found */
-            IS_NOT_MANAGED      /**< task is not managed */
-};
 
+/** Formatters for enumerations */
 extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
+extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
+
+/** represent task priority */
+enum requestPriority{
+    HIGH,
+    LOW,
+    NOT_SET,
+};
 
 /**
  * @namespace request
@@ -56,21 +54,23 @@ namespace request
 class Task{
 protected:
 	boost::posix_time::ptime  m_taskCreation;   /**< task creation timestamp */
-	taskOverallStatus         m_status;          /**< overall task status. By default, NOT_RUN */
+	taskOverallStatus         m_status;         /**< overall task status. By default, NOT_RUN */
+
+	bool                      m_invalidated;    /**< task invalidation flag. Having this flag, task should not run
+	                                             if it was not run yet. */
+	/** Implementor should provide completion callback scenario here */
+	virtual void callback() = 0;
 
 	virtual ~Task() = default;
 
 	/** Initializes task creation timestamp. */
-	Task() : m_status(taskOverallStatus::NOT_RUN) {
+	Task() : m_status(taskOverallStatus::NOT_RUN), m_invalidated(false) {
 		m_taskCreation = boost::posix_time::microsec_clock::local_time();
 	}
 
 public:
-	/**
-	 * Implementor should provide completion callback scenario here
-	 */
-	virtual void callback() = 0;
 
+	/** "do work" predicate */
     virtual void operator()() = 0;
 
 	/** getter for underlying creation timestamp */
@@ -81,25 +81,49 @@ public:
 
 	/** Getter for task status */
 	taskOverallStatus status() const { return m_status; }
+
+	/** Setter for task status */
+	void status(taskOverallStatus status){ m_status = status; }
+
+	/** getter for "invalidated" flag */
+	void invalidate() { m_invalidated = true; }
+
+	/** invalidation of task triggering, is only works in "invalidation" points that
+	 * should be controlled within the main task run scenarios
+	 */
+	bool invalidated() { return m_invalidated; }
+
+	bool failure(){
+		return (m_status != taskOverallStatus::COMPLETED_OK ||
+			m_status != taskOverallStatus::CANCELATION_SENT ||
+			m_status != taskOverallStatus::CANCELED_CONFIRMED);
+	}
+
 };
 
+}
+
+// namespace impala
+
+/** Describes the thread pool for dfs-related requests */
+typedef ThreadPool<boost::shared_ptr<request::Task> > dfsThreadPool;
+
+namespace request {
 /**
  * Task that provides the cancellation
  */
 class CancellableTask : virtual public Task{
-private:
-	/** Cancellation section. For sync cancellation of  related executor */
-	boost::condition_variable_any m_conditionvar;   /** condition variable, should be shared with the @a m_functor in order
-	 	 	 	 	 	 	 	 	 	 	 	                      * to support cancellation by functor
-	                                                                  */
-	mutable boost::mutex          m_mux;            /** mutex to lock the shared data */
-
 protected:
-    bool                          m_condition;      /** condition which will control the possible cancellation */
+	/** Cancellation section. For sync cancellation of  related executor */
+	boost::condition_variable_any m_controlCancelationCompletionCondition;   /** condition variable, should be shared with the @a m_functor in order
+	 	 	 	 	 	 	 	 	 	 	 	                               * to support cancellation by functor */
+	mutable boost::mutex          m_controlCancelationCompletionMux;         /** mutex to guard the "condition" flag */
+    bool                          m_controlCancelationCompletionFlag;         /** condition which will control the possible cancellation */
+
     ~CancellableTask() = default;
 public:
 
-    CancellableTask() : m_condition(false) {}
+    CancellableTask() : m_controlCancelationCompletionFlag(false) {  }
 
 	/**
 	 * Implementor should provide cancellation scenario here
@@ -113,22 +137,22 @@ public:
 	/**
 	 * Getter for condition variable that guards the cancellation condition
 	 */
-    void conditionvar(boost::condition_variable_any*& conditionvar) { conditionvar = &m_conditionvar; }
+    void conditionvar(boost::condition_variable_any*& conditionvar) { conditionvar = &m_controlCancelationCompletionCondition; }
 
     /**
      * Getter for cancellation condition
      */
-    void condition(bool*& condition) { condition = &m_condition; }
+    void condition(bool*& condition) { condition = &m_controlCancelationCompletionFlag; }
 
     /**
      * Getter for cancellation condition
      */
-    bool condition() { return m_condition; }
+    bool condition() { return m_controlCancelationCompletionFlag; }
 
     /**
      * Getter for guarding mutex
      */
-    void mux(boost::mutex*& mux) { mux = &m_mux; }
+    void mux(boost::mutex*& mux) { mux = &m_controlCancelationCompletionMux; }
 };
 
 /**
@@ -154,19 +178,38 @@ class SessionBoundTask : virtual public MakeProgressTask<Progress_>{
 
 protected:
 	SessionContext            m_session;        /**< bound client session descriptor */
+	bool 					  m_async;          /**< flag, indicates that the task is async */
+
+	dfsThreadPool*            m_pool;                              /**< reference to a thread pool to schedule subtasks */
+	boost::condition_variable m_controlDataSetScheduledCondition;  /**< condition variable to have signaling from this task that the task is scheduled */
+	boost::mutex              m_controlDataSetScheduledMux;        /**< guard for task "is scheduled" signal */
+	bool                      m_controlDataSetScheduledFlag;       /**< flag, indicates that the task is scheduled */
 
 	virtual ~SessionBoundTask() = default;
 public:
 
-	/** getter for underlying client context */
-	SessionContext session() const { return m_session; }
-
 	/**
 	 * Ctor. Created assuming user context.
 	 */
-    SessionBoundTask(const SessionContext& session) : m_session(session){
+    SessionBoundTask(const SessionContext& session, dfsThreadPool* pool, bool async = true) :
+    	m_session(session), m_async(async), m_pool(pool), m_controlDataSetScheduledFlag(false) { }
 
-    }
+	/** getter for underlying client context */
+	SessionContext session() const { return m_session; }
+
+	/** getter for "is task is scheduled" flag */
+	bool scheduled() { return m_controlDataSetScheduledFlag; }
+
+	/** Wait until the task will be scheduled */
+	template<typename predicate_type>
+	void waitScheduled(predicate_type predicate){
+		boost::unique_lock<boost::mutex> lock(m_controlDataSetScheduledMux);
+		m_controlDataSetScheduledCondition.wait(lock, predicate);
+		lock.unlock();
+	}
+
+	/** getter for "async" flag describes the running context task nature */
+	bool async() { return m_async; }
 };
 
 /**
@@ -185,7 +228,6 @@ private:
 	std::clock_t            m_start;     /**< start time when the task was started */
     int64_t                 m_cputime;   /**< time which the task spent on CPU */
 
-
 protected:
 	CompletionCallback_      m_callback;    /** < callback to invoke on caller when Prepare request is
 	 	 	 	 	 	 	 	 	 	     * completed or interrupted (whatever status)*/
@@ -193,11 +235,19 @@ protected:
 
 	Cancellation_            m_cancelation; /** functor to perform the task cancellation */
 
+	requestPriority          m_priority;    /** request priority */
 	request_performance      m_performance; /** task performance */
-	/**
-	 * Implementor should provide run scenario here
-	 */
-	virtual taskOverallStatus run_internal() = 0;
+
+    /** Sync stuff */
+    bool         		      m_controlDataSetCompletionFlag;
+    boost::mutex 			  m_controlDataSetCompletionMux;
+    boost::condition_variable m_controlDataSetCompletionCondition;
+
+	/** "Do work" predicate */
+	virtual void run_internal() = 0;
+
+    /** "finalize" predicate */
+    virtual void finalize() = 0;
 
 	virtual ~RunnableTask() = default;
 
@@ -205,7 +255,8 @@ protected:
 
 public:
 	RunnableTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancellation)
-		: m_callback(callback), m_functor(functor), m_cancelation(cancellation), m_lifetime(0), m_cputime(0), m_start(std::clock()){}
+		: m_lifetime(0), m_start(std::clock()), m_cputime(0), m_callback(callback),
+		  m_functor(functor), m_cancelation(cancellation), m_priority(requestPriority::NOT_SET), m_controlDataSetCompletionFlag(false){}
 
 	/**
 	 * query request performance
@@ -219,8 +270,15 @@ public:
 		return m_performance;
 	}
 
+	/** getter for request priority */
+	requestPriority priority() { return m_priority; }
+
 	/**
 	 * Operator overload in order to be callable by boost::asio::io_services threadpool (which we do not use right now :) )
+	 * Here're we see all phases of requests execution:
+	 * - main routine;
+	 * - callback to a client;
+	 * - finalization
 	 */
 	void  operator()(){
 		m_sw.Start();
@@ -239,6 +297,9 @@ public:
 	    m_lifetime = m_sw.ElapsedTime();
 	    m_sw.Stop();
 	    cpu_time();
+
+	    // run finalizations
+	    this->finalize();
    }
 };
 
@@ -252,12 +313,15 @@ protected:
 	virtual ~ContextBoundTask() = default;
 
 public:
-	ContextBoundTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancelation, const SessionContext& session ) :
-		RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>(callback, functor, cancelation), SessionBoundTask<Progress_>(session){}
+	ContextBoundTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancelation, const SessionContext& session,
+		dfsThreadPool* pool, bool async = true ) :
+			RunnableTask<CompletionCallback_, Functor_, Cancellation_, Progress_>(callback, functor, cancelation),
+			SessionBoundTask<Progress_>(session, pool, async){}
 };
 
 
 } /** request */
+
 } /** impala */
 
 #endif /* TASK_H_ */

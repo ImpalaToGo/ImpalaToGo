@@ -32,3 +32,4 @@ add_library(GlobalFlags
 )
 
 ADD_BE_TEST(atomic-test)
+ADD_BE_TEST(multi-precision-test)

@@ -41,8 +41,16 @@ typedef ContextBoundTask<CacheEstimationCompletedCallback, DataSetRequestComplet
  */
 class FileDownloadTask : public FileProgressTaskType{
 protected:
-	~FileDownloadTask() = default;
-	taskOverallStatus run_internal();
+
+	/** "do work" predicate */
+	void run_internal();
+
+	/** Call back into the owner task (PrepareDatasetTask) to inform about the completion */
+	void callback();
+
+	/** "finalize" predicate */
+	void finalize();
+
 public:
 	/**
 	 * Ctor. Construct the "Single file - get locally" request
@@ -56,28 +64,28 @@ public:
 	FileDownloadTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
 			const NameNodeDescriptor & namenode, const char* path)
 		try : FileProgressTaskType(callback, functor, cancellation){
-             this->m_progress->namenode = namenode;
-             this->m_progress->dfsPath = path;
+			this->m_progress.reset(new FileProgress());
+			this->m_progress->namenode = namenode;
+			this->m_progress->dfsPath = path;
 		}
 		catch(...)
 		{}
 
-		/**
-		 * Cancel the file download operation.
-		 * Sync or async way.
-		 * @param async      - flag, indicates whether request cancellation should be run asynchronously.
-		 * Async way means the cancellation request is sent to the handler, and no confirmation is required so far.
-		 * Sync way assumes the calling thread will be synchronously wait while the file download will be interrupted and
-		 * all post-actions will be completed.
-		 *
-		 * @return overall request status.
-		 */
-		taskOverallStatus cancel(bool async = false);
 
-		/**
-		 * Call back into the owner task (PrepareDatasetTask) to inform about the completion
-		 */
-		void callback();
+	~FileDownloadTask() = default;
+
+	/**
+	 * Cancel the file download operation.
+	 * Sync or async way.
+	 * @param async      - flag, indicates whether request cancellation should be run asynchronously.
+	 * Async way means the cancellation request is sent to the handler, and no confirmation is required so far.
+	 * Sync way assumes the calling thread will be synchronously wait while the file download will be interrupted and
+	 * all post-actions will be completed.
+	 *
+	 * @return overall request status.
+	 */
+	taskOverallStatus cancel(bool async = false);
+
 };
 
 /**
@@ -86,8 +94,15 @@ public:
  */
 class FileEstimateTask : public FileProgressTaskType{
 protected:
-	~FileEstimateTask() = default;
-	taskOverallStatus run_internal();
+
+	/** "do work" predicate */
+	void run_internal();
+
+	/** Call back into the owner task (PrepareDatasetTask) to inform about the completion */
+	void callback();
+
+	/** "finalize" predicate */
+	void finalize();
 public:
 	/**
 	 * Ctor. Construct the "Single file - get locally" request
@@ -101,30 +116,27 @@ public:
 	FileEstimateTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
 			const NameNodeDescriptor & namenode, const char* path)
 		try : FileProgressTaskType(callback, functor, cancellation){
-
-             m_progress->namenode = namenode;
-             m_progress->dfsPath = path;
+             this->m_progress.reset(new FileProgress());
+             this->m_progress->namenode = namenode;
+             this->m_progress->dfsPath = path;
 		}
 		catch(...)
 		{}
 
-		/**
-		 * Cancel the file download operation.
-		 * Sync or async way.
-		 * @param async      - flag, indicates whether request cancellation should be run asynchronously.
-		 * Async way means the cancellation request is sent to the handler, and no confirmation is required so far.
-		 * Sync way assumes the calling thread will be synchronously wait while the file download will be interrupted and
-		 * all post-actions will be completed.
-		 *
-		 * @return overall request status.
-		 */
-		taskOverallStatus cancel(bool async = false);
 
-		/**
-		 * Call back into the owner task (PrepareDatasetTask) to inform about the completion
-		 */
-		void callback();
+	~FileEstimateTask() = default;
 
+	/**
+	 * Cancel the file download operation.
+	 * Sync or async way.
+	 * @param async      - flag, indicates whether request cancellation should be run asynchronously.
+	 * Async way means the cancellation request is sent to the handler, and no confirmation is required so far.
+	 * Sync way assumes the calling thread will be synchronously wait while the file download will be interrupted and
+	 * all post-actions will be completed.
+	 *
+	 * @return overall request status.
+	 */
+	taskOverallStatus cancel(bool async = false);
 };
 
 /**
@@ -143,23 +155,34 @@ private:
 	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
 
 	boost::shared_ptr<Sync>       m_syncModule;       /** reference to Sync module */
+	int                           m_remainedFiles;    /**< non-processed yet files */
 
-    std::list<FileDownloadTask*>  m_boundrequests;      /**< list of bound file requests */
-    int                           m_remainedFiles;      /**< non-processed yet files */
+    std::list<boost::shared_ptr<FileDownloadTask> >  m_boundrequests;      /**< list of bound file requests */
 
     // Disable copy of our task and its assignment
     PrepareDatasetTask(PrepareDatasetTask const & task) = delete;
     PrepareDatasetTask& operator=(PrepareDatasetTask const & task) = delete;
 
 protected:
-    taskOverallStatus run_internal();
+    /** "do work" predicate */
+    void run_internal();
+
+    /** The callback to the client identified by SessionContext */
+    void callback();
+
+    /** "finalize" predicate */
+	void finalize();
 
 public:
 	PrepareDatasetTask(PrepareCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation, const SessionContext& session,
-			const NameNodeDescriptor& namenode, boost::shared_ptr<Sync> sync, const DataSet& files)
-        try : ContextBoundPrepareTaskType(callback, functor, cancelation, session),
-        m_files(files), m_namenode(namenode), m_syncModule(sync), m_remainedFiles(0){
+			const NameNodeDescriptor& namenode, boost::shared_ptr<Sync> sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
+        try : ContextBoundPrepareTaskType(callback, functor, cancelation, session, pool, async),
+        			m_files(files), m_namenode(namenode){
 
+				m_syncModule = sync;
+				// note remained files to check - set size
+				m_remainedFiles = files.size();
+				this->m_priority = requestPriority::LOW;
 		}
 		catch(...)
 		{}
@@ -175,10 +198,8 @@ public:
 		  * context.
 		  * If all files are done for request, should invoke the final callback to a client with overall
 		  * "prepare" status report.
-		  *
-		  * @param progress - single file progress
 		  */
-		status::StatusInternal reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
+	void reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
 
 		 /**
 		  *  Cancel the request's sub requests and once done, move the request along with subrequests statuses to the history.
@@ -190,11 +211,6 @@ public:
 		  * @return overall request status.
 		  */
 		 taskOverallStatus cancel(bool async = false);
-
-		 /**
-		  * The callback to the client identified by SessionContext
-		  */
-		 void callback();
 };
 
 /**
@@ -213,19 +229,31 @@ private:
 	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
 
 	boost::shared_ptr<Sync>  m_syncModule;       /** reference to Sync module */
+	int                      m_remainedFiles;    /**< non-processed yet files */
 
-    std::list<FileEstimateTask*>  m_boundrequests;      /**< list of bound file requests */
-    int                           m_remainedFiles;      /**< non-processed yet files */
+    std::list<boost::shared_ptr<FileEstimateTask> >  m_boundrequests;      /**< list of bound file requests */
 
 protected:
-    taskOverallStatus run_internal();
+
+    /** "do work" predicate */
+    void run_internal();
+
+	/** The callback to the client identified by SessionContext */
+	void callback();
+
+    /** "finalize" predicate */
+	void finalize();
 
 public:
 	EstimateDatasetTask(CacheEstimationCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation,
-			const SessionContext& session, const NameNodeDescriptor& namenode, const boost::shared_ptr<Sync> & sync, const DataSet& files)
-        try : ContextBoundEstimateTaskType(callback, functor, cancelation, session),
-        m_files(files), m_namenode(namenode), m_remainedFiles(0){
-              m_syncModule = sync;
+			const SessionContext& session, const NameNodeDescriptor& namenode, const boost::shared_ptr<Sync> & sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
+        try : ContextBoundEstimateTaskType(callback, functor, cancelation, session, pool, async),
+        			m_files(files), m_namenode(namenode){
+
+				m_syncModule = sync;
+				// note remained files to check - set size
+				m_remainedFiles = files.size();
+				this->m_priority = requestPriority::HIGH;
 		}
 		catch(...)
 		{}
@@ -243,7 +271,7 @@ public:
 	 * "estimate" status report.
 	 * @param progress - single file progress
 	 */
-	status::StatusInternal reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
+	void reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress);
 
 	/**
 	 * Cancel the request's sub requests and once done, move the request along with subrequests statuses to the history.
@@ -254,11 +282,6 @@ public:
 	 * @return overall request status.
 	 */
 	taskOverallStatus cancel(bool async = false);
-
-	/**
-	 * The callback to the client identified by SessionContext
-	 */
-	void callback();
 };
 
 } // request

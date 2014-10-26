@@ -30,9 +30,9 @@ class FileSystemManager {
 private:
 	// Singleton instance. Instantiated in Init().
 	static boost::scoped_ptr<FileSystemManager> instance_;
-	boost::shared_ptr<CacheLayerRegistry> m_registry; /**< reference to metadata registry instance */
+	CacheLayerRegistry*                         m_registry; /**< reference to metadata registry instance */
 
-	FileSystemManager() { };
+	FileSystemManager() : m_registry(nullptr) { };
 	FileSystemManager(FileSystemManager const& l);            // disable copy constructor
 	FileSystemManager& operator=(FileSystemManager const& l); // disable assignment operator
 
@@ -44,12 +44,10 @@ public:
 
 	/**
 	 * Subscribe to cache registry as one of owners.
-	 * @param registry - cache registry
 	 */
-	status::StatusInternal configure(
-			const boost::shared_ptr<CacheLayerRegistry>& registry) {
+	status::StatusInternal configure() {
 		// become one of owners of the arrived registry:
-		m_registry = registry;
+		m_registry = CacheLayerRegistry::instance();
 		return status::StatusInternal::OK;
 	}
 

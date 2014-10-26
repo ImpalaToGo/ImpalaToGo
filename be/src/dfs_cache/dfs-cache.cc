@@ -38,12 +38,8 @@ status::StatusInternal cacheInit() {
     CacheManager::init();
     filemgmt::FileSystemManager::init();
 
-	// and pin its singleton reference
-	boost::shared_ptr<CacheLayerRegistry>  cacheRegistry(CacheLayerRegistry::instance());
-
-	// now share the cache registry between Cache Manager and File Manager
-	CacheManager::instance()->configure(cacheRegistry);
-	filemgmt::FileSystemManager::instance()->configure(cacheRegistry);
+	CacheManager::instance()->configure();
+	filemgmt::FileSystemManager::instance()->configure();
 	return status::StatusInternal::OK;
 }
 

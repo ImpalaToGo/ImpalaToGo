@@ -31,7 +31,7 @@
 #include <boost/interprocess/smart_ptr/unique_ptr.hpp>
 #include <boost/tuple/tuple.hpp>
 
-
+#include "common/logging.h"
 #include "dfs_cache/task.hpp"
 #include "dfs_cache/managed-file.hpp"
 
@@ -45,17 +45,13 @@
  */
 namespace impala {
 
-/**
- * Type for Registry of managed files
- */
-typedef boost::intrusive::set<ManagedFile::File>                    FileRegistry;
+/** Type for Registry of managed files */
+typedef boost::intrusive::set<ManagedFile::File> FileRegistry;
 
 /** Represent MonitorRequest, the Client Request to be tracked by client for progress */
 typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;
 
-/**
- * Defines the index tag to represent composite "session-timestamp" nature of Client Request
- */
+/** Defines the index tag to represent composite "session-timestamp" nature of Client Request */
 struct session_timestamp_tag {};
 
 /** Equal operator to run equality comparison on @a MonitorRequest entity */
@@ -77,9 +73,10 @@ typedef boost::multi_index::multi_index_container<
     			boost::multi_index::tag<session_timestamp_tag>,
     			boost::multi_index::composite_key<
     			    MonitorRequest,
-    				boost::multi_index::const_mem_fun<MonitorRequest, SessionContext, &MonitorRequest::session>,
-    				boost::multi_index::const_mem_fun<request::Task,
-    					std::string, &request::Task::timestampstr> > >
+    			    boost::multi_index::const_mem_fun<request::Task,
+    			        					std::string, &request::Task::timestampstr>,
+    				boost::multi_index::const_mem_fun<MonitorRequest, SessionContext, &MonitorRequest::session>
+    				 > >
     >
 > ClientRequests;
 
@@ -94,13 +91,14 @@ struct FileProgress;
  *
  * @return operation status
  */
-typedef boost::function<status::StatusInternal (const boost::shared_ptr<FileProgress>& progress)> SingleFileProgressCompletedCallback;
+typedef boost::function<void (const boost::shared_ptr<FileProgress>& progress)> SingleFileProgressCompletedCallback;
 
 typedef boost::function<status::StatusInternal (const NameNodeDescriptor & namenode, const char* filepath,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task)> SingleFileMakeProgressFunctor;
 
 /** Functor to run on manager when the request is completed */
-typedef boost::function<void (const requestIdentity& requestIdentity, const NameNodeDescriptor & namenode, bool canceled)> DataSetRequestCompletionFunctor;
+typedef boost::function<void (const requestIdentity& requestIdentity, const NameNodeDescriptor & namenode,
+		requestPriority priority, bool canceled, bool async)> DataSetRequestCompletionFunctor;
 
 typedef boost::function<status::StatusInternal (bool async, request::CancellableTask* const & cancellable)> CancellationFunctor;
 

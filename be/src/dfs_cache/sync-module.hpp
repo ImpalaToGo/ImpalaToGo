@@ -25,10 +25,10 @@ namespace impala {
  */
 class Sync{
 private:
-	boost::shared_ptr<CacheLayerRegistry>   m_registry;            /**< reference to metadata registry instance */
+	CacheLayerRegistry*   m_registry;            /**< reference to metadata registry instance */
 
 public:
-	Sync() {}
+	Sync() : m_registry(nullptr) {}
 
 	/**
 	* init - Init the Sync module with an access to shared registry.
@@ -36,8 +36,8 @@ public:
 	* @param registry - the reference to the registry
 	* @return operation status
 	*/
-	status::StatusInternal init(const boost::shared_ptr<CacheLayerRegistry>& registry) {
-		m_registry = registry;
+	status::StatusInternal init() {
+		m_registry = CacheLayerRegistry::instance();
 		return status::StatusInternal::OK;
 	}
 

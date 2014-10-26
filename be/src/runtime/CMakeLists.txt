@@ -39,7 +39,6 @@ add_library(Runtime
   lib-cache.cc
   mem-tracker.cc
   mem-pool.cc
-  multi-precision.cc
   parallel-executor.cc
   plan-fragment-executor.cc
   types.cc
@@ -73,6 +72,5 @@ ADD_BE_TEST(raw-value-test)
 ADD_BE_TEST(string-value-test)
 ADD_BE_TEST(thread-resource-mgr-test)
 ADD_BE_TEST(mem-tracker-test)
-ADD_BE_TEST(multi-precision-test)
 ADD_BE_TEST(decimal-test)
 ADD_BE_TEST(buffered-tuple-stream-test)

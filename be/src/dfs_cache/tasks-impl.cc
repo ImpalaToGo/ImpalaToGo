@@ -32,31 +32,49 @@ std::ostream& operator<<(std::ostream& out, const taskOverallStatus value){
     return out << strings[value];
 }
 
+std::ostream& operator<<(std::ostream& out, const status::StatusInternal value){
+    static std::map<status::StatusInternal, std::string> strings;
+    if (strings.size() == 0){
+#define INSERT_ELEMENT(p) strings[p] = #p
+        INSERT_ELEMENT(status::OK);
+        INSERT_ELEMENT(status::OPERATION_ASYNC_SCHEDULED);
+        INSERT_ELEMENT(status::REQUEST_IS_NOT_FOUND);
+        INSERT_ELEMENT(status::NAMENODE_IS_NOT_CONFIGURED);
+        INSERT_ELEMENT(status::NAMENODE_IS_UNREACHABLE);
+        INSERT_ELEMENT(status::NAMENODE_CONNECTION_FAILED);
+        INSERT_ELEMENT(status::DFS_ADAPTOR_IS_NOT_CONFIGURED);
+        INSERT_ELEMENT(status::DFS_OBJECT_DOES_NOT_EXIST);
+        INSERT_ELEMENT(status::FILE_OBJECT_OPERATION_FAILURE);
+        INSERT_ELEMENT(status::NOT_IMPLEMENTED);
+#undef INSERT_ELEMENT
+    }
+    return out << strings[value];
+}
+
 /**
  * @namespace request
  */
 namespace request{
 
+/***********************************************************************************************************************/
 /******************************************   Single tasks ***********************************************************/
+/***********************************************************************************************************************/
 
-taskOverallStatus FileEstimateTask::run_internal(){
+/***************************************  File Estimate task *********************************************************/
+void FileEstimateTask::run_internal(){
 	if(m_functor == NULL){
-       return taskOverallStatus::FAILURE;
+		LOG (ERROR) << "File estimate task is not initialized with a \"do work\" predicate." << "\n";
+        this->m_status = taskOverallStatus::FAILURE;
 	}
 
 	// say task is in progress:
 	m_status = taskOverallStatus::IN_PROGRESS;
 
-	// run the functor, share the synchronization objects required for cancellation support.
-	// pass addresses of synchronization objects
+	// run the functor and share itself allowing the worker to access the cancellation context if needed
+	status::StatusInternal runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
 
-	m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
-
-	// check cancellation flag:
-	if(condition() == true)
-		return m_status = taskOverallStatus::CANCELED_CONFIRMED;
-
-	return taskOverallStatus::COMPLETED_OK;
+	LOG (INFO) << "File Estimate Task was executed with the worker status : \"" << runstatus << "\". \n";
+	m_status = taskOverallStatus::COMPLETED_OK;
 }
 
 void FileEstimateTask::callback(){
@@ -80,7 +98,6 @@ taskOverallStatus FileEstimateTask::cancel(bool async){
 		if(async)
 			return taskOverallStatus::CANCELATION_SENT;
 		else
-			// return status.code() == TStatusCode::OK ? taskOverallStatus::CANCELED_CONFIRMED : taskOverallStatus::FAILURE;
             return taskOverallStatus::CANCELED_CONFIRMED;
 	}
 	catch(...){
@@ -89,26 +106,25 @@ taskOverallStatus FileEstimateTask::cancel(bool async){
 	return status;
 }
 
-taskOverallStatus FileDownloadTask::run_internal(){
+void FileEstimateTask::finalize(){
+	// this task does not require finalization
+}
+
+/***************************************  File Download task *********************************************************/
+
+void FileDownloadTask::run_internal(){
 	if(m_functor == NULL){
-       return taskOverallStatus::FAILURE;
+		LOG (ERROR) << "File download task is not initialized with a \"do work\" predicate." << "\n";
+        this->m_status = taskOverallStatus::FAILURE;
 	}
 
 	// say task is in progress:
 	m_status = taskOverallStatus::IN_PROGRESS;
 
-	// run the functor, share the cancellation token
-	m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
-
-	// check cancellation flag:
-	if(condition() == true)
-		return m_status = taskOverallStatus::CANCELED_CONFIRMED;
-	/*if(status.code() == TStatusCode::OK)
-		return m_status = taskOverallStatus::COMPLETED_OK;
-	else
-		return m_status = taskOverallStatus::FAILURE;
-		*/
-	return taskOverallStatus::COMPLETED_OK;
+	// run the functor and share itself allowing the worker to access the cancellation context if needed
+	status::StatusInternal runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
+	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\". \n";
+	m_status = taskOverallStatus::COMPLETED_OK;
 }
 
 void FileDownloadTask::callback(){
@@ -141,10 +157,21 @@ taskOverallStatus FileDownloadTask::cancel(bool async){
 	return status;
 }
 
-/******************************************   Compound tasks ***********************************************************/
+void FileDownloadTask::finalize(){
+	// this task does not require finalization
+}
 
-taskOverallStatus EstimateDatasetTask::run_internal(){
-    // This task should enqueue all bound misc tasks into workers queue.
+/***********************************************************************************************************************/
+/******************************************   Compound tasks ***********************************************************/
+/***********************************************************************************************************************/
+
+/****************************************  Dataset Estimate task *******************************************************/
+
+void EstimateDatasetTask::run_internal(){
+	this->m_status = taskOverallStatus::IN_PROGRESS;
+
+	// This task should run subrequests. If sync execution is requested, we wait here for all tasks being executed.
+	// In asyn scenario, this thread will finish once all subrequests will be successfully enqueued for processing to a thread pool.
 	// Subscribe each subrequest to a local class to report for completion:
 	SingleFileProgressCompletedCallback callback =
 			boost::bind(boost::mem_fn(&EstimateDatasetTask::reportSingleFileIsCompletedCallback), this, _1);
@@ -155,18 +182,46 @@ taskOverallStatus EstimateDatasetTask::run_internal(){
 
 	CancellationFunctor cancelation = boost::bind(boost::mem_fn(&Sync::cancelFileMakeProgress), m_syncModule, _1, _2);
 	for(auto file : m_files){
-		FileEstimateTask* task = new FileEstimateTask(callback, functor, cancelation, m_namenode, file);
+		boost::shared_ptr<FileEstimateTask> taskptr(new FileEstimateTask(callback, functor, cancelation, m_namenode, file));
 		// TODO use scheduler for tasks execution
 		// add "single file estimate" task into the queue.
-	    m_boundrequests.push_back(task);
+	    m_boundrequests.push_back(taskptr);
 	}
 
-	// Send all tasks to a thread pool:
-	// and wait for them to complete:
+	// in async scenario, offer all tasks to a thread pool basing on their order.
+    if(this->async()){
+    	for(auto item : m_boundrequests){
+    		if(!m_pool->Offer(item)){
+    			LOG (WARNING) << "failed to schedule the estimate file subrequests. Possible reason is the pool shutdown." << "\n";
+    			status(taskOverallStatus::INTERRUPTED_EXTERNAL);
+    			return; // do not wait for all subrequests executed! this will not happen..
+    		}
+    	}
 
-	// and now call the supplied run functor:
+    	{
+    		// All subrequests are offered to a thread pool, give a signal that the pool can be used now
+    		boost::lock_guard<boost::mutex> lockshceduling(m_controlDataSetScheduledMux);
+    		m_controlDataSetScheduledFlag = true;
+    		m_controlDataSetScheduledCondition.notify_all();
+    	}
 
-   return taskOverallStatus::IN_PROGRESS;
+    	// and wait on this thread while all of them to be completed.
+    	// do not replace with guard or scoped lock here as it will prevent the wait()
+    	// from correct reacquiring the mutex.
+    	boost::unique_lock<boost::mutex> lockcompletion(m_controlDataSetCompletionMux);
+    	// if the condition is not satisfied (lambda returns false), wait() unlocks the mutex and put the thread onto blocked/waiting state.
+    	// when condition variable is notified, the thread awakes and acquire the mutex again.
+    	// Then it check for condition and if it is satisfied (lambda returns true), returns from wait()
+    	// with locked mutex. If condition flag is false, unlock the mutex and wait again.
+    	m_controlDataSetCompletionCondition.wait(lockcompletion, [this]{ return m_controlDataSetCompletionFlag; });
+    	lockcompletion.unlock();
+    	return;
+    }
+
+    // Sync scenario. Run all tasks in a sync way.
+    for(auto task : m_boundrequests){
+    	task->operator ()();
+    }
 }
 
 taskOverallStatus EstimateDatasetTask::cancel(bool async){
@@ -185,7 +240,7 @@ taskOverallStatus EstimateDatasetTask::cancel(bool async){
 	m_status = subrequest_failure ? taskOverallStatus::FAILURE : m_status;
 
 	// invoke cancellation
-    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, true);
+    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, this->priority(), true, this->async());
 
     // if async, we will go out from here immediately.
     if(async)
@@ -201,19 +256,75 @@ std::list<boost::shared_ptr<FileProgress> > EstimateDatasetTask::progress(){
     	  progress.push_back(item->progress());
       return progress;
 }
-status::StatusInternal EstimateDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
-    return status::StatusInternal::OK;
+
+void EstimateDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
+	if(status() == taskOverallStatus::INTERRUPTED_EXTERNAL){
+		LOG (INFO) << "Parent Estimate DataSet task is interrupted." << "\n";
+	}
+	if(m_remainedFiles == 0){
+		LOG (ERROR) << "Bug in EstimateDatasetTask implementation" << "\n";
+		// anyway try to release the async locked scenario:
+		if(this->async()){
+			boost::lock_guard<boost::mutex> lock(m_controlDataSetCompletionMux);
+			m_controlDataSetCompletionFlag = true;
+			m_controlDataSetCompletionCondition.notify_all();
+		}
+		return;
+	}
+
+	if(progress->error){
+		LOG (WARNING) << "File \"" << progress->dfsPath << "\" is NOT estimated due to error : \"" << progress->errdescr << "\".\n";
+	}
+	else
+		LOG (INFO) << "File \"" << progress->dfsPath << "\" is estimated with a size : " << progress->estimatedBytes << "; time : " <<
+		progress->estimatedTime << ".\n";
+
+	// decrement number of remained subtasks
+	--m_remainedFiles;
+	if(m_remainedFiles != 0){
+		// just do nothing
+		return;
+	}
+
+	// All subtasks are done.
+	status(taskOverallStatus::COMPLETED_OK);
+
+	// Summarize the overall task status.
+	for(auto request : m_boundrequests){
+		if(request->failure() ){
+			status(taskOverallStatus::FAILURE);
+		}
+	}
+
+	// In async scenario,
+	// notify the thread running this compound task that all subtasks are done within this task.
+	if(this->async()){
+		boost::lock_guard<boost::mutex> lock(m_controlDataSetCompletionMux);
+		m_controlDataSetCompletionFlag = true;
+		m_controlDataSetCompletionCondition.notify_all();
+	}
 }
 
 void EstimateDatasetTask::callback(){
 	// callback to the client
-
-	// then callback to the cache manager
-    m_functor(requestIdentity{session(), timestampstr()}, m_namenode, false);
+	// query all subtasks about their status
+	// call the callback.
+	std::list<boost::shared_ptr<FileProgress> > _progress = this->progress();
+	std::time_t estimatedtime = 0;
+	for(auto item : _progress){
+		estimatedtime += item->estimatedTime;
+	}
+	m_callback(m_session, _progress, estimatedtime, (m_status != taskOverallStatus::FAILURE), m_controlCancelationCompletionFlag, status());
 }
 
+void EstimateDatasetTask::finalize(){
+	// then callback to the cache manager
+    m_functor(requestIdentity{session(), timestampstr()}, m_namenode, this->priority(), false, this->async());
+}
 
-taskOverallStatus PrepareDatasetTask::run_internal(){
+/****************************************  Dataset Prepare task *******************************************************/
+
+void PrepareDatasetTask::run_internal(){
     // This task should enqueue all bound misc tasks into workers queue.
 	// Subscribe each subrequest to a local class to report for completion:
 	SingleFileProgressCompletedCallback callback =
@@ -225,13 +336,46 @@ taskOverallStatus PrepareDatasetTask::run_internal(){
 	CancellationFunctor cancelation = boost::bind(boost::mem_fn(&Sync::cancelFileMakeProgress), m_syncModule, _1, _2);
 
 	for(auto file : m_files){
-		FileDownloadTask* task = new FileDownloadTask(callback, functor, cancelation, m_namenode, file);
+		boost::shared_ptr<FileDownloadTask> taskptr(new FileDownloadTask(callback, functor, cancelation, m_namenode, file));
 		// TODO use scheduler for tasks execution
 		// add "single file download" task into the queue.
-	    m_boundrequests.push_back(task);
+	    m_boundrequests.push_back(taskptr);
 	}
 
-   return taskOverallStatus::COMPLETED_OK;
+	// in async scenario, offer all tasks to a thread pool basing on their order.
+    if(this->async()){
+    	for(auto item : m_boundrequests){
+    		if(!m_pool->Offer(item)){
+    			LOG (WARNING) << "failed to schedule the prepare file subrequests. Possible reason is the pool shutdown." << "\n";
+    			status(taskOverallStatus::INTERRUPTED_EXTERNAL);
+    			return; // do not wait for all subrequests executed! this will not happen..
+    		}
+    	}
+
+    	{
+    		// All subrequests are offered to a thread pool, give a signal that the pool can be used now
+    		boost::lock_guard<boost::mutex> lockshceduling(m_controlDataSetScheduledMux);
+    		m_controlDataSetScheduledFlag = true;
+    		m_controlDataSetScheduledCondition.notify_all();
+    	}
+
+    	// and wait on this thread while all of them to be completed.
+    	// do not replace with guard or scoped lock here as it will prevent the wait()
+    	// from correct reacquiring the mutex.
+    	boost::unique_lock<boost::mutex> lockcompletion(m_controlDataSetCompletionMux);
+    	// if the condition is not satisfied (lambda returns false), wait() unlocks the mutex and put the thread onto blocked/waiting state.
+    	// when condition variable is notified, the thread awakes and acquire the mutex again.
+    	// Then it check for condition and if it is satisfied (lambda returns true), returns from wait()
+    	// with locked mutex. If condition flag is false, unlock the mutex and wait again.
+    	m_controlDataSetCompletionCondition.wait(lockcompletion, [this]{ return m_controlDataSetCompletionFlag; });
+    	lockcompletion.unlock();
+    	return;
+    }
+
+    // Sync scenario. Run all tasks in a sync way.
+    for(auto task : m_boundrequests){
+    	task->operator ()();
+    }
 }
 
 taskOverallStatus PrepareDatasetTask::cancel(bool async){
@@ -249,7 +393,7 @@ taskOverallStatus PrepareDatasetTask::cancel(bool async){
 	}
 	m_status = subrequest_failure ? taskOverallStatus::FAILURE : m_status;
 
-    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, true);
+    m_cancelation(requestIdentity{session(), timestampstr()}, m_namenode, this->priority(), true, this->async());
     // if async, we will go out from here immediately.
     if(async)
        	return taskOverallStatus::CANCELATION_SENT;
@@ -265,21 +409,62 @@ std::list<boost::shared_ptr<FileProgress> > PrepareDatasetTask::progress(){
       return progress;
 }
 
-status::StatusInternal PrepareDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
-    return status::StatusInternal::OK;
+void PrepareDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared_ptr<FileProgress>& progress){
+	if(status() == taskOverallStatus::INTERRUPTED_EXTERNAL){
+		LOG (INFO) << "Parent Prepare DataSet task is interrupted." << "\n";
+	}
+
+	if(m_remainedFiles == 0){
+		LOG (ERROR) << "Bug in PrepareDatasetTask implementation" << "\n";
+		// anyway try to release the async locked scenario:
+		if(this->async()){
+			boost::lock_guard<boost::mutex> lock(m_controlDataSetCompletionMux);
+			m_controlDataSetCompletionFlag = true;
+			m_controlDataSetCompletionCondition.notify_all();
+		}
+		return;
+	}
+
+	if(progress->error){
+		LOG (WARNING) << "File \"" << progress->dfsPath << "\" is NOT estimated due to error : \"" << progress->errdescr << "\".\n";
+	}
+	else
+		LOG (INFO) << "File \"" << progress->dfsPath << "\" is estimated with a size : " << progress->estimatedBytes << "; time : " <<
+		progress->estimatedTime << ".\n";
+
+	// decrement number of remained subtasks
+	--m_remainedFiles;
+	if(m_remainedFiles != 0){
+		// just do nothing
+		return;
+	}
+
+	// All subtasks are done.
+	status(taskOverallStatus::COMPLETED_OK);
+
+	// Summarize the overall task status.
+	for(auto request : m_boundrequests){
+		if(request->failure() ){
+			status(taskOverallStatus::FAILURE);
+		}
+	}
+
+	// All subtasks are done. In async scenario,
+	// notify the thread running this compound task that all subtasks are done within this task.
+	if(this->async()){
+		boost::lock_guard<boost::mutex> lock(m_controlDataSetCompletionMux);
+		m_controlDataSetCompletionFlag = true;
+		m_controlDataSetCompletionCondition.notify_all();
+	}
 }
 
 void PrepareDatasetTask::callback(){
-     // query all subtasks about their status
-	 // call the callback.
-     std::list<boost::shared_ptr<FileProgress> > progress;
-     for(auto item : m_boundrequests){
-    	 progress.push_back(item->progress());
-     }
-	 m_callback(m_session, progress, performance(), (m_status != taskOverallStatus::FAILURE), m_condition);
+	 m_callback(m_session, this->progress(), this->performance(), (m_status != taskOverallStatus::FAILURE), m_controlCancelationCompletionFlag, status());
+}
 
-	 // then callback to the cache manager
-	 m_functor(requestIdentity{session(), timestampstr()}, m_namenode, false);
+void PrepareDatasetTask::finalize(){
+	// then callback to the cache manager
+    m_functor(requestIdentity{session(), timestampstr()}, this->m_namenode, this->priority(), false, this->async());
 }
 
 } // request

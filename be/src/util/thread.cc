@@ -45,13 +45,13 @@ class ThreadMgr;
 // that a race between the end of the process's main thread (and therefore the destruction
 // of thread_manager) and the end of a thread that tries to remove itself from the
 // manager after the destruction can be avoided.
-shared_ptr<ThreadMgr> thread_manager;
+boost::shared_ptr<ThreadMgr> thread_manager;
 
 // A singleton class that tracks all live threads, and groups them together for easy
 // auditing. Used only by Thread.
 class ThreadMgr {
  public:
-  ThreadMgr() : metrics_enabled_(false) { }
+  ThreadMgr() : metrics_enabled_(false), total_threads_metric_(NULL), current_num_threads_metric_(NULL) { }
 
   Status StartInstrumentation(Metrics* metrics, Webserver* webserver);
 
@@ -71,7 +71,7 @@ class ThreadMgr {
   // TODO: Track fragment ID.
   class ThreadDescriptor {
    public:
-    ThreadDescriptor() { }
+    ThreadDescriptor() : thread_id_(-1) { }
     ThreadDescriptor(const string& category, const string& name, int64_t thread_id)
         : name_(name), category_(category), thread_id_(thread_id) {
     }
@@ -292,7 +292,7 @@ void Thread::SuperviseThread(const string& name, const string& category,
   }
   // Make a copy, since we want to refer to these variables after the unsafe point below.
   string category_copy = category;
-  shared_ptr<ThreadMgr> thread_mgr_ref = thread_manager;
+  boost::shared_ptr<ThreadMgr> thread_mgr_ref = thread_manager;
   stringstream ss;
   ss << (name.empty() ? "thread" : name) << "-" << system_tid;
   string name_copy = ss.str();

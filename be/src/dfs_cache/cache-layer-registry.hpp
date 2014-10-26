@@ -56,6 +56,7 @@ private:
 
 public:
 
+	~CacheLayerRegistry() { LOG (INFO) << "cache layer registry destructor" << "\n"; }
     static CacheLayerRegistry* instance() { return CacheLayerRegistry::instance_.get(); }
 
 	/** *************************** External configuration  ************************************************************/
