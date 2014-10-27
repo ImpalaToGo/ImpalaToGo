@@ -11,6 +11,7 @@
  */
 
 #include "dfs_cache/sync-module.hpp"
+#include "dfs_cache/dfs-connection.hpp"
 
 namespace impala {
 
@@ -23,8 +24,18 @@ status::StatusInternal Sync::estimateTimeToGetFileLocally(const NameNodeDescript
     	// no namenode adaptor configured, go out
     	return status::StatusInternal::NAMENODE_IS_NOT_CONFIGURED;
     }
-    boost::shared_ptr<dfsConnection> connection = (*namenodeAdaptor->getFreeConnection());
+    raiiDfsConnection connection(namenodeAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, no estimate actions will be taken for namenode \"" << namenode.dfs_type << ":" <<
+    			namenode.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
     boost::shared_ptr<RemoteAdaptor> adaptor    = namenodeAdaptor->adaptor();
+
+    // Execute the remote estimation operation on the adaptor.
+    // wait for execution.
+    // free the connection so it is available for further usage
 
     // get the file progress reference:
     boost::shared_ptr<FileProgress> fp = task->progress();
@@ -42,12 +53,18 @@ status::StatusInternal Sync::prepareFile(const NameNodeDescriptor & namenode, co
     	return status::StatusInternal::NAMENODE_IS_NOT_CONFIGURED;
     }
 
-    boost::shared_ptr<dfsConnection> connection = (*namenodeAdaptor->getFreeConnection());
-    boost::shared_ptr<RemoteAdaptor> adaptor    = namenodeAdaptor->adaptor();
+    raiiDfsConnection connection(namenodeAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, no prepare actions will be taken for namenode \"" << namenode.dfs_type << ":" <<
+    			namenode.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+    boost::shared_ptr<RemoteAdaptor> adaptor = namenodeAdaptor->adaptor();
 
     // get the file progress reference:
     boost::shared_ptr<FileProgress> fp = task->progress();
-    adaptor->read(connection);
+    adaptor->read(connection.connection());
 
 
     // Pure academic part.

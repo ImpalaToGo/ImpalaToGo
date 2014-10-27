@@ -32,7 +32,6 @@
 
 namespace impala {
 
-typedef void* dfsFSConnection;
 /**
  * Represents context of File-related operation session.
  * Context should provide at least the callback and the underlying session entity.
@@ -63,6 +62,7 @@ typedef enum {
 
 	DFS_ADAPTOR_IS_NOT_CONFIGURED,
 	DFS_OBJECT_DOES_NOT_EXIST,
+	DFS_NAMENODE_IS_NOT_REACHABLE,  /**< requested namenode is not reachable */
 
 	FILE_OBJECT_OPERATION_FAILURE,
 
@@ -86,6 +86,7 @@ enum taskOverallStatus{
             IS_NOT_MANAGED      /**< task is not managed */
 };
 
+
 namespace dfs {
 
 /** supported / configured DFS types */
@@ -95,6 +96,11 @@ enum DFS_TYPE {
 	OTHER,
 };
 }
+
+/** Formatters for enumerations */
+extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
+extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
+extern std::ostream& operator<<(std::ostream& out, const dfs::DFS_TYPE value);
 
 /**
  * Connection details as configured
@@ -120,6 +126,8 @@ struct NameNodeDescriptor{
 typedef NameNodeDescriptor dfsFS;
 typedef std::list<const char*> DataSet;
 
+typedef void* dfsFSConnection;
+
 /**
  * Represent the single DFS connection
  */
@@ -135,6 +143,8 @@ typedef struct {
 	ConnectionState  state;           /**< connection status, to help manage it */
 } dfsConnection;
 
+typedef boost::shared_ptr<dfsConnection> dfsConnectionPtr;
+
 /**
  * Remote DFS adaptor. Interface expected - similar to hdfs.h
  */
@@ -147,12 +157,11 @@ public:
 	inline std::string name() { return m_name; }
 	inline void name(const std::string & name) { m_name = name;}
 
-	virtual int connect(boost::shared_ptr<dfsConnection> & conn) = 0;
-	virtual int disconnect(boost::shared_ptr<dfsConnection> & conn) = 0;
-	virtual int read(boost::shared_ptr<dfsConnection> & conn) = 0;
-	virtual int write(boost::shared_ptr<dfsConnection> & conn) = 0;
+	virtual int connect(dfsConnectionPtr & conn) = 0;
+	virtual int disconnect(dfsConnectionPtr & conn) = 0;
+	virtual int read(dfsConnectionPtr & conn) = 0;
+	virtual int write(dfsConnectionPtr & conn) = 0;
 };
-
 
 /**
  * File progress (prepare or any other operation) status.

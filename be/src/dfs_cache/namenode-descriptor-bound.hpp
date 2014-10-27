@@ -8,9 +8,12 @@
 #ifndef DFS_ADAPTER_HPP_
 #define DFS_ADAPTER_HPP_
 
+#include <utility>
 #include "dfs_cache/common-include.hpp"
+#include "dfs_cache/dfs-connection.hpp"
 
 namespace impala{
+
 
 /**
  * Namenode descriptor bound to dfs adaptor
@@ -64,7 +67,7 @@ public:
 	/**
 	 * get free namenode connection
 	 */
-	boost::shared_ptr<dfsConnection>* getFreeConnection();
+	raiiDfsConnection getFreeConnection();
 };
 }
 

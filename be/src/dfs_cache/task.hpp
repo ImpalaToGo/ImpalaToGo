@@ -31,10 +31,6 @@
 namespace impala
 {
 
-/** Formatters for enumerations */
-extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
-extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
-
 /** represent task priority */
 enum requestPriority{
     HIGH,
@@ -73,29 +69,30 @@ public:
 	/** "do work" predicate */
     virtual void operator()() = 0;
 
-	/** getter for underlying creation timestamp */
-	boost::posix_time::ptime timestamp() const { return m_taskCreation; }
+	/** getter for underlying creation timestamp. Result is not an lvalue! */
+	inline boost::posix_time::ptime timestamp() const { return m_taskCreation; }
 
 	/** string representation of timestamp - for hashing */
-	std::string timestampstr() const { return boost::posix_time::to_iso_string(m_taskCreation); }
+	inline std::string timestampstr() const { return boost::posix_time::to_iso_string(m_taskCreation); }
 
 	/** Getter for task status */
-	taskOverallStatus status() const { return m_status; }
+	inline taskOverallStatus status() const { return m_status; }
 
 	/** Setter for task status */
-	void status(taskOverallStatus status){ m_status = status; }
+	inline void status(taskOverallStatus status) { m_status = status; }
 
 	/** getter for "invalidated" flag */
-	void invalidate() { m_invalidated = true; }
+	inline void invalidate() { m_invalidated = true; }
 
 	/** invalidation of task triggering, is only works in "invalidation" points that
 	 * should be controlled within the main task run scenarios
 	 */
-	bool invalidated() { return m_invalidated; }
+	inline bool invalidated() const { return m_invalidated; }
 
-	bool failure(){
-		return (m_status != taskOverallStatus::COMPLETED_OK ||
-			m_status != taskOverallStatus::CANCELATION_SENT ||
+	/** summarize the task status in regards whether te task should be treated as failed */
+	inline bool failure() const {
+		return (m_status != taskOverallStatus::COMPLETED_OK &&
+			m_status != taskOverallStatus::CANCELATION_SENT &&
 			m_status != taskOverallStatus::CANCELED_CONFIRMED);
 	}
 
@@ -147,7 +144,7 @@ public:
     /**
      * Getter for cancellation condition
      */
-    bool condition() { return m_controlCancelationCompletionFlag; }
+    inline bool condition() const { return m_controlCancelationCompletionFlag; }
 
     /**
      * Getter for guarding mutex
