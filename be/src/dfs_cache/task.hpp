@@ -165,6 +165,7 @@ public:
 
     /** get the progress */
 	Progress_ progress() { return m_progress; }
+	virtual request_performance performance() = 0;
 };
 
 /**
@@ -248,7 +249,7 @@ protected:
 
 	virtual ~RunnableTask() = default;
 
-	int64_t cpu_time(){ return m_cputime = (std::clock() - m_start) / (double)(CLOCKS_PER_SEC / 1000); }
+	inline int64_t cpu_time(){ return m_cputime = (std::clock() - m_start) / (double)(CLOCKS_PER_SEC / 1000); }
 
 public:
 	RunnableTask(CompletionCallback_ callback, Functor_ functor, Cancellation_ cancellation)
@@ -259,12 +260,12 @@ public:
 	 * query request performance
 	 *
 	 */
-	request_performance performance(){
+	request_performance performance() {
 		// overall request lifetime and CPU calculations
 		m_performance.lifetime = m_lifetime = m_sw.ElapsedTime();
 		m_performance.cpu_time_miliseconds = cpu_time();
 
-		return m_performance;
+		return this->m_performance;
 	}
 
 	/** getter for request priority */

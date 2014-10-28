@@ -67,13 +67,17 @@ private:
 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	     * contains either "Pending" or "In progress" requests.
 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	     * This set is the subjects pool for scheduling to a thread pool
 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	 	     */
-	ClientRequests                          m_HistoryRequests;     /**< Set of client requests moved to history. TODO : make it lightweight!!! */
+	ClientRequests                          m_syncRequestsQueue;    /**< Set of synhrounous requests */
+
+	HistoryOfRequests                       m_HistoryRequests;      /**< Set of client requests moved to history. */
 
 	boost::shared_ptr<Sync>                 m_syncModule;       /**< sync module reference. */
 
 	boost::mutex                            m_highrequestsMux;  /**< mutex to protect high active client requests */
 	boost::mutex                            m_lowrequestsMux;   /**< mutex to protect active client requests */
 	boost::mutex                            m_HistoryMux;       /**< mutex to protect history of client requests */
+
+	boost::mutex                            m_SyncRequestsMux;  /**< mutex to protect sync requests queue **/
 
 	boost::condition_variable               m_controlHighRequestsArrival; /**< condition variable to control new arrivals of high requests */
 	boost::condition_variable               m_controlLowRequestsArrival;  /**< condition variable to control new arrivals of low requests */
@@ -138,7 +142,8 @@ private:
 	 * @param requests - queue of requests to finalize
 	 * @param mux      - mutex to protect the queue access
 	 */
-	void finalize(ClientRequests* requests, boost::mutex* mux);
+	template<typename IndexType_, typename ItemType_>
+	void finalize(IndexType_* requests, boost::mutex* mux);
 
 	/** dispatch user request to the further processing basing on @a priority
 	 * @param - priority - request priority

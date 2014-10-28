@@ -36,6 +36,18 @@ std::size_t hash_value(MonitorRequest const& request) {
     return seed;
 }
 
+bool operator==(HistoricalCacheRequest const & request1, HistoricalCacheRequest const & request2)
+{
+    return request1.identity.ctx == request2.identity.ctx && request1.identity.timestamp == request2.identity.timestamp;
+}
+
+std::size_t hash_value(HistoricalCacheRequest const& request) {
+    std::size_t seed = 0;
+    boost::hash_combine(seed, request.identity.ctx);
+    boost::hash_combine(seed, request.identity.timestamp);
+    return seed;
+}
+
 /* Singleton instance */
 boost::scoped_ptr<CacheManager> CacheManager::instance_;
 
@@ -59,9 +71,13 @@ status::StatusInternal CacheManager::shutdown(bool force, bool updateClients){
 
 	// Now cleanup all cache manager queues to prevent new data to be found by dispatchers on the current iteration.y
 	// If any request is already on the fly, it will be canceled ASAP and there's no interest in its statistic more.
-	finalize(&m_activeHighRequests, &m_highrequestsMux);
-	finalize(&m_activeLowRequests, &m_lowrequestsMux);
-	finalize(&m_HistoryRequests, &m_HistoryMux);
+	finalize<ClientRequests, MonitorRequest>(&m_activeHighRequests, &m_highrequestsMux);
+	finalize<ClientRequests, MonitorRequest>(&m_activeLowRequests, &m_lowrequestsMux);
+	finalize<ClientRequests, MonitorRequest>(&m_syncRequestsQueue, &m_SyncRequestsMux);
+
+	// finalize the history:
+	// finalize<HistoryOfRequests, HistoricalCacheRequest>(&m_HistoryRequests, &m_HistoryMux);
+	HistoryOfRequests().swap(m_HistoryRequests);
 
     // shutdown thread pools in a graceful way so that they will finish all enqueued work while will not
 	// accept newly offered if happens to be offered with.
@@ -109,15 +125,16 @@ status::StatusInternal CacheManager::shutdown(bool force, bool updateClients){
 /***************************************   Internals  *******************************************************************************************/
 /************************************************************************************************************************************************/
 
-void CacheManager::finalize(ClientRequests* queue, boost::mutex* mux){
+template<typename IndexType_, typename ItemType_>
+void CacheManager::finalize(IndexType_* queue, boost::mutex* mux){
 	boost::lock_guard<boost::mutex> lock(*mux);
 	// Cancel everything that now in a running state
-	std::for_each(queue->begin(), queue->end(), [](boost::shared_ptr<MonitorRequest> request){
+	std::for_each(queue->begin(), queue->end(), [](boost::shared_ptr<ItemType_> request){
 		if(request->status() == taskOverallStatus::IN_PROGRESS)
 			request->cancel(); });
 
 	// clean the queue
-	ClientRequests().swap(*queue);
+	IndexType_().swap(*queue);
 }
 
 void CacheManager::dispatcherProc(dfsThreadPool* pool, int threadnum, const boost::shared_ptr<request::Task>& task ){
@@ -268,14 +285,14 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
 	// for sync requests, check for them in History always. They are not executed on active queues but rather on a client thread.
 	if(!async){
 		// just check that request is in history and do nothing.
-		boost::mutex::scoped_lock lock(m_HistoryMux);
-		// get the request from the history requests:
-		RequestsBySessionAndTimestampTag& requests = m_HistoryRequests.get<session_timestamp_tag>();
+		boost::mutex::scoped_lock lock(m_SyncRequestsMux);
+		// get the request from the sync requests queue:
+		RequestsBySessionAndTimestampTag& requests = m_syncRequestsQueue.get<session_timestamp_tag>();
 		auto it = requests.find(boost::make_tuple(requestIdentity.timestamp, requestIdentity.ctx));
 
 		if(it == requests.end()){
 			// nothing to do, just log the BUG
-			LOG (ERROR) << "Finalize request. Unable to locate sync request in HISTORY to finalize it. Request timestamp : "
+			LOG (ERROR) << "Finalize request. Unable to locate sync request in SYNC requests queue to finalize it. Request timestamp : "
 					<< requestIdentity.timestamp << "\n";
 			return;
 		}
@@ -327,9 +344,19 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
         		request->timestampstr() == requestIdentity.timestamp; });
     activeLock.unlock();
 
+    // create the history request from this one:
+    boost::shared_ptr<HistoricalCacheRequest> historical(new HistoricalCacheRequest());
+    historical->canceled    = (request->status() == taskOverallStatus::CANCELED_CONFIRMED ||
+    						   request->status() == taskOverallStatus::CANCELATION_SENT);
+    historical->identity    = requestIdentity;
+    historical->status      = request->status();
+    historical->performance = request->performance();
+    historical->progress    = request->progress();
+    historical->succeed     = (request->status() == taskOverallStatus::COMPLETED_OK);
+
     boost::unique_lock<boost::mutex> historyLock(m_HistoryMux);
     // now add it to History, add it first as most recent:
-    m_HistoryRequests.push_front(request);
+    m_HistoryRequests.push_front(std::move(historical));
     historyLock.unlock();
 
     LOG (INFO) << "Finalize request. Request was moved to history. Status : " << request->status() << "; Request timestamp : " << requestIdentity.timestamp << "\n";
@@ -368,9 +395,9 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
     }
 
     // request is sync and should be marked as that so that it will not be handled by scheduler
-    boost::unique_lock<boost::mutex> lock(m_HistoryMux);
+    boost::unique_lock<boost::mutex> lock(m_SyncRequestsMux);
     // now add it to History, add it first as most recent:
-    m_HistoryRequests.push_back(request);
+    m_syncRequestsQueue.push_back(request);
     lock.unlock();
 
     // and executed on the caller thread:
@@ -461,6 +488,8 @@ status::StatusInternal CacheManager::cacheCheckPrepareStatus(const requestIdenti
 		lock.unlock();
 
 		progress = request->progress();
+		performance = request->performance();
+
 		LOG (INFO) << "Request is found among \"Active\". Request timestamp : " << requestIdentity.timestamp << "; Request status : " << request->status() << "\n";
 	    return status::StatusInternal::OK;
 	}
@@ -469,17 +498,19 @@ status::StatusInternal CacheManager::cacheCheckPrepareStatus(const requestIdenti
 	boost::unique_lock<boost::mutex> hilock(m_HistoryMux);
 
 	// get the request from the history requests:
-	requests = m_HistoryRequests.get<session_timestamp_tag>();
-	auto hit = requests.find(boost::make_tuple(requestIdentity.timestamp, requestIdentity.ctx));
+	HistoricalRequestsBySessionAndTimestampTag& historical = m_HistoryRequests.get<session_timestamp_tag>();
+	auto hit = historical.find(boost::make_tuple(requestIdentity.timestamp, requestIdentity.ctx));
 
 	// if nothing found in "active requests", log this and try to find in "history"
-	if(hit != requests.end()){
+	if(hit != historical.end()){
 		// if there's request found, query it for progress and report back to client
-		boost::shared_ptr<MonitorRequest> request = (*it);
+		boost::shared_ptr<HistoricalCacheRequest> request = (*hit);
 		hilock.unlock();
 
-		progress = request->progress();
-		LOG (INFO) << "Request is found in \"History\". Request timestamp : " << requestIdentity.timestamp << "; Request status : " << request->status() << "\n";
+		progress = request->progress;
+		performance = request->performance;
+
+		LOG (INFO) << "Request is found in \"History\". Request timestamp : " << requestIdentity.timestamp << "; Request status : " << request->status << "\n";
 	    return status::StatusInternal::OK;
 	}
 	hilock.unlock();

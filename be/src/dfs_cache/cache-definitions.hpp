@@ -23,6 +23,7 @@
 #include <boost/thread.hpp>
 
 #include <boost/multi_index_container.hpp>
+#include <boost/multi_index/member.hpp>
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -51,15 +52,14 @@ typedef boost::intrusive::set<ManagedFile::File> FileRegistry;
 /** Represent MonitorRequest, the Client Request to be tracked by client for progress */
 typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;
 
-/** Defines the index tag to represent composite "session-timestamp" nature of Client Request */
-struct session_timestamp_tag {};
-
 /** Equal operator to run equality comparison on @a MonitorRequest entity */
 extern bool operator==(MonitorRequest const & request1, MonitorRequest const & request2);
 
 /** hash function defined for @a MonitorRequest type */
 extern std::size_t hash_value(MonitorRequest const& request);
 
+/** Defines the index tag to represent composite "session-timestamp" nature of Client Request */
+struct session_timestamp_tag {};
 /**
  * Type for Pool of Active (Pending and in Progress) and Pool of History requests.
  * Have semantics of std::list while serves as a queue of requests.
@@ -81,6 +81,45 @@ typedef boost::multi_index::multi_index_container<
 > ClientRequests;
 
 typedef ClientRequests::index<session_timestamp_tag>::type RequestsBySessionAndTimestampTag;
+
+/** represents historical request available for statistics and status query.
+ * Contains the summary depicting the original request */
+template<typename Progress_>
+struct HistoricalRequest{
+	requestIdentity     identity;    /**< request identity */
+	Progress_           progress;    /**< request progress */
+    request_performance performance; /**< request overall performance */
+    taskOverallStatus   status ;     /**< request overall status */
+    bool                canceled;    /**< flag, indicates whether request was canceled */
+    bool                succeed;     /**< flag indicates success completion for those who does not need details of status */
+
+    std::string    timestamp() const { return identity.timestamp; }
+    SessionContext ctx() const { return identity.ctx; }
+};
+
+typedef HistoricalRequest<std::list<boost::shared_ptr<FileProgress> > > HistoricalCacheRequest;
+
+/** Equal operator to run equality comparison on @a HistoricalCacheRequest entity */
+extern bool operator==(HistoricalCacheRequest const & request1, HistoricalCacheRequest const & request2);
+
+/** hash function defined for @a HistoricalCacheRequest type */
+extern std::size_t hash_value(HistoricalCacheRequest const& request);
+
+typedef boost::multi_index::multi_index_container<
+		boost::shared_ptr<HistoricalCacheRequest>,
+		boost::multi_index::indexed_by<
+		    boost::multi_index::sequenced<>,
+    		boost::multi_index::hashed_unique<
+    			boost::multi_index::tag<session_timestamp_tag>,
+    			boost::multi_index::composite_key<
+    			HistoricalCacheRequest,
+    			boost::multi_index::const_mem_fun<HistoricalCacheRequest, std::string, &HistoricalCacheRequest::timestamp>,
+    			boost::multi_index::const_mem_fun<HistoricalCacheRequest, SessionContext, &HistoricalCacheRequest::ctx>
+    				 > >
+    >
+> HistoryOfRequests;
+
+typedef HistoryOfRequests::index<session_timestamp_tag>::type HistoricalRequestsBySessionAndTimestampTag;
 
 struct FileProgress;
 
