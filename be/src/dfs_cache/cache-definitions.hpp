@@ -61,9 +61,10 @@ extern std::size_t hash_value(MonitorRequest const& request);
 /** Defines the index tag to represent composite "session-timestamp" nature of Client Request */
 struct session_timestamp_tag {};
 /**
- * Type for Pool of Active (Pending and in Progress) and Pool of History requests.
+ * Type for Pool of Active Async (Pending and in Progress) and Pool of Active Sync requests.
  * Have semantics of std::list while serves as a queue of requests.
- * We want this to work fast and contain requests in order as they were received.
+ * We want this to work fast from "find" perspective ( O(1)) - as client's sync call will cover only "find";
+ * and contain requests in order as they were received, so FIFO
  */
 typedef boost::multi_index::multi_index_container<
 		boost::shared_ptr<MonitorRequest>,
@@ -105,6 +106,12 @@ extern bool operator==(HistoricalCacheRequest const & request1, HistoricalCacheR
 /** hash function defined for @a HistoricalCacheRequest type */
 extern std::size_t hash_value(HistoricalCacheRequest const& request);
 
+/**
+ * Type for Pool of Historical requests (currently, Prepare requests only are of interest).
+ * Have semantics of std::list. New request reaches the top of the history as most recent
+ * We want this to work fast from "find" perspective ( O(1)) - as client's sync call will cover only "find";
+ * and contain requests in the order opposite as they were received, so, LIFO.
+ */
 typedef boost::multi_index::multi_index_container<
 		boost::shared_ptr<HistoricalCacheRequest>,
 		boost::multi_index::indexed_by<

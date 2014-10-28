@@ -154,6 +154,7 @@ public:
 
        ~CacheManager() {
     	   // run all finalizations here
+    	   shutdown();
        }
 
        static CacheManager* instance() { return CacheManager::instance_.get(); }

@@ -205,7 +205,7 @@ void CacheManager::dispatchRequest(requestPriority priority){
 		}
 
 		// do work while global shutdown flag is not received
-		while(m_shutdownFlag){
+		while(!m_shutdownFlag){
 			// single request
 			boost::shared_ptr<MonitorRequest>           request;
 			// iterator through requests
@@ -282,45 +282,34 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
 		return;
 	}
 
-	// for sync requests, check for them in History always. They are not executed on active queues but rather on a client thread.
-	if(!async){
-		// just check that request is in history and do nothing.
-		boost::mutex::scoped_lock lock(m_SyncRequestsMux);
-		// get the request from the sync requests queue:
-		RequestsBySessionAndTimestampTag& requests = m_syncRequestsQueue.get<session_timestamp_tag>();
-		auto it = requests.find(boost::make_tuple(requestIdentity.timestamp, requestIdentity.ctx));
-
-		if(it == requests.end()){
-			// nothing to do, just log the BUG
-			LOG (ERROR) << "Finalize request. Unable to locate sync request in SYNC requests queue to finalize it. Request timestamp : "
-					<< requestIdentity.timestamp << "\n";
-			return;
-		}
-
-		boost::shared_ptr<MonitorRequest> request = (*it);
-		lock.unlock();
-		LOG (INFO) << "Finalize request. Request is synchronous. Status : " << request->status() << "; Request timestamp : "
-				<< requestIdentity.timestamp << "\n";
-		return;
-	}
-
 	// select work instrumentation.
 	boost::mutex*   mux;              // mutex to guard the selected collection
-	ClientRequests* requests;      // queue to analyze for arrivals
+	ClientRequests* requests;         // queue to analyze for arrivals
+    std::string     message;          // message to specify the queue which is handled.
 
-	switch(priority){
-	case requestPriority::HIGH:
-		mux      = &m_highrequestsMux;
-		requests = &m_activeHighRequests;
-		break;
-	case requestPriority::LOW:
-		mux      = &m_lowrequestsMux;
-		requests = &m_activeLowRequests;
-		break;
+	// If request is async
+	if(async){
+		switch(priority){
+			case requestPriority::HIGH:
+				mux      = &m_highrequestsMux;
+				requests = &m_activeHighRequests;
+				message  = "high priority queue";
+				break;
+			case requestPriority::LOW:
+				mux      = &m_lowrequestsMux;
+				requests = &m_activeLowRequests;
+				message  = "low priority queue";
+				break;
 
-	case requestPriority::NOT_SET:
-		LOG (WARNING) << "non-prioritized request reached finalization and cannot be fnalized." << "\n";
-		return;
+			case requestPriority::NOT_SET:
+				LOG (WARNING) << "non-prioritized request reached finalization and cannot be fnalized." << "\n";
+				return;
+			}
+	}
+	else { // request is sync
+		mux      = &m_SyncRequestsMux;
+		requests = &m_syncRequestsQueue;
+		message  = "sync requests eue";
 	}
 
 	// Async scenario is handled here:
@@ -332,7 +321,8 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
 	// if anything found, remove it from the "active" requests and place it to "history":
     if(it == filtered_requests.end()){
     	// nothing to do, just log the BUG
-    	LOG (ERROR) << "Finalize request. Unable to locate request to finalize it. Request timestamp : " << requestIdentity.timestamp << "\n";
+    	LOG (ERROR) << "Finalize request. Unable to locate request in " << message << " to finalize it. Request timestamp : "
+    			<< requestIdentity.timestamp << "\n";
     	return;
     }
 
@@ -389,7 +379,8 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
     	boost::lock_guard<boost::mutex> lock(m_highrequestsMux);
     	// send task to the queue for further processing:
     	m_activeHighRequests.push_back(request);
-
+    	// notify new data arrival
+    	m_controlHighRequestsArrival.notify_all();
     	// if async, go out immediately:
 		return status::StatusInternal::OPERATION_ASYNC_SCHEDULED;
     }
@@ -430,6 +421,8 @@ status::StatusInternal CacheManager::cachePrepareData(SessionContext session, co
     	boost::lock_guard<boost::mutex> lock(m_lowrequestsMux);
     	// send task to the queue for further processing:
     	m_activeLowRequests.push_back(request);
+    	// notify new data arrival
+    	m_controlLowRequestsArrival.notify_all();
     }
 
     // if async, go out immediately:
