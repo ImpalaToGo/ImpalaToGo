@@ -1,0 +1,68 @@
+@mixin transition-time($time) {
+  -webkit-transition: all $time ease-out;
+  -moz-transition: all $time ease-out;
+  -o-transition: all $time ease-out;
+  -ms-transition: all $time ease-out;
+  transition: all $time ease-out;
+}
+.tiles-grid-container {
+
+}
+
+.tiles-grid-container table {
+  border-spacing: 20px;
+  border-collapse: initial;
+}
+
+.tiles-grid-container .jTile-bottom{
+  position: absolute;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100%  !important;
+}
+.tiles-grid-container .margin-right-4{
+  margin-right: 4px;
+}
+.tiles-grid-container .table-bordered {
+  border: 0px solid transparent;
+}
+.tiles-grid-container .table > thead > tr > th,
+.tiles-grid-container .table > tbody > tr > th,
+.tiles-grid-container .table > tfoot > tr > th,
+.tiles-grid-container .table > thead > tr > td,
+.tiles-grid-container .table > tbody > tr > td,
+.tiles-grid-container .table > tfoot > tr > td {
+  padding: 30px;
+  border: 1px solid #000000 !important;
+//  max-width:60px !important;
+//  width:60px !important;
+}
+
+//tiles hover
+.tiles-grid-container .tile-mask {
+  position:relative;
+
+  box-shadow:0 0 1px #000;
+  overflow:hidden;
+
+}
+
+.tiles-grid-container  .tile-caption {
+  background-color: rgba(0, 0, 0, 0.5);
+  position: absolute;
+  color: #fff;
+  left: 0;
+  right: 0;
+  top: 42px;
+  bottom: 0;
+  padding: 4px 20px 4px 15px;
+  font-size: 0.8em;
+  opacity: 0;
+  @include transition-time(300ms);
+}
+
+.tiles-grid-container .tile-mask:hover .tile-caption {
+  opacity: 1;
+}
+

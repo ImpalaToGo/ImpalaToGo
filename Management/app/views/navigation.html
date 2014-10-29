@@ -1,0 +1,7 @@
+<div ng-controller="NavigationCtrl">
+    <ul i class="nav navbar-nav navbar-right" >
+        <li data-ng-repeat="r in navRoutes" data-ng-class="isCurrent(r)">
+            <a href="#{{r.url}}" data-toggle="tab">{{r.config.title}}</a>
+        </li>
+    </ul>
+</div>

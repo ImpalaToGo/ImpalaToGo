@@ -1,0 +1,30 @@
+<div id="cluster-container">
+    <div class="panel-heading">
+        <div class="row">
+            <div class="col-md-3">
+                <label class="cluster-heading-font" >Cluster Grid</label>
+            </div>
+            <div class="col-md-3">
+                <label class="cluster-heading-font" for="proc">All Processes:</label>
+                <input   type="checkbox" class="cluster-heading-checkbox" icheck ng-model="allProcess" id="proc">
+            </div>
+            <div class="col-md-3">
+                <label class="cluster-heading-font" for="sum">Select Sum</label>
+                <input  type="checkbox" class="cluster-heading-checkbox" icheck ng-model="sum" id="sum">
+
+
+            </div>
+            <div class="col-md-3">
+                <label class="cluster-heading-font" for="warm">Warm Up for...</label>
+                <input type="checkbox" class="cluster-heading-checkbox" icheck ng-model="warmUp" id="warm">
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div tiles-grid="gridOptions"></div>
+</div>
+
+
