@@ -1,0 +1,35 @@
+#resizeContainer .tiles-grid-container {
+  overflow: auto;
+  max-height: 705px; }
+
+.price-item-text {
+  font-size: 30px; }
+
+.dp-numberPicker-input, .dp-numberPicker-add, .dp-numberPicker-sub {
+  border: 1px solid #428bca; }
+
+.dp-numberPicker-add, .dp-numberPicker-sub {
+  background-color: #428bca;
+  color: #ffffff; }
+
+.price-container {
+  padding: 13px 13px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 663px; }
+
+.resize-price-footer-text {
+  font-size: 18px;
+  margin-top: 2px; }
+
+.resize-price-td-font {
+  font-size: 14px; }
+
+.resize-header-cost-container {
+  margin-top: -4px; }
+
+.resize-header-cost {
+  padding-right: 40px;
+  font-size: 14px; }
+
+/*# sourceMappingURL=resize.css.map */

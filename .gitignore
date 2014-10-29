@@ -36,3 +36,13 @@ tests/test-hive-udfs/target/
 cdh-*-hdfs-data/
 avro_schemas/
 cluster_logs/
+
+
+management/node_modules/
+management/dist/
+management/.tmp/
+management/.idea/
+management/.sass-cache/
+management/bower_components/
+
+

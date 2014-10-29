@@ -1,0 +1,90 @@
+
+@mixin transition-time($time) {
+  -webkit-transition: all $time ease-out;
+  -moz-transition: all $time ease-out;
+  -o-transition: all $time ease-out;
+  -ms-transition: all $time ease-out;
+  transition: all $time ease-out;
+}
+.tiles-grid-container {
+  overflow: auto;
+  max-height: 800px;
+}
+
+.extra-tile-data{
+  border: 1px solid rgb(194, 194, 194) !important;
+  text-align: center;
+  background-color: rgba(220,220,220,.17);
+  font-size: 14px;
+//  font-size: 18px;
+}
+.tiles-grid-container table {
+  border-spacing: 20px;
+  border-collapse: separate;
+
+}
+.tiles-grid-form-group{
+  margin-top: 10px;
+}
+.tiles-grid-label{
+  font-weight: bold !important;
+}
+.tiles-grid-container .margin-right-4{
+  margin-right: 4px;
+}
+.tiles-grid-container .table-bordered {
+  border: 0px solid transparent;
+}
+.tiles-grid-container .table > thead > tr > th,
+.tiles-grid-container .table > tbody > tr > th,
+.tiles-grid-container .table > tfoot > tr > th,
+.tiles-grid-container .table > thead > tr > td,
+.tiles-grid-container .table > tfoot > tr > td {
+  @extend .extra-tile-data;
+  padding: 30px;
+
+}
+
+.tiles-grid-container .table > tbody > tr > td{
+  @extend .extra-tile-data;
+  padding: 0px !important;
+}
+
+//tiles hover
+.tiles-grid-container .tileContainer{
+  height: 90px;
+ // line-height: 90px;
+}
+.tiles-grid-container .tile-text{
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.tiles-grid-container .tile-item{
+   // display: block;
+  padding-right: 10px;
+ // padding: 3px 0 2px 3px;
+  display: inline-block;
+ // line-height: 16px;
+  font-weight: 700;
+ // font-size: 11px;
+  box-sizing: border-box;
+}
+.tiles-grid-container .tile-mask {
+  position:relative;
+  overflow:hidden;
+}
+
+.tiles-grid-container  .tile-caption {
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 4px 20px 4px 20px;
+  margin-top: 52px;
+  font-size: 0.8em;
+  opacity: 0;
+  @include transition-time(300ms);
+}
+
+.tiles-grid-container .tile-mask:hover .tile-caption {
+  opacity: 1;
+}
+

@@ -1,0 +1,74 @@
+.tiles-grid-container {
+  overflow: auto;
+  max-height: 800px; }
+
+.extra-tile-data, .tiles-grid-container .table > thead > tr > th,
+.tiles-grid-container .table > tbody > tr > th,
+.tiles-grid-container .table > tfoot > tr > th,
+.tiles-grid-container .table > thead > tr > td,
+.tiles-grid-container .table > tfoot > tr > td, .tiles-grid-container .table > tbody > tr > td {
+  border: 1px solid #c2c2c2 !important;
+  text-align: center;
+  background-color: rgba(220, 220, 220, 0.17);
+  font-size: 14px; }
+
+.tiles-grid-container table {
+  border-spacing: 20px;
+  border-collapse: separate; }
+
+.tiles-grid-form-group {
+  margin-top: 10px; }
+
+.tiles-grid-label {
+  font-weight: bold !important; }
+
+.tiles-grid-container .margin-right-4 {
+  margin-right: 4px; }
+
+.tiles-grid-container .table-bordered {
+  border: 0px solid transparent; }
+
+.tiles-grid-container .table > thead > tr > th,
+.tiles-grid-container .table > tbody > tr > th,
+.tiles-grid-container .table > tfoot > tr > th,
+.tiles-grid-container .table > thead > tr > td,
+.tiles-grid-container .table > tfoot > tr > td {
+  padding: 30px; }
+
+.tiles-grid-container .table > tbody > tr > td {
+  padding: 0px !important; }
+
+.tiles-grid-container .tileContainer {
+  height: 90px; }
+
+.tiles-grid-container .tile-text {
+  position: absolute;
+  left: 0;
+  right: 0; }
+
+.tiles-grid-container .tile-item {
+  padding-right: 10px;
+  display: inline-block;
+  font-weight: 700;
+  box-sizing: border-box; }
+
+.tiles-grid-container .tile-mask {
+  position: relative;
+  overflow: hidden; }
+
+.tiles-grid-container .tile-caption {
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 4px 20px 4px 20px;
+  margin-top: 52px;
+  font-size: 0.8em;
+  opacity: 0;
+  -webkit-transition: all 300ms ease-out;
+  -moz-transition: all 300ms ease-out;
+  -o-transition: all 300ms ease-out;
+  -ms-transition: all 300ms ease-out;
+  transition: all 300ms ease-out; }
+
+.tiles-grid-container .tile-mask:hover .tile-caption {
+  opacity: 1; }
+
+/*# sourceMappingURL=tilesGrid.css.map */

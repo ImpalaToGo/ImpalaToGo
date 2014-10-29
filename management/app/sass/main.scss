@@ -1,0 +1,50 @@
+body {
+  padding-top: 50px;
+ // font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+ // font-family: Helvetica, sans-serif;
+//  font-family: 'Open Sans', Arial, Helvetica, sans-serif;
+}
+//h2 {
+//  height: 100%;
+//  width: auto;
+//  display: inline-block;
+//  font-size: 14px;
+//  position: relative;
+//  margin: 0;
+//  line-height: 34px;
+//  font-weight: 400;
+//  letter-spacing: 0;
+//}
+*{
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+#impala2GoMain .container{
+  width: 100%;
+}
+.padding-15{
+  padding: 15px;
+}
+.padding-top-22{
+  padding-top: 22px;
+}
+.main-container{
+  margin-top: 30px;
+  padding: 0px 15px 0px 15px;
+}
+.main-container .navbar-inverse{
+  background: #3a3633;
+}
+
+.no-margin-top-bottom{
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.bold{
+  font-weight: bold;
+}
