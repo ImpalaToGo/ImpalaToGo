@@ -32,4 +32,8 @@ add_library(dfs_cache
   dfs-adaptor-factory.cc
   managed-file.cc
   namenode-descriptor-bound.cc  
+  test-utilities.cc
 )
+
+ADD_BE_TEST(test-filesystem-mgr)
+ADD_BE_TEST(test-cache-manager)

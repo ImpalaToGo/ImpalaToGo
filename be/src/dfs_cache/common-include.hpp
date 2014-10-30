@@ -51,6 +51,7 @@ namespace status {
 typedef enum {
 	OK,
 	OPERATION_ASYNC_SCHEDULED,
+	OPERATION_ASYNC_REJECTED,
 	FINALIZATION_IN_PROGRESS,
 
 	REQUEST_IS_NOT_FOUND,           /**< request is not found */

@@ -62,6 +62,13 @@ protected:
 	/** Initializes task creation timestamp. */
 	Task() : m_status(taskOverallStatus::NOT_RUN), m_invalidated(false) {
 		m_taskCreation = boost::posix_time::microsec_clock::local_time();
+		/*
+		boost::posix_time::ptime current_date_microseconds = boost::posix_time::microsec_clock::local_time();
+		long milliseconds = current_date_microseconds.time_of_day().total_milliseconds();
+		boost::posix_time::time_duration current_time_milliseconds = boost::posix_time::milliseconds(milliseconds);
+
+		m_taskCreation = boost::posix_time::ptime(current_date_microseconds.date(), current_time_milliseconds);
+		*/
 	}
 
 public:

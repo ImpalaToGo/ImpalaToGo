@@ -378,7 +378,12 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
     if(async){
     	boost::lock_guard<boost::mutex> lock(m_highrequestsMux);
     	// send task to the queue for further processing:
-    	m_activeHighRequests.push_back(request);
+    	auto it = m_activeHighRequests.push_back(request);
+    	// if there was a problem to insert the request, reply it
+    	if(!it.second){
+    		LOG (WARNING) << "Unable to schedule estimate request for processing." << "\n";
+    		return status::StatusInternal::OPERATION_ASYNC_REJECTED;
+    	}
     	// notify new data arrival
     	m_controlHighRequestsArrival.notify_all();
     	// if async, go out immediately:
@@ -388,8 +393,15 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
     // request is sync and should be marked as that so that it will not be handled by scheduler
     boost::unique_lock<boost::mutex> lock(m_SyncRequestsMux);
     // now add it to History, add it first as most recent:
-    m_syncRequestsQueue.push_back(request);
+    auto it = m_syncRequestsQueue.push_back(request);
     lock.unlock();
+
+	// if there was a problem to insert the request, reply it
+	if(!it.second){
+		LOG (WARNING) << "Unable to schedule estimate request for processing." << "\n";
+		std::cout << "Unable to schedule estimate request for processing.\n";
+		return status::StatusInternal::OPERATION_ASYNC_REJECTED;
+	}
 
     // and executed on the caller thread:
     request->operator ()();
@@ -420,7 +432,13 @@ status::StatusInternal CacheManager::cachePrepareData(SessionContext session, co
     {
     	boost::lock_guard<boost::mutex> lock(m_lowrequestsMux);
     	// send task to the queue for further processing:
-    	m_activeLowRequests.push_back(request);
+    	auto it = m_activeLowRequests.push_back(request);
+    	// if there was a problem to insert the request, reply it
+    	if(!it.second){
+    		LOG (WARNING) << "Unable to schedule prepare request for processing." << "\n";
+    		std::cout << "Unable to schedule prepare request for processing.\n";
+    		return status::StatusInternal::OPERATION_ASYNC_REJECTED;
+    	}
     	// notify new data arrival
     	m_controlLowRequestsArrival.notify_all();
     }
