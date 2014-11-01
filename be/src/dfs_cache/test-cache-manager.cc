@@ -9,7 +9,11 @@
  *                                   1) ask for requests via std::async so that runtime decides to spawn threads or run some in the current thread - on its own.
  *                                   2) ask for requests via explicit spawning a thread for each client.
  *
- * - EstimateDatasetheavyLoadAsync - the same as EstmateDatasetFewTasksAsync, both scenario, but with 1000 parallel requests.
+ *
+ * - EstimateDatasetHeavyLoadManagedAsync  - the same as EstmateDatasetFewTasksAsync, both scenario, but with 700 parallel requests.
+ *                                           Run requests in 700 parallel-spawned threads.
+ * - EstimateDataseHeavyLoadUnmanagedAsync - the same as EstmateDatasetFewTasksAsync, both scenario, but with 700 parallel requests.
+ * 											 Run requests via 700 std::async constructions.
  *
  * @author elenav
  * @date   Oct 29, 2014
@@ -257,102 +261,153 @@ TEST_F(CacheMgrTest, EstmateDatasetFewTasksAsync){
 	delete static_cast<std::string*>(m_ctx6);
 }
 
-TEST_F(CacheMgrTest, EstimateDatasetheavyLoadAsync){
-	m_flag = false;
+TEST_F(CacheMgrTest, EstimateDatasetHeavyLoadManagedAsync){
+	    m_flag = false;
 
-	const int CONTEXT_NUM = 700;
-	std::atomic<int> countdown(CONTEXT_NUM * 2);
+        const int CONTEXT_NUM = 700;
+		std::atomic<int> countdown(CONTEXT_NUM);
 
-	// Schedule the dataset:
-	DataSet data;
-	data.push_back("hdfs://123.23.12.4344:9000/timur/filename1.txt");
-	data.push_back("hdfs://123.23.12.4344:9000/timur/filename2.txt");
-	data.push_back("hdfs://123.23.12.4344:9000/timur/filename3.txt");
+		// Schedule the dataset:
+		DataSet data;
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename1.txt");
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename2.txt");
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename3.txt");
 
-	CacheEstimationCompletedCallback cb =
-			[&] (SessionContext context,
-					const std::list<boost::shared_ptr<FileProgress> > & estimation,
-					time_t const & time, bool overall, bool canceled, taskOverallStatus status) -> void {
-				std::lock_guard<std::mutex> lock(m_mux);
-				EXPECT_TRUE(status == taskOverallStatus::COMPLETED_OK);
-				EXPECT_TRUE(context != NULL);
+		CacheEstimationCompletedCallback cb = [&] (SessionContext context,
+				const std::list<boost::shared_ptr<FileProgress> > & estimation,
+				time_t const & time, bool overall, bool canceled, taskOverallStatus status) -> void {
+			std::lock_guard<std::mutex> lock(m_mux);
+	        EXPECT_TRUE(status == taskOverallStatus::COMPLETED_OK);
+			EXPECT_TRUE(context != NULL);
 
-				EXPECT_TRUE(estimation.size() != 0);
-				EXPECT_FALSE(canceled);
-				EXPECT_TRUE(overall);
+			EXPECT_TRUE(estimation.size() != 0);
+			EXPECT_FALSE(canceled);
+			EXPECT_TRUE(overall);
 
-				if(--countdown == 0) { // finalize the test when all requests back with a callback
-					m_flag = true;
-					m_condition.notify_all();
-				}
-			};
+			if(--countdown == 0){ // finalize the test when all requests back with a callback
+				m_flag = true;
+				m_condition.notify_all();
+			}
+		};
 
-	time_t time_ = 0;
-	requestIdentity identity;
-	// execute all requests in async way:
+		time_t time_ = 0;
+		requestIdentity identity;
+		// execute all requests in async way:
 
-	using namespace std::placeholders;
+		using namespace std::placeholders;
 
-	auto f1 = std::bind(&CacheManager::cacheEstimate, CacheManager::instance(),
-			ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
+		auto f1 = std::bind(&CacheManager::cacheEstimate, CacheManager::instance(), ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
 
-	std::vector<SessionContext> clients;
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		// generate unique client.
-		std::string* client = new std::string(genRandomString(10));
-		SessionContext ctx = static_cast<void*>(client);
-		clients.push_back(ctx);
-	}
+		std::vector<SessionContext> clients;
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			// generate unique client.
+			std::string* client = new std::string(genRandomString(10));
+			SessionContext ctx  = static_cast<void*>(client);
+			clients.push_back(ctx);
+		}
 
-	status::StatusInternal status;
+		status::StatusInternal status;
 
-	std::vector<std::future<status::StatusInternal>> futures;
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		srand(time(0));       //initialize the random seed
-		int idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and 1000
-		futures.push_back(
-				std::move(
-						spawn_task(f1, clients[idx], std::cref(m_namenode1),
-								std::cref(data), std::ref(time_), cb,
-								std::ref(identity), true)));
-	}
+		std::vector<std::future<status::StatusInternal>> futures;
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			srand(time(0));       //initialize the random seed
+			int idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and 1000
+			futures.push_back(std::move(spawn_task(f1, clients[idx], std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true)));
+		}
 
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		if (futures[i].valid())
+
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			if(futures[i].valid())
+				status = futures[i].get();
+			if(status == status::StatusInternal::OPERATION_ASYNC_REJECTED){
+				--countdown;
+			}
+		}
+
+        EXPECT_EQ(futures.size(), CONTEXT_NUM);
+
+	    // wait when callback will be fired 6 times:
+	    std::unique_lock<std::mutex> lock(m_mux);
+	    m_condition.wait(lock, [&]{ return m_flag || countdown == 0;});
+
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			delete static_cast<std::string*>(clients[i]);
+		}
+		lock.unlock();
+}
+
+TEST_F(CacheMgrTest, EstimateDataseHeavyLoadUnmanagedAsync){
+	    m_flag = false;
+
+        const int CONTEXT_NUM = 700;
+		std::atomic<int> countdown(CONTEXT_NUM);
+
+		// Schedule the dataset:
+		DataSet data;
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename1.txt");
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename2.txt");
+		data.push_back("hdfs://123.23.12.4344:9000/timur/filename3.txt");
+
+		CacheEstimationCompletedCallback cb = [&] (SessionContext context,
+				const std::list<boost::shared_ptr<FileProgress> > & estimation,
+				time_t const & time, bool overall, bool canceled, taskOverallStatus status) -> void {
+			std::lock_guard<std::mutex> lock(m_mux);
+	        EXPECT_TRUE(status == taskOverallStatus::COMPLETED_OK);
+			EXPECT_TRUE(context != NULL);
+
+			EXPECT_TRUE(estimation.size() != 0);
+			EXPECT_FALSE(canceled);
+			EXPECT_TRUE(overall);
+
+			if(--countdown == 0){ // finalize the test when all requests back with a callback
+				m_flag = true;
+				m_condition.notify_all();
+			}
+		};
+
+		time_t time_ = 0;
+		requestIdentity identity;
+		// execute all requests in async way:
+
+		using namespace std::placeholders;
+
+		auto f1 = std::bind(&CacheManager::cacheEstimate, CacheManager::instance(), ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
+
+		std::vector<SessionContext> clients;
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			// generate unique client.
+			std::string* client = new std::string(genRandomString(10));
+			SessionContext ctx  = static_cast<void*>(client);
+			clients.push_back(ctx);
+		}
+
+		status::StatusInternal status;
+
+		std::vector<std::future<status::StatusInternal>> futures;
+		// the same but rely on system:
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			srand(time(0));       //initialize the random seed
+			int idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and 1000
+			futures.push_back(std::async(std::launch::async, [&]{ return f1(clients[idx], std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); }));
+		}
+
+		EXPECT_EQ(futures.size(), CONTEXT_NUM);
+
+		for(int i = 0; i < CONTEXT_NUM; i++){
 			status = futures[i].get();
-		if (status == status::StatusInternal::OPERATION_ASYNC_REJECTED) {
-			--countdown;
+			if(status == status::StatusInternal::OPERATION_ASYNC_REJECTED){
+				--countdown;
+			}
 		}
-		EXPECT_EQ(status, status::StatusInternal::OPERATION_ASYNC_SCHEDULED);
-	}
 
-	std::cout << "Futures number = " << futures.size() << ".\n";
+		// wait when callback will be fired 6 times:
+	    std::unique_lock<std::mutex> lock(m_mux);
+	    m_condition.wait(lock, [&]{ return m_flag || countdown == 0;});
 
-	std::vector<std::future<status::StatusInternal>> futures1;
-	// the same but rely on system:
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		srand(time(0));       //initialize the random seed
-		int idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and 1000
-		futures1.push_back(
-				std::async(std::launch::async,
-						[&] {return f1(clients[idx], std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);}));
-	}
-
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		status = futures1[i].get();
-		if (status == status::StatusInternal::OPERATION_ASYNC_REJECTED) {
-			--countdown;
+		for(int i = 0; i < CONTEXT_NUM; i++){
+			delete static_cast<std::string*>(clients[i]);
 		}
-	}
-
-	// wait when callback will be fired 6 times:
-	std::unique_lock<std::mutex> lock(m_mux);
-	m_condition.wait(lock, [&] {return m_flag || countdown == 0;});
-
-	for (int i = 0; i < CONTEXT_NUM; i++) {
-		delete static_cast<std::string*>(clients[i]);
-	}
-	lock.unlock();
+		lock.unlock();
 }
 
 }

@@ -509,7 +509,7 @@ status::StatusInternal dfsChmod(const NameNodeDescriptor & namenode, const char*
  * @param file     - The HDFS file
  * @param stats    - (out parameter) on a successful return, the read
  *                 statistics.  Unchanged otherwise.  You must free the
- *                 returned statistics with hdfsFileFreeReadStatistics.
+ *                 returned statistics with dfsFileFreeReadStatistics.
  *
  * @return         0 if the statistics were successfully returned,
  *                 -1 otherwise.  On a failure, please check errno against

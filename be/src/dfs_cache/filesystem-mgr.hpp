@@ -156,7 +156,7 @@ public:
 	tSize dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length);
 
 	/**
-	 * @fn int dfsFlush(hdfsFile file)
+	 * @fn int dfsFlush(dfsFile file)
 	 * @brief Flush the data
 	 *
 	 * @param file - The file handle.

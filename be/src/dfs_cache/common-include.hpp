@@ -127,7 +127,8 @@ struct NameNodeDescriptor{
 typedef NameNodeDescriptor dfsFS;
 typedef std::list<const char*> DataSet;
 
-typedef void* dfsFSConnection;
+/** bridge to abtract FileSystem */
+typedef void* fSBridge;
 
 /**
  * Represent the single DFS connection
@@ -140,7 +141,7 @@ typedef struct {
 		BUSY_OK,
 	} ConnectionState;
 
-	dfsFSConnection  connection;      /**< the connection handle */
+	fSBridge  connection;      /**< the connection handle */
 	ConnectionState  state;           /**< connection status, to help manage it */
 } dfsConnection;
 
