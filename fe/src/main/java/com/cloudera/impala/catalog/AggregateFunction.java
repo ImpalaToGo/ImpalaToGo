@@ -59,6 +59,13 @@ public class AggregateFunction extends Function {
   // True if this function can be used for aggregation (without an OVER() clause).
   private boolean isAggregateFn_;
 
+  // True if this function returns a non-null value on an empty input. It is used
+  // primarily during the rewrite of scalar subqueries.
+  // TODO: Instead of manually setting this flag, we should identify this
+  // property from the function itself (e.g. evaluating the function on an
+  // empty input in BE).
+  private boolean returnsNonNullOnEmpty_;
+
   public AggregateFunction(FunctionName fnName, FunctionArgs args, Type retType) {
     super(fnName, args.argTypes, retType, args.hasVarArgs);
   }
@@ -81,30 +88,34 @@ public class AggregateFunction extends Function {
     ignoresDistinct_ = false;
     isAnalyticFn_ = false;
     isAggregateFn_ = true;
+    returnsNonNullOnEmpty_ = false;
   }
 
   public static AggregateFunction createBuiltin(Db db, String name,
       List<Type> argTypes, Type retType, Type intermediateType,
       String initFnSymbol, String updateFnSymbol, String mergeFnSymbol,
       String serializeFnSymbol, String finalizeFnSymbol, boolean ignoresDistinct,
-      boolean isAnalyticFn) {
+      boolean isAnalyticFn, boolean returnsNonNullOnEmpty) {
     return createBuiltin(db, name, argTypes, retType, intermediateType, initFnSymbol,
-        updateFnSymbol, mergeFnSymbol, serializeFnSymbol, null, finalizeFnSymbol,
-        ignoresDistinct, isAnalyticFn);
+        updateFnSymbol, mergeFnSymbol, serializeFnSymbol, null, null, finalizeFnSymbol,
+        ignoresDistinct, isAnalyticFn, returnsNonNullOnEmpty);
   }
 
   public static AggregateFunction createBuiltin(Db db, String name,
       List<Type> argTypes, Type retType, Type intermediateType,
       String initFnSymbol, String updateFnSymbol, String mergeFnSymbol,
-      String serializeFnSymbol, String getValueFnSymbol, String finalizeFnSymbol,
-      boolean ignoresDistinct, boolean isAnalyticFn) {
+      String serializeFnSymbol, String getValueFnSymbol, String removeFnSymbol,
+      String finalizeFnSymbol, boolean ignoresDistinct, boolean isAnalyticFn,
+      boolean returnsNonNullOnEmpty) {
     AggregateFunction fn = new AggregateFunction(new FunctionName(db.getName(), name),
         argTypes, retType, intermediateType, null, updateFnSymbol, initFnSymbol,
-        serializeFnSymbol, mergeFnSymbol, getValueFnSymbol, null, finalizeFnSymbol);
+        serializeFnSymbol, mergeFnSymbol, getValueFnSymbol, removeFnSymbol,
+        finalizeFnSymbol);
     fn.setBinaryType(TFunctionBinaryType.BUILTIN);
     fn.ignoresDistinct_ = ignoresDistinct;
     fn.isAnalyticFn_ = isAnalyticFn;
     fn.isAggregateFn_ = true;
+    fn.returnsNonNullOnEmpty_ = returnsNonNullOnEmpty;
     return fn;
   }
 
@@ -114,11 +125,12 @@ public class AggregateFunction extends Function {
       String getValueFnSymbol, String finalizeFnSymbol) {
     AggregateFunction fn = new AggregateFunction(new FunctionName(db.getName(), name),
         argTypes, retType, intermediateType, null, updateFnSymbol, initFnSymbol,
-        null, null, getValueFnSymbol, null, finalizeFnSymbol);
+        null, null, getValueFnSymbol, removeFnSymbol, finalizeFnSymbol);
     fn.setBinaryType(TFunctionBinaryType.BUILTIN);
     fn.ignoresDistinct_ = false;
     fn.isAnalyticFn_ = true;
     fn.isAggregateFn_ = false;
+    fn.returnsNonNullOnEmpty_ = false;
     return fn;
   }
 
@@ -131,6 +143,7 @@ public class AggregateFunction extends Function {
     fn.ignoresDistinct_ = false;
     fn.isAnalyticFn_ = true;
     fn.isAggregateFn_ = false;
+    fn.returnsNonNullOnEmpty_ = false;
     fn.setUserVisible(true);
     return fn;
   }
@@ -145,6 +158,7 @@ public class AggregateFunction extends Function {
   public boolean ignoresDistinct() { return ignoresDistinct_; }
   public boolean isAnalyticFn() { return isAnalyticFn_; }
   public boolean isAggregateFn() { return isAggregateFn_; }
+  public boolean returnsNonNullOnEmpty() { return returnsNonNullOnEmpty_; }
 
   /**
    * Returns the intermediate type of this aggregate function or null

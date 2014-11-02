@@ -20,7 +20,7 @@
 
 import pytest
 from tests.hs2.hs2_test_suite import HS2TestSuite, needs_session
-from cli_service import TCLIService
+from TCLIService import TCLIService
 from tests.common.impala_cluster import ImpalaCluster
 
 class TestFetchFirst(HS2TestSuite):
@@ -78,6 +78,7 @@ class TestFetchFirst(HS2TestSuite):
     Regardless of whether a FETCH_FIRST succeeds or not, clients may always resume
     fetching with FETCH_NEXT.
     """
+    pytest.xfail("IMPALA-1264")
     # Negative tests for the result caching option.
     self.__test_invalid_result_caching("SELECT COUNT(*) FROM functional.alltypes")
 

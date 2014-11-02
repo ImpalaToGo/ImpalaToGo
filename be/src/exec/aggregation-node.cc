@@ -152,15 +152,15 @@ Status AggregationNode::Prepare(RuntimeState* state) {
   }
 
   if (state->codegen_enabled()) {
-    DCHECK(state->codegen() != NULL);
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
     Function* update_tuple_fn = CodegenUpdateTuple(state);
     if (update_tuple_fn != NULL) {
       codegen_process_row_batch_fn_ =
           CodegenProcessRowBatch(state, update_tuple_fn);
       if (codegen_process_row_batch_fn_ != NULL) {
         // Update to using codegen'd process row batch.
-        state->codegen()->AddFunctionToJit(
-            codegen_process_row_batch_fn_,
+        codegen->AddFunctionToJit(codegen_process_row_batch_fn_,
             reinterpret_cast<void**>(&process_row_batch_fn_));
         AddRuntimeExecOption("Codegen Enabled");
       }
@@ -188,7 +188,7 @@ Status AggregationNode::Open(RuntimeState* state) {
   while (true) {
     bool eos;
     RETURN_IF_CANCELLED(state);
-    RETURN_IF_ERROR(state->CheckQueryState());
+    RETURN_IF_ERROR(QueryMaintenance(state));
     RETURN_IF_ERROR(children_[0]->GetNext(state, &batch, &eos));
     SCOPED_TIMER(build_timer_);
 
@@ -213,7 +213,7 @@ Status AggregationNode::Open(RuntimeState* state) {
     output_iterator_ = hash_tbl_->Begin();
 
     batch.Reset();
-    RETURN_IF_ERROR(state->CheckQueryState());
+    RETURN_IF_ERROR(QueryMaintenance(state));
     if (eos) break;
   }
 
@@ -229,7 +229,7 @@ Status AggregationNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* 
   SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
-  RETURN_IF_ERROR(state->CheckQueryState());
+  RETURN_IF_ERROR(QueryMaintenance(state));
   SCOPED_TIMER(get_results_timer_);
 
   if (ReachedLimit()) {
@@ -239,7 +239,15 @@ Status AggregationNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* 
   ExprContext** ctxs = &conjunct_ctxs_[0];
   int num_ctxs = conjunct_ctxs_.size();
 
+  int count = 0;
+  const int N = state->batch_size();
   while (!output_iterator_.AtEnd() && !row_batch->AtCapacity()) {
+    // This loop can go on for a long time if the conjuncts are very selective. Do query
+    // maintenance every N iterations.
+    if (count++ % N == 0) {
+      RETURN_IF_CANCELLED(state);
+      RETURN_IF_ERROR(QueryMaintenance(state));
+    }
     int row_idx = row_batch->AddRow();
     TupleRow* row = row_batch->GetRow(row_idx);
     Tuple* intermediate_tuple = output_iterator_.GetTuple();
@@ -345,15 +353,7 @@ Tuple* AggregationNode::ConstructIntermediateTuple() {
 
 void AggregationNode::UpdateTuple(Tuple* tuple, TupleRow* row) {
   DCHECK(tuple != NULL || aggregate_evaluators_.empty());
-  for (int i = 0; i < aggregate_evaluators_.size(); ++i) {
-    AggFnEvaluator* evaluator = aggregate_evaluators_[i];
-    FunctionContext* agg_fn_ctx = agg_fn_ctxs_[i];
-    if (evaluator->is_merge()) {
-      evaluator->Merge(agg_fn_ctx, row, tuple);
-    } else {
-      evaluator->Update(agg_fn_ctx, row, tuple);
-    }
-  }
+  AggFnEvaluator::Add(aggregate_evaluators_, agg_fn_ctxs_, row, tuple);
 }
 
 Tuple* AggregationNode::FinalizeTuple(Tuple* tuple, MemPool* pool) {
@@ -429,7 +429,7 @@ IRFunction::Type GetHllUpdateFunction2(const ColumnType& type) {
 //   %0 = extractvalue { i8, double } %src, 0
 //   %is_null = trunc i8 %0 to i1
 //   br i1 %is_null, label %ret, label %src_not_null
-// 
+//
 // src_not_null:                                     ; preds = %entry
 //   %dst_slot_ptr = getelementptr inbounds { i8, double }* %agg_tuple, i32 0, i32 1
 //   call void @SetNotNull({ i8, double }* %agg_tuple)
@@ -438,7 +438,7 @@ IRFunction::Type GetHllUpdateFunction2(const ColumnType& type) {
 //   %1 = fadd double %dst_val, %val
 //   store double %1, double* %dst_slot_ptr
 //   br label %ret
-// 
+//
 // ret:                                              ; preds = %src_not_null, %entry
 //   ret void
 // }
@@ -455,7 +455,7 @@ IRFunction::Type GetHllUpdateFunction2(const ColumnType& type) {
 //   %0 = extractvalue { i8, double } %src, 0
 //   %is_null = trunc i8 %0 to i1
 //   br i1 %is_null, label %ret, label %src_not_null
-// 
+//
 // src_not_null:                                     ; preds = %entry
 //   %dst_slot_ptr = getelementptr inbounds
 //     { i8, %"struct.impala::StringValue" }* %agg_tuple, i32 0, i32 1
@@ -488,14 +488,15 @@ IRFunction::Type GetHllUpdateFunction2(const ColumnType& type) {
 //   %11 = insertvalue %"struct.impala::StringValue" %7, i32 %10, 1
 //   store %"struct.impala::StringValue" %11, %"struct.impala::StringValue"* %dst_slot_ptr
 //   br label %ret
-// 
+//
 // ret:                                              ; preds = %src_not_null, %entry
 //   ret void
 // }
 llvm::Function* AggregationNode::CodegenUpdateSlot(
     RuntimeState* state, AggFnEvaluator* evaluator, SlotDescriptor* slot_desc) {
   DCHECK(slot_desc->is_materialized());
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   DCHECK_EQ(evaluator->input_expr_ctxs().size(), 1);
   ExprContext* input_expr_ctx = evaluator->input_expr_ctxs()[0];
@@ -664,7 +665,8 @@ llvm::Function* AggregationNode::CodegenUpdateSlot(
 //   ret void
 // }
 Function* AggregationNode::CodegenUpdateTuple(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
   SCOPED_TIMER(codegen->codegen_timer());
 
   int j = probe_expr_ctxs_.size();
@@ -768,7 +770,8 @@ Function* AggregationNode::CodegenUpdateTuple(RuntimeState* state) {
 
 Function* AggregationNode::CodegenProcessRowBatch(
     RuntimeState* state, Function* update_tuple_fn) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
   SCOPED_TIMER(codegen->codegen_timer());
   DCHECK(update_tuple_fn != NULL);
 

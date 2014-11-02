@@ -30,8 +30,6 @@ struct ExprValue {
   int64_t bigint_val;
   float float_val;
   double double_val;
-  std::string string_data;
-  char* char_val;
   StringValue string_val;
   TimestampValue timestamp_val;
   Decimal4Value decimal4_val;
@@ -64,8 +62,9 @@ struct ExprValue {
 
   // c'tor for string values
   ExprValue(const std::string& str)
-    : string_data(str),
-      string_val(const_cast<char*>(string_data.data()), string_data.size()) {
+    : string_data(str) {
+    string_val.ptr = const_cast<char*>(string_data.data());
+    string_val.len = string_data.size();
   }
 
   // Sets the value for type to '0' and returns a pointer to the data
@@ -165,6 +164,11 @@ struct ExprValue {
         return NULL;
     }
   }
+
+  std::string& GetStringData() { return string_data; }
+
+ private:
+  std::string string_data; // Stores the data for string_val if necessary.
 };
 
 }

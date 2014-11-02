@@ -539,7 +539,7 @@ Status ImpalaServer::Execute(TQueryCtx* query_ctx,
   Status status = ExecuteInternal(*query_ctx, session_state, &registered_exec_state,
       exec_state);
   if (!status.ok() && registered_exec_state) {
-    UnregisterQuery((*exec_state)->query_id(), &status);
+    UnregisterQuery((*exec_state)->query_id(), false, &status);
   }
   return status;
 }
@@ -636,9 +636,7 @@ Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
   // expire while checked out, so it must not be expired.
   DCHECK(session_state->ref_count > 0 && !session_state->expired);
   // The session may have been closed after it was checked out.
-  if (session_state->closed) {
-    return Status("Session has been closed, ignoring query.");
-  }
+  if (session_state->closed) return Status("Session has been closed, ignoring query.");
   const TUniqueId& query_id = exec_state->query_id();
   {
     lock_guard<mutex> l(query_exec_state_map_lock_);
@@ -650,10 +648,24 @@ Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
       ss << "query id " << PrintId(query_id) << " already exists";
       return Status(TStatusCode::INTERNAL_ERROR, ss.str());
     }
-    session_state->inflight_queries.insert(query_id);
     query_exec_state_map_.insert(make_pair(query_id, exec_state));
   }
+  return Status::OK;
+}
 
+Status ImpalaServer::SetQueryInflight(shared_ptr<SessionState> session_state,
+    const shared_ptr<QueryExecState>& exec_state) {
+  const TUniqueId& query_id = exec_state->query_id();
+  lock_guard<mutex> l(session_state->lock);
+  // The session wasn't expired at the time it was checked out and it isn't allowed to
+  // expire while checked out, so it must not be expired.
+  DCHECK_GT(session_state->ref_count, 0);
+  DCHECK(!session_state->expired);
+  // The session may have been closed after it was checked out.
+  if (session_state->closed) return Status("Session closed");
+  // Add query to the set that will be unregistered if sesssion is closed.
+  session_state->inflight_queries.insert(query_id);
+  // Set query expiration.
   int32_t timeout_s = exec_state->query_options().query_timeout_s;
   if (FLAGS_idle_query_timeout > 0 && timeout_s > 0) {
     timeout_s = min(FLAGS_idle_query_timeout, timeout_s);
@@ -661,9 +673,8 @@ Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
     // Use a non-zero timeout, if one exists
     timeout_s = max(FLAGS_idle_query_timeout, timeout_s);
   }
-
   if (timeout_s > 0) {
-    lock_guard<mutex> l(query_expiration_lock_);
+    lock_guard<mutex> l2(query_expiration_lock_);
     VLOG_QUERY << "Query " << PrintId(query_id) << " has timeout of "
                << PrettyPrinter::Print(timeout_s * 1000L * 1000L * 1000L,
                      TCounterType::TIME_NS);
@@ -673,19 +684,18 @@ Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
   return Status::OK;
 }
 
-bool ImpalaServer::UnregisterQuery(const TUniqueId& query_id, const Status* cause) {
+Status ImpalaServer::UnregisterQuery(const TUniqueId& query_id, bool check_inflight,
+    const Status* cause) {
   VLOG_QUERY << "UnregisterQuery(): query_id=" << query_id;
 
-  // Cancel the query if it's still running
-  CancelInternal(query_id, cause);
+  RETURN_IF_ERROR(CancelInternal(query_id, check_inflight, cause));
 
   shared_ptr<QueryExecState> exec_state;
   {
     lock_guard<mutex> l(query_exec_state_map_lock_);
     QueryExecStateMap::iterator entry = query_exec_state_map_.find(query_id);
     if (entry == query_exec_state_map_.end()) {
-      VLOG_QUERY << "unknown query id: " << PrintId(query_id);
-      return false;
+      return Status("Invalid or unknown query handle");
     } else {
       exec_state = entry->second;
     }
@@ -725,7 +735,7 @@ bool ImpalaServer::UnregisterQuery(const TUniqueId& query_id, const Status* caus
     }
   }
   ArchiveQuery(*exec_state);
-  return true;
+  return Status::OK;
 }
 
 Status ImpalaServer::UpdateCatalogMetrics() {
@@ -742,12 +752,19 @@ Status ImpalaServer::UpdateCatalogMetrics() {
   return Status::OK;
 }
 
-Status ImpalaServer::CancelInternal(const TUniqueId& query_id, const Status* cause) {
+Status ImpalaServer::CancelInternal(const TUniqueId& query_id, bool check_inflight,
+    const Status* cause) {
   VLOG_QUERY << "Cancel(): query_id=" << PrintId(query_id);
   shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
   if (exec_state == NULL) return Status("Invalid or unknown query handle");
-
   lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
+  if (check_inflight) {
+    lock_guard<mutex> l2(exec_state->session()->lock);
+    if (exec_state->session()->inflight_queries.find(query_id) ==
+        exec_state->session()->inflight_queries.end()) {
+      return Status("Query not yet running");
+    }
+  }
   // TODO: can we call Coordinator::Cancel() here while holding lock?
   exec_state->Cancel(cause);
   return Status::OK;
@@ -788,7 +805,7 @@ Status ImpalaServer::CloseSessionInternal(const TUniqueId& session_id,
   // Unregister all open queries from this session.
   Status status("Session closed", true);
   BOOST_FOREACH(const TUniqueId& query_id, inflight_queries) {
-    UnregisterQuery(query_id, &status);
+    UnregisterQuery(query_id, false, &status);
   }
   return Status::OK;
 }
@@ -990,6 +1007,16 @@ Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
         int64_t mem;
         RETURN_IF_ERROR(ParseMemValue(value, "block mgr memory limit", &mem));
         query_options->__set_max_block_mgr_memory(mem);
+        break;
+      }
+      case TImpalaQueryOptions::APPX_COUNT_DISTINCT: {
+        query_options->__set_appx_count_distinct(
+            iequals(value, "true") || iequals(value, "1"));
+        break;
+      }
+      case TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS: {
+        query_options->__set_disable_unsafe_spills(
+            iequals(value, "true") || iequals(value, "1"));
         break;
       }
       default:
@@ -1280,6 +1307,12 @@ void ImpalaServer::TQueryOptionsToMap(const TQueryOptions& query_option,
       case TImpalaQueryOptions::MAX_BLOCK_MGR_MEMORY:
         val << query_option.max_block_mgr_memory;
         break;
+      case TImpalaQueryOptions::APPX_COUNT_DISTINCT:
+        val << query_option.appx_count_distinct;
+        break;
+      case TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS:
+        val << query_option.disable_unsafe_spills;
+        break;
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
         // when we add a new query option.
@@ -1306,13 +1339,15 @@ void ImpalaServer::SessionState::ToThrift(const TUniqueId& session_id,
 void ImpalaServer::CancelFromThreadPool(uint32_t thread_id,
     const CancellationWork& cancellation_work) {
   if (cancellation_work.unregister()) {
-    if (!UnregisterQuery(cancellation_work.query_id(), &cancellation_work.cause())) {
+    Status status = UnregisterQuery(cancellation_work.query_id(), true,
+        &cancellation_work.cause());
+    if (!status.ok()) {
       VLOG_QUERY << "Query de-registration (" << cancellation_work.query_id()
                  << ") failed";
     }
   } else {
-    Status status =
-        CancelInternal(cancellation_work.query_id(), &cancellation_work.cause());
+    Status status = CancelInternal(cancellation_work.query_id(), true,
+        &cancellation_work.cause());
     if (!status.ok()) {
       VLOG_QUERY << "Query cancellation (" << cancellation_work.query_id()
                  << ") did not succeed: " << status.GetErrorMsg();
@@ -1482,13 +1517,11 @@ void ImpalaServer::CatalogUpdateCallback(
 
 Status ImpalaServer::ProcessCatalogUpdateResult(
     const TCatalogUpdateResult& catalog_update_result, bool wait_for_all_subscribers) {
-  // If wait_for_all_subscribers is false, or if this this update result contains a
-  // catalog object to add or remove, assume it is "fast" update and directly apply the
-  // update to the local impalad's catalog cache. Otherwise, wait for a statestore
+  // If this this update result contains a catalog object to add or remove, directly apply
+  // the update to the local impalad's catalog cache. Otherwise, wait for a statestore
   // heartbeat that contains this update version.
   if ((catalog_update_result.__isset.updated_catalog_object ||
-      catalog_update_result.__isset.removed_catalog_object) &&
-      !wait_for_all_subscribers) {
+      catalog_update_result.__isset.removed_catalog_object)) {
     TUpdateCatalogCacheRequest update_req;
     update_req.__set_is_delta(true);
     update_req.__set_catalog_service_id(catalog_update_result.catalog_service_id);
@@ -1503,35 +1536,36 @@ Status ImpalaServer::ProcessCatalogUpdateResult(
     TUpdateCatalogCacheResponse resp;
     Status status = exec_env_->frontend()->UpdateCatalogCache(update_req, &resp);
     if (!status.ok()) LOG(ERROR) << status.GetErrorMsg();
-    return status;
-  } else {
-    unique_lock<mutex> unique_lock(catalog_version_lock_);
-    int64_t min_req_catalog_version = catalog_update_result.version;
-    const TUniqueId& catalog_service_id = catalog_update_result.catalog_service_id;
-
-    // Wait for the update to be processed locally.
-    // TODO: What about query cancellation?
-    VLOG_QUERY << "Waiting for catalog version: " << min_req_catalog_version
-               << " current version: " << catalog_update_info_.catalog_version;
-    while (catalog_update_info_.catalog_version < min_req_catalog_version &&
-           catalog_update_info_.catalog_service_id == catalog_service_id) {
-      catalog_version_update_cv_.wait(unique_lock);
-    }
-
+    RETURN_IF_ERROR(status);
     if (!wait_for_all_subscribers) return Status::OK;
+  }
 
-    // Now wait for this update to be propagated to all catalog topic subscribers.
-    // If we make it here it implies the first condition was met (the update was processed
-    // locally or the catalog service id has changed).
-    int64_t min_req_subscriber_topic_version = catalog_update_info_.catalog_topic_version;
+  unique_lock<mutex> unique_lock(catalog_version_lock_);
+  int64_t min_req_catalog_version = catalog_update_result.version;
+  const TUniqueId& catalog_service_id = catalog_update_result.catalog_service_id;
 
-    VLOG_QUERY << "Waiting for min subscriber topic version: "
-               << min_req_subscriber_topic_version << " current version: "
-               << min_subscriber_catalog_topic_version_;
-    while (min_subscriber_catalog_topic_version_ < min_req_subscriber_topic_version &&
-           catalog_update_info_.catalog_service_id == catalog_service_id) {
-      catalog_version_update_cv_.wait(unique_lock);
-    }
+  // Wait for the update to be processed locally.
+  // TODO: What about query cancellation?
+  VLOG_QUERY << "Waiting for catalog version: " << min_req_catalog_version
+             << " current version: " << catalog_update_info_.catalog_version;
+  while (catalog_update_info_.catalog_version < min_req_catalog_version &&
+         catalog_update_info_.catalog_service_id == catalog_service_id) {
+    catalog_version_update_cv_.wait(unique_lock);
+  }
+
+  if (!wait_for_all_subscribers) return Status::OK;
+
+  // Now wait for this update to be propagated to all catalog topic subscribers.
+  // If we make it here it implies the first condition was met (the update was processed
+  // locally or the catalog service id has changed).
+  int64_t min_req_subscriber_topic_version = catalog_update_info_.catalog_topic_version;
+
+  VLOG_QUERY << "Waiting for min subscriber topic version: "
+             << min_req_subscriber_topic_version << " current version: "
+             << min_subscriber_catalog_topic_version_;
+  while (min_subscriber_catalog_topic_version_ < min_req_subscriber_topic_version &&
+         catalog_update_info_.catalog_service_id == catalog_service_id) {
+    catalog_version_update_cv_.wait(unique_lock);
   }
   return Status::OK;
 }
@@ -1872,7 +1906,7 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
         new RpcEventHandler("beeswax", exec_env->metrics()));
     beeswax_processor->setEventHandler(event_handler);
     *beeswax_server = new ThriftServer(BEESWAX_SERVER_NAME, beeswax_processor,
-        beeswax_port, AuthManager::GetInstance()->GetClientFacingAuthProvider(),
+        beeswax_port, AuthManager::GetInstance()->GetExternalAuthProvider(),
         exec_env->metrics(), FLAGS_fe_service_threads, ThriftServer::ThreadPool);
 
     (*beeswax_server)->SetConnectionHandler(handler.get());
@@ -1894,7 +1928,7 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
     hs2_fe_processor->setEventHandler(event_handler);
 
     *hs2_server = new ThriftServer(HS2_SERVER_NAME, hs2_fe_processor, hs2_port,
-        AuthManager::GetInstance()->GetClientFacingAuthProvider(), exec_env->metrics(),
+        AuthManager::GetInstance()->GetExternalAuthProvider(), exec_env->metrics(),
         FLAGS_fe_service_threads, ThriftServer::ThreadPool);
 
     (*hs2_server)->SetConnectionHandler(handler.get());

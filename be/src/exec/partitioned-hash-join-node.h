@@ -58,7 +58,6 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
  public:
   PartitionedHashJoinNode(ObjectPool* pool, const TPlanNode& tnode,
       const DescriptorTbl& descs);
-  ~PartitionedHashJoinNode();
 
   virtual Status Init(const TPlanNode& tnode);
   virtual Status Prepare(RuntimeState* state);
@@ -72,6 +71,8 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   virtual Status ConstructBuildSide(RuntimeState* state);
 
  private:
+  class Partition;
+
   // Implementation details:
   // Logically, the algorithm runs in three modes.
   //   1. Read the build side rows and partition them into hash_partitions_. This is a
@@ -111,10 +112,10 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   // Number of initial partitions to create. Must be a power of two.
   // TODO: this is set to a lower than actual value for testing.
-  static const int PARTITION_FANOUT = 4;
+  static const int PARTITION_FANOUT = 32;
 
   // Needs to be the log(PARTITION_FANOUT)
-  static const int NUM_PARTITIONING_BITS = 2;
+  static const int NUM_PARTITIONING_BITS = 5;
 
   // Maximum number of times we will repartition. The maximum build table we
   // can process is:
@@ -140,9 +141,15 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // sensitive).
   bool AppendRow(BufferedTupleStream* stream, TupleRow* row);
 
+  // Slow path for AppendRow() above except the stream has failed to append the row.
+  // We need to find more memory by spilling.
+  bool AppendRowStreamFull(BufferedTupleStream* stream, TupleRow* row);
+
   // Called when we need to free up memory by spilling a partition.
   // This function walks hash_partitions_ and picks on to spill.
-  Status SpillPartition();
+  // *spilled_partition is the partition that was spilled.
+  // Returns non-ok status if we couldn't spill a partition.
+  Status SpillPartition(Partition** spilled_partition);
 
   // Partitions the entire build input (either from child(1) or input_partition_) into
   // hash_partitions_. When this call returns, hash_partitions_ is ready to consume
@@ -150,8 +157,7 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // level is the level new partitions (in hash_partitions_) should be created with.
   Status ProcessBuildInput(RuntimeState* state, int level);
 
-  // Processes all the build rows by partitioning them.
-  // Reads the rows in build_batch and partition them in hash_partitions_.
+  // Reads the rows in build_batch and partitions them in hash_partitions_.
   Status ProcessBuildBatch(RowBatch* build_batch);
 
   // Call at the end of partitioning the build rows (which could be from the build child
@@ -164,11 +170,15 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   // Process probe rows from probe_batch_. Returns either if out_batch is full or
   // probe_batch_ is entirely consumed.
+  // For RIGHT_ANTI_JOIN, all this function does is to mark whether each build row
+  // had a match.
+  // Returns the number of rows added to out_batch; -1 on error (and status_ will be
+  // set).
   template<int const JoinOp>
-  Status ProcessProbeBatch(RowBatch* out_batch, HashTableCtx* ht_ctx);
+  int ProcessProbeBatch(RowBatch* out_batch, HashTableCtx* ht_ctx);
 
-  // Wrapper that calls templated version of ProcessProbeBatch() based on 'join_op'.
-  Status ProcessProbeBatch(
+  // Wrapper that calls the templated version of ProcessProbeBatch() based on 'join_op'.
+  int ProcessProbeBatch(
       const TJoinOp::type join_op, RowBatch* out_batch, HashTableCtx* ht_ctx);
 
   // Sweep the hash_tbl_ of the partition that it is in the front of
@@ -178,6 +188,27 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // partition in the front of flush_build_partitions_.
   Status OutputUnmatchedBuild(RowBatch* out_batch);
 
+  // Initializes null_aware_partition_ and nulls_build_batch_ to output rows.
+  Status PrepareNullAwarePartition();
+
+  // Continues processing from null_aware_partition_. Called after we have finished
+  // processing all build and probe input (including repartitioning them).
+  Status OutputNullAwareProbeRows(RuntimeState* state, RowBatch* out_batch);
+
+  // Evaluates all other_join_conjuncts against null_probe_rows_ with all the
+  // rows in build. This updates matched_null_probe_, short-circuiting if one of the
+  // conjuncts pass (i.e. there is a match).
+  // This is used for NAAJ, when there are NULL probe rows.
+  Status EvaluateNullProbe(BufferedTupleStream* build);
+
+  // Prepares to output NULLs on the probe side for NAAJ. Before calling this,
+  // matched_null_probe_ should have been fully evaluated.
+  Status PrepareNullAwareNullProbe();
+
+  // Outputs NULLs on the probe side, returning rows where matched_null_probe_[i] is
+  // false. Used for NAAJ.
+  Status OutputNullAwareNullProbe(RuntimeState* state, RowBatch* out_batch);
+
   // Call at the end of consuming the probe rows. Walks hash_partitions_ and
   //  - If this partition had a hash table, close it. This partition is fully processed
   //    on both the build and probe sides. The streams are transferred to batch.
@@ -186,6 +217,10 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   //  - If this partition did not have a hash table, meaning both sides were spilled,
   //    move the partition to spilled_partitions_.
   Status CleanUpHashPartitions(RowBatch* batch);
+
+  // For each partition in hash partitions, reserves an io sized block on both the
+  // build and probe stream.
+  Status ReserveTupleStreamBlocks();
 
   // Get the next row batch from the probe (left) side (child(0)). If we are done
   // consuming the input, sets probe_batch_pos_ to -1, otherwise, sets it to 0.
@@ -206,20 +241,25 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // Prepares for probing the next batch.
   void ResetForProbe();
 
+  // For each 'probe_expr_' in 'ht_ctx' that is a slot ref, allocate a bitmap filter on
+  // that slot. Returns false if it should not add probe filters.
+  bool AllocateProbeFilters(RuntimeState* state);
+
+  // Attach the probe filters to runtime state.
+  bool AttachProbeFilters(RuntimeState* state);
+
   // Codegen function to create output row. Assumes that the probe row is non-NULL.
   llvm::Function* CodegenCreateOutputRow(LlvmCodeGen* codegen);
 
   // Codegen processing build batches.  Identical signature to ProcessBuildBatch.
-  // hash_fn is the codegen'd function for computing hashes over tuple rows in the
-  // hash table.
-  // Returns NULL if codegen was not possible.
-  llvm::Function* CodegenProcessBuildBatch(RuntimeState* state, llvm::Function* hash_fn);
+  // Returns false if codegen was not possible.
+  bool CodegenProcessBuildBatch(
+      RuntimeState* state, llvm::Function* hash_fn, llvm::Function* murmur_hash_fn);
 
   // Codegen processing probe batches.  Identical signature to ProcessProbeBatch.
-  // hash_fn is the codegen'd function for computing hashes over tuple rows in the
-  // hash table.
-  // Returns NULL if codegen was not possible.
-  llvm::Function* CodegenProcessProbeBatch(RuntimeState* state, llvm::Function* hash_fn);
+  // Returns false if codegen was not possible.
+  bool CodegenProcessProbeBatch(
+      RuntimeState* state, llvm::Function* hash_fn, llvm::Function* murmur_hash_fn);
 
   // Returns the current state of the partition as a string.
   std::string PrintState() const;
@@ -227,7 +267,19 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // Updates state_ to 's', logging the transition.
   void UpdateState(State s);
 
-  std::string DebugString() const;
+  std::string NodeDebugString() const;
+
+  // We need two output buffers per partition (one for build and one for probe) and
+  // and two additional buffers for the input (while repartitioning; for the build and
+  // probe sides).
+  // For NAAJ, we need 3 additional buffers to maintain the null_aware_partition_.
+  int MinRequiredBuffers() const {
+    int num_reserved_buffers = PARTITION_FANOUT * 2 + 2;
+    num_reserved_buffers += join_op_ == TJoinOp::NULL_AWARE_LEFT_ANTI_JOIN ? 3 : 0;
+    return num_reserved_buffers;
+  }
+
+  RuntimeState* runtime_state_;
 
   // our equi-join predicates "<lhs> = <rhs>" are separated into
   // build_expr_ctxs_ (over child(1)) and probe_expr_ctxs_ (over child(0))
@@ -236,6 +288,9 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   // non-equi-join conjuncts from the JOIN clause
   std::vector<ExprContext*> other_join_conjunct_ctxs_;
+
+  // If true, the partitions in hash_partitions_ are using small buffers.
+  bool using_small_buffers_;
 
   // State of the algorithm. Used just for debugging.
   State state_;
@@ -278,6 +333,9 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // 1 / PARTITION_FANOUT. A value much larger indicates skew.
   RuntimeProfile::HighWaterMarkCounter* largest_partition_percent_;
 
+  // Time spent evaluating other_join_conjuncts for NAAJ.
+  RuntimeProfile::Counter* null_aware_eval_timer_;
+
   class Partition {
    public:
     Partition(RuntimeState* state, PartitionedHashJoinNode* parent, int level);
@@ -307,8 +365,18 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
     // Pins the build tuples for this partition and constructs the hash_tbl_ from it.
     // Build rows cannot be added after calling this.
     // If the partition could not be built due to memory pressure, *built is set to false
-    // and this function cleans up the hash_tbl.
-    Status BuildHashTable(RuntimeState* state, bool* built);
+    // and the caller is responsible for spilling this partition.
+    // If 'AddProbeFilters' is set, it creates the probe filters.
+    template<bool const AddProbeFilters>
+    Status BuildHashTableInternal(RuntimeState* state, bool* built);
+
+    // Wrapper for the template-based BuildHashTable() based on 'add_probe_filters'.
+    Status BuildHashTable(RuntimeState* state, bool* built, const bool add_probe_filters);
+
+    // Spills this partition, cleaning up and unpinning blocks.
+    // If unpin_all_build is true, the build stream is completely unpinned, otherwise,
+    // it is unpinned with one buffer remaining.
+    Status Spill(bool unpin_all_build);
 
    private:
     friend class PartitionedHashJoinNode;
@@ -341,14 +409,22 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   // llvm function and signature for codegening build batch.
   typedef Status (*ProcessBuildBatchFn)(PartitionedHashJoinNode*, RowBatch*);
-  // Jitted ProcessBuildBatch function pointer.  NULL if codegen is disabled.
+  // Jitted ProcessBuildBatch function pointers.  NULL if codegen is disabled.
+  // process_build_batch_fn_level0_ uses CRC hashing when available and is used when the
+  // partition level is 0, otherwise process_build_batch_fn_ uses murmur hash and is used
+  // for subsequent levels.
   ProcessBuildBatchFn process_build_batch_fn_;
+  ProcessBuildBatchFn process_build_batch_fn_level0_;
 
   // llvm function and signature for codegening probe batch.
-  typedef Status (*ProcessProbeBatchFn)(
+  typedef int (*ProcessProbeBatchFn)(
       PartitionedHashJoinNode*, RowBatch*, HashTableCtx*);
   // Jitted ProcessProbeBatch function pointer.  NULL if codegen is disabled.
+  // process_probe_batch_fn_level0_ uses CRC hashing when available and is used when the
+  // partition level is 0, otherwise process_probe_batch_fn_ uses murmur hash and is used
+  // for subsequent levels.
   ProcessProbeBatchFn process_probe_batch_fn_;
+  ProcessProbeBatchFn process_probe_batch_fn_level0_;
 
   // The list of partitions that have been spilled on both sides and still need more
   // processing. These partitions could need repartitioning, in which cases more
@@ -360,6 +436,13 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // This is not used when processing a single partition.
   std::vector<Partition*> hash_partitions_;
 
+  // Cache of the per partition hash table to speed up ProcessProbeBatch.
+  // In the case where we need to partition the probe:
+  //  hash_tbls_[i] = hash_partitions_[i]->hash_tbl();
+  // In the case where we don't need to partition the probe:
+  //  hash_tbls_[i] = input_partition_->hash_tbl();
+  HashTable* hash_tbls_[PARTITION_FANOUT];
+
   // The current input partition to be processed (not in spilled_partitions_).
   // This partition can either serve as the source for a repartitioning step, or
   // if the hash table fits in memory, the source of the probe rows.
@@ -369,6 +452,42 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // that we need to output their unmatched build rows. We always flush the unmatched
   // rows of the partition that it is in the front.
   std::list<Partition*> output_build_partitions_;
+
+  // Used for concentrating the existence bits from all the partitions, used by the
+  // probe-side filter optimization.
+  std::vector<std::pair<SlotId, Bitmap*> > probe_filters_;
+
+  // Partition used if null_aware_ is set. This partition is always processed at the end
+  // after all build and probe rows are processed. Rows are added to this partition along
+  // the way.
+  // In this partition's build_rows_, we store all the rows for which build_expr_ctxs_
+  // evaluated over the row returns NULL (i.e. it has a NULL on the eq join slot).
+  // In this partition's probe_rows, we store all probe rows that did not have a match
+  // in the hash table.
+  // At the very end, we then iterate over all the probe rows. For each probe row, we
+  // return the rows that did not match any of the build rows.
+  // NULL if we this join is not null aware or we are done processing this partition.
+  Partition* null_aware_partition_;
+
+  // Used while processing null_aware_partition_. It contains all the build tuple rows
+  // with a NULL when evaluating the hash table expr.
+  boost::scoped_ptr<RowBatch> nulls_build_batch_;
+
+  // If true, the build side has at least one row.
+  bool non_empty_build_;
+
+  // For NAAJ, this stream contains all probe rows that had NULL on the hash table
+  // conjuncts.
+  BufferedTupleStream* null_probe_rows_;
+
+  // For each row in null_probe_rows_, true if this row has matched any build row
+  // (i.e. the resulting joined row passes other_join_conjuncts).
+  // TODO: remove this. We need to be able to put these bits inside the tuple itself.
+  std::vector<bool> matched_null_probe_;
+
+  // The current index into null_probe_rows_/matched_null_probe_ that we are
+  // outputting.
+  int64_t null_probe_output_idx_;
 };
 
 }

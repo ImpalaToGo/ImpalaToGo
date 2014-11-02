@@ -87,17 +87,17 @@ decimal,decimal
 ---- QUERY
 select ndv(c1), distinctpc(c2), distinctpcsa(c1 + c2) from decimal_tiny
 ---- RESULTS
-'95','94','137'
+95,94,137
 ---- TYPES
-string,string,string
+bigint,bigint,bigint
 ====
 ---- QUERY
 select ndv(d1), distinctpc(d1), distinctpcsa(d1), count(distinct d1)
 from decimal_tbl;
 ---- RESULTS
-'4','5','84',4
+4,5,84,4
 ---- TYPES
-string,string,string,bigint
+bigint,bigint,bigint,bigint
 ====
 ---- QUERY
 select c1 + c2 from decimal_tiny order by 1 limit 5
@@ -132,6 +132,13 @@ order by t1.c1 desc limit 3
 10.7767,218.55534,0.7,10.7767,218.55534,0.7
 ---- TYPES
 DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL
+====
+---- QUERY
+select avg(d1), avg(d2), avg(d3), avg(d4), avg(d5), avg(d6) from decimal_tbl;
+---- RESULTS
+32222,666,2743.4567651580,0.12345678900000000000000000000000000000,2472.20577,1
+---- TYPES
+decimal,decimal,decimal,decimal,decimal,decimal
 ====
 ---- QUERY
 select cast(avg(c1) as decimal(10,4)) as c from decimal_tiny
@@ -257,4 +264,48 @@ select * from decimal_tiny
 10.9989,220.99978,0.9
 ---- TYPES
 DECIMAL, DECIMAL, DECIMAL
+====
+---- QUERY
+# Test sum() and avg() analytic fns with start bounds (tests Remove() for decimal)
+select
+sum(c1) over (order by c1 rows between 5 preceding and current row),
+sum(c2) over (order by c1 rows between 5 preceding and 5 following),
+sum(c3) over (order by c1 rows between 5 preceding and 2 preceding),
+avg(c1) over (order by c1 rows between 5 preceding and current row),
+avg(c2) over (order by c1 rows between 5 preceding and 5 following),
+avg(c3) over (order by c1 rows between 5 preceding and 2 preceding)
+from decimal_tiny where c2 < 112
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+0.0000,618.33330,NULL,0.0000,103.05555,NULL
+0.1111,725.66662,NULL,0.0555,103.66666,NULL
+0.3333,834.22216,0.0,0.1111,104.27777,0.0
+0.6666,943.99992,0.1,0.1666,104.88888,0.0
+1.1110,1054.99990,0.3,0.2222,105.49999,0.1
+1.6665,1054.99990,0.6,0.2777,105.49999,0.1
+2.3331,954.99990,1.0,0.3888,106.11110,0.2
+2.9997,853.77768,1.4,0.4999,106.72221,0.3
+3.6663,751.33324,1.8,0.6110,107.33332,0.4
+4.3329,647.66658,2.2,0.7221,107.94443,0.5
+---- TYPES
+DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL
+====
+---- QUERY
+select histogram(d1) from decimal_tbl;
+---- RESULTS
+'1234, 2345, 12345, 12345, 132842'
+---- TYPES
+STRING
+====
+---- QUERY
+select appx_median(c1), appx_median(c2), appx_median(c3) from decimal_tiny
+---- RESULTS
+5.5550,161.11100,0.5
+---- TYPES
+DECIMAL, DECIMAL, DECIMAL
+====
+---- QUERY
+select sample(d1) from decimal_tbl;
+---- TYPES
+# Results are unstable, just check that this doesn't crash
+STRING
 ====

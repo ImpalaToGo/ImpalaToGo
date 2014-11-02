@@ -678,13 +678,19 @@ void DiskIoMgr::ReturnFreeBuffer(char* buffer, int64_t buffer_size) {
   if (!FLAGS_disable_mem_pools && free_buffers_.size() < FLAGS_max_free_io_buffers) {
     unique_lock<mutex> lock(free_buffers_lock_);
     free_buffers_[idx].push_back(buffer);
+    if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
+      ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Increment(1L);
+    }
   } else {
     process_mem_tracker_->Release(buffer_size);
     --num_allocated_buffers_;
     delete[] buffer;
-  }
-  if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
-    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Increment(1L);
+    if (ImpaladMetrics::IO_MGR_NUM_BUFFERS != NULL) {
+      ImpaladMetrics::IO_MGR_NUM_BUFFERS->Increment(-1L);
+    }
+    if (ImpaladMetrics::IO_MGR_TOTAL_BYTES != NULL) {
+      ImpaladMetrics::IO_MGR_TOTAL_BYTES->Increment(-buffer_size);
+    }
   }
 }
 
@@ -1044,6 +1050,9 @@ Status DiskIoMgr::WriteRangeHelper(FILE* file_handle, WriteRange* write_range) {
     return Status(TStatusCode::RUNTIME_ERROR,
         Substitute("fwrite(buffer, 1, $0, $1) failed with errno=$2 description=$3",
             write_range->len_, write_range->file_, errno, GetStrErrMsg()));
+  }
+  if (ImpaladMetrics::IO_MGR_BYTES_WRITTEN != NULL) {
+    ImpaladMetrics::IO_MGR_BYTES_WRITTEN->Increment(write_range->len_);
   }
 
   return Status::OK;

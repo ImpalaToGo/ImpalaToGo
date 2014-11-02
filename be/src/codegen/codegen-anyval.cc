@@ -126,7 +126,7 @@ Value* CodegenAnyVal::CreateCall(
     // We need to pass a DecimalVal pointer to 'fn' that will be populated with the result
     // value. Use 'result_ptr' if specified, otherwise alloca one.
     Value* ret_ptr = (result_ptr == NULL) ?
-                     builder->CreateAlloca(ret_type, 0, name) : result_ptr;
+                     cg->CreateEntryBlockAlloca(*builder, ret_type, name) : result_ptr;
     vector<Value*> new_args = args.vec();
     new_args.insert(new_args.begin(), ret_ptr);
     builder->CreateCall(fn, new_args);
@@ -161,7 +161,7 @@ CodegenAnyVal::CodegenAnyVal(LlvmCodeGen* codegen, LlvmCodeGen::LlvmBuilder* bui
   Type* value_type = GetLoweredType(codegen, type);
   if (value_ == NULL) {
     // No Value* was specified, so allocate one on the stack and load it.
-    Value* ptr = builder_->CreateAlloca(value_type, 0);
+    Value* ptr = codegen_->CreateEntryBlockAlloca(*builder, value_type);
     value_ = builder_->CreateLoad(ptr, name_);
   }
   DCHECK_EQ(value_->getType(), value_type);
@@ -442,7 +442,7 @@ void CodegenAnyVal::SetDate(Value* date) {
 }
 
 Value* CodegenAnyVal::GetUnloweredPtr() {
-  Value* value_ptr = builder_->CreateAlloca(value_->getType());
+  Value* value_ptr = codegen_->CreateEntryBlockAlloca(*builder_, value_->getType());
   builder_->CreateStore(value_, value_ptr);
   return builder_->CreateBitCast(value_ptr, GetUnloweredPtrType(codegen_, type_));
 }
@@ -560,7 +560,8 @@ Value* CodegenAnyVal::Eq(CodegenAnyVal* other) {
     case TYPE_FLOAT:
     case TYPE_DOUBLE:
       return builder_->CreateFCmpUEQ(GetVal(), other->GetVal(), "eq");
-    case TYPE_STRING: {
+    case TYPE_STRING:
+    case TYPE_VARCHAR: {
       Function* eq_fn = codegen_->GetFunction(IRFunction::CODEGEN_ANYVAL_STRING_VAL_EQ);
       return builder_->CreateCall2(
           eq_fn, GetUnloweredPtr(), other->GetUnloweredPtr(), "eq");
@@ -579,7 +580,7 @@ Value* CodegenAnyVal::Eq(CodegenAnyVal* other) {
 
 Value* CodegenAnyVal::EqToNativePtr(Value* native_ptr) {
   Value* val = NULL;
-  if (type_.type != TYPE_STRING) {
+  if (!type_.IsStringType()) {
      val = builder_->CreateLoad(native_ptr);
   }
   switch (type_.type) {
@@ -595,7 +596,8 @@ Value* CodegenAnyVal::EqToNativePtr(Value* native_ptr) {
     case TYPE_FLOAT:
     case TYPE_DOUBLE:
       return builder_->CreateFCmpUEQ(GetVal(), val, "cmp_raw");
-    case TYPE_STRING: {
+    case TYPE_STRING:
+    case TYPE_VARCHAR: {
       Function* eq_fn = codegen_->GetFunction(IRFunction::CODEGEN_ANYVAL_STRING_VALUE_EQ);
       return builder_->CreateCall2(eq_fn, GetUnloweredPtr(), native_ptr, "cmp_raw");
     }
@@ -674,25 +676,4 @@ CodegenAnyVal CodegenAnyVal::GetNonNullVal(LlvmCodeGen* codegen,
   // All zeros => 'is_null' = false
   Value* value = Constant::getNullValue(val_type);
   return CodegenAnyVal(codegen, builder, type, value, name);
-}
-
-AnyVal* CreateAnyVal(ObjectPool* pool, const ColumnType& type) {
-  switch(type.type) {
-    case TYPE_NULL: return pool->Add(new AnyVal);
-    case TYPE_BOOLEAN: return pool->Add(new BooleanVal);
-    case TYPE_TINYINT: return pool->Add(new TinyIntVal);
-    case TYPE_SMALLINT: return pool->Add(new SmallIntVal);
-    case TYPE_INT: return pool->Add(new IntVal);
-    case TYPE_BIGINT: return pool->Add(new BigIntVal);
-    case TYPE_FLOAT: return pool->Add(new FloatVal);
-    case TYPE_DOUBLE: return pool->Add(new DoubleVal);
-    case TYPE_STRING:
-    case TYPE_VARCHAR:
-      return pool->Add(new StringVal);
-    case TYPE_TIMESTAMP: return pool->Add(new TimestampVal);
-    case TYPE_DECIMAL: return pool->Add(new DecimalVal);
-    default:
-      DCHECK(false) << "Unsupported type: " << type;
-      return NULL;
-  }
 }

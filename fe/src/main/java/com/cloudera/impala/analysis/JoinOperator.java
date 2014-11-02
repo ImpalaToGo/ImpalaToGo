@@ -22,8 +22,15 @@ public enum JoinOperator {
   LEFT_SEMI_JOIN("LEFT SEMI JOIN", TJoinOp.LEFT_SEMI_JOIN),
   LEFT_ANTI_JOIN("LEFT ANTI JOIN", TJoinOp.LEFT_ANTI_JOIN),
   RIGHT_OUTER_JOIN("RIGHT OUTER JOIN", TJoinOp.RIGHT_OUTER_JOIN),
+  RIGHT_SEMI_JOIN("RIGHT SEMI JOIN", TJoinOp.RIGHT_SEMI_JOIN),
+  RIGHT_ANTI_JOIN("RIGHT ANTI JOIN", TJoinOp.RIGHT_ANTI_JOIN),
   FULL_OUTER_JOIN("FULL OUTER JOIN", TJoinOp.FULL_OUTER_JOIN),
-  CROSS_JOIN("CROSS JOIN", TJoinOp.CROSS_JOIN);
+  CROSS_JOIN("CROSS JOIN", TJoinOp.CROSS_JOIN),
+  // Variant of the LEFT ANTI JOIN that is used for the rewrite of
+  // NOT IN subqueries. It can have a single equality join conjunct
+  // that returns TRUE when the rhs is NULL.
+  NULL_AWARE_LEFT_ANTI_JOIN("NULL AWARE LEFT ANTI JOIN",
+      TJoinOp.NULL_AWARE_LEFT_ANTI_JOIN);
 
   private final String description_;
   private final TJoinOp thriftJoinOp_;
@@ -49,14 +56,34 @@ public enum JoinOperator {
   }
 
   public boolean isSemiJoin() {
-    return this == JoinOperator.LEFT_SEMI_JOIN || this == JoinOperator.LEFT_ANTI_JOIN;
+    return this == JoinOperator.LEFT_SEMI_JOIN || this == JoinOperator.LEFT_ANTI_JOIN ||
+        this == JoinOperator.RIGHT_SEMI_JOIN || this == JoinOperator.RIGHT_ANTI_JOIN ||
+        this == JoinOperator.NULL_AWARE_LEFT_ANTI_JOIN;
   }
 
   public boolean isCrossJoin() {
     return this == JoinOperator.CROSS_JOIN;
   }
 
+  public boolean isNullAwareLeftAntiJoin() {
+    return this == JoinOperator.NULL_AWARE_LEFT_ANTI_JOIN;
+  }
+
   public boolean isAntiJoin() {
-    return this == JoinOperator.LEFT_ANTI_JOIN;
+    return this == JoinOperator.LEFT_ANTI_JOIN || this == JoinOperator.RIGHT_ANTI_JOIN ||
+        this == JoinOperator.NULL_AWARE_LEFT_ANTI_JOIN;
+  }
+
+  public JoinOperator invert() {
+    switch (this) {
+      case LEFT_OUTER_JOIN: return RIGHT_OUTER_JOIN;
+      case RIGHT_OUTER_JOIN: return LEFT_OUTER_JOIN;
+      case LEFT_SEMI_JOIN: return RIGHT_SEMI_JOIN;
+      case RIGHT_SEMI_JOIN: return LEFT_SEMI_JOIN;
+      case LEFT_ANTI_JOIN: return RIGHT_ANTI_JOIN;
+      case RIGHT_ANTI_JOIN: return LEFT_ANTI_JOIN;
+      case NULL_AWARE_LEFT_ANTI_JOIN: throw new IllegalStateException("Not implemented");
+      default: return this;
+    }
   }
 }

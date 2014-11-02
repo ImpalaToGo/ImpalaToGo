@@ -61,7 +61,9 @@ PartitionedAggregationNode::PartitionedAggregationNode(
     output_tuple_id_(tnode.agg_node.output_tuple_id),
     output_tuple_desc_(NULL),
     needs_finalize_(tnode.agg_node.need_finalize),
+    needs_serialize_(false),
     block_mgr_client_(NULL),
+    using_small_buffers_(true),
     singleton_output_tuple_(NULL),
     singleton_output_tuple_returned_(true),
     output_partition_(NULL),
@@ -74,9 +76,6 @@ PartitionedAggregationNode::PartitionedAggregationNode(
     num_row_repartitioned_(NULL),
     num_repartitions_(NULL) {
   DCHECK_EQ(PARTITION_FANOUT, 1 << NUM_PARTITIONING_BITS);
-  // TODO: remove when aggregation-node is removed (too easy to get confused which
-  // node is running otherwise).
-  LOG(ERROR) << "Partitioned aggregation";
 }
 
 Status PartitionedAggregationNode::Init(const TPlanNode& tnode) {
@@ -94,6 +93,15 @@ Status PartitionedAggregationNode::Init(const TPlanNode& tnode) {
 
 Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
   SCOPED_TIMER(runtime_profile_->total_time_counter());
+
+  // Create the codegen object before preparing conjunct_ctxs_ and children_, so that any
+  // ScalarFnCalls will use codegen.
+  // TODO: this is brittle and hard to reason about, revisit
+  if (state->codegen_enabled()) {
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
+  }
+
   RETURN_IF_ERROR(ExecNode::Prepare(state));
   state_ = state;
 
@@ -124,8 +132,9 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
         output_tuple_desc_->slots().size());
 
   RETURN_IF_ERROR(Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc()));
+  AddExprCtxsToFree(probe_expr_ctxs_);
 
-  contains_var_len_agg_exprs_ = contains_var_len_grouping_exprs_ = false;
+  contains_var_len_grouping_exprs_ = false;
 
   // Construct build exprs from intermediate_agg_tuple_desc_
   for (int i = 0; i < probe_expr_ctxs_.size(); ++i) {
@@ -138,15 +147,15 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
     state->obj_pool()->Add(expr);
     build_expr_ctxs_.push_back(new ExprContext(expr));
     state->obj_pool()->Add(build_expr_ctxs_.back());
-    contains_var_len_grouping_exprs_ |= (expr->type().type == TYPE_STRING);
+    contains_var_len_grouping_exprs_ |= expr->type().IsVarLen();
   }
   // Construct a new row desc for preparing the build exprs because neither the child's
   // nor this node's output row desc may contain the intermediate tuple, e.g.,
   // in a single-node plan with an intermediate tuple different from the output tuple.
   intermediate_row_desc_.reset(new RowDescriptor(intermediate_tuple_desc_, false));
   RETURN_IF_ERROR(Expr::Prepare(build_expr_ctxs_, state, *intermediate_row_desc_));
+  AddExprCtxsToFree(build_expr_ctxs_);
 
-  agg_fn_ctxs_.resize(aggregate_evaluators_.size());
   int j = probe_expr_ctxs_.size();
   for (int i = 0; i < aggregate_evaluators_.size(); ++i, ++j) {
     // skip non-materialized slots; we don't have evaluators instantiated for those
@@ -158,10 +167,12 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
     }
     SlotDescriptor* intermediate_slot_desc = intermediate_tuple_desc_->slots()[j];
     SlotDescriptor* output_slot_desc = output_tuple_desc_->slots()[j];
+    FunctionContext* agg_fn_ctx = NULL;
     RETURN_IF_ERROR(aggregate_evaluators_[i]->Prepare(state, child(0)->row_desc(),
-        intermediate_slot_desc, output_slot_desc, agg_fn_pool_.get(), &agg_fn_ctxs_[i]));
-    state->obj_pool()->Add(agg_fn_ctxs_[i]);
-    contains_var_len_agg_exprs_ |= (intermediate_slot_desc->type().type == TYPE_STRING);
+        intermediate_slot_desc, output_slot_desc, agg_fn_pool_.get(), &agg_fn_ctx));
+    agg_fn_ctxs_.push_back(agg_fn_ctx);
+    state->obj_pool()->Add(agg_fn_ctx);
+    needs_serialize_ |= aggregate_evaluators_[i]->SupportsSerialize();
   }
 
   if (probe_expr_ctxs_.empty()) {
@@ -172,23 +183,20 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
     singleton_output_tuple_returned_ = false;
   } else {
     ht_ctx_.reset(new HashTableCtx(build_expr_ctxs_, probe_expr_ctxs_, true, true,
-                                   state->fragment_hash_seed(), MAX_PARTITION_DEPTH));
+        state->fragment_hash_seed(), MAX_PARTITION_DEPTH, 1));
     RETURN_IF_ERROR(state_->block_mgr()->RegisterClient(
         MinRequiredBuffers(), mem_tracker(), state, &block_mgr_client_));
-    RETURN_IF_ERROR(CreateHashPartitions(state, 0));
+    RETURN_IF_ERROR(CreateHashPartitions(0));
   }
 
   if (state->codegen_enabled()) {
-    DCHECK(state->codegen() != NULL);
-    Function* update_tuple_fn = CodegenUpdateTuple(state);
-    if (update_tuple_fn != NULL) {
-      Function* codegen_process_row_batch_fn =
-          CodegenProcessBatch(state, update_tuple_fn);
-      if (codegen_process_row_batch_fn != NULL) {
-        state->codegen()->AddFunctionToJit(codegen_process_row_batch_fn,
-            reinterpret_cast<void**>(&process_row_batch_fn_));
-        AddRuntimeExecOption("Codegen Enabled");
-      }
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
+    Function* codegen_process_row_batch_fn = CodegenProcessBatch();
+    if (codegen_process_row_batch_fn != NULL) {
+      codegen->AddFunctionToJit(codegen_process_row_batch_fn,
+          reinterpret_cast<void**>(&process_row_batch_fn_));
+      AddRuntimeExecOption("Codegen Enabled");
     }
   }
   return Status::OK;
@@ -206,13 +214,22 @@ Status PartitionedAggregationNode::Open(RuntimeState* state) {
     RETURN_IF_ERROR(aggregate_evaluators_[i]->Open(state, agg_fn_ctxs_[i]));
   }
 
+  if (needs_serialize_ && block_mgr_client_ != NULL) {
+    serialize_stream_.reset(new BufferedTupleStream(state, *intermediate_row_desc_,
+        state->block_mgr(), block_mgr_client_,
+        false, /* use initial small buffers */
+        true  /* delete on read */));
+    RETURN_IF_ERROR(serialize_stream_->Init(runtime_profile(), false));
+    DCHECK(serialize_stream_->has_write_block());
+  }
+
   // Read all the rows from the child and process them.
   RETURN_IF_ERROR(children_[0]->Open(state));
   RowBatch batch(children_[0]->row_desc(), state->batch_size(), mem_tracker());
   bool eos = false;
   while (!eos) {
     RETURN_IF_CANCELLED(state);
-    RETURN_IF_ERROR(state->CheckQueryState());
+    RETURN_IF_ERROR(QueryMaintenance(state));
     RETURN_IF_ERROR(children_[0]->GetNext(state, &batch, &eos));
 
     if (VLOG_ROW_IS_ON) {
@@ -253,7 +270,7 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
   SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
-  RETURN_IF_ERROR(state->CheckQueryState());
+  RETURN_IF_ERROR(QueryMaintenance(state));
 
   if (ReachedLimit()) {
     *eos = true;
@@ -278,6 +295,7 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
       singleton_output_tuple_returned_ = true;
     }
     *eos = true;
+    COUNTER_SET(rows_returned_counter_, num_rows_returned_);
     return Status::OK;
   }
 
@@ -293,13 +311,22 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
       return Status::OK;
     }
     // Process next partition.
-    RETURN_IF_ERROR(NextPartition(state));
+    RETURN_IF_ERROR(NextPartition());
     DCHECK(output_partition_ != NULL);
   }
 
   SCOPED_TIMER(get_results_timer_);
+  int count = 0;
+  const int N = state->batch_size();
   // Keeping returning rows from the current partition.
   while (!output_iterator_.AtEnd() && !row_batch->AtCapacity()) {
+    // This loop can go on for a long time if the conjuncts are very selective. Do query
+    // maintenance every N iterations.
+    if (count++ % N == 0) {
+      RETURN_IF_CANCELLED(state);
+      RETURN_IF_ERROR(QueryMaintenance(state));
+    }
+
     int row_idx = row_batch->AddRow();
     TupleRow* row = row_batch->GetRow(row_idx);
     Tuple* intermediate_tuple = output_iterator_.GetTuple();
@@ -315,31 +342,33 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
   }
   COUNTER_SET(rows_returned_counter_, num_rows_returned_);
   *eos = ReachedLimit();
+  if (output_iterator_.AtEnd()) row_batch->MarkNeedToReturn();
   return Status::OK;
+}
+
+void PartitionedAggregationNode::CleanupHashTbl(const vector<FunctionContext*>& ctxs,
+    HashTable::Iterator it) {
+  if (!needs_finalize_ && !needs_serialize_) return;
+  while (!it.AtEnd()) {
+    FinalizeTuple(ctxs, it.GetTuple(), mem_pool_.get());
+    // Avoid consuming excessive memory.
+    if (mem_pool_->total_allocated_bytes() > 1024 * 1024) mem_pool_->FreeAll();
+    it.Next<false>(ht_ctx_.get());
+  }
 }
 
 void PartitionedAggregationNode::Close(RuntimeState* state) {
   if (is_closed()) return;
 
   if (!singleton_output_tuple_returned_) {
+    DCHECK_EQ(agg_fn_ctxs_.size(), aggregate_evaluators_.size());
     FinalizeTuple(agg_fn_ctxs_, singleton_output_tuple_, mem_pool_.get());
   }
 
   // Iterate through the remaining rows in the hash table and call Serialize/Finalize on
   // them in order to free any memory allocated by UDAs
   if (output_partition_ != NULL) {
-    while (!output_iterator_.AtEnd()) {
-      Tuple* intermediate_tuple = output_iterator_.GetTuple();
-      Tuple* output_tuple = FinalizeTuple(
-          output_partition_->agg_fn_ctxs, intermediate_tuple, mem_pool_.get());
-      if (output_tuple != intermediate_tuple) {
-        // Avoid consuming excessive memory.
-        mem_pool_->FreeAll();
-      }
-      output_iterator_.Next<false>(ht_ctx_.get());
-    }
-    output_partition_->aggregated_row_stream->Close();
-    output_partition_->aggregated_row_stream.reset();
+    CleanupHashTbl(output_partition_->agg_fn_ctxs, output_iterator_);
     output_partition_->Close(false);
   }
 
@@ -357,17 +386,19 @@ void PartitionedAggregationNode::Close(RuntimeState* state) {
   aggregated_partitions_.clear();
   spilled_partitions_.clear();
 
-  DCHECK(aggregate_evaluators_.size() == agg_fn_ctxs_.size() || agg_fn_ctxs_.empty());
   for (int i = 0; i < aggregate_evaluators_.size(); ++i) {
     aggregate_evaluators_[i]->Close(state);
-    if (!agg_fn_ctxs_.empty()) agg_fn_ctxs_[i]->impl()->Close();
+  }
+  for (int i = 0; i < agg_fn_ctxs_.size(); ++i) {
+    agg_fn_ctxs_[i]->impl()->Close();
   }
   if (agg_fn_pool_.get() != NULL) agg_fn_pool_->FreeAll();
   if (mem_pool_.get() != NULL) mem_pool_->FreeAll();
   if (ht_ctx_.get() != NULL) ht_ctx_->Close();
+  if (serialize_stream_.get() != NULL) serialize_stream_->Close();
 
   if (block_mgr_client_ != NULL) {
-    state->block_mgr()->LowerBufferReservation(block_mgr_client_, 0);
+    state->block_mgr()->ClearReservations(block_mgr_client_);
   }
 
   Expr::Close(probe_expr_ctxs_, state);
@@ -381,48 +412,144 @@ Status PartitionedAggregationNode::Partition::InitStreams() {
     agg_fn_ctxs.push_back(parent->agg_fn_ctxs_[i]->impl()->Clone(agg_fn_pool.get()));
   }
 
-  aggregated_row_stream.reset(new BufferedTupleStream(parent->state_, parent->row_desc(),
-      parent->state_->block_mgr(), parent->block_mgr_client_));
-  RETURN_IF_ERROR(aggregated_row_stream->Init());
+  aggregated_row_stream.reset(new BufferedTupleStream(parent->state_,
+      *parent->intermediate_row_desc_, parent->state_->block_mgr(),
+      parent->block_mgr_client_,
+      level == 0, /* use small buffers */
+      false /* delete on read */));
+  RETURN_IF_ERROR(aggregated_row_stream->Init(parent->runtime_profile()));
 
   unaggregated_row_stream.reset(new BufferedTupleStream(parent->state_,
       parent->child(0)->row_desc(), parent->state_->block_mgr(),
-      parent->block_mgr_client_));
+      parent->block_mgr_client_,
+      level == 0, /* use small buffers */
+      true /* delete on read */));
   // This stream is only used to spill, no need to ever have this pinned.
-  RETURN_IF_ERROR(unaggregated_row_stream->Init(false));
+  RETURN_IF_ERROR(unaggregated_row_stream->Init(parent->runtime_profile(), false));
+  DCHECK(unaggregated_row_stream->has_write_block());
   return Status::OK;
 }
 
 bool PartitionedAggregationNode::Partition::InitHashTable() {
   DCHECK(hash_tbl.get() == NULL);
+  // We use the upper PARTITION_FANOUT num bits to pick the partition so only the
+  // remaining bits can be used for the hash table.
   // TODO: how many buckets?
-  hash_tbl.reset(new HashTable(parent->state_, parent->block_mgr_client_, 1, true));
+  // TODO: we could switch to 64 bit hashes and then we don't need a max size.
+  // It might be reasonable to limit individual hash table size for other reasons
+  // though.
+  // Only use small buffers on level 0 (no repartitioning).
+  hash_tbl.reset(new HashTable(parent->state_, parent->block_mgr_client_, 1, NULL,
+      level == 0, 1 << (32 - NUM_PARTITIONING_BITS)));
   return hash_tbl->Init();
+}
+
+Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
+  DCHECK(!is_spilled());
+  if (parent->needs_serialize_ && aggregated_row_stream->num_rows() != 0) {
+    // We need to do a lot more work in this case. This step effectively does a merge
+    // aggregation in this node. We need to serialize the intermediates, spill the
+    // intermediates and then feed them into the aggregate function's merge step.
+    // This is often used when the intermediate is a string type, meaning the current
+    // (before serialization) in memory layout is not the on disk block layout.
+    // The disk layout does not support mutable rows. We need to rewrite the stream
+    // into the on disk format.
+    // TODO: if it happens to not be a string, we could serialize in place. This is
+    // a future optimization since it is very unlikely to have a serialize phase
+    // for those UDAs.
+    DCHECK(parent->serialize_stream_.get() != NULL);
+    DCHECK(!parent->serialize_stream_->is_pinned());
+    DCHECK(parent->serialize_stream_->has_write_block());
+
+    const vector<AggFnEvaluator*>& evaluators = parent->aggregate_evaluators_;;
+
+    // Serialize and copy the spilled partition's stream into the new stream.
+    bool failed_to_add = false;
+    BufferedTupleStream* new_stream = parent->serialize_stream_.get();
+    HashTableCtx* ctx = parent->ht_ctx_.get();
+    HashTable::Iterator it = hash_tbl->Begin(ctx);
+    while (!it.AtEnd()) {
+      Tuple* tuple = it.GetTuple();
+      it.Next<false>(ctx);
+      AggFnEvaluator::Serialize(evaluators, agg_fn_ctxs, tuple);
+      if (UNLIKELY(!new_stream->AddRow(reinterpret_cast<TupleRow*>(&tuple)))) {
+        failed_to_add = true;
+        break;
+      }
+    }
+
+    if (intermediate_tuple != NULL) {
+      AggFnEvaluator::Serialize(evaluators, agg_fn_ctxs, intermediate_tuple);
+      if (!failed_to_add &&
+          !new_stream->AddRow(reinterpret_cast<TupleRow*>(&intermediate_tuple))) {
+        failed_to_add = true;
+      }
+    }
+
+    // Even if we can't add to new_stream, finish up processing this agg stream
+    // to make clean up easier (someone has to finalize this stream and we don't want
+    // to remember where we are).
+    if (failed_to_add) {
+      parent->CleanupHashTbl(agg_fn_ctxs, it);
+      hash_tbl->Close();
+      hash_tbl.reset();
+      aggregated_row_stream->Close();
+      RETURN_IF_ERROR(new_stream->status());
+      return parent->state_->block_mgr()->MemLimitTooLowError(parent->block_mgr_client_);
+    }
+
+    aggregated_row_stream->Close();
+    aggregated_row_stream.swap(parent->serialize_stream_);
+    // Recreate the serialize_stream (and reserve 1 buffer) now in preparation for
+    // when we need to spill again. We need to have this available before we need
+    // to spill to make sure it is available. This must be acquirable since we just
+    // freed at least one buffer from this partition's (old) aggregated_row_stream.
+    parent->serialize_stream_.reset(new BufferedTupleStream(parent->state_,
+        *parent->intermediate_row_desc_, parent->state_->block_mgr(),
+        parent->block_mgr_client_,
+        false, /* use small buffers */
+        true   /* delete on read */));
+    RETURN_IF_ERROR(parent->serialize_stream_->Init(parent->runtime_profile(), false));
+    DCHECK(parent->serialize_stream_->has_write_block());
+  }
+
+  // Free the in-memory result data
+  for (int i = 0; i < agg_fn_ctxs.size(); ++i) {
+    agg_fn_ctxs[i]->impl()->Close();
+  }
+  if (agg_fn_pool.get() != NULL) {
+    agg_fn_pool->FreeAll();
+    agg_fn_pool.reset();
+  }
+
+  hash_tbl->Close();
+  hash_tbl.reset();
+  DCHECK(aggregated_row_stream->has_write_block())
+      << aggregated_row_stream->DebugString();
+  RETURN_IF_ERROR(aggregated_row_stream->UnpinStream(false));
+
+  COUNTER_ADD(parent->num_spilled_partitions_, 1);
+  if (parent->num_spilled_partitions_->value() == 1) {
+    parent->AddRuntimeExecOption("Spilled");
+  }
+  DCHECK(!aggregated_row_stream->using_small_buffers());
+  DCHECK(!unaggregated_row_stream->using_small_buffers());
+  return Status::OK;
 }
 
 void PartitionedAggregationNode::Partition::Close(bool finalize_rows) {
   if (is_closed) return;
   is_closed = true;
-  if (hash_tbl.get() != NULL) hash_tbl->Close();
   if (aggregated_row_stream.get() != NULL) {
-    if (finalize_rows) {
+    if (finalize_rows && hash_tbl.get() != NULL) {
       // We need to walk all the rows and Finalize them here so the UDA gets a chance
-      // to cleanup.
-      aggregated_row_stream->PrepareForRead();
-      RowBatch batch(parent->row_desc(),
-          parent->state_->batch_size(), parent->mem_tracker());
-      bool eos = false;
-      while (!eos) {
-        aggregated_row_stream->GetNext(&batch, &eos);
-        for (int i = 0; i < batch.num_rows(); ++i) {
-          parent->FinalizeTuple(
-              agg_fn_ctxs, batch.GetRow(i)->GetTuple(0), batch.tuple_data_pool());
-        }
-        batch.Reset();
-      }
+      // to cleanup. If the hash table is gone (meaning this was spilled), the rows
+      // should have been finalized/serialized in Spill().
+      parent->CleanupHashTbl(agg_fn_ctxs, hash_tbl->Begin(parent->ht_ctx_.get()));
     }
     aggregated_row_stream->Close();
   }
+  if (hash_tbl.get() != NULL) hash_tbl->Close();
   if (unaggregated_row_stream.get() != NULL) unaggregated_row_stream->Close();
 
   for (int i = 0; i < agg_fn_ctxs.size(); ++i) {
@@ -450,7 +577,7 @@ Tuple* PartitionedAggregationNode::ConstructIntermediateTuple(
       // TODO: This is likely to be too slow. The hash table could maintain this as
       // it hashes.
       for (int i = 0; i < probe_expr_ctxs_.size(); ++i) {
-        if (probe_expr_ctxs_[i]->root()->type().type != TYPE_STRING) continue;
+        if (!probe_expr_ctxs_[i]->root()->type().IsVarLen()) continue;
         if (ht_ctx_->last_expr_value_null(i)) continue;
         StringValue* sv = reinterpret_cast<StringValue*>(ht_ctx_->last_expr_value(i));
         size += sv->len;
@@ -521,10 +648,10 @@ void PartitionedAggregationNode::UpdateTuple(FunctionContext** agg_fn_ctxs,
     Tuple* tuple, TupleRow* row, bool is_merge) {
   DCHECK(tuple != NULL || aggregate_evaluators_.empty());
   for (int i = 0; i < aggregate_evaluators_.size(); ++i) {
-    if (aggregate_evaluators_[i]->is_merge() || is_merge) {
-      aggregate_evaluators_[i]->Merge(agg_fn_ctxs[i], row, tuple);
+    if (is_merge) {
+      aggregate_evaluators_[i]->Merge(agg_fn_ctxs[i], row->GetTuple(0), tuple);
     } else {
-      aggregate_evaluators_[i]->Update(agg_fn_ctxs[i], row, tuple);
+      aggregate_evaluators_[i]->Add(agg_fn_ctxs[i], row, tuple);
     }
   }
 }
@@ -570,12 +697,14 @@ void PartitionedAggregationNode::DebugString(int indentation_level,
   *out << ")";
 }
 
-Status PartitionedAggregationNode::CreateHashPartitions(RuntimeState* state, int level) {
+Status PartitionedAggregationNode::CreateHashPartitions(int level) {
   if (level >= MAX_PARTITION_DEPTH) {
-    // TODO: better error msg.
-    return Status("Cannot perform hash aggregation. Partitioned input data too many"
+    Status status = Status::MEM_LIMIT_EXCEEDED;
+    status.AddErrorMsg("Cannot perform hash aggregation. Partitioned input data too many"
        " times. This could mean there is too much skew in the data or the memory"
        " limit is set too low.");
+    state_->SetMemLimitExceeded();
+    return status;
   }
   ht_ctx_->set_level(level);
 
@@ -584,16 +713,13 @@ Status PartitionedAggregationNode::CreateHashPartitions(RuntimeState* state, int
     hash_partitions_.push_back(state_->obj_pool()->Add(new Partition(this, level)));
     RETURN_IF_ERROR(hash_partitions_[i]->InitStreams());
   }
-  DCHECK_GT(state->block_mgr()->num_reserved_buffers_remaining(block_mgr_client_), 0);
+  DCHECK_GT(state_->block_mgr()->num_reserved_buffers_remaining(block_mgr_client_), 0);
 
   // Now that all the streams are reserved (meaning we have enough memory to execute
   // the algorithm), allocate the hash tables. These can fail and we can still continue.
   for (int i = 0; i < PARTITION_FANOUT; ++i) {
     if (!hash_partitions_[i]->InitHashTable()) {
-      hash_partitions_[i]->hash_tbl->Close();
-      hash_partitions_[i]->hash_tbl.reset();
-      RETURN_IF_ERROR(hash_partitions_[i]->aggregated_row_stream->UnpinStream(true));
-      COUNTER_ADD(num_spilled_partitions_, 1);
+      RETURN_IF_ERROR(hash_partitions_[i]->Spill());
     }
   }
   COUNTER_ADD(partitions_created_, PARTITION_FANOUT);
@@ -601,7 +727,7 @@ Status PartitionedAggregationNode::CreateHashPartitions(RuntimeState* state, int
   return Status::OK;
 }
 
-Status PartitionedAggregationNode::NextPartition(RuntimeState* state) {
+Status PartitionedAggregationNode::NextPartition() {
   DCHECK(output_partition_ == NULL);
 
   // Keep looping until we get to a partition that fits in memory.
@@ -618,7 +744,8 @@ Status PartitionedAggregationNode::NextPartition(RuntimeState* state) {
 
     if (partition == NULL) {
       DCHECK(!spilled_partitions_.empty());
-      DCHECK_EQ(state->block_mgr()->num_pinned_buffers(block_mgr_client_), 0);
+      DCHECK_EQ(state_->block_mgr()->num_pinned_buffers(block_mgr_client_),
+          needs_serialize_ ? 1 : 0);
 
       // TODO: we can probably do better than just picking the first partition. We
       // can base this on the amount written to disk, etc.
@@ -629,7 +756,7 @@ Status PartitionedAggregationNode::NextPartition(RuntimeState* state) {
       // TODO: we don't need to repartition here. We are now working on 1 / FANOUT
       // of the input so it's reasonably likely it can fit. We should look at this
       // partitions size and just do the aggregation if it fits in memory.
-      RETURN_IF_ERROR(CreateHashPartitions(state, partition->level + 1));
+      RETURN_IF_ERROR(CreateHashPartitions(partition->level + 1));
       COUNTER_ADD(num_repartitions_, 1);
 
       // Rows in this partition could have been spilled into two streams, depending
@@ -659,19 +786,19 @@ Status PartitionedAggregationNode::NextPartition(RuntimeState* state) {
   DCHECK(partition->aggregated_row_stream->is_pinned());
 
   output_partition_ = partition;
-  output_iterator_ = output_partition_->hash_tbl->Begin();
+  output_iterator_ = output_partition_->hash_tbl->Begin(ht_ctx_.get());
   COUNTER_ADD(num_hash_buckets_, output_partition_->hash_tbl->num_buckets());
   return Status::OK;
 }
 
 template<bool AGGREGATED_ROWS>
 Status PartitionedAggregationNode::ProcessStream(BufferedTupleStream* input_stream) {
-  bool got_buffer = false;
-  RETURN_IF_ERROR(input_stream->PrepareForRead(&got_buffer));
-  if (!got_buffer) {
+  while (true) {
+    bool got_buffer = false;
+    RETURN_IF_ERROR(input_stream->PrepareForRead(&got_buffer));
+    if (got_buffer) break;
     // Did not have a buffer to read the input stream. Spill and try again.
     RETURN_IF_ERROR(SpillPartition());
-    RETURN_IF_ERROR(input_stream->PrepareForRead());
   }
 
   bool eos = false;
@@ -686,9 +813,31 @@ Status PartitionedAggregationNode::ProcessStream(BufferedTupleStream* input_stre
   return Status::OK;
 }
 
-Status PartitionedAggregationNode::SpillPartition() {
+Status PartitionedAggregationNode::SpillPartition(Partition* curr_partition,
+    Tuple* intermediate_tuple) {
   int64_t max_freed_mem = 0;
   int partition_idx = -1;
+
+  if (using_small_buffers_) {
+    for (int i = 0; i < hash_partitions_.size(); ++i) {
+      if (hash_partitions_[i]->is_closed) continue;
+      DCHECK(hash_partitions_[i]->aggregated_row_stream->using_small_buffers());
+      DCHECK(hash_partitions_[i]->unaggregated_row_stream->using_small_buffers());
+      bool got_buffer;
+      RETURN_IF_ERROR(
+          hash_partitions_[i]->aggregated_row_stream->InitIoBuffer(&got_buffer));
+      if (got_buffer) {
+        RETURN_IF_ERROR(
+            hash_partitions_[i]->unaggregated_row_stream->InitIoBuffer(&got_buffer));
+      }
+      if (!got_buffer) {
+        Status status = Status::MEM_LIMIT_EXCEEDED;
+        status.AddErrorMsg("Not enough memory to get the minimum required buffers.");
+        return status;
+      }
+    }
+    using_small_buffers_ = false;
+  }
 
   // Iterate over the partitions and pick the largest partition that is not spilled.
   for (int i = 0; i < hash_partitions_.size(); ++i) {
@@ -702,58 +851,13 @@ Status PartitionedAggregationNode::SpillPartition() {
     }
   }
   if (partition_idx == -1) {
-    DCHECK(false) << "This should never happen due to the reservation. This is "
-      "defense on release builds";
-    // Could not find a partition to spill. This means the mem limit was just too
-    // low.
-    Status status = Status::MEM_LIMIT_EXCEEDED;
-    status.AddErrorMsg("Mem limit is too low to perform partitioned aggregation");
-    return status;
+    // Could not find a partition to spill. This means the mem limit was just too low.
+    return state_->block_mgr()->MemLimitTooLowError(block_mgr_client_);
   }
 
-  Partition* partition = hash_partitions_[partition_idx];
-  DCHECK(partition->hash_tbl.get() != NULL);
-  partition->hash_tbl->Close();
-  partition->hash_tbl.reset();
-  RETURN_IF_ERROR(partition->aggregated_row_stream->UnpinStream(true));
-  COUNTER_ADD(num_spilled_partitions_, 1);
-
-  // We need to do a lot more work in this case. The result tuple contains var-len
-  // strings, meaning the current in memory layout is not the on disk block layout.
-  // The disk layout does not support mutable rows. We need to rewrite the stream
-  // into the on disk format.
-  if (contains_var_len_agg_exprs_) {
-    // TODO: We can't do this without expr-refactoring. All var-len data currently comes
-    // from the same mem pool. Remove this check after expr refactoring rebase.
-    DCHECK(!contains_var_len_agg_exprs_) << "Not implemented without expr-refactoring";
-
-    // Make a new stream to copy the rows into.
-    scoped_ptr<BufferedTupleStream> new_stream(new BufferedTupleStream(
-        state_, row_desc(), state_->block_mgr(), block_mgr_client_));
-    RETURN_IF_ERROR(new_stream->Init(false));
-
-    // Copy the spilled partition's stream into the new stream. This compacts the var-len
-    // result data.
-    RETURN_IF_ERROR(partition->aggregated_row_stream->PrepareForRead());
-    RowBatch batch(row_desc(), state_->batch_size(), mem_tracker());
-    bool eos = false;
-    while (!eos) {
-      RETURN_IF_ERROR(partition->aggregated_row_stream->GetNext(&batch, &eos));
-      for (int i = 0; i < batch.num_rows(); ++i) {
-        bool result = new_stream->AddRow(batch.GetRow(i));
-        if (!result) return Status::MEM_LIMIT_EXCEEDED;
-      }
-    }
-    partition->aggregated_row_stream->Close();
-    partition->aggregated_row_stream.swap(new_stream);
-
-    // Free the in-memory result data
-    // TODO: this isn't right. We need to finalize each tuple and close the partition's
-    // FunctionContext
-    for (int i = 0; i < partition->agg_fn_ctxs.size(); ++i) {
-      partition->agg_fn_ctxs[i]->impl()->FreeLocalAllocations();
-    }
-  }
+  Partition* spilled_partition = hash_partitions_[partition_idx];
+  RETURN_IF_ERROR(spilled_partition->Spill(
+      spilled_partition == curr_partition ? intermediate_tuple : NULL));
   return Status::OK;
 }
 
@@ -780,6 +884,7 @@ Status PartitionedAggregationNode::MoveHashPartitions(int64_t num_input_rows) {
     if (total_rows == 0) {
       partition->Close(false);
     } else if (partition->is_spilled()) {
+      DCHECK(partition->hash_tbl.get() == NULL);
       // We need to unpin all the spilled partitions to make room to allocate new
       // hash_partitions_ when we repartition the spilled partitions.
       // TODO: we only need to do this when we have memory pressure. This might be
@@ -787,50 +892,30 @@ Status PartitionedAggregationNode::MoveHashPartitions(int64_t num_input_rows) {
       // is memory pressure.
       RETURN_IF_ERROR(partition->aggregated_row_stream->UnpinStream(true));
       RETURN_IF_ERROR(partition->unaggregated_row_stream->UnpinStream(true));
-      spilled_partitions_.push_back(partition);
+
+      // Push new created partitions at the front. This means a depth first walk
+      // (more finely partitioned partitions are processed first). This allows us
+      // to delete blocks earlier and bottom out the recursion earlier.
+      spilled_partitions_.push_front(partition);
     } else {
       aggregated_partitions_.push_back(partition);
     }
 
   }
-  LOG(ERROR) << ss.str();
+  VLOG(2) << ss.str();
   hash_partitions_.clear();
   return Status::OK;
 }
 
-IRFunction::Type GetAvgFunction(const ColumnType& type, bool is_merge) {
-  if (!is_merge) {
-    switch (type.type) {
-      case TYPE_BIGINT: return IRFunction::AVG_UPDATE_BIGINT;
-      case TYPE_DOUBLE: return IRFunction::AVG_UPDATE_DOUBLE;
-      case TYPE_TIMESTAMP: return IRFunction::AVG_UPDATE_TIMESTAMP;
-      case TYPE_DECIMAL: return IRFunction::AVG_UPDATE_DECIMAL;
-      default:
-        DCHECK(false) << "Unsupported type: " << type;
-        return IRFunction::FN_END;
-    }
-  } else {
-    if (type.type == TYPE_DECIMAL) return IRFunction::AVG_MERGE_DECIMAL;
-    return IRFunction::AVG_MERGE;
+Status PartitionedAggregationNode::QueryMaintenance(RuntimeState* state) {
+  for (int i = 0; i < aggregate_evaluators_.size(); ++i) {
+    ExprContext::FreeLocalAllocations(aggregate_evaluators_[i]->input_expr_ctxs());
   }
-}
-
-IRFunction::Type GetHllFunction(const ColumnType& type, bool is_merge) {
-  if (is_merge) return IRFunction::HLL_MERGE;
-  switch (type.type) {
-    case TYPE_BOOLEAN: return IRFunction::HLL_UPDATE_BOOLEAN;
-    case TYPE_TINYINT: return IRFunction::HLL_UPDATE_TINYINT;
-    case TYPE_SMALLINT: return IRFunction::HLL_UPDATE_SMALLINT;
-    case TYPE_INT: return IRFunction::HLL_UPDATE_INT;
-    case TYPE_BIGINT: return IRFunction::HLL_UPDATE_BIGINT;
-    case TYPE_FLOAT: return IRFunction::HLL_UPDATE_FLOAT;
-    case TYPE_DOUBLE: return IRFunction::HLL_UPDATE_DOUBLE;
-    case TYPE_STRING: return IRFunction::HLL_UPDATE_STRING;
-    case TYPE_DECIMAL: return IRFunction::HLL_UPDATE_DECIMAL;
-    default:
-      DCHECK(false) << "Unsupported type: " << type;
-      return IRFunction::FN_END;
+  ExprContext::FreeLocalAllocations(agg_fn_ctxs_);
+  for (int i = 0; i < hash_partitions_.size(); ++i) {
+    ExprContext::FreeLocalAllocations(hash_partitions_[i]->agg_fn_ctxs);
   }
+  return ExecNode::QueryMaintenance(state);
 }
 
 // IR Generation for updating a single aggregation slot. Signature is:
@@ -910,9 +995,10 @@ IRFunction::Type GetHllFunction(const ColumnType& type, bool is_merge) {
 //   ret void
 // }
 llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
-    RuntimeState* state, AggFnEvaluator* evaluator, SlotDescriptor* slot_desc) {
+    AggFnEvaluator* evaluator, SlotDescriptor* slot_desc) {
   DCHECK(slot_desc->is_materialized());
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state_->GetCodegen(&codegen).ok()) return NULL;
 
   DCHECK_EQ(evaluator->input_expr_ctxs().size(), 1);
   ExprContext* input_expr_ctx = evaluator->input_expr_ctxs()[0];
@@ -925,7 +1011,7 @@ llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
   }
 
   Function* agg_expr_fn;
-  Status status = input_expr->GetCodegendComputeFn(state, &agg_expr_fn);
+  Status status = input_expr->GetCodegendComputeFn(state_, &agg_expr_fn);
   if (!status.ok()) {
     VLOG_QUERY << "Could not codegen UpdateSlot(): " << status.GetErrorMsg();
     return NULL;
@@ -1001,48 +1087,44 @@ llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
       break;
     }
     case AggFnEvaluator::SUM:
-      if (slot_desc->type().type == TYPE_FLOAT || slot_desc->type().type == TYPE_DOUBLE) {
-        result = builder.CreateFAdd(dst_value, src.GetVal());
-      } else {
-        result = builder.CreateAdd(dst_value, src.GetVal());
+      if (slot_desc->type().type != TYPE_DECIMAL) {
+        if (slot_desc->type().type == TYPE_FLOAT ||
+            slot_desc->type().type == TYPE_DOUBLE) {
+          result = builder.CreateFAdd(dst_value, src.GetVal());
+        } else {
+          result = builder.CreateAdd(dst_value, src.GetVal());
+        }
+        break;
       }
-      break;
+      DCHECK_EQ(slot_desc->type().type, TYPE_DECIMAL);
+      // Fall through to xcompiled case
     case AggFnEvaluator::AVG:
     case AggFnEvaluator::NDV: {
-      DCHECK_EQ(slot_desc->type().type, TYPE_STRING);
+      // Get xcompiled update/merge function from IR module
+      const string& symbol = evaluator->is_merge() ?
+                             evaluator->merge_symbol() : evaluator->update_symbol();
+      Function* ir_fn = codegen->module()->getFunction(symbol);
+      DCHECK_NOTNULL(ir_fn);
 
-      IRFunction::Type ir_function_type;
-      if (evaluator->agg_op() == AggFnEvaluator::AVG) {
-        ir_function_type = GetAvgFunction(input_expr->type(), evaluator->is_merge());
-      } else {
-        DCHECK_EQ(evaluator->agg_op(), AggFnEvaluator::NDV);
-        ir_function_type = GetHllFunction(input_expr->type(), evaluator->is_merge());
-      }
-
-      Function* ir_fn = codegen->GetFunction(ir_function_type);
-
-      // Create pointer to src_anyval to pass to HllUpdate() function. We must use the
-      // unlowered type.
+      // Create pointer to src to pass to ir_fn. We must use the unlowered type.
       Value* src_lowered_ptr = codegen->CreateEntryBlockAlloca(
           fn, LlvmCodeGen::NamedVariable("src_lowered_ptr", src.value()->getType()));
       builder.CreateStore(src.value(), src_lowered_ptr);
       Type* unlowered_ptr_type =
-          CodegenAnyVal::GetUnloweredType(codegen, input_expr->type())->getPointerTo();
+          CodegenAnyVal::GetUnloweredPtrType(codegen, input_expr->type());
       Value* src_unlowered_ptr =
           builder.CreateBitCast(src_lowered_ptr, unlowered_ptr_type, "src_unlowered_ptr");
 
-      // Create StringVal* intermediate argument from dst_value
-      CodegenAnyVal dst_stringval = CodegenAnyVal::GetNonNullVal(
-          codegen, &builder, TYPE_STRING, "dst_stringval");
-      dst_stringval.SetFromRawValue(dst_value);
-      // Create pointer to dst_stringval to pass to HllUpdate() function. We must use
-      // the unlowered type.
+      // Create intermediate argument 'dst' from 'dst_value'
+      const ColumnType& dst_type = evaluator->intermediate_type();
+      CodegenAnyVal dst = CodegenAnyVal::GetNonNullVal(
+          codegen, &builder, dst_type, "dst");
+      dst.SetFromRawValue(dst_value);
+      // Create pointer to dst to pass to ir_fn. We must use the unlowered type.
       Value* dst_lowered_ptr = codegen->CreateEntryBlockAlloca(
-          fn, LlvmCodeGen::NamedVariable("dst_lowered_ptr",
-                                         dst_stringval.value()->getType()));
-      builder.CreateStore(dst_stringval.value(), dst_lowered_ptr);
-      unlowered_ptr_type =
-          codegen->GetPtrType(CodegenAnyVal::GetUnloweredType(codegen, TYPE_STRING));
+          fn, LlvmCodeGen::NamedVariable("dst_lowered_ptr", dst.value()->getType()));
+      builder.CreateStore(dst.value(), dst_lowered_ptr);
+      unlowered_ptr_type = CodegenAnyVal::GetUnloweredPtrType(codegen, dst_type);
       Value* dst_unlowered_ptr =
           builder.CreateBitCast(dst_lowered_ptr, unlowered_ptr_type, "dst_unlowered_ptr");
 
@@ -1051,8 +1133,7 @@ llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
 
       // Convert StringVal intermediate 'dst_arg' back to StringValue
       Value* anyval_result = builder.CreateLoad(dst_lowered_ptr, "anyval_result");
-      result = CodegenAnyVal(codegen, &builder, TYPE_STRING, anyval_result)
-               .ToNativeValue();
+      result = CodegenAnyVal(codegen, &builder, dst_type, anyval_result).ToNativeValue();
       break;
     }
     default:
@@ -1099,8 +1180,9 @@ llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
 //                          %"class.impala::TupleRow"* %row)
 //   ret void
 // }
-Function* PartitionedAggregationNode::CodegenUpdateTuple(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+Function* PartitionedAggregationNode::CodegenUpdateTuple() {
+  LlvmCodeGen* codegen;
+  if (!state_->GetCodegen(&codegen).ok()) return NULL;
   SCOPED_TIMER(codegen->codegen_timer());
 
   int j = probe_expr_ctxs_.size();
@@ -1116,13 +1198,23 @@ Function* PartitionedAggregationNode::CodegenUpdateTuple(RuntimeState* state) {
     // Don't codegen things that aren't builtins (for now)
     if (!evaluator->is_builtin()) return NULL;
 
-    // Char and timestamp are never supported.  Only AVG and NDV support string and
-    // decimal.
+    bool supported = true;
     AggFnEvaluator::AggregationOp op = evaluator->agg_op();
     PrimitiveType type = slot_desc->type().type;
-    if (type == TYPE_TIMESTAMP || type == TYPE_CHAR ||
-        (op != AggFnEvaluator::AVG && op != AggFnEvaluator::NDV &&
-         (type == TYPE_DECIMAL || type == TYPE_STRING || type == TYPE_VARCHAR))) {
+    // Char and timestamp intermediates aren't supported
+    if (type == TYPE_TIMESTAMP || type == TYPE_CHAR) supported = false;
+    // Only AVG and NDV support string intermediates
+    if ((type == TYPE_STRING || type == TYPE_VARCHAR) &&
+        !(op == AggFnEvaluator::AVG || op == AggFnEvaluator::NDV)) {
+      supported = false;
+    }
+    // Only SUM, AVG, and NDV support decimal intermediates
+    if (type == TYPE_DECIMAL &&
+        !(op == AggFnEvaluator::SUM || op == AggFnEvaluator::AVG ||
+          op == AggFnEvaluator::NDV)) {
+      supported = false;
+    }
+    if (!supported) {
       VLOG_QUERY << "Could not codegen UpdateTuple because intermediate type "
                  << slot_desc->type()
                  << "is not yet supported for aggregate function \""
@@ -1190,7 +1282,7 @@ Function* PartitionedAggregationNode::CodegenUpdateTuple(RuntimeState* state) {
       Value* count_inc = builder.CreateAdd(slot_loaded, const_one, "count_star_inc");
       builder.CreateStore(count_inc, slot_ptr);
     } else {
-      Function* update_slot_fn = CodegenUpdateSlot(state, evaluator, slot_desc);
+      Function* update_slot_fn = CodegenUpdateSlot(evaluator, slot_desc);
       if (update_slot_fn == NULL) return NULL;
       Value* fn_ctx_ptr = builder.CreateConstGEP1_32(agg_fn_ctxs_arg, i);
       Value* fn_ctx = builder.CreateLoad(fn_ctx_ptr, "fn_ctx");
@@ -1203,11 +1295,13 @@ Function* PartitionedAggregationNode::CodegenUpdateTuple(RuntimeState* state) {
   return codegen->FinalizeFunction(fn);
 }
 
-Function* PartitionedAggregationNode::CodegenProcessBatch(
-    RuntimeState* state, Function* update_tuple_fn) {
-  LlvmCodeGen* codegen = state->codegen();
+Function* PartitionedAggregationNode::CodegenProcessBatch() {
+  LlvmCodeGen* codegen;
+  if (!state_->GetCodegen(&codegen).ok()) return NULL;
   SCOPED_TIMER(codegen->codegen_timer());
-  DCHECK(update_tuple_fn != NULL);
+
+  Function* update_tuple_fn = CodegenUpdateTuple();
+  if (update_tuple_fn == NULL) return NULL;
 
   // Get the cross compiled update row batch function
   IRFunction::Type ir_fn = (!probe_expr_ctxs_.empty() ?
@@ -1221,15 +1315,17 @@ Function* PartitionedAggregationNode::CodegenProcessBatch(
     // Aggregation w/o grouping does not use a hash table.
 
     // Codegen for hash
-    Function* hash_fn = ht_ctx_->CodegenHashCurrentRow(state);
+    // The codegen'd ProcessBatch function is only used in Open() with level_ = 0,
+    // so don't use murmur hash
+    Function* hash_fn = ht_ctx_->CodegenHashCurrentRow(state_, /* use murmur */ false);
     if (hash_fn == NULL) return NULL;
 
     // Codegen HashTable::Equals
-    Function* equals_fn = ht_ctx_->CodegenEquals(state);
+    Function* equals_fn = ht_ctx_->CodegenEquals(state_);
     if (equals_fn == NULL) return NULL;
 
     // Codegen for evaluating probe rows
-    Function* eval_probe_row_fn = ht_ctx_->CodegenEvalRow(state, false);
+    Function* eval_probe_row_fn = ht_ctx_->CodegenEvalRow(state_, false);
     if (eval_probe_row_fn == NULL) return NULL;
 
     // Replace call sites
@@ -1237,11 +1333,11 @@ Function* PartitionedAggregationNode::CodegenProcessBatch(
         eval_probe_row_fn, "EvalProbeRow", &replaced);
     DCHECK_EQ(replaced, 1);
 
-    process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, false,
+    process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, true,
         hash_fn, "HashCurrentRow", &replaced);
     DCHECK_EQ(replaced, 1);
 
-    process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, false,
+    process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, true,
         equals_fn, "Equals", &replaced);
     DCHECK_EQ(replaced, 1);
   }

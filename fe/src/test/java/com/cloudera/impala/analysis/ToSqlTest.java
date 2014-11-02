@@ -19,6 +19,7 @@ import static org.junit.Assert.fail;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.cloudera.impala.authorization.AuthorizationConfig;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.testutil.TestUtils;
 import com.google.common.base.Preconditions;
@@ -31,21 +32,42 @@ public class ToSqlTest extends AnalyzerTest {
   private static final String[] joinConditions_ =
       new String[] {"USING (id)", "ON (a.id = b.id)"};
 
+  // All left semi join types.
+  private static final String[] leftSemiJoinTypes_ =
+      new String[] {"LEFT SEMI JOIN", "LEFT ANTI JOIN"};
+
+  // All right semi join types.
+  private static final String[] rightSemiJoinTypes_ =
+      new String[] {"RIGHT SEMI JOIN", "RIGHT ANTI JOIN"};
+
   // All join types that take an ON or USING clause, i.e., all joins except CROSS JOIN.
   private static final String[] joinTypes_;
+
+  // Same as joinTypes_, but excluding semi joins.
+  private static final String[] nonSemiJoinTypes_;
+
   static {
-    joinTypes_ = new String[JoinOperator.values().length - 1];
+    // Exclude the NULL AWARE LEFT ANTI JOIN operator because it cannot
+    // be directly expressed via SQL.
+    joinTypes_ = new String[JoinOperator.values().length - 2];
+    int numNonSemiJoinTypes = JoinOperator.values().length - 2 -
+        leftSemiJoinTypes_.length - rightSemiJoinTypes_.length;
+    nonSemiJoinTypes_ = new String[numNonSemiJoinTypes];
     int i = 0;
+    int j = 0;
     for (JoinOperator op: JoinOperator.values()) {
-      if (op.isCrossJoin()) continue;
+      if (op.isCrossJoin() || op.isNullAwareLeftAntiJoin()) continue;
       joinTypes_[i++] = op.toString();
+      if (op.isSemiJoin()) continue;
+      nonSemiJoinTypes_[j++] = op.toString();
     }
   }
 
   private static AnalysisContext.AnalysisResult analyze(String query, String defaultDb) {
     try {
       AnalysisContext analysisCtx = new AnalysisContext(catalog_,
-          TestUtils.createQueryContext(defaultDb, System.getProperty("user.name")));
+          TestUtils.createQueryContext(defaultDb, System.getProperty("user.name")),
+          AuthorizationConfig.createAuthDisabledConfig());
       analysisCtx.analyze(query);
       AnalysisContext.AnalysisResult analysisResult = analysisCtx.getAnalysisResult();
       Preconditions.checkNotNull(analysisResult.getStmt());
@@ -245,6 +267,55 @@ public class ToSqlTest extends AnalyzerTest {
         joinTypes_, joinConditions_);
   }
 
+  /**
+   * Tests that the toSql() of plan hints use the end-of-line commented hint style
+   * (for view compatibility with Hive) regardless of what style was used in the
+   * original query.
+   */
+  @Test
+  public void planHintsTest() {
+    String[][] hintStyles = new String[][] {
+        new String[] { "/* +", "*/" }, // traditional commented hint
+        new String[] { "\n-- +", "\n" }, // eol commented hint
+        new String[] { "[", "]" } // legacy style
+    };
+    for (String[] hintStyle: hintStyles) {
+      String prefix = hintStyle[0];
+      String suffix = hintStyle[1];
+
+      // Join hint.
+      testToSql(String.format(
+          "select * from functional.alltypes a join %sbroadcast%s " +
+          "functional.alltypes b on a.id = b.id", prefix, suffix),
+          "SELECT * FROM functional.alltypes a INNER JOIN \n-- +broadcast\n " +
+          "functional.alltypes b ON a.id = b.id");
+
+      // Insert hint.
+      testToSql(String.format(
+          "insert into functional.alltypes(int_col, bool_col) " +
+          "partition(year, month) %snoshuffle%s " +
+          "select int_col, bool_col, year, month from functional.alltypes",
+          prefix, suffix),
+          "INSERT INTO TABLE functional.alltypes(int_col, bool_col) " +
+              "PARTITION (year, month) \n-- +noshuffle\n " +
+          "SELECT int_col, bool_col, year, month FROM functional.alltypes");
+
+      // Select-list hint. The legacy-style hint has no prefix and suffix.
+      if (prefix.contains("[")) {
+        prefix = "";
+        suffix = "";
+      }
+      // Comment-style select-list plan hint.
+      testToSql(String.format(
+          "select %sstraight_join%s * from functional.alltypes", prefix, suffix),
+          "SELECT \n-- +straight_join\n * FROM functional.alltypes");
+      testToSql(
+          String.format("select distinct %sstraight_join%s * from functional.alltypes",
+          prefix, suffix),
+          "SELECT DISTINCT \n-- +straight_join\n * FROM functional.alltypes");
+    }
+  }
+
   // Test the toSql() output of aggregate and group by expressions.
   @Test
   public void aggregationTest() {
@@ -415,7 +486,15 @@ public class ToSqlTest extends AnalyzerTest {
     runTestTemplate("select t.* from (select a.* from functional.alltypes a %s " +
         "functional.alltypes b %s) t",
         "SELECT t.* FROM (SELECT a.* FROM functional.alltypes a %s " +
-        "functional.alltypes b %s) t", joinTypes_, joinConditions_);
+        "functional.alltypes b %s) t", nonSemiJoinTypes_, joinConditions_);
+    runTestTemplate("select t.* from (select a.* from functional.alltypes a %s " +
+        "functional.alltypes b %s) t",
+        "SELECT t.* FROM (SELECT a.* FROM functional.alltypes a %s " +
+        "functional.alltypes b %s) t", leftSemiJoinTypes_, joinConditions_);
+    runTestTemplate("select t.* from (select b.* from functional.alltypes a %s " +
+        "functional.alltypes b %s) t",
+        "SELECT t.* FROM (SELECT b.* FROM functional.alltypes a %s " +
+        "functional.alltypes b %s) t", rightSemiJoinTypes_, joinConditions_);
 
     // Test undoing expr substitution in select-list exprs and on clause.
     testToSql("select t1.int_col, t2.int_col from " +
@@ -567,7 +646,17 @@ public class ToSqlTest extends AnalyzerTest {
     runTestTemplate("with t as (select a.* from functional.alltypes a %s " +
         "functional.alltypes b %s) select * from t",
         "WITH t AS (SELECT a.* FROM functional.alltypes a %s " +
-        "functional.alltypes b %s) SELECT * FROM t", joinTypes_, joinConditions_);
+        "functional.alltypes b %s) SELECT * FROM t", nonSemiJoinTypes_, joinConditions_);
+    runTestTemplate("with t as (select a.* from functional.alltypes a %s " +
+        "functional.alltypes b %s) select * from t",
+        "WITH t AS (SELECT a.* FROM functional.alltypes a %s " +
+        "functional.alltypes b %s) SELECT * FROM t",
+        leftSemiJoinTypes_, joinConditions_);
+    runTestTemplate("with t as (select b.* from functional.alltypes a %s " +
+        "functional.alltypes b %s) select * from t",
+        "WITH t AS (SELECT b.* FROM functional.alltypes a %s " +
+        "functional.alltypes b %s) SELECT * FROM t",
+        rightSemiJoinTypes_, joinConditions_);
     // WITH clause in complex query with joins and and order by + limit.
     testToSql("with t as (select int_col x, bigint_col y from functional.alltypestiny " +
         "order by id nulls first limit 2) " +
@@ -705,6 +794,11 @@ public class ToSqlTest extends AnalyzerTest {
         "(case true when true then 1 when false then 2 else 3 end)",
         "SELECT CASE TRUE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END, " +
         "(CASE TRUE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END)");
+    // DECODE version of CaseExpr.
+    testToSql("select decode(1, 2, 3), (decode(4, 5, 6))",
+        "SELECT decode(1, 2, 3), (decode(4, 5, 6))");
+    testToSql("select decode(1, 2, 3, 4, 5, 6), (decode(1, 2, 3, 4, 5, 6))",
+        "SELECT decode(1, 2, 3, 4, 5, 6), (decode(1, 2, 3, 4, 5, 6))");
 
     // CastExpr.
     testToSql("select cast(NULL as INT), (cast(NULL as INT))",

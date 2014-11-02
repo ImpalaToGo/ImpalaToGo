@@ -45,14 +45,35 @@ static uint32_t SEED_PRIMES[] = {
   338294347,
 };
 
+// Put a non-zero constant in the result location for NULL.
+// We don't want(NULL, 1) to hash to the same as (0, 1).
+// This needs to be as big as the biggest primitive type since the bytes
+// get copied directly.
+// TODO find a better approach, since primitives like CHAR(N) can be up to 128 bytes
+static int64_t NULL_VALUE[] = { HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED,
+                                HashUtil::FNV_SEED, HashUtil::FNV_SEED };
+
+// The first NUM_SMALL_BLOCKS of nodes_ are made of blocks less than the io size to
+// reduce the memory footprint of small queries.
+static const int64_t INITIAL_DATA_PAGE_SIZES[] =
+    { 64 * 1024, 512 * 1024 };
+static const int NUM_SMALL_DATA_PAGES = sizeof(INITIAL_DATA_PAGE_SIZES) / sizeof(int64_t);
+
 HashTableCtx::HashTableCtx(const vector<ExprContext*>& build_expr_ctxs,
     const vector<ExprContext*>& probe_expr_ctxs, bool stores_nulls, bool finds_nulls,
-    int32_t initial_seed, int max_levels)
+    int32_t initial_seed, int max_levels, int num_build_tuples)
     : build_expr_ctxs_(build_expr_ctxs),
       probe_expr_ctxs_(probe_expr_ctxs),
       stores_nulls_(stores_nulls),
       finds_nulls_(finds_nulls),
-      level_(0) {
+      level_(0),
+      row_(reinterpret_cast<TupleRow*>(malloc(sizeof(Tuple*) * num_build_tuples))) {
   // Compute the layout and buffer size to store the evaluated expr results
   DCHECK_EQ(build_expr_ctxs_.size(), probe_expr_ctxs_.size());
   DCHECK(!build_expr_ctxs_.empty());
@@ -81,15 +102,11 @@ void HashTableCtx::Close() {
   DCHECK_NOTNULL(expr_value_null_bits_);
   delete[] expr_value_null_bits_;
   expr_value_null_bits_ = NULL;
+  free(row_);
+  row_ = NULL;
 }
 
 bool HashTableCtx::EvalRow(TupleRow* row, const vector<ExprContext*>& ctxs) {
-  // Put a non-zero constant in the result location for NULL.
-  // We don't want(NULL, 1) to hash to the same as (0, 1).
-  // This needs to be as big as the biggest primitive type since the bytes
-  // get copied directly.
-  int64_t null_value[] = { HashUtil::FNV_SEED, HashUtil::FNV_SEED };
-
   bool has_null = false;
   for (int i = 0; i < ctxs.size(); ++i) {
     void* loc = expr_values_buffer_ + expr_values_buffer_offsets_[i];
@@ -99,11 +116,13 @@ bool HashTableCtx::EvalRow(TupleRow* row, const vector<ExprContext*>& ctxs) {
       if (!stores_nulls_) return true;
 
       expr_value_null_bits_[i] = true;
-      val = reinterpret_cast<void*>(&null_value);
+      val = reinterpret_cast<void*>(&NULL_VALUE);
       has_null = true;
     } else {
       expr_value_null_bits_[i] = false;
     }
+    DCHECK_LE(build_expr_ctxs_[i]->root()->type().GetSlotSize(),
+              sizeof(NULL_VALUE));
     RawValue::Write(val, loc, build_expr_ctxs_[i]->root()->type(), NULL);
   }
   return has_null;
@@ -113,7 +132,7 @@ uint32_t HashTableCtx::HashVariableLenRow() {
   uint32_t hash = seeds_[level_];
   // Hash the non-var length portions (if there are any)
   if (var_result_begin_ != 0) {
-    hash = HashUtil::FnvHash64to32(expr_values_buffer_, var_result_begin_, hash);
+    hash = Hash(expr_values_buffer_, var_result_begin_, hash);
   }
 
   for (int i = 0; i < build_expr_ctxs_.size(); ++i) {
@@ -124,11 +143,11 @@ uint32_t HashTableCtx::HashVariableLenRow() {
     void* loc = expr_values_buffer_ + expr_values_buffer_offsets_[i];
     if (expr_value_null_bits_[i]) {
       // Hash the null random seed values at 'loc'
-      hash = HashUtil::FnvHash64to32(loc, sizeof(StringValue), hash);
+      hash = Hash(loc, sizeof(StringValue), hash);
     } else {
       // Hash the string
       StringValue* str = reinterpret_cast<StringValue*>(loc);
-      hash = HashUtil::FnvHash64to32(str->ptr, str->len, hash);
+      hash = Hash(str->ptr, str->len, hash);
     }
   }
   return hash;
@@ -156,43 +175,61 @@ bool HashTableCtx::Equals(TupleRow* build_row) {
 const float HashTable::MAX_BUCKET_OCCUPANCY_FRACTION = 0.75f;
 
 HashTable::HashTable(RuntimeState* state, BufferedBlockMgr::Client* client,
-    int num_build_tuples, bool stores_tuples, int64_t num_buckets)
+    int num_build_tuples, BufferedTupleStream* stream, bool use_initial_small_pages,
+    int64_t max_num_buckets, int64_t num_buckets)
   : state_(state),
     block_mgr_client_(client),
+    tuple_stream_(stream),
     data_page_pool_(NULL),
     num_build_tuples_(num_build_tuples),
-    stores_tuples_(stores_tuples),
+    stores_tuples_(num_build_tuples == 1),
+    use_initial_small_pages_(use_initial_small_pages),
+    max_num_buckets_(max_num_buckets),
     num_filled_buckets_(0),
     num_nodes_(0),
+    total_data_page_size_(0),
     next_node_(NULL),
     node_remaining_current_page_(0),
+    buckets_(NULL),
     num_buckets_(num_buckets),
     num_buckets_till_resize_(num_buckets_ * MAX_BUCKET_OCCUPANCY_FRACTION) {
   DCHECK_EQ((num_buckets & (num_buckets-1)), 0) << "num_buckets must be a power of 2";
   DCHECK_GT(num_buckets, 0) << "num_buckets must be larger than 0";
-  buckets_.resize(num_buckets_);
+  if (!stores_tuples_) DCHECK_NOTNULL(stream);
 }
 
 HashTable::HashTable(MemPool* pool, int num_buckets)
   : state_(NULL),
     block_mgr_client_(NULL),
+    tuple_stream_(NULL),
     data_page_pool_(pool),
     num_build_tuples_(1),
-    stores_tuples_(false),
+    stores_tuples_(true),
+    use_initial_small_pages_(false),
+    max_num_buckets_(-1),
     num_filled_buckets_(0),
     num_nodes_(0),
+    total_data_page_size_(0),
     next_node_(NULL),
     node_remaining_current_page_(0),
+    buckets_(NULL),
     num_buckets_(num_buckets),
     num_buckets_till_resize_(num_buckets_ * MAX_BUCKET_OCCUPANCY_FRACTION) {
   DCHECK_EQ((num_buckets & (num_buckets-1)), 0) << "num_buckets must be a power of 2";
   DCHECK_GT(num_buckets, 0) << "num_buckets must be larger than 0";
-  buckets_.resize(num_buckets_);
-  bool ret = GrowNodeArray();
+  bool ret = Init();
   DCHECK(ret);
 }
 
 bool HashTable::Init() {
+  int64_t buckets_byte_size = num_buckets_ * sizeof(Bucket);
+  if (block_mgr_client_ != NULL &&
+      !state_->block_mgr()->ConsumeMemory(block_mgr_client_, buckets_byte_size)) {
+    num_buckets_ = 0;
+    return false;
+  }
+  buckets_ = reinterpret_cast<Bucket*>(malloc(buckets_byte_size));
+  memset(buckets_, 0, buckets_byte_size);
   return GrowNodeArray();
 }
 
@@ -201,37 +238,24 @@ void HashTable::Close() {
     data_pages_[i]->Delete();
   }
   if (ImpaladMetrics::HASH_TABLE_TOTAL_BYTES != NULL) {
-    ImpaladMetrics::HASH_TABLE_TOTAL_BYTES->Increment(
-        -data_pages_.size() * state_->io_mgr()->max_read_buffer_size());
+    ImpaladMetrics::HASH_TABLE_TOTAL_BYTES->Increment(-total_data_page_size_);
   }
   data_pages_.clear();
-  buckets_.clear();
-}
-
-int64_t HashTable::byte_size() const {
-  return data_pages_.size() * state_->io_mgr()->max_read_buffer_size();
-}
-
-void HashTable::AddBitmapFilters(HashTableCtx* ht_ctx) {
-  DCHECK_NOTNULL(ht_ctx);
-  DCHECK_EQ(ht_ctx->build_expr_ctxs_.size(), ht_ctx->probe_expr_ctxs_.size());
-  vector<pair<SlotId, Bitmap*> > bitmaps;
-  bitmaps.resize(ht_ctx->probe_expr_ctxs_.size());
-  for (int i = 0; i < ht_ctx->build_expr_ctxs_.size(); ++i) {
-    if (ht_ctx->probe_expr_ctxs_[i]->root()->is_slotref()) {
-      bitmaps[i].first =
-          reinterpret_cast<SlotRef*>(ht_ctx->probe_expr_ctxs_[i]->root())->slot_id();
-      bitmaps[i].second = new Bitmap(state_->slot_filter_bitmap_size());
-    } else {
-      bitmaps[i].second = NULL;
-    }
+  if (buckets_ != NULL) free(buckets_);
+  if (block_mgr_client_ != NULL) {
+    state_->block_mgr()->ReleaseMemory(block_mgr_client_, num_buckets_ * sizeof(Bucket));
   }
+}
+
+void HashTable::UpdateProbeFilters(HashTableCtx* ht_ctx,
+    vector<pair<SlotId, Bitmap*> >& bitmaps) {
+  DCHECK_NOTNULL(ht_ctx);
   // For the bitmap filters, always use the initial seed. The other parts of the plan
   // tree (e.g. the scan node) relies on this.
   uint32_t seed = ht_ctx->seeds_[0];
 
-  // Walk the build table and generate a bitmap for each probe side slot.
-  HashTable::Iterator iter = Begin();
+  // Walk the build table and update the bitmap for each probe side slot.
+  HashTable::Iterator iter = Begin(ht_ctx);
   while (iter != End()) {
     TupleRow* row = iter.GetRow();
     for (int i = 0; i < ht_ctx->build_expr_ctxs_.size(); ++i) {
@@ -243,14 +267,6 @@ void HashTable::AddBitmapFilters(HashTableCtx* ht_ctx) {
     }
     iter.Next<false>(ht_ctx);
   }
-
-  // Add all the bitmaps to the runtime state.
-  for (int i = 0; i < bitmaps.size(); ++i) {
-    if (bitmaps[i].second == NULL) continue;
-    state_->AddBitmapFilter(bitmaps[i].first, bitmaps[i].second);
-    VLOG(2) << "Bitmap filter added on slot: " << bitmaps[i].first;
-    delete bitmaps[i].second;
-  }
 }
 
 bool HashTable::ResizeBuckets(int64_t num_buckets) {
@@ -259,16 +275,20 @@ bool HashTable::ResizeBuckets(int64_t num_buckets) {
   VLOG(2) << "Resizing hash table from "
           << num_buckets_ << " to " << num_buckets << " buckets.";
 
+  if (max_num_buckets_ != -1 && num_buckets > max_num_buckets_) return false;
+
   int64_t old_num_buckets = num_buckets_;
-#if 0
-  // TODO (Ippo): remove the bucket structure and merge it with nodes. All the allocations
-  // should come from the BufferedBlockMgr.
-  // This can be a rather large allocation so check the limit before (to prevent
-  // us from going over the limits too much).
+  // All memory that can grow proportional to the input should come from the block mgrs
+  // mem tracker.
   int64_t delta_size = (num_buckets - old_num_buckets) * sizeof(Bucket);
-  //if (!TryConsume(delta_size)) return false;
-#endif
-  buckets_.resize(num_buckets);
+  if (block_mgr_client_ != NULL &&
+      !state_->block_mgr()->ConsumeMemory(block_mgr_client_, delta_size)) {
+    return false;
+  }
+  if (num_buckets > old_num_buckets) {
+    buckets_ = reinterpret_cast<Bucket*>(realloc(buckets_, num_buckets * sizeof(Bucket)));
+    memset(&buckets_[old_num_buckets], 0, delta_size);
+  }
 
   // If we're doubling the number of buckets, all nodes in a particular bucket
   // either remain there, or move down to an analogous bucket in the other half.
@@ -312,40 +332,54 @@ bool HashTable::ResizeBuckets(int64_t num_buckets) {
 }
 
 bool HashTable::GrowNodeArray() {
-  int64_t buffer_size = 0;
+  int64_t page_size = 0;
   if (block_mgr_client_ != NULL) {
+    page_size = state_->block_mgr()->max_block_size();;
+    if (use_initial_small_pages_ && data_pages_.size() < NUM_SMALL_DATA_PAGES) {
+      page_size = min(page_size, INITIAL_DATA_PAGE_SIZES[data_pages_.size()]);
+    }
     BufferedBlockMgr::Block* block = NULL;
-    state_->block_mgr()->GetNewBlock(block_mgr_client_, &block);
+    Status status = state_->block_mgr()->GetNewBlock(
+        block_mgr_client_, NULL, &block, page_size);
+    if (!status.ok()) DCHECK(block == NULL);
     if (block == NULL) return false;
     data_pages_.push_back(block);
-    buffer_size = state_->io_mgr()->max_read_buffer_size();
-    next_node_ = block->Allocate<Node>(buffer_size);
-    ImpaladMetrics::HASH_TABLE_TOTAL_BYTES->Increment(buffer_size);
+    next_node_ = block->Allocate<Node>(page_size);
+    ImpaladMetrics::HASH_TABLE_TOTAL_BYTES->Increment(page_size);
   } else {
     // Only used for testing.
     DCHECK(data_page_pool_ != NULL);
-    buffer_size = TEST_PAGE_SIZE;
-    next_node_ = reinterpret_cast<Node*>(data_page_pool_->Allocate(buffer_size));
+    page_size = TEST_PAGE_SIZE;
+    next_node_ = reinterpret_cast<Node*>(data_page_pool_->Allocate(page_size));
     if (data_page_pool_->mem_tracker()->LimitExceeded()) return false;
     DCHECK(next_node_ != NULL);
   }
-  node_remaining_current_page_ = buffer_size / sizeof(Node);
+  node_remaining_current_page_ = page_size / sizeof(Node);
+  total_data_page_size_ += page_size;
   return true;
 }
 
 string HashTable::DebugString(bool skip_empty, bool show_match,
     const RowDescriptor* desc) {
+  Tuple* row[num_build_tuples_];
   stringstream ss;
   ss << endl;
-  for (int i = 0; i < buckets_.size(); ++i) {
+  for (int i = 0; i < num_buckets_; ++i) {
     Node* node = buckets_[i].node;
     bool first = true;
     if (skip_empty && node == NULL) continue;
     ss << i << ": ";
     while (node != NULL) {
       if (!first) ss << ",";
-      ss << node << "(" << node->data << ")";
-      if (desc != NULL) ss << " " << PrintRow(GetRow(node), *desc);
+      if (stores_tuples_) {
+        ss << node << "(" << node->tuple << ")";
+      } else {
+        ss << node << "(" << node->idx.block() << ", " << node->idx.idx()
+           << ", " << node->idx.offset() << ")";
+      }
+      if (desc != NULL) {
+        ss << " " << PrintRow(GetRow(node, reinterpret_cast<TupleRow*>(row)), *desc);
+      }
       if (show_match) {
         if (node->matched) {
           ss << " [M]";
@@ -444,10 +478,11 @@ Function* HashTableCtx::CodegenEvalRow(RuntimeState* state, bool build) {
   const vector<ExprContext*>& ctxs = build ? build_expr_ctxs_ : probe_expr_ctxs_;
   for (int i = 0; i < ctxs.size(); ++i) {
     PrimitiveType type = ctxs[i]->root()->type().type;
-    if (type == TYPE_TIMESTAMP || type == TYPE_DECIMAL) return NULL;
+    if (type == TYPE_TIMESTAMP || type == TYPE_DECIMAL || type == TYPE_CHAR) return NULL;
   }
 
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Get types to generate function prototype
   Type* tuple_row_type = codegen->GetType(TupleRow::LLVM_CLASS_NAME);
@@ -488,9 +523,7 @@ Function* HashTableCtx::CodegenEvalRow(RuntimeState* state, bool build) {
     Function* expr_fn;
     Status status = ctxs[i]->root()->GetCodegendComputeFn(state, &expr_fn);
     if (!status.ok()) {
-      stringstream ss;
-      ss << "Problem with codegen: " << status.GetErrorMsg();
-      state->LogError(ss.str());
+      VLOG_QUERY << "Problem with CodegenEvalRow: " << status.GetErrorMsg();
       fn->eraseFromParent(); // deletes function
       return NULL;
     }
@@ -568,15 +601,22 @@ Function* HashTableCtx::CodegenEvalRow(RuntimeState* state, bool build) {
 //   call void @set_hash(%"class.impala::HashTableCtx"* %this_ptr, i32 %7)
 //   ret i32 %7
 // }
-Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state, bool use_murmur) {
+  for (int i = 0; i < build_expr_ctxs_.size(); ++i) {
+    // Disable codegen for CHAR
+    if (build_expr_ctxs_[i]->root()->type().type == TYPE_CHAR) return NULL;
+  }
+
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Get types to generate function prototype
   Type* this_type = codegen->GetType(HashTableCtx::LLVM_CLASS_NAME);
   DCHECK(this_type != NULL);
   PointerType* this_ptr_type = PointerType::get(this_type, 0);
 
-  LlvmCodeGen::FnPrototype prototype(codegen, "HashCurrentRow",
+  LlvmCodeGen::FnPrototype prototype(codegen,
+      (use_murmur ? "MurmurHashCurrentRow" : "HashCurrentRow"),
       codegen->GetType(TYPE_INT));
   prototype.AddArgument(LlvmCodeGen::NamedVariable("this_ptr", this_ptr_type));
 
@@ -594,13 +634,17 @@ Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
   if (var_result_begin_ == -1) {
     // No variable length slots, just hash what is in 'expr_values_buffer_'
     if (results_buffer_size_ > 0) {
-      Function* hash_fn = codegen->GetFnvHashFunction(results_buffer_size_);
+      Function* hash_fn = use_murmur ?
+                          codegen->GetMurmurHashFunction(results_buffer_size_) :
+                          codegen->GetHashFunction(results_buffer_size_);
       Value* len = codegen->GetIntConstant(TYPE_INT, results_buffer_size_);
       hash_result = builder.CreateCall3(hash_fn, data, len, hash_result, "hash");
     }
   } else {
     if (var_result_begin_ > 0) {
-      Function* hash_fn = codegen->GetFnvHashFunction(var_result_begin_);
+      Function* hash_fn = use_murmur ?
+                          codegen->GetMurmurHashFunction(var_result_begin_) :
+                          codegen->GetHashFunction(var_result_begin_);
       Value* len = codegen->GetIntConstant(TYPE_INT, var_result_begin_);
       hash_result = builder.CreateCall3(hash_fn, data, len, hash_result, "hash");
     }
@@ -635,7 +679,9 @@ Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
         // For null, we just want to call the hash function on the portion of
         // the data
         builder.SetInsertPoint(null_block);
-        Function* null_hash_fn = codegen->GetFnvHashFunction(sizeof(StringValue));
+        Function* null_hash_fn = use_murmur ?
+                                 codegen->GetMurmurHashFunction(sizeof(StringValue)) :
+                                 codegen->GetHashFunction(sizeof(StringValue));
         Value* llvm_loc = codegen->CastPtrToLlvmPtr(codegen->ptr_type(), loc);
         Value* len = codegen->GetIntConstant(TYPE_INT, sizeof(StringValue));
         str_null_result =
@@ -654,7 +700,8 @@ Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
       len = builder.CreateLoad(len, "len");
 
       // Call hash(ptr, len, hash_result);
-      Function* general_hash_fn = codegen->GetFnvHashFunction();
+      Function* general_hash_fn = use_murmur ? codegen->GetMurmurHashFunction() :
+                                  codegen->GetHashFunction();
       Value* string_hash_result =
           builder.CreateCall3(general_hash_fn, ptr, len, hash_result, "string_hash");
 
@@ -672,10 +719,6 @@ Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
       }
     }
   }
-
-  // Call set_hash() to store result in hash_
-  Function* set_hash_fn = codegen->GetFunction(IRFunction::HASH_TABLE_SET_HASH);
-  builder.CreateCall2(set_hash_fn, this_arg, hash_result);
 
   builder.CreateRet(hash_result);
   return codegen->FinalizeFunction(fn);
@@ -732,7 +775,13 @@ Function* HashTableCtx::CodegenHashCurrentRow(RuntimeState* state) {
 //   ret i1 true
 // }
 Function* HashTableCtx::CodegenEquals(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+  for (int i = 0; i < build_expr_ctxs_.size(); ++i) {
+    // Disable codegen for CHAR
+    if (build_expr_ctxs_[i]->root()->type().type == TYPE_CHAR) return NULL;
+  }
+
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
   // Get types to generate function prototype
   Type* tuple_row_type = codegen->GetType(TupleRow::LLVM_CLASS_NAME);
   DCHECK(tuple_row_type != NULL);
@@ -753,7 +802,6 @@ Function* HashTableCtx::CodegenEquals(RuntimeState* state) {
   Value* row = args[1];
 
   BasicBlock* false_block = BasicBlock::Create(context, "false_block", fn);
-
   for (int i = 0; i < build_expr_ctxs_.size(); ++i) {
     BasicBlock* null_block = BasicBlock::Create(context, "null", fn);
     BasicBlock* not_null_block = BasicBlock::Create(context, "not_null", fn);
@@ -763,9 +811,7 @@ Function* HashTableCtx::CodegenEquals(RuntimeState* state) {
     Function* expr_fn;
     Status status = build_expr_ctxs_[i]->root()->GetCodegendComputeFn(state, &expr_fn);
     if (!status.ok()) {
-      stringstream ss;
-      ss << "Problem with codegen: " << status.GetErrorMsg();
-      state->LogError(ss.str());
+      VLOG_QUERY << "Problem with CodegenEquals: " << status.GetErrorMsg();
       fn->eraseFromParent(); // deletes function
       return NULL;
     }

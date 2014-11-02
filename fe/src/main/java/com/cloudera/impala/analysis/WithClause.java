@@ -70,34 +70,43 @@ public class WithClause implements ParseNode {
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     // Create an analyzer for the WITH clause. If this is the top-level WITH
-    // clause, the new analyzer uses its own global state and is not attached to
+    // clause or the parent analyzer belongs to a CTAS or an insert stmt,
+    // the new analyzer uses its own global state and is not attached to
     // the hierarchy of analyzers. Otherwise, it becomes a child of 'analyzer'
     // to be able to resolve WITH-clause views registered in an ancestor of
-    // 'analyzer' (see IMPALA-1106).
+    // 'analyzer' (see IMPALA-1106, IMPALA-1100).
     Analyzer withClauseAnalyzer = null;
     if (analyzer.isRootAnalyzer()) {
-      withClauseAnalyzer = new Analyzer(analyzer.getCatalog(), analyzer.getQueryCtx());
+      withClauseAnalyzer = new Analyzer(analyzer.getCatalog(), analyzer.getQueryCtx(),
+          analyzer.getAuthzConfig());
     } else {
       withClauseAnalyzer = new Analyzer(analyzer);
     }
     if (analyzer.isExplain()) withClauseAnalyzer.setIsExplain();
-    for (View view: views_) {
-      Analyzer viewAnalyzer = new Analyzer(withClauseAnalyzer);
-      view.getQueryStmt().analyze(viewAnalyzer);
-      // Register this view so that the next view can reference it.
-      withClauseAnalyzer.registerLocalView(view);
-    }
-    // Register all local views with the analyzer.
-    for (View localView: withClauseAnalyzer.getLocalViews().values()) {
-      analyzer.registerLocalView(localView);
-    }
-    // Record audit events because the resolved table references won't generate any
-    // when a view is referenced.
-    analyzer.getAccessEvents().addAll(withClauseAnalyzer.getAccessEvents());
+    try {
+      for (View view: views_) {
+        Analyzer viewAnalyzer = new Analyzer(withClauseAnalyzer);
+        view.getQueryStmt().analyze(viewAnalyzer);
+        // Register this view so that the next view can reference it.
+        withClauseAnalyzer.registerLocalView(view);
+      }
+      // Register all local views with the analyzer.
+      for (View localView: withClauseAnalyzer.getLocalViews().values()) {
+        analyzer.registerLocalView(localView);
+      }
+      // Record audit events because the resolved table references won't generate any
+      // when a view is referenced.
+      analyzer.getAccessEvents().addAll(withClauseAnalyzer.getAccessEvents());
 
-    // Register all privilege requests made from the root analyzer.
-    for (PrivilegeRequest req: withClauseAnalyzer.getPrivilegeReqs()) {
-      analyzer.registerPrivReq(req);
+      // Register all privilege requests made from the root analyzer.
+      for (PrivilegeRequest req: withClauseAnalyzer.getPrivilegeReqs()) {
+        analyzer.registerPrivReq(req);
+      }
+    } finally {
+      // Record missing tables in the original analyzer.
+      if (analyzer.isRootAnalyzer()) {
+        analyzer.getMissingTbls().addAll(withClauseAnalyzer.getMissingTbls());
+      }
     }
   }
 

@@ -19,10 +19,12 @@ import static org.junit.Assert.fail;
 
 import java.lang.reflect.Field;
 
+import junit.framework.Assert;
+
 import org.junit.Test;
 
-import com.cloudera.impala.catalog.AggregateFunction;
 import com.cloudera.impala.catalog.PrimitiveType;
+import com.cloudera.impala.catalog.ScalarType;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.common.AnalysisException;
 import com.google.common.collect.ImmutableList;
@@ -194,6 +196,19 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
       AnalysisError(String.format("select a.*, b.* from functional.alltypes a " +
           "%s functional.alltypes b on (a.id = b.id)", joinType),
           "'*' expression cannot reference semi-/anti-joined table 'b'");
+    }
+    for (String joinType: new String[] { "right semi join", "right anti join" }) {
+      // ignore semi-/anti-joined tables in unqualified '*' expansion
+      SelectStmt stmt = (SelectStmt) AnalyzesOk(String.format(
+          "select * from functional.alltypes a " +
+          "%s functional.testtbl b on (a.id = b.id)", joinType));
+      // expect to have as many result exprs as testtbl has columns
+      assertEquals(3, stmt.getResultExprs().size());
+
+      // cannot expand '*" for a semi-/anti-joined table
+      AnalysisError(String.format("select a.*, b.* from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)", joinType),
+          "'*' expression cannot reference semi-/anti-joined table 'a'");
     }
   }
 
@@ -561,6 +576,7 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
    */
   @Test
   public void TestSemiJoins() {
+    // Test left semi joins.
     for (String joinType: new String[] { "left semi join", "left anti join" }) {
       // semi/anti join requires ON/USING clause
       AnalyzesOk(String.format("select a.id from functional.alltypes a " +
@@ -640,33 +656,224 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
           "unqualified table alias 'alltypes' in column reference 'alltypes.int_col' " +
           "is ambiguous");
     }
+
+    // Test right semi joins. Do not combine these with the left semi join tests above
+    // for better readability.
+    for (String joinType: new String[] { "right semi join", "right anti join" }) {
+      // semi/anti join requires ON/USING clause
+      AnalyzesOk(String.format("select b.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)", joinType));
+      AnalyzesOk(String.format("select c.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id) " +
+          "%s functional.alltypes c on (b.id = c.id)", joinType, joinType));
+      AnalyzesOk(String.format("select b.id from functional.alltypes a %s " +
+          "functional.alltypes b using (id)", joinType));
+      // unqualified column reference is not ambiguous outside of the On-clause
+      // because a semi/anti-joined tuple is invisible
+      AnalyzesOk(String.format("select int_col from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)", joinType));
+      AnalysisError(String.format("select * from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id and a.int_col = int_col)", joinType),
+          "unqualified column reference 'int_col' is ambiguous");
+      // flip 'a' and 'b' aliases to test the unqualified column resolution logic
+      AnalyzesOk(String.format("select int_col from functional.alltypes b " +
+          "%s functional.alltypes a on (b.id = a.id)", joinType));
+      AnalysisError(String.format("select * from functional.alltypes b " +
+          "%s functional.alltypes a on (b.id = a.id and b.int_col = int_col)", joinType),
+          "unqualified column reference 'int_col' is ambiguous");
+      // unqualified column reference that matches two semi-/anti-joined tables
+      // is not ambiguous outside of On-clause
+      AnalyzesOk(String.format("select int_col from functional.jointbl c " +
+          "%s functional.alltypes b on (test_id = b.id) " +
+          "%s functional.alltypes a on (b.id = a.id)", joinType, joinType));
+      AnalyzesOk(String.format("select int_col from functional.jointbl c " +
+          "%s functional.alltypes b on (test_id = id) " +
+          "%s functional.alltypes a on (b.id = a.id)", joinType, joinType));
+      AnalysisError(String.format("select int_col from functional.jointbl c " +
+          "%s functional.alltypes b on (test_id = a.id) " +
+          "%s functional.alltypes a on (c.id = b.id)", joinType, joinType),
+          "unknown table alias 'a' in column reference 'a.id'");
+      // must not reference semi/anti-joined alias outside of join clause
+      AnalysisError(String.format("select a.id, b.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)", joinType),
+          "Illegal column reference 'id' of semi-/anti-joined table 'a'");
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s (select * from functional.alltypes) b " +
+          "on (a.id = b.id) where a.int_col > 10", joinType),
+          "Illegal column reference 'int_col' of semi-/anti-joined table 'a'");
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id) group by a.bool_col", joinType),
+          "Illegal column reference 'bool_col' of semi-/anti-joined table 'a'");
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s (select * from functional.alltypes) b " +
+          "on (a.id = b.id) order by a.string_col", joinType),
+          "Illegal column reference 'string_col' of semi-/anti-joined table 'a'");
+      // column of semi/anti-joined table is not visible in other On-clause
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)" +
+          "left outer join functional.testtbl c on (a.id = c.id)", joinType),
+          "Illegal column reference 'id' of semi-/anti-joined table 'a'");
+      // column of semi/anti-joined table is not visible in other On-clause
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id)" +
+          "%s functional.testtbl c on (a.id = c.id)", joinType, joinType),
+          "Illegal column reference 'id' of semi-/anti-joined table 'a'");
+      // using clause always refers to lhs/rhs table
+      AnalysisError(String.format("select b.id from functional.alltypes a " +
+          "%s functional.alltypes b using(id) " +
+          "%s functional.alltypes c using(int_col)", joinType, joinType),
+          "Illegal column reference 'id' of semi-/anti-joined table 'b'");
+      // unqualified column reference is ambiguous in the On-clause of a semi/anti join
+      AnalysisError(String.format("select * from functional.alltypes a " +
+          "%s functional.alltypes b on (a.id = b.id and a.int_col = int_col)", joinType),
+          "unqualified column reference 'int_col' is ambiguous");
+      // illegal unqualified column reference against semi/anti-joined table
+      AnalysisError(String.format("select test_id from functional.jointbl a " +
+          "%s functional.alltypes b on (a.alltypes_id = b.id)", joinType),
+          "Illegal column reference 'test_id' of semi-/anti-joined table 'a'");
+      // unqualified table ref is ambiguous even if semi/anti-joined
+      AnalysisError(String.format("select alltypes.int_col from functional.alltypes " +
+          "%s functional_parquet.alltypes " +
+          "on (functional.alltypes.id = functional_parquet.alltypes.id)", joinType),
+          "unqualified table alias 'alltypes' in column reference 'alltypes.int_col' " +
+          "is ambiguous");
+    }
   }
 
   @Test
   public void TestJoinHints() throws AnalysisException {
-    AnalyzesOk("select * from functional.alltypes a join [broadcast] " +
-        "functional.alltypes b using (int_col)");
-    AnalyzesOk("select * from functional.alltypes a join [shuffle] " +
-        "functional.alltypes b using (int_col)");
-    AnalyzesOk("select * from functional.alltypes a cross join [broadcast] " +
-        "functional.alltypes b");
-    AnalysisError(
-        "select * from functional.alltypes a join [broadcast,shuffle] " +
-         "functional.alltypes b using (int_col)",
-        "Conflicting JOIN hint: shuffle");
-    AnalysisError(
-        "select * from functional.alltypes a join [bla] " +
-         "functional.alltypes b using (int_col)",
-        "JOIN hint not recognized: bla");
-    AnalysisError("select * from functional.alltypes a cross join [shuffle] " +
-        "functional.alltypes b",
-        "CROSS JOIN does not support SHUFFLE.");
-    AnalysisError("select * from functional.alltypes a right outer join [broadcast] " +
-        "functional.alltypes b using (int_col)",
-        "RIGHT OUTER JOIN does not support BROADCAST.");
-    AnalysisError("select * from functional.alltypes a full outer join [broadcast] " +
-        "functional.alltypes b using (int_col)",
-        "FULL OUTER JOIN does not support BROADCAST.");
+    String[][] hintStyles = new String[][] {
+        new String[] { "/* +", "*/" }, // traditional commented hint
+        new String[] { "\n-- +", "\n" }, // eol commented hint
+        new String[] { "[", "]" } // legacy style
+    };
+    for (String[] hintStyle: hintStyles) {
+      String prefix = hintStyle[0];
+      String suffix = hintStyle[1];
+      AnalyzesOk(
+          String.format("select * from functional.alltypes a join %sbroadcast%s " +
+          "functional.alltypes b using (int_col)", prefix, suffix));
+      AnalyzesOk(
+          String.format("select * from functional.alltypes a join %sshuffle%s " +
+          "functional.alltypes b using (int_col)", prefix, suffix));
+      AnalyzesOk(
+          String.format("select * from functional.alltypes a cross join %sbroadcast%s " +
+          "functional.alltypes b", prefix, suffix));
+      // Only warn on unrecognized hints for view-compatibility with Hive.
+      AnalyzesOk(
+          String.format("select * from functional.alltypes a join %sbadhint%s " +
+              "functional.alltypes b using (int_col)", prefix, suffix),
+          "JOIN hint not recognized: badhint");
+      // Hints must be comma separated. Legacy-style hint does not parse because
+      // of space-separated identifiers.
+      if (!prefix.contains("[")) {
+        AnalyzesOk(String.format(
+            "select * from functional.alltypes a join %sbroadcast broadcast%s " +
+                "functional.alltypes b using (int_col)", prefix, suffix),
+            "JOIN hint not recognized: broadcast broadcast");
+      }
+      AnalysisError(
+          String.format("select * from functional.alltypes a cross join %sshuffle%s " +
+          "functional.alltypes b", prefix, suffix),
+          "CROSS JOIN does not support SHUFFLE.");
+      AnalysisError(String.format(
+          "select * from functional.alltypes a right outer join %sbroadcast%s " +
+              "functional.alltypes b using (int_col)", prefix, suffix),
+          "RIGHT OUTER JOIN does not support BROADCAST.");
+      AnalysisError(String.format(
+          "select * from functional.alltypes a full outer join %sbroadcast%s " +
+          "functional.alltypes b using (int_col)", prefix, suffix),
+          "FULL OUTER JOIN does not support BROADCAST.");
+      AnalysisError(String.format(
+          "select * from functional.alltypes a right semi join %sbroadcast%s " +
+          "functional.alltypes b using (int_col)", prefix, suffix),
+          "RIGHT SEMI JOIN does not support BROADCAST.");
+      AnalysisError(String.format(
+          "select * from functional.alltypes a right anti join %sbroadcast%s " +
+          "functional.alltypes b using (int_col)", prefix, suffix),
+          "RIGHT ANTI JOIN does not support BROADCAST.");
+      // Conflicting join hints.
+      AnalysisError(String.format(
+          "select * from functional.alltypes a join %sbroadcast,shuffle%s " +
+              "functional.alltypes b using (int_col)", prefix, suffix),
+          "Conflicting JOIN hint: shuffle");
+    }
+  }
+
+  @Test
+  public void TestSelectListHints() throws AnalysisException {
+    String[][] hintStyles = new String[][] {
+        new String[] { "/* +", "*/" }, // traditional commented hint
+        new String[] { "\n-- +", "\n" }, // eol commented hint
+        new String[] { "", "" } // legacy style
+    };
+    for (String[] hintStyle: hintStyles) {
+      String prefix = hintStyle[0];
+      String suffix = hintStyle[1];
+      AnalyzesOk(String.format(
+          "select %sstraight_join%s * from functional.alltypes", prefix, suffix));
+      AnalyzesOk(String.format(
+          "select %sStrAigHt_jOiN%s * from functional.alltypes", prefix, suffix));
+      if (!prefix.equals("")) {
+        // Only warn on unrecognized hints for view-compatibility with Hive.
+        // Legacy hint style does not parse.
+        AnalyzesOk(String.format(
+            "select %sbadhint%s * from functional.alltypes", prefix, suffix),
+            "PLAN hint not recognized: badhint");
+        // Multiple hints. Legacy hint style does not parse.
+        AnalyzesOk(String.format(
+            "select %sstraight_join,straight_join%s * from functional.alltypes",
+            prefix, suffix));
+      }
+    }
+  }
+
+  @Test
+  public void TestInsertHints() throws AnalysisException {
+    String[][] hintStyles = new String[][] {
+        new String[] { "/* +", "*/" }, // traditional commented hint
+        new String[] { "\n-- +", "\n" }, // eol commented hint
+        new String[] { "[", "]" } // legacy style
+    };
+    for (String[] hintStyle: hintStyles) {
+      String prefix = hintStyle[0];
+      String suffix = hintStyle[1];
+      // Test plan hints for partitioned Hdfs tables.
+      AnalyzesOk(String.format("insert into functional.alltypessmall " +
+          "partition (year, month) %sshuffle%s select * from functional.alltypes",
+          prefix, suffix));
+      AnalyzesOk(String.format("insert into table functional.alltypessmall " +
+          "partition (year, month) %snoshuffle%s select * from functional.alltypes",
+          prefix, suffix));
+      // Only warn on unrecognized hints.
+      AnalyzesOk(String.format("insert into functional.alltypessmall " +
+          "partition (year, month) %sbadhint%s select * from functional.alltypes",
+          prefix, suffix),
+          "INSERT hint not recognized: badhint");
+      // Plan hints require a partition clause.
+      AnalysisError(String.format(
+          "insert into table functional.alltypesnopart %sshuffle%s " +
+          "select * from functional.alltypesnopart", prefix, suffix),
+          "INSERT hints are only supported for inserting into partitioned Hdfs tables.");
+      // Plan hints do not make sense for inserting into HBase tables.
+      AnalysisError(String.format(
+          "insert into table functional_hbase.alltypes %sshuffle%s " +
+          "select * from functional_hbase.alltypes", prefix, suffix),
+          "INSERT hints are only supported for inserting into partitioned Hdfs tables.");
+      // Conflicting plan hints.
+      AnalysisError("insert into table functional.alltypessmall " +
+          "partition (year, month) /* +shuffle,noshuffle */ " +
+          "select * from functional.alltypes",
+          "Conflicting INSERT hint: noshuffle");
+    }
+
+    // Multiple non-conflicting hints and case insensitivity of hints.
+    AnalyzesOk("insert into table functional.alltypessmall " +
+        "partition (year, month) /* +shuffle, ShUfFlE */ " +
+        "select * from functional.alltypes");
+    AnalyzesOk("insert into table functional.alltypessmall " +
+        "partition (year, month) [shuffle, ShUfFlE] " +
+        "select * from functional.alltypes");
   }
 
   @Test
@@ -711,12 +918,6 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
         "round() must be called with a constant second argument.");
     AnalysisError("select truncate(c1, cast(c3 as int)) from functional.decimal_tiny",
         "truncate() must be called with a constant second argument.");
-  }
-
-  void addTestUda(String name, Type retType, Type... argTypes) {
-    FunctionName fnName = new FunctionName("default", name);
-    catalog_.addFunction(new AggregateFunction(fnName,
-        new FunctionArgs(Lists.newArrayList(argTypes), false), retType));
   }
 
   @Test
@@ -852,6 +1053,16 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     // Test select stmt avg smap.
     AnalyzesOk("select cast(avg(c1) as decimal(10,4)) as c from " +
         "functional.decimal_tiny group by c3 having c = 5.1106 order by 1");
+
+    // check CHAR and VARCHAR aggregates
+    checkExprType("select min(cast('foo' as char(5))) from functional.chars_tiny",
+        ScalarType.STRING);
+    checkExprType("select max(cast('foo' as varchar(5))) from functional.chars_tiny",
+        ScalarType.STRING);
+    checkExprType("select max(vc) from functional.chars_tiny", ScalarType.STRING);
+    checkExprType("select max(cs) from functional.chars_tiny", ScalarType.STRING);
+    checkExprType("select max(lower(cs)) from functional.chars_tiny",
+        ScalarType.STRING);
   }
 
   @Test
@@ -1007,14 +1218,16 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     // picks up select item alias
     AnalyzesOk("select zip z, id iD1, id ID2, count(*) " +
         "from functional.testtbl group by z, ID1, id2");
+    // same alias is not ambiguous if it refers to the same expr
+    AnalyzesOk("select int_col, INT_COL from functional.alltypes group by int_col");
+    AnalyzesOk("select bool_col a, bool_col A from functional.alltypes group by a");
+    AnalyzesOk("select int_col A, bool_col b, int_col a, bool_col B " +
+        "from functional.alltypes group by a, b");
     // ambiguous alias
     AnalysisError("select zip a, id a, count(*) from functional.testtbl group by a",
-        "Column a in group by clause is ambiguous");
+        "Column 'a' in GROUP BY clause is ambiguous");
     AnalysisError("select zip id, id, count(*) from functional.testtbl group by id",
-        "Column id in group by clause is ambiguous");
-    AnalysisError("select zip id, zip ID, count(*) from functional.testtbl group by id",
-        "Column id in group by clause is ambiguous");
-
+        "Column 'id' in GROUP BY clause is ambiguous");
 
     // can't group by aggregate
     AnalysisError("select zip, count(*) from functional.testtbl group by count(*)",
@@ -1089,13 +1302,18 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalyzesOk("select t1.int_col from functional.alltypes t1, " +
         "functional.alltypes t2 where t1.id = t2.id order by int_col");
 
-    // Ambiguous alias cause error
+    // same alias is not ambiguous if it refers to the same expr
+    AnalyzesOk("select int_col, INT_COL from functional.alltypes order by int_col");
+    AnalyzesOk("select bool_col a, bool_col A from functional.alltypes order by a");
+    AnalyzesOk("select int_col A, bool_col b, int_col a, bool_col B " +
+        "from functional.alltypes order by a, b");
+    // ambiguous alias causes error
     AnalysisError("select string_col a, int_col a from " +
         "functional.alltypessmall order by a limit 1",
-        "Column a in order clause is ambiguous");
+        "Column 'a' in ORDER BY clause is ambiguous");
     AnalysisError("select string_col a, int_col A from " +
         "functional.alltypessmall order by a limit 1",
-        "Column a in order clause is ambiguous");
+        "Column 'a' in ORDER BY clause is ambiguous");
 
     // Test if an ignored order by produces the expected warning.
     AnalyzesOk("select * from (select * from functional.alltypes order by int_col) A",
@@ -1249,11 +1467,16 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalysisError("(select int_col a, string_col a from functional.alltypes) " +
         "union (select int_col a, string_col a " +
         "from functional.alltypessmall) order by a",
-        "Column a in order clause is ambiguous");
+        "Column 'a' in ORDER BY clause is ambiguous");
     // Ambiguous alias in the second union operand should work.
     AnalyzesOk("(select int_col a, string_col b from functional.alltypes) " +
         "union (select int_col a, string_col a " +
         "from functional.alltypessmall) order by a");
+    // Ambiguous alias even though the exprs of the first operand are identical
+    // (the corresponding in exprs in the other operand are different)
+    AnalysisError("select int_col a, int_col a from functional.alltypes " +
+        "union all (select 1, bigint_col from functional.alltypessmall) order by a",
+        "Column 'a' in ORDER BY clause is ambiguous");
 
     // Column labels are inherited from first select block.
     // Order by references an invalid column
@@ -1363,6 +1586,19 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     // WITH clause in insert statement.
     AnalyzesOk("with t1 as (select * from functional.alltypestiny)" +
         "insert into functional.alltypes partition(year, month) select * from t1");
+    // WITH clause in insert statement with a select statement that has a WITH
+    // clause and an inline view (IMPALA-1100)
+    AnalyzesOk("with test_ctas_1 as (select * from functional.alltypestiny) insert " +
+        "into functional.alltypes partition (year, month) with with_1 as " +
+        "(select t1.* from test_ctas_1 as t1 right join (select 1 as int_col " +
+        "from functional.alltypestiny as t1) as t2 ON t2.int_col = t1.int_col) " +
+        "select * from with_1 limit 10");
+    // Insert with a select statement containing a WITH clause and an inline
+    // view
+    AnalyzesOk("insert into functional.alltypes partition (year, month) with " +
+        "with_1 as (select t1.* from functional.alltypes as t1 right " +
+        "join (select * from functional.alltypestiny as t1) t2 on t1.int_col = " +
+        "t2.int_col) select * from with_1 limit 10");
     // WITH-clause views belong to different scopes.
     AnalyzesOk("with t1 as (select id from functional.alltypestiny) " +
         "insert into functional.alltypes partition(year, month) " +
@@ -1706,8 +1942,8 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     // Multiple non-conflicting hints and case insensitivity of hints.
     AnalyzesOk("insert into table functional.alltypessmall " +
         "partition (year, month) [shuffle, ShUfFlE] select * from functional.alltypes");
-    // Unknown plan hint,
-    AnalysisError("insert into functional.alltypessmall " +
+    // Unknown plan hint. Expect a warning but no error.
+    AnalyzesOk("insert into functional.alltypessmall " +
         "partition (year, month) [badhint] select * from functional.alltypes",
         "INSERT hint not recognized: badhint");
     // Conflicting plan hints.
@@ -2196,7 +2432,7 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
   @Test
   public void cloneTest() {
     testNumberOfMembers(QueryStmt.class, 10);
-    testNumberOfMembers(UnionStmt.class, 7);
+    testNumberOfMembers(UnionStmt.class, 8);
     testNumberOfMembers(ValuesStmt.class, 0);
 
     // Also check TableRefs.

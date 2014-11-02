@@ -62,8 +62,10 @@ Status ScalarFnCall::Prepare(RuntimeState* state, const RowDescriptor& desc,
 
   FunctionContext::TypeDesc return_type = AnyValUtil::ColumnTypeToTypeDesc(type_);
   vector<FunctionContext::TypeDesc> arg_types;
+  bool char_arg = false;
   for (int i = 0; i < children_.size(); ++i) {
     arg_types.push_back(AnyValUtil::ColumnTypeToTypeDesc(children_[i]->type_));
+    char_arg = char_arg || (children_[i]->type_.type == TYPE_CHAR);
   }
 
   // Compute buffer size for varargs
@@ -77,11 +79,16 @@ Status ScalarFnCall::Prepare(RuntimeState* state, const RowDescriptor& desc,
 
   context_index_ = context->Register(state, return_type, arg_types, varargs_buffer_size);
 
-  // If codegen is disabled and we're calling a non-variadic builtin with <= 3 arguments,
-  // we can use the interpreted path and call the builtin without codegen.
+  // If the codegen object hasn't been created yet and we're calling a non-variadic
+  // builtin with <= 3 arguments, we can use the interpreted path and call the builtin
+  // without codegen. This saves us the overhead of creating the codegen object when it's
+  // not necessary (i.e., in plan fragments with no codegen-enabled operators).
   // TODO: no need to restrict this to builtins.
-  if (state->codegen() == NULL && vararg_start_idx_ == -1 && children_.size() <= 3 &&
-      fn_.binary_type == TFunctionBinaryType::BUILTIN) {
+  // TODO: codegen for char arguments
+  if (char_arg || (!state->codegen_created() && vararg_start_idx_ == -1 &&
+      children_.size() <= 3 && fn_.binary_type == TFunctionBinaryType::BUILTIN)) {
+    DCHECK(vararg_start_idx_ == -1 && children_.size() <= 3 &&
+      fn_.binary_type == TFunctionBinaryType::BUILTIN);
     Status status = LibCache::instance()->GetSoFunctionPtr(
         fn_.hdfs_location, fn_.scalar_fn.symbol, &scalar_fn_, &cache_entry_);
     if (!status.ok()) {
@@ -95,9 +102,8 @@ Status ScalarFnCall::Prepare(RuntimeState* state, const RowDescriptor& desc,
     }
   } else {
     // If we got here, either codegen is enabled or we need codegen to run this function.
-    // TODO: reintroduce disable_codegen? We're doing extra work here if the user doesn't
-    // call GetCodegendComputeFn()
-    if (state->codegen() == NULL) RETURN_IF_ERROR(state->CreateCodegen());
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
 
     if (fn_.binary_type == TFunctionBinaryType::IR) {
       string local_path;
@@ -106,14 +112,13 @@ Status ScalarFnCall::Prepare(RuntimeState* state, const RowDescriptor& desc,
       // Link the UDF module into this query's main module (essentially copy the UDF
       // module into the main module) so the UDF's functions are available in the main
       // module.
-      RETURN_IF_ERROR(state->codegen()->LinkModule(local_path));
+      RETURN_IF_ERROR(codegen->LinkModule(local_path));
     }
 
     llvm::Function* ir_udf_wrapper;
     RETURN_IF_ERROR(GetCodegendComputeFn(state, &ir_udf_wrapper));
-    DCHECK(state->codegen() != NULL);
     // TODO: don't do this for child exprs
-    state->codegen()->AddFunctionToJit(ir_udf_wrapper, &scalar_fn_wrapper_);
+    codegen->AddFunctionToJit(ir_udf_wrapper, &scalar_fn_wrapper_);
   }
 
   if (fn_.scalar_fn.__isset.prepare_fn_symbol) {
@@ -223,9 +228,15 @@ Status ScalarFnCall::GetCodegendComputeFn(RuntimeState* state, llvm::Function** 
     *fn = ir_compute_fn_;
     return Status::OK;
   }
+  for (int i = 0; i < GetNumChildren(); ++i) {
+    if (children_[i]->type().type == TYPE_CHAR) {
+      *fn = NULL;
+      return Status("ScalarFnCall Codegen not supported for CHAR");
+    }
+  }
 
-  LlvmCodeGen* codegen = state->codegen();
-  DCHECK(codegen != NULL);
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
   llvm::Function* udf;
   RETURN_IF_ERROR(GetUdf(state, &udf));
 
@@ -295,7 +306,7 @@ Status ScalarFnCall::GetCodegendComputeFn(RuntimeState* state, llvm::Function** 
     if (vararg_start_idx_ == -1 || i < vararg_start_idx_) {
       // Either no varargs or arguments before varargs begin. Allocate space to store
       // 'child_fn's result so we can pass the pointer to the UDF.
-      arg_val_ptr = builder.CreateAlloca(arg_type, 0, "arg_val_ptr");
+      arg_val_ptr = codegen->CreateEntryBlockAlloca(builder, arg_type, "arg_val_ptr");
 
       if (children_[i]->type().type == TYPE_DECIMAL) {
         // UDFs may manipulate DecimalVal arguments via SIMD instructions such as 'movaps'
@@ -347,8 +358,9 @@ Status ScalarFnCall::GetCodegendComputeFn(RuntimeState* state, llvm::Function** 
 }
 
 Status ScalarFnCall::GetUdf(RuntimeState* state, llvm::Function** udf) {
-  LlvmCodeGen* codegen = state->codegen();
-  DCHECK(codegen != NULL);
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
+
   // from_utc_timestamp and to_utc_timestamp have inline ASM that cannot be JIT'd. Always
   // use the statically compiled versions so the xcompiled versions are not included in
   // the final module to be JIT'd.
@@ -448,15 +460,16 @@ Status ScalarFnCall::GetFunction(RuntimeState* state, const string& symbol, void
                                                   &cache_entry_);
   } else {
     DCHECK_EQ(fn_.binary_type, TFunctionBinaryType::IR);
-    DCHECK(state->codegen() != NULL);
-    llvm::Function* ir_fn = state->codegen()->module()->getFunction(symbol);
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
+    llvm::Function* ir_fn = codegen->module()->getFunction(symbol);
     if (ir_fn == NULL) {
       stringstream ss;
       ss << "Unable to locate function " << symbol
          << " from LLVM module " << fn_.hdfs_location;
       return Status(ss.str());
     }
-    state->codegen()->AddFunctionToJit(ir_fn, fn);
+    codegen->AddFunctionToJit(ir_fn, fn);
     return Status::OK;
   }
 }

@@ -133,16 +133,16 @@ public abstract class QueryStmt extends StatementBase {
       // create copies, we don't want to modify the original parse node, in case
       // we need to print it
       orderingExprs.add(orderByElement.getExpr().clone());
-      isAscOrder.add(Boolean.valueOf(orderByElement.getIsAsc()));
+      isAscOrder.add(Boolean.valueOf(orderByElement.isAsc()));
       nullsFirstParams.add(orderByElement.getNullsFirstParam());
     }
     substituteOrdinals(orderingExprs, "ORDER BY", analyzer);
     Expr ambiguousAlias = getFirstAmbiguousAlias(orderingExprs);
     if (ambiguousAlias != null) {
-      throw new AnalysisException("Column " + ambiguousAlias.toSql() +
-          " in order clause is ambiguous");
+      throw new AnalysisException("Column '" + ambiguousAlias.toSql() +
+          "' in ORDER BY clause is ambiguous");
     }
-    orderingExprs = Expr.trySubstituteList(orderingExprs, aliasSmap_, analyzer);
+    orderingExprs = Expr.trySubstituteList(orderingExprs, aliasSmap_, analyzer, false);
 
     if (!analyzer.isRootAnalyzer() && hasOffset() && !hasLimit()) {
       throw new AnalysisException("Order-by with offset without limit not supported" +
@@ -191,7 +191,7 @@ public abstract class QueryStmt extends StatementBase {
     TreeNode.collect(sortInfo_.getOrderingExprs(), Predicates.instanceOf(SlotRef.class),
         sourceSlots);
 
-    TupleDescriptor sortTupleDesc = analyzer.getDescTbl().createTupleDescriptor();
+    TupleDescriptor sortTupleDesc = analyzer.getDescTbl().createTupleDescriptor("sort");
     List<Expr> sortTupleExprs = Lists.newArrayList();
     sortTupleDesc.setIsMaterialized(true);
     // substOrderBy is the mapping from slot refs in the input row to slot refs in the
@@ -214,7 +214,7 @@ public abstract class QueryStmt extends StatementBase {
       sortTupleExprs.add(origSlotRef);
     }
 
-    resultExprs_ = Expr.substituteList(resultExprs_, substOrderBy, analyzer);
+    resultExprs_ = Expr.substituteList(resultExprs_, substOrderBy, analyzer, false);
     sortInfo_.substituteOrderingExprs(substOrderBy, analyzer);
     sortInfo_.setMaterializedTupleInfo(sortTupleDesc, sortTupleExprs);
   }

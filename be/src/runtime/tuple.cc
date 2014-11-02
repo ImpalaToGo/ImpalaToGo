@@ -43,7 +43,7 @@ void Tuple::DeepCopy(Tuple* dst, const TupleDescriptor& desc, MemPool* pool,
   // allocate in the same pool and then copy all non-null string slots
   for (vector<SlotDescriptor*>::const_iterator i = desc.string_slots().begin();
        i != desc.string_slots().end(); ++i) {
-    DCHECK((*i)->type() == TYPE_STRING || (*i)->type() == TYPE_VARCHAR);
+    DCHECK((*i)->type().IsVarLen());
     if (!dst->IsNull((*i)->null_indicator_offset())) {
       StringValue* string_v = dst->GetStringSlot((*i)->tuple_offset());
       int offset = pool->GetCurrentOffset();
@@ -62,7 +62,7 @@ void Tuple::DeepCopy(const TupleDescriptor& desc, char** data, int* offset,
   *offset += desc.byte_size();
   for (vector<SlotDescriptor*>::const_iterator i = desc.string_slots().begin();
        i != desc.string_slots().end(); ++i) {
-    DCHECK((*i)->type() == TYPE_STRING || (*i)->type() == TYPE_VARCHAR);
+    DCHECK((*i)->type().IsVarLen());
     if (!dst->IsNull((*i)->null_indicator_offset())) {
       StringValue* string_v = dst->GetStringSlot((*i)->tuple_offset());
       memcpy(*data, string_v->ptr, string_v->len);
@@ -97,7 +97,7 @@ void Tuple::MaterializeExprs(
     if (src != NULL) {
       void* dst = GetSlot(slot_desc->tuple_offset());
       RawValue::Write(src, dst, slot_desc->type(), pool);
-      if (collect_string_vals && slot_desc->type() == TYPE_STRING) {
+      if (collect_string_vals && slot_desc->type().IsVarLen()) {
         StringValue* string_val = reinterpret_cast<StringValue*>(dst);
         non_null_var_len_values->push_back(string_val);
         *total_var_len += string_val->len;

@@ -81,6 +81,9 @@ class Frontend {
   // Call FE to get the table/column stats.
   Status GetStats(const TShowStatsParams& params, TResultSet* result);
 
+  // Call FE to get the privileges granted to a role.
+  Status GetRolePrivileges(const TShowGrantRoleParams& params, TResultSet* result);
+
   // Return all functions of 'category' that match the optional argument 'pattern'.
   // If pattern is NULL match all functions, otherwise match only those functions that
   // match the pattern string.
@@ -98,6 +101,9 @@ class Frontend {
   // Returns OK if the operation was successful, otherwise a Status object with
   // information on the error will be returned.
   Status GetCatalogObject(const TCatalogObject& request, TCatalogObject* response);
+
+  // Call FE to get the roles.
+  Status ShowRoles(const TShowRolesParams& params, TShowRolesResult* result);
 
   // Returns (in the output parameter) the result of a DESCRIBE table command. This
   // command retrieves table metadata, such as the column definitions. The metadata
@@ -162,6 +168,8 @@ class Frontend {
   jmethodID get_stats_id_; // JniFrontend.getTableStats
   jmethodID get_functions_id_; // JniFrontend.getFunctions
   jmethodID get_catalog_object_id_; // JniFrontend.getCatalogObject
+  jmethodID show_roles_id_; // JniFrontend.getRoles
+  jmethodID get_role_privileges_id_; // JniFrontend.getRolePrivileges
   jmethodID exec_hs2_metadata_op_id_; // JniFrontend.execHiveServer2MetadataOp
   jmethodID load_table_data_id_; // JniFrontend.loadTableData
   jmethodID set_catalog_initialized_id_; // JniFrontend.setCatalogInitialized

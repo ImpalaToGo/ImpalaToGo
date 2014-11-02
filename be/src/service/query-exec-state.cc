@@ -30,11 +30,14 @@
 #include "gen-cpp/CatalogService.h"
 #include "gen-cpp/CatalogService_types.h"
 
+#include <thrift/Thrift.h>
+
 using namespace std;
 using namespace boost;
 using namespace boost::uuids;
 using namespace beeswax;
 using namespace strings;
+using namespace apache::thrift;
 using namespace apache::hive::service::cli::thrift;
 
 DECLARE_int32(catalog_service_port);
@@ -81,6 +84,10 @@ ImpalaServer::QueryExecState::QueryExecState(
   profile_.set_name("Query (id=" + PrintId(query_id()) + ")");
   summary_profile_.AddInfoString("Session ID", PrintId(session_id()));
   summary_profile_.AddInfoString("Session Type", PrintTSessionType(session_type()));
+  if (session_type() == TSessionType::HIVESERVER2) {
+    summary_profile_.AddInfoString("HiveServer2 Protocol Version",
+        Substitute("V$0", 1 + session->hs2_version));
+  }
   summary_profile_.AddInfoString("Start Time", start_time().DebugString());
   summary_profile_.AddInfoString("End Time", "");
   summary_profile_.AddInfoString("Query Type", "N/A");
@@ -150,6 +157,7 @@ Status ImpalaServer::QueryExecState::Exec(TExecRequest* exec_request) {
       TCatalogOpRequest reset_req;
       reset_req.__set_op_type(TCatalogOpType::RESET_METADATA);
       reset_req.__set_reset_metadata_params(TResetMetadataRequest());
+      reset_req.reset_metadata_params.__set_header(TCatalogServiceRequestHeader());
       reset_req.reset_metadata_params.__set_is_refresh(true);
       reset_req.reset_metadata_params.__set_table_name(
           exec_request_.load_data_request.table_name);
@@ -252,6 +260,46 @@ Status ImpalaServer::QueryExecState::ExecLocalCatalogOp(
       RETURN_IF_ERROR(frontend_->GetFunctions(
           params->category, params->db, fn_pattern, &query_ctx_.session, &functions));
       SetResultSet(functions.fn_ret_types, functions.fn_signatures);
+      return Status::OK;
+    }
+    case TCatalogOpType::SHOW_ROLES: {
+      const TShowRolesParams& params = catalog_op.show_roles_params;
+      if (params.is_admin_op) {
+        // Verify the user has privileges to perform this operation by checking against the
+        // Sentry Service (via the Catalog Server).
+        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+
+        TSentryAdminCheckRequest req;
+        req.__set_header(TCatalogServiceRequestHeader());
+        req.header.__set_requesting_user(effective_user());
+        RETURN_IF_ERROR(catalog_op_executor_->SentryAdminCheck(req));
+      }
+
+      // If we have made it here, the user has privileges to execute this operation.
+      // Return the results.
+      TShowRolesResult result;
+      RETURN_IF_ERROR(frontend_->ShowRoles(params, &result));
+      SetResultSet(result.role_names);
+      return Status::OK;
+    }
+    case TCatalogOpType::SHOW_GRANT_ROLE: {
+      const TShowGrantRoleParams& params = catalog_op.show_grant_role_params;
+      if (params.is_admin_op) {
+        // Verify the user has privileges to perform this operation by checking against the
+        // Sentry Service (via the Catalog Server).
+        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+
+        TSentryAdminCheckRequest req;
+        req.__set_header(TCatalogServiceRequestHeader());
+        req.header.__set_requesting_user(effective_user());
+        RETURN_IF_ERROR(catalog_op_executor_->SentryAdminCheck(req));
+      }
+
+      TResultSet response;
+      RETURN_IF_ERROR(frontend_->GetRolePrivileges(params, &response));
+      // Set the result set and its schema from the response.
+      request_result_set_.reset(new vector<TResultRow>(response.rows));
+      result_metadata_ = response.schema;
       return Status::OK;
     }
     case TCatalogOpType::DESCRIBE: {
@@ -641,6 +689,7 @@ Status ImpalaServer::QueryExecState::FetchRowsInternal(const int32_t max_rows,
       ++current_batch_row_;
     }
   }
+  ExprContext::FreeLocalAllocations(output_expr_ctxs_);
 
   // Update the result cache if necessary.
   if (result_cache_max_size_ > 0 && result_cache_.get() != NULL) {
@@ -652,7 +701,7 @@ Status ImpalaServer::QueryExecState::FetchRowsInternal(const int32_t max_rows,
       return Status::OK;
     }
     int64_t delta_bytes =
-        fetched_rows->BytesSize(num_rows_fetched_from_cache, fetched_rows->size());
+        fetched_rows->ByteSize(num_rows_fetched_from_cache, fetched_rows->size());
     MemTracker* query_mem_tracker = coord_->query_mem_tracker();
     // Count the cached rows towards the mem limit.
     if (!query_mem_tracker->TryConsume(delta_bytes)) {
@@ -710,6 +759,8 @@ Status ImpalaServer::QueryExecState::UpdateCatalog() {
   if (query_exec_request.__isset.finalize_params) {
     const TFinalizeParams& finalize_params = query_exec_request.finalize_params;
     TUpdateCatalogRequest catalog_update;
+    catalog_update.__set_header(TCatalogServiceRequestHeader());
+    catalog_update.header.__set_requesting_user(effective_user());
     if (!coord()->PrepareCatalogUpdate(&catalog_update)) {
       VLOG_QUERY << "No partitions altered, not updating metastore (query id: "
                  << query_id() << ")";
@@ -733,7 +784,12 @@ Status ImpalaServer::QueryExecState::UpdateCatalog() {
 
       VLOG_QUERY << "Executing FinalizeDml() using CatalogService";
       TUpdateCatalogResponse resp;
-      client->UpdateCatalog(resp, catalog_update);
+      try {
+        client->UpdateCatalog(resp, catalog_update);
+      } catch (const TException& e) {
+        RETURN_IF_ERROR(client.Reopen());
+        client->UpdateCatalog(resp, catalog_update);
+      }
 
       Status status(resp.result.status);
       if (!status.ok()) LOG(ERROR) << "ERROR Finalizing DML: " << status.GetErrorMsg();
@@ -914,7 +970,7 @@ void ImpalaServer::QueryExecState::ClearResultCache() {
   if (result_cache_ == NULL) return;
   // Update result set cache metrics and mem limit accounting.
   ImpaladMetrics::RESULTSET_CACHE_TOTAL_NUM_ROWS->Increment(-result_cache_->size());
-  int64_t total_bytes = result_cache_->BytesSize();
+  int64_t total_bytes = result_cache_->ByteSize();
   ImpaladMetrics::RESULTSET_CACHE_TOTAL_BYTES->Increment(-total_bytes);
   if (coord_ != NULL) {
     DCHECK_NOTNULL(coord_->query_mem_tracker());

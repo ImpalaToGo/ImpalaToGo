@@ -40,8 +40,8 @@ else
 fi
 set -u
 
-IMPALAD_LOG_DIR=${IMPALA_TEST_CLUSTER_LOG_DIR}/data_loading
-mkdir -p ${IMPALAD_LOG_DIR}
+DATA_LOADING_LOG_DIR=${IMPALA_TEST_CLUSTER_LOG_DIR}/data_loading
+mkdir -p ${DATA_LOADING_LOG_DIR}
 
 # Copy the test data source library into HDFS
 ${IMPALA_HOME}/testdata/bin/copy-data-sources.sh
@@ -66,6 +66,17 @@ hadoop fs -put ${IMPALA_HOME}/testdata/data/schemas/malformed_decimal_tiny.parqu
 hadoop fs -put ${IMPALA_HOME}/testdata/data/schemas/decimal.parquet \
   /test-warehouse/schemas/
 
+# CHAR and VARCHAR tables written by Hive
+hadoop fs -mkdir -p /test-warehouse/chars_formats_avro_snap/
+hadoop fs -put -f ${IMPALA_HOME}/testdata/data/chars-formats.avro \
+  /test-warehouse/chars_formats_avro_snap
+hadoop fs -mkdir -p /test-warehouse/chars_formats_parquet/
+hadoop fs -put -f ${IMPALA_HOME}/testdata/data/chars-formats.parquet \
+  /test-warehouse/chars_formats_parquet
+hadoop fs -mkdir -p /test-warehouse/chars_formats_text/
+hadoop fs -put -f ${IMPALA_HOME}/testdata/data/chars-formats.txt \
+  /test-warehouse/chars_formats_text
+
 # If a schema change is detected, force load the data.
 set +e
 LOAD_DATA_ARGS=""
@@ -77,12 +88,22 @@ set -e
 
 # Load the data set
 pushd ${IMPALA_HOME}/bin
-./start-impala-cluster.py -s 3 --wait_for_cluster --log_dir=${IMPALAD_LOG_DIR}
-# Use unbuffered logging by executing these data loading steps with 'python -u'
-python -u ./load-data.py --workloads functional-query --exploration_strategy exhaustive \
-  ${LOAD_DATA_ARGS}
-python -u ./load-data.py --workloads tpcds --exploration_strategy core ${LOAD_DATA_ARGS}
-python -u ./load-data.py --workloads tpch --exploration_strategy core ${LOAD_DATA_ARGS}
+./start-impala-cluster.py -s 3 --wait_for_cluster --log_dir=${DATA_LOADING_LOG_DIR}
+
+function load-data {
+  WORKLOAD=$1
+  EXPLORATION_STRATEGY=$2
+  LOG_FILE=${DATA_LOADING_LOG_DIR}/data-load-${WORKLOAD}-${EXPLORATION_STRATEGY}.log
+  echo "Loading workload: ${WORKLOAD} (${EXPLORATION_STRATEGY}). Logging to: "\
+      "${LOG_FILE}"
+  # Use unbuffered logging by executing with 'python -u'
+  python -u ./load-data.py --workloads ${WORKLOAD} \
+      --exploration_strategy ${EXPLORATION_STRATEGY} ${LOAD_DATA_ARGS} &> ${LOG_FILE}
+}
+
+load-data "functional-query" "exhaustive"
+load-data "tpch" "core"
+load-data "tpcds" "core"
 
 # Load the test data source and table
 ./impala-shell.sh -f ${IMPALA_HOME}/testdata/bin/create-data-source-table.sql

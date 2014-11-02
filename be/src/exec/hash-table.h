@@ -22,7 +22,10 @@
 #include "codegen/impala-ir.h"
 #include "common/logging.h"
 #include "runtime/buffered-block-mgr.h"
+#include "runtime/buffered-tuple-stream.h"
+#include "runtime/buffered-tuple-stream.inline.h"
 #include "runtime/mem-tracker.h"
+#include "runtime/tuple-row.h"
 #include "util/bitmap.h"
 #include "util/hash-util.h"
 
@@ -96,12 +99,14 @@ class HashTableCtx {
   //  - The max levels we will hash with.
   HashTableCtx(const std::vector<ExprContext*>& build_expr_ctxs,
       const std::vector<ExprContext*>& probe_expr_ctxs, bool stores_nulls,
-      bool finds_nulls, int32_t initial_seed, int max_levels);
+      bool finds_nulls, int32_t initial_seed, int max_levels,
+      int num_build_tuples);
 
   // Call to cleanup any resources.
   void Close();
 
   void set_level(int level);
+  int level() const { return level_; }
 
   // Returns the results of the exprs at 'expr_idx' evaluated over the last row
   // processed.
@@ -134,9 +139,12 @@ class HashTableCtx {
   // 'expr_values_buffer_'.  Function signature matches HashTable::Equals().
   llvm::Function* CodegenEquals(RuntimeState* state);
 
-  // Codegen for hashing the expr values in 'expr_values_buffer_'.  Function
-  // prototype matches HashCurrentRow identically.
-  llvm::Function* CodegenHashCurrentRow(RuntimeState* state);
+  // Codegen for hashing the expr values in 'expr_values_buffer_'. Function prototype
+  // matches HashCurrentRow identically. Unlike HashCurrentRow(), the returned function
+  // only uses a single hash function, rather than switching based on level_.
+  // If 'use_murmur' is true, murmur hash is used, otherwise CRC is used if the hardware
+  // supports it (see hash-util.h).
+  llvm::Function* CodegenHashCurrentRow(RuntimeState* state, bool use_murmur);
 
   static const char* LLVM_CLASS_NAME;
 
@@ -155,11 +163,18 @@ class HashTableCtx {
       // TODO: figure out which hash function to use. We need to generate uncorrelated
       // hashes by changing just the seed. CRC does not have this property and FNV is
       // okay. We should switch to something else.
-      hash_ = HashUtil::FnvHash64to32(expr_values_buffer_, results_buffer_size_, seed);
+      return Hash(expr_values_buffer_, results_buffer_size_, seed);
     } else {
-      hash_ = HashTableCtx::HashVariableLenRow();
+      return HashTableCtx::HashVariableLenRow();
     }
-    return hash_;
+  }
+
+  // Wrapper function for calling correct HashUtil function in non-codegen'd case.
+  uint32_t inline Hash(const void* input, int len, int32_t hash) {
+    // Use CRC hash at first level for better performance. Switch to murmur hash at
+    // subsequent levels since CRC doesn't randomize well with different seed inputs.
+    if (level_ == 0) return HashUtil::Hash(input, len, hash);
+    return HashUtil::MurmurHash2_64(input, len, hash);
   }
 
   // Evaluate 'row' over build exprs caching the results in 'expr_values_buffer_' This
@@ -225,18 +240,11 @@ class HashTableCtx {
   // not change once allocated.
   uint8_t* expr_value_null_bits_;
 
-  // The hash of the current row. Valid until EvalAndHashBuild/EvalAndHashProbe
-  // is called again.
-  uint32_t hash_;
-
-  // If true, the current row can be skipped on subsequent hash table operations.
-  // It cannot match existing hash table entries and/or should not be inserted.
-  // This value is valid until EvalAndHashBuild/EvalAndHashProbe is called again.
-  bool skip_row_;
+  // Scratch buffer to generate rows on the fly.
+  TupleRow* row_;
 
   // Cross-compiled functions to access member variables used in CodegenHashCurrentRow().
   uint32_t GetHashSeed() const;
-  void set_hash(uint32_t hash);
 };
 
 // The hash table data structure. Consists of a vector of buckets (of linked nodes).
@@ -251,11 +259,20 @@ class HashTable {
   // Create a hash table.
   //  - client: block mgr client to allocate data pages from.
   //  - num_build_tuples: number of Tuples in the build tuple row.
-  //  - stores_tuples: If true, the hash table stores tuples, otherwise it stores tuple
-  //    rows.
-  //  - num_buckets: number of buckets that the hash table should be initialized to.
+  //  - tuple_stream: the tuple stream which contains the tuple rows index by the
+  //    hash table. Can be NULL if the rows contain only a single tuple, in which
+  //    the 'tuple_stream' is unused.
+  //  - use_initial_small_pages: if true the first fixed N data_pages_ will be smaller
+  //    than the io buffer size.
+  //  - max_num_buckets: the maximum number of buckets that can be stored. If we
+  //    try to grow the number of buckets to a larger number, the inserts will fail.
+  //    -1, if it unlimited.
+  //  - initial_num_buckets: number of buckets that the hash table
+  //    should be initialized with.
   HashTable(RuntimeState* state, BufferedBlockMgr::Client* client,
-      int num_build_tuples, bool stores_tuples = false, int64_t num_buckets = 1024);
+      int num_build_tuples, BufferedTupleStream* tuple_stream,
+      bool use_initial_small_pages, int64_t max_num_buckets,
+      int64_t initial_num_buckets = 1024);
 
   // Ctor used only for testing. Memory is allocated from the pool instead of the
   // block mgr.
@@ -273,22 +290,17 @@ class HashTable {
   // the insert fails and this function returns false.
   // The 'row' is not copied by the hash table and the caller must guarantee it
   // stays in memory.
+  // 'idx' is the index into tuple_stream_ for this row. If the row contains more
+  // than one tuples, the 'idx' is stored instead of the 'row'.
   // Returns false if there was not enough memory to insert the row.
-  bool IR_ALWAYS_INLINE Insert(HashTableCtx* ht_ctx, TupleRow* row) {
-    DCHECK_NOTNULL(ht_ctx);
-    DCHECK(!ht_ctx->skip_row_) << "Caller should have checked";
-    return InsertImpl(ht_ctx, row);
-  }
+  bool IR_ALWAYS_INLINE Insert(HashTableCtx* ht_ctx,
+      const BufferedTupleStream::RowIdx& idx, TupleRow* row, uint32_t hash);
 
-  bool IR_ALWAYS_INLINE Insert(HashTableCtx* ht_ctx, Tuple* tuple) {
-    DCHECK_NOTNULL(ht_ctx);
-    DCHECK(!ht_ctx->skip_row_) << "Caller should have checked";
-    return InsertImpl(ht_ctx, tuple);
-  }
+  bool IR_ALWAYS_INLINE Insert(HashTableCtx* ht_ctx, Tuple* tuple, uint32_t hash);
 
   // Returns the start iterator for all rows that match the last row evaluated in
   // 'ht_cxt'. EvalAndHashBuild/EvalAndHashProbe must have been called before calling
-  // this.
+  // this. Hash must be the hash returned by EvalAndHashBuild/Probe.
   // The iterator can be iterated until HashTable::End() to find all the matching rows.
   // Only one scan can be in progress at any time (i.e. it is not legal to call
   // Find(), begin iterating through all the matches, call another Find(),
@@ -296,45 +308,50 @@ class HashTable {
   // Advancing the returned iterator will go to the next matching row.  The matching
   // rows are evaluated lazily (i.e. computed as the Iterator is moved).
   // Returns HashTable::End() if there is no match.
-  Iterator IR_ALWAYS_INLINE Find(HashTableCtx* ht_ctx);
+  Iterator IR_ALWAYS_INLINE Find(HashTableCtx* ht_ctx, uint32_t hash);
 
   // Returns number of elements in the hash table
   int64_t size() const { return num_nodes_; }
 
   // Returns the number of buckets
-  int64_t num_buckets() const { return buckets_.size(); }
+  int64_t num_buckets() const { return num_buckets_; }
 
   // Returns the load factor (the number of non-empty buckets)
   float load_factor() const {
-    return num_filled_buckets_ / static_cast<float>(buckets_.size());
+    return num_filled_buckets_ / static_cast<float>(num_buckets_);
   }
 
   // Returns an estimate of the number of bytes needed to build the hash table
   // structure for 'num_rows'.
   static int64_t EstimateSize(int64_t num_rows) {
+    return EstimatedNumBuckets(num_rows) * sizeof(Bucket) + num_rows * sizeof(Node);
+  }
+
+  // Returns the estimated number of buckets (rounded up to a power of two) to
+  // store num_rows.
+  static int64_t EstimatedNumBuckets(int64_t num_rows) {
     // Assume 50% fill factor.
     int64_t num_buckets = num_rows * 2;
-    return num_buckets * sizeof(Bucket) + num_rows * sizeof(Node);
+    return BitUtil::NextPowerOfTwo(num_buckets);
   }
 
   // Returns the number of bytes allocated to the hash table
-  int64_t byte_size() const;
+  int64_t byte_size() const { return total_data_page_size_; }
 
-  // Can be called after all insert calls to add bitmap filters for the probe side values.
-  // For each 'probe_expr_' in 'ht_ctx' that is a slot ref, generate a bitmap filter on
-  // that slot.
-  // These filters are added to the runtime state.
-  // The bitmap filter is similar to a Bloom filter in that has no false negatives but
-  // will have false positives.
-  void AddBitmapFilters(HashTableCtx* ht_ctx);
+  // Can be called after all insert calls to update the bitmap filters for the probe
+  // side values. The bitmap filters are similar to Bloom filters in that they have no
+  // false negatives but they will have false positives.
+  // These filters are not added to the runtime state.
+  void UpdateProbeFilters(HashTableCtx* ht_ctx,
+      std::vector<std::pair<SlotId, Bitmap*> >& bitmaps);
 
   // Returns an iterator at the beginning of the hash table.  Advancing this iterator
   // will traverse all elements.
-  Iterator Begin();
+  Iterator Begin(HashTableCtx* ht_ctx);
 
   // Return an iterator pointing to the first element in the hash table that does not
   // have its matched flag set. Used in right-outer and full-outer joins.
-  Iterator FirstUnmatched();
+  Iterator FirstUnmatched(HashTableCtx* ctx);
 
   // Returns end marker
   Iterator End() { return Iterator(); }
@@ -363,17 +380,17 @@ class HashTable {
     bool NextUnmatched();
 
     // Returns the current row. Callers must check the iterator is not AtEnd() before
-    // calling GetRow().
+    // calling GetRow(). The returned row is owned by the iterator and valid until
+    // the next call to GetRow(). It is safe to advance the iterator.
     TupleRow* GetRow() {
       DCHECK(!AtEnd());
-      DCHECK(!table_->stores_tuples_);
-      return reinterpret_cast<TupleRow*>(node_->data);
+      return table_->GetRow(node_, ctx_->row_);
     }
 
     Tuple* GetTuple() {
       DCHECK(!AtEnd());
       DCHECK(table_->stores_tuples_);
-      return reinterpret_cast<Tuple*>(node_->data);
+      return reinterpret_cast<Tuple*>(node_->tuple);
     }
 
     void set_matched(bool v) {
@@ -402,14 +419,17 @@ class HashTable {
    private:
     friend class HashTable;
 
-    Iterator(HashTable* table, int bucket_idx, Node* node, uint32_t hash) :
-      table_(table),
-      bucket_idx_(bucket_idx),
-      node_(node),
-      scan_hash_(hash) {
+    Iterator(HashTable* table, HashTableCtx* ctx,
+        int bucket_idx, Node* node, uint32_t hash)
+      : table_(table),
+        ctx_(ctx),
+        bucket_idx_(bucket_idx),
+        node_(node),
+        scan_hash_(hash) {
     }
 
     HashTable* table_;
+    HashTableCtx* ctx_;
 
     // Current bucket idx
     int64_t bucket_idx_;
@@ -438,7 +458,10 @@ class HashTable {
     // TODO: Do we even have to cache the hash value?
     uint32_t hash;   // Cache of the hash for data_
     Node* next;      // Chain to next node for collisions
-    void* data;      // Either the Tuple* or TupleRow*
+    union {
+      BufferedTupleStream::RowIdx idx;
+      Tuple* tuple;
+    };
   };
 
   struct Bucket {
@@ -453,8 +476,9 @@ class HashTable {
   // Resize the hash table to 'num_buckets'. Returns false on OOM.
   bool ResizeBuckets(int64_t num_buckets);
 
-  // Insert row into the hash table
-  bool IR_ALWAYS_INLINE InsertImpl(HashTableCtx* ht_ctx, void* data);
+  // Insert row into the hash table. Returns the node that was inserted. Returns NULL
+  // if there was not enough memory.
+  Node* IR_ALWAYS_INLINE InsertImpl(HashTableCtx* ht_ctx, uint32_t hash);
 
   // Chains the node at 'node_idx' to 'bucket'.  Nodes in a bucket are chained
   // as a linked list; this places the new node at the beginning of the list.
@@ -465,11 +489,12 @@ class HashTable {
   void MoveNode(Bucket* from_bucket, Bucket* to_bucket, Node* node,
      Node* previous_node);
 
-  TupleRow* GetRow(Node* node) const {
+  TupleRow* GetRow(Node* node, TupleRow* row) const {
     if (stores_tuples_) {
-      return reinterpret_cast<TupleRow*>(&node->data);
+      return reinterpret_cast<TupleRow*>(&node->tuple);
     } else {
-      return reinterpret_cast<TupleRow*>(node->data);
+      tuple_stream_->GetTupleRow(node->idx, row);
+      return row;
     }
   }
 
@@ -485,6 +510,11 @@ class HashTable {
   // Client to allocate data pages with.
   BufferedBlockMgr::Client* block_mgr_client_;
 
+  // Stream contains the rows referenced by the hash table. Can be NULL if the
+  // row only contains a single tuple, in which case the TupleRow indirection
+  // is removed by the hash table.
+  BufferedTupleStream* tuple_stream_;
+
   // Only used for tests to allocate data pages instead of the block mgr.
   MemPool* data_page_pool_;
 
@@ -497,6 +527,11 @@ class HashTable {
   // TODO: ..or with template-ization
   const bool stores_tuples_;
 
+  // If true use small pages for the first few allocated data pages.
+  const bool use_initial_small_pages_;
+
+  const int64_t max_num_buckets_;
+
   // Number of non-empty buckets.  Used to determine when to grow and rehash
   int64_t num_filled_buckets_;
 
@@ -506,15 +541,20 @@ class HashTable {
   // Data pages for all nodes. These are always pinned.
   std::vector<BufferedBlockMgr::Block*> data_pages_;
 
+  // Byte size of all buffers in data_pages_.
+  int64_t total_data_page_size_;
+
   // Next node to insert.
   Node* next_node_;
 
   // Number of nodes left in the current page.
   int node_remaining_current_page_;
 
-  std::vector<Bucket> buckets_;
+  // Array of all buckets. Owned by this node. Using c-style array to control
+  // control memory footprint.
+  Bucket* buckets_;
 
-  // equal to buckets_.size() but more efficient than the size function
+  // Number of buckets.
   int64_t num_buckets_;
 
   // The number of filled buckets to trigger a resize.  This is cached for efficiency

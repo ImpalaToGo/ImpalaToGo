@@ -20,10 +20,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,6 +51,7 @@ import com.cloudera.impala.authorization.ImpalaInternalAdminUser;
 import com.cloudera.impala.authorization.User;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.Function;
+import com.cloudera.impala.catalog.Role;
 import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.InternalException;
@@ -74,6 +77,9 @@ import com.cloudera.impala.thrift.TLogLevel;
 import com.cloudera.impala.thrift.TMetadataOpRequest;
 import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TResultSet;
+import com.cloudera.impala.thrift.TShowGrantRoleParams;
+import com.cloudera.impala.thrift.TShowRolesParams;
+import com.cloudera.impala.thrift.TShowRolesResult;
 import com.cloudera.impala.thrift.TShowStatsParams;
 import com.cloudera.impala.thrift.TTableName;
 import com.cloudera.impala.thrift.TUpdateCatalogCacheRequest;
@@ -82,6 +88,7 @@ import com.cloudera.impala.util.TSessionStateUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 /**
  * JNI-callable interface onto a wrapped Frontend instance. The main point is to serialise
@@ -108,12 +115,14 @@ public class JniFrontend {
         authorizationPolicyFile, sentryConfigFile, authPolicyProviderClass);
     authConfig.validateConfig();
     if (authConfig.isEnabled()) {
-      LOG.info("Authorization is 'ENABLED' using %s",
+      LOG.info(String.format("Authorization is 'ENABLED' using %s",
           authConfig.isFileBasedPolicy() ? " file based policy from: " +
-          authConfig.getPolicyFile() : " using Sentry Policy Service.");
+          authConfig.getPolicyFile() : " using Sentry Policy Service."));
     } else {
       LOG.info("Authorization is 'DISABLED'.");
     }
+    LOG.info(JniUtil.getJavaVersion());
+
     frontend_ = new Frontend(authConfig);
   }
 
@@ -128,7 +137,7 @@ public class JniFrontend {
 
     StringBuilder explainString = new StringBuilder();
     TExecRequest result = frontend_.createExecRequest(queryCtx, explainString);
-    LOG.debug(explainString.toString());
+    if (explainString.length() > 0) LOG.debug(explainString.toString());
 
     // TODO: avoid creating serializer for each query?
     TSerializer serializer = new TSerializer(protocolFactory_);
@@ -356,6 +365,59 @@ public class JniFrontend {
     JniUtil.deserializeThrift(protocolFactory_, params, thriftTableName);
     return ToSqlUtils.getCreateTableSql(frontend_.getCatalog().getTable(
         params.getDb_name(), params.getTable_name()));
+  }
+
+  /**
+   * Gets all roles
+   */
+  public byte[] getRoles(byte[] showRolesParams) throws ImpalaException {
+    TShowRolesParams params = new TShowRolesParams();
+    JniUtil.deserializeThrift(protocolFactory_, params, showRolesParams);
+    TShowRolesResult result = new TShowRolesResult();
+
+    List<Role> roles = Lists.newArrayList();
+    if (params.isIs_show_current_roles() || params.isSetGrant_group()) {
+      User user = new User(params.getRequesting_user());
+      Set<String> groupNames;
+      if (params.isIs_show_current_roles()) {
+        groupNames = frontend_.getAuthzChecker().getUserGroups(user);
+      } else {
+        Preconditions.checkState(params.isSetGrant_group());
+        groupNames = Sets.newHashSet(params.getGrant_group());
+      }
+      for (String groupName: groupNames) {
+        roles.addAll(frontend_.getCatalog().getAuthPolicy().getGrantedRoles(groupName));
+      }
+    } else {
+      Preconditions.checkState(!params.isIs_show_current_roles());
+      roles = frontend_.getCatalog().getAuthPolicy().getAllRoles();
+    }
+
+    result.setRole_names(Lists.<String>newArrayListWithExpectedSize(roles.size()));
+    for (Role role: roles) {
+      result.getRole_names().add(role.getName());
+    }
+
+    Collections.sort(result.getRole_names());
+    TSerializer serializer = new TSerializer(protocolFactory_);
+    try {
+      return serializer.serialize(result);
+    } catch (TException e) {
+      throw new InternalException(e.getMessage());
+    }
+  }
+
+  public byte[] getRolePrivileges(byte[] showGrantRolesParams) throws ImpalaException {
+    TShowGrantRoleParams params = new TShowGrantRoleParams();
+    JniUtil.deserializeThrift(protocolFactory_, params, showGrantRolesParams);
+    TResultSet result = frontend_.getCatalog().getAuthPolicy().getRolePrivileges(
+        params.getRole_name(), params.getPrivilege());
+    TSerializer serializer = new TSerializer(protocolFactory_);
+    try {
+      return serializer.serialize(result);
+    } catch (TException e) {
+      throw new InternalException(e.getMessage());
+    }
   }
 
   /**

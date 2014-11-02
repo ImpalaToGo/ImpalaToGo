@@ -14,7 +14,6 @@
 
 package com.cloudera.impala.planner;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -72,8 +71,8 @@ public class AnalyticEvalNode extends PlanNode {
 
   // predicates constructed from partitionExprs_/orderingExprs_ to
   // compare input to buffered tuples
-  private final Expr partitionByLessThan_;
-  private final Expr orderByLessThan_;
+  private final Expr partitionByEq_;
+  private final Expr orderByEq_;
   private final TupleDescriptor bufferedTupleDesc_;
 
   public AnalyticEvalNode(
@@ -82,8 +81,7 @@ public class AnalyticEvalNode extends PlanNode {
       List<OrderByElement> orderByElements, AnalyticWindow analyticWindow,
       TupleDescriptor logicalTupleDesc, TupleDescriptor intermediateTupleDesc,
       TupleDescriptor outputTupleDesc, ExprSubstitutionMap logicalToPhysicalSmap,
-      Expr partitionByLessThan, Expr orderByLessThan,
-      TupleDescriptor bufferedTupleDesc) {
+      Expr partitionByEq, Expr orderByEq, TupleDescriptor bufferedTupleDesc) {
     super(id, input.getTupleIds(), "ANALYTIC");
     Preconditions.checkState(!tupleIds_.contains(outputTupleDesc.getId()));
     // we're materializing the input row augmented with the analytic output tuple
@@ -97,8 +95,8 @@ public class AnalyticEvalNode extends PlanNode {
     intermediateTupleDesc_ = intermediateTupleDesc;
     outputTupleDesc_ = outputTupleDesc;
     logicalToPhysicalSmap_ = logicalToPhysicalSmap;
-    partitionByLessThan_ = partitionByLessThan;
-    orderByLessThan_ = orderByLessThan;
+    partitionByEq_ = partitionByEq;
+    orderByEq_ = orderByEq;
     bufferedTupleDesc_ = bufferedTupleDesc;
     children_.add(input);
     nullableTupleIds_.addAll(input.getNullableTupleIds());
@@ -118,28 +116,9 @@ public class AnalyticEvalNode extends PlanNode {
     outputSmap_ = logicalToPhysicalSmap_;
     createDefaultSmap(analyzer);
 
-    // Gather candidate conjuncts from propagated predicates (bound by the logical
-    // analytic output tuple) as well as unassigned conjuncts bound by the stmtTupleIds.
-    List<Expr> boundConjuncts = analyzer.getBoundPredicates(logicalTupleDesc_.getId());
-    List<Expr> candidateConjuncts = analyzer.getUnassignedConjuncts(stmtTupleIds_, true);
-    candidateConjuncts.addAll(boundConjuncts);
-
-    // Resolve candidate conjuncts against our outputSmap_.
-    List<Expr> resolvedCandidateConjuncts =
-        Expr.substituteList(candidateConjuncts, outputSmap_, analyzer);
-
-    // Assign conjuncts to the bottom-most analytic node that can evaluate them.
-    ArrayList<TupleId> inputTids = Lists.newArrayList(getChild(0).getTupleIds());
-    for (Expr e: resolvedCandidateConjuncts) {
-      // A conjunct can be evaluated by this node if it is bound by the tuples
-      // materialized by this node. Ignore the conjunct if it can also be evaluated
-      // by our input node (it has already been assigned there). Note that
-      // getBoundPredicates() may return predicates based on already assigned conjuncts.
-      if (e.isBoundByTupleIds(tupleIds_) && !e.isBoundByTupleIds(inputTids)) {
-        conjuncts_.add(e);
-        analyzer.markConjunctAssigned(e);
-      }
-    }
+    // Do not assign any conjuncts here: the conjuncts out of our SelectStmt's
+    // Where clause have already been assigned, and conjuncts coming out of an
+    // enclosing scope need to be evaluated *after* all analytic computations.
 
     // do this at the end so it can take all conjuncts into account
     computeStats(analyzer);
@@ -148,9 +127,9 @@ public class AnalyticEvalNode extends PlanNode {
 
     // point fn calls, partition and ordering exprs at our input
     ExprSubstitutionMap childSmap = getCombinedChildSmap();
-    analyticFnCalls_ = Expr.substituteList(analyticFnCalls_, childSmap, analyzer);
+    analyticFnCalls_ = Expr.substituteList(analyticFnCalls_, childSmap, analyzer, false);
     substitutedPartitionExprs_ = Expr.substituteList(partitionExprs_, childSmap,
-        analyzer);
+        analyzer, false);
     orderByElements_ = OrderByElement.substitute(orderByElements_, childSmap, analyzer);
     LOG.trace("evalnode: " + debugString());
   }
@@ -175,10 +154,10 @@ public class AnalyticEvalNode extends PlanNode {
         .add("window", analyticWindow_)
         .add("intermediateTid", intermediateTupleDesc_.getId())
         .add("outputTid", outputTupleDesc_.getId())
-        .add("partitionByLt",
-            partitionByLessThan_ != null ? partitionByLessThan_.debugString() : "null")
-        .add("orderByLt",
-            orderByLessThan_ != null ? orderByLessThan_.debugString() : "null")
+        .add("partitionByEq",
+            partitionByEq_ != null ? partitionByEq_.debugString() : "null")
+        .add("orderByEq",
+            orderByEq_ != null ? orderByEq_.debugString() : "null")
         .addValue(super.debugString())
         .toString();
   }
@@ -198,13 +177,14 @@ public class AnalyticEvalNode extends PlanNode {
         msg.analytic_node.setWindow(AnalyticWindow.DEFAULT_WINDOW.toThrift());
       }
     } else {
+      // TODO: Window boundaries should have range_offset_predicate set
       msg.analytic_node.setWindow(analyticWindow_.toThrift());
     }
-    if (partitionByLessThan_ != null) {
-      msg.analytic_node.setPartition_by_lt(partitionByLessThan_.treeToThrift());
+    if (partitionByEq_ != null) {
+      msg.analytic_node.setPartition_by_eq(partitionByEq_.treeToThrift());
     }
-    if (orderByLessThan_ != null) {
-      msg.analytic_node.setOrder_by_lt(orderByLessThan_.treeToThrift());
+    if (orderByEq_ != null) {
+      msg.analytic_node.setOrder_by_eq(orderByEq_.treeToThrift());
     }
     if (bufferedTupleDesc_ != null) {
       msg.analytic_node.setBuffered_tuple_id(bufferedTupleDesc_.getId().asInt());

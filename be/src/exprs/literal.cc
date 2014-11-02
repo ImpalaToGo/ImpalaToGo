@@ -66,11 +66,25 @@ Literal::Literal(const TExprNode& node)
       value_.double_val = node.float_literal.value;
       break;
     case TYPE_STRING:
+    case TYPE_VARCHAR:
+    case TYPE_CHAR: {
       DCHECK_EQ(node.node_type, TExprNodeType::STRING_LITERAL);
       DCHECK(node.__isset.string_literal);
-      string_data_ = node.string_literal.value;
-      value_.string_val = StringValue(string_data_);
+      value_ = ExprValue(node.string_literal.value);
+      if (type_.type == TYPE_VARCHAR) {
+        value_.string_val.len = min(type_.len, value_.string_val.len);
+      }
+      if (type_.type == TYPE_CHAR) {
+        string& str = value_.GetStringData();
+        int str_len = str.size();
+        str.resize(type_.len);
+        if (str_len < type_.len) {
+          str.replace(str_len, type_.len - str_len, type_.len - str_len, ' ');
+        }
+        value_.string_val.len = type_.len;
+      }
       break;
+    }
     case TYPE_DECIMAL: {
       DCHECK_EQ(node.node_type, TExprNodeType::DECIMAL_LITERAL);
       DCHECK(node.__isset.decimal_literal);
@@ -150,16 +164,15 @@ Literal::Literal(ColumnType type, double v)
 }
 
 Literal::Literal(ColumnType type, const string& v)
-  : Expr(type) {
+  : Expr(type),
+    value_(v) {
   DCHECK(type.type == TYPE_STRING || type.type == TYPE_CHAR) << type;
-  string_data_ = v;
-  value_.string_val = StringValue(string_data_);
 }
 
 Literal::Literal(ColumnType type, const StringValue& v)
-  : Expr(type) {
+  : Expr(type),
+    value_(v.DebugString()) {
   DCHECK(type.type == TYPE_STRING || type.type == TYPE_CHAR) << type;
-  value_.string_val = string(v.ptr, v.len);
 }
 
 template<class T>
@@ -207,6 +220,7 @@ Literal* Literal::CreateLiteral(const ColumnType& type, const string& str) {
       return new Literal(type, v);
     }
     case TYPE_STRING:
+    case TYPE_VARCHAR:
     case TYPE_CHAR:
       return new Literal(type, str);
     case TYPE_TIMESTAMP: {
@@ -256,7 +270,7 @@ DoubleVal Literal::GetDoubleVal(ExprContext* context, TupleRow* row) {
 }
 
 StringVal Literal::GetStringVal(ExprContext* context, TupleRow* row) {
-  DCHECK(type_.type == TYPE_STRING || type_.type == TYPE_CHAR) << type_;
+  DCHECK(type_.IsStringType()) << type_;
   StringVal result;
   value_.string_val.ToStringVal(&result);
   return result;
@@ -341,7 +355,8 @@ Status Literal::GetCodegendComputeFn(RuntimeState* state, llvm::Function** fn) {
   }
 
   DCHECK_EQ(GetNumChildren(), 0);
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
   Value* args[2];
   *fn = CreateIrFunctionPrototype(codegen, "Literal", &args);
   BasicBlock* entry_block = BasicBlock::Create(codegen->context(), "entry", *fn);
@@ -371,6 +386,8 @@ Status Literal::GetCodegendComputeFn(RuntimeState* state, llvm::Function** fn) {
       v.SetVal(value_.double_val);
       break;
     case TYPE_STRING:
+    case TYPE_VARCHAR:
+    case TYPE_CHAR:
       v.SetLen(builder.getInt32(value_.string_val.len));
       v.SetPtr(codegen->CastPtrToLlvmPtr(codegen->ptr_type(), value_.string_val.ptr));
       break;

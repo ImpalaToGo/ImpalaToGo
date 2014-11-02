@@ -22,53 +22,43 @@ namespace impala {
 
 inline bool HashTableCtx::EvalAndHashBuild(TupleRow* row, uint32_t* hash) {
   bool has_null = EvalBuildRow(row);
-  if (!stores_nulls_ && has_null) {
-    skip_row_ = true;
-  } else {
-    *hash = HashCurrentRow();
-    skip_row_ = false;
-  }
-  return !skip_row_;
+  if (!stores_nulls_ && has_null) return false;
+  *hash = HashCurrentRow();
+  return true;
 }
 
 inline bool HashTableCtx::EvalAndHashProbe(TupleRow* row, uint32_t* hash) {
   bool has_null = EvalProbeRow(row);
-  if ((!stores_nulls_ || !finds_nulls_) && has_null) {
-    skip_row_ = true;
-  } else {
-    *hash = HashCurrentRow();
-    skip_row_ = false;
-  }
-  return !skip_row_;
+  if ((!stores_nulls_ || !finds_nulls_) && has_null) return false;
+  *hash = HashCurrentRow();
+  return true;
 }
 
-inline HashTable::Iterator HashTable::Find(HashTableCtx* ht_ctx) {
+inline HashTable::Iterator HashTable::Find(HashTableCtx* ht_ctx, uint32_t hash) {
   DCHECK_NOTNULL(ht_ctx);
-  DCHECK(!ht_ctx->skip_row_);
-  DCHECK(!buckets_.empty());
-  uint32_t hash = ht_ctx->hash_;
+  DCHECK_NE(num_buckets_, 0);
   DCHECK_EQ(hash, ht_ctx->HashCurrentRow());
   int64_t bucket_idx = hash & (num_buckets_ - 1);
   Bucket* bucket = &buckets_[bucket_idx];
   Node* node = bucket->node;
   while (node != NULL) {
-    if (node->hash == hash && ht_ctx->Equals(GetRow(node))) {
-      return Iterator(this, bucket_idx, node, hash);
+    if (node->hash == hash && ht_ctx->Equals(GetRow(node, ht_ctx->row_))) {
+      return Iterator(this, ht_ctx, bucket_idx, node, hash);
     }
     node = node->next;
   }
   return End();
 }
 
-inline HashTable::Iterator HashTable::Begin() {
-  DCHECK(!buckets_.empty());
+inline HashTable::Iterator HashTable::Begin(HashTableCtx* ctx) {
+  DCHECK_NE(num_buckets_, 0);
   int64_t bucket_idx = -1;
   Bucket* bucket = NextBucket(&bucket_idx);
-  if (bucket != NULL) return Iterator(this, bucket_idx, bucket->node, 0);
+  if (bucket != NULL) return Iterator(this, ctx, bucket_idx, bucket->node, 0);
   return End();
 }
 
-inline HashTable::Iterator HashTable::FirstUnmatched() {
+inline HashTable::Iterator HashTable::FirstUnmatched(HashTableCtx* ctx) {
   int64_t bucket_idx = -1;
   Bucket* bucket = NextBucket(&bucket_idx);
   while (bucket != NULL) {
@@ -80,7 +70,7 @@ inline HashTable::Iterator HashTable::FirstUnmatched() {
       bucket = NextBucket(&bucket_idx);
     } else {
       DCHECK(!node->matched);
-      return Iterator(this, bucket_idx, node, 0);
+      return Iterator(this, ctx, bucket_idx, node, 0);
     }
   }
   return End();
@@ -95,27 +85,47 @@ inline HashTable::Bucket* HashTable::NextBucket(int64_t* bucket_idx) {
   return NULL;
 }
 
-inline bool HashTable::InsertImpl(HashTableCtx* ht_ctx, void* data) {
-  DCHECK(!buckets_.empty());
+inline bool HashTable::Insert(HashTableCtx* ht_ctx,
+    const BufferedTupleStream::RowIdx& idx, TupleRow* row, uint32_t hash) {
+  Node* node = InsertImpl(ht_ctx, hash);
+  if (node == NULL) return false;
+  if (stores_tuples_) {
+    DCHECK_EQ(num_build_tuples_, 1);
+    // Optimization: if this row is just a single tuple, just store the tuple*.
+    node->tuple = row->GetTuple(0);
+  } else {
+    node->idx = idx;
+  }
+  return true;
+}
+
+inline bool HashTable::Insert(HashTableCtx* ht_ctx, Tuple* tuple, uint32_t hash) {
+  DCHECK(stores_tuples_);
+  Node* node = InsertImpl(ht_ctx, hash);
+  if (node == NULL) return false;
+  node->tuple = tuple;
+  return true;
+}
+
+inline HashTable::Node* HashTable::InsertImpl(HashTableCtx* ht_ctx, uint32_t hash) {
+  DCHECK_NOTNULL(ht_ctx);
+  DCHECK_NE(num_buckets_, 0);
   if (UNLIKELY(num_filled_buckets_ > num_buckets_till_resize_)) {
     // TODO: next prime instead of double?
-    if (!ResizeBuckets(num_buckets_ * 2)) return false;
+    if (!ResizeBuckets(num_buckets_ * 2)) return NULL;
   }
   if (node_remaining_current_page_ == 0) {
-    if (!GrowNodeArray()) return false;
+    if (!GrowNodeArray()) return NULL;
   }
-  uint32_t hash = ht_ctx->hash_;
   DCHECK_EQ(hash, ht_ctx->HashCurrentRow());
   int64_t bucket_idx = hash & (num_buckets_ - 1);
   next_node_->hash = hash;
-  next_node_->data = data;
   next_node_->matched = false;
   AddToBucket(&buckets_[bucket_idx], next_node_);
   DCHECK_GT(node_remaining_current_page_, 0);
   --node_remaining_current_page_;
-  ++next_node_;
   ++num_nodes_;
-  return true;
+  return next_node_++;
 }
 
 inline void HashTable::AddToBucket(Bucket* bucket, Node* node) {
@@ -149,7 +159,8 @@ inline void HashTable::Iterator::Next(HashTableCtx* ht_ctx) {
     // TODO: this should prefetch the next node
     Node* node = node_->next;
     while (node != NULL) {
-      if (node->hash == scan_hash_ && ht_ctx->Equals(table_->GetRow(node))) {
+      if (node->hash == scan_hash_ &&
+          ht_ctx->Equals(table_->GetRow(node, ht_ctx->row_))) {
         node_ = node;
         return;
       }

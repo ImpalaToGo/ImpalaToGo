@@ -75,7 +75,7 @@ std::ostream& operator<<(std::ostream& os, const NullIndicatorOffset& null_indic
 class SlotDescriptor {
  public:
   SlotId id() const { return id_; }
-  ColumnType type() const { return type_; }
+  const ColumnType& type() const { return type_; }
   TupleId parent() const { return parent_; }
   // Returns the column index of this slot, including partition keys.
   // (e.g., col_pos - num_partition_keys = the table column this slot corresponds to)
@@ -369,6 +369,9 @@ class RowDescriptor {
       tuple_idx_map_(desc.tuple_idx_map_) {
   }
 
+  // c'tor for a row assembled from two rows
+  RowDescriptor(const RowDescriptor& lhs_row_desc, const RowDescriptor& rhs_row_desc);
+
   RowDescriptor(const std::vector<TupleDescriptor*>& tuple_descs,
       const std::vector<bool>& nullable_tuples);
 
@@ -389,6 +392,9 @@ class RowDescriptor {
 
   // Return true if the Tuple of the given Tuple index is nullable.
   bool TupleIsNullable(int tuple_idx) const;
+
+  // Return true if any Tuple of the row is nullable.
+  bool IsAnyTupleNullable() const;
 
   // Return descriptors for all tuples in this row, in order of appearance.
   const std::vector<TupleDescriptor*>& tuple_descriptors() const {

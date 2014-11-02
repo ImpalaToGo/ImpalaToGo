@@ -21,6 +21,8 @@ import java.util.Set;
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.common.Pair;
+import com.cloudera.impala.planner.PlanNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -80,7 +82,7 @@ public class TableRef implements ParseNode {
         (other.joinHints_ != null) ? Lists.newArrayList(other.joinHints_) : null;
     this.usingColNames_ =
         (other.usingColNames_ != null) ? Lists.newArrayList(other.usingColNames_) : null;
-    this.onClause_ = (other.onClause_ != null) ? other.onClause_.reset().clone() : null;
+    this.onClause_ = (other.onClause_ != null) ? other.onClause_.clone().reset() : null;
     isAnalyzed_ = false;
   }
 
@@ -214,22 +216,23 @@ public class TableRef implements ParseNode {
     }
   }
 
-  /**
-   * Parse hints.
-   */
-  private void analyzeJoinHints() throws AnalysisException {
+  private void analyzeJoinHints(Analyzer analyzer) throws AnalysisException {
     if (joinHints_ == null) return;
     for (String hint: joinHints_) {
-      if (hint.toUpperCase().equals("BROADCAST")) {
-        if (joinOp_ == JoinOperator.RIGHT_OUTER_JOIN ||
-            joinOp_ == JoinOperator.FULL_OUTER_JOIN) {
-          throw new AnalysisException(joinOp_.toString() + " does not support BROADCAST.");
+      if (hint.equalsIgnoreCase("BROADCAST")) {
+        if (joinOp_ == JoinOperator.RIGHT_OUTER_JOIN
+            || joinOp_ == JoinOperator.FULL_OUTER_JOIN
+            || joinOp_ == JoinOperator.RIGHT_SEMI_JOIN
+            || joinOp_ == JoinOperator.RIGHT_ANTI_JOIN) {
+          throw new AnalysisException(
+              joinOp_.toString() + " does not support BROADCAST.");
         }
         if (isPartitionedJoin_) {
           throw new AnalysisException("Conflicting JOIN hint: " + hint);
         }
         isBroadcastJoin_ = true;
-      } else if (hint.toUpperCase().equals("SHUFFLE")) {
+        analyzer.setHasPlanHints();
+      } else if (hint.equalsIgnoreCase("SHUFFLE")) {
         if (joinOp_ == JoinOperator.CROSS_JOIN) {
           throw new AnalysisException("CROSS JOIN does not support SHUFFLE.");
         }
@@ -237,8 +240,9 @@ public class TableRef implements ParseNode {
           throw new AnalysisException("Conflicting JOIN hint: " + hint);
         }
         isPartitionedJoin_ = true;
+        analyzer.setHasPlanHints();
       } else {
-        throw new AnalysisException("JOIN hint not recognized: " + hint);
+        analyzer.addWarning("JOIN hint not recognized: " + hint);
       }
     }
   }
@@ -250,7 +254,7 @@ public class TableRef implements ParseNode {
    */
   public void analyzeJoin(Analyzer analyzer) throws AnalysisException {
     Preconditions.checkState(desc_ != null);
-    analyzeJoinHints();
+    analyzeJoinHints(analyzer);
     if (joinOp_ == JoinOperator.CROSS_JOIN) {
       // A CROSS JOIN is always a broadcast join, regardless of the join hints
       isBroadcastJoin_ = true;
@@ -279,12 +283,7 @@ public class TableRef implements ParseNode {
             new BinaryPredicate(BinaryPredicate.Operator.EQ,
               new SlotRef(leftTblRef_.getAliasAsName(), colName),
               new SlotRef(getAliasAsName(), colName));
-        if (onClause_ == null) {
-          onClause_ = eqPred;
-        } else {
-          onClause_ =
-              new CompoundPredicate(CompoundPredicate.Operator.AND, onClause_, eqPred);
-        }
+        onClause_ = CompoundPredicate.createConjunction(eqPred, onClause_);
       }
     }
 
@@ -303,12 +302,19 @@ public class TableRef implements ParseNode {
       lhsIsNullable = true;
     }
 
-    // register the tuple id of the rhs of a left semi join or anti join
+    // register the tuple id of the rhs of a left semi join
     TupleId semiJoinedTupleId = null;
     if (joinOp_ == JoinOperator.LEFT_SEMI_JOIN
-        || joinOp_ == JoinOperator.LEFT_ANTI_JOIN) {
+        || joinOp_ == JoinOperator.LEFT_ANTI_JOIN
+        || joinOp_ == JoinOperator.NULL_AWARE_LEFT_ANTI_JOIN) {
       analyzer.registerSemiJoinedTid(getId(), this);
       semiJoinedTupleId = getId();
+    }
+    // register the tuple id of the lhs of a right semi join
+    if (joinOp_ == JoinOperator.RIGHT_SEMI_JOIN
+        || joinOp_ == JoinOperator.RIGHT_ANTI_JOIN) {
+      analyzer.registerSemiJoinedTid(leftTblRef_.getId(), this);
+      semiJoinedTupleId = leftTblRef_.getId();
     }
 
     if (onClause_ != null) {
@@ -351,6 +357,33 @@ public class TableRef implements ParseNode {
     }
   }
 
+  /**
+   * Inverts the join whose rhs is represented by this table ref. If necessary, this
+   * function modifies the registered analysis state associated with this table ref,
+   * as well as the chain of left table references in refPlans as appropriate.
+   * Requires that this is the very first join in a series of joins.
+   */
+  public void invertJoin(List<Pair<TableRef, PlanNode>> refPlans, Analyzer analyzer) {
+    // Assert that this is the first join in a series of joins.
+    Preconditions.checkState(leftTblRef_.leftTblRef_ == null);
+    // Find a table ref that references 'this' as its left table (if any) and change
+    // it to reference 'this.leftTblRef_ 'instead, because 'this.leftTblRef_' will
+    // become the new rhs of the inverted join.
+    for (Pair<TableRef, PlanNode> refPlan: refPlans) {
+      if (refPlan.first.leftTblRef_ == this) {
+        refPlan.first.setLeftTblRef(leftTblRef_);
+        break;
+      }
+    }
+    if (joinOp_.isOuterJoin()) analyzer.invertOuterJoinState(this, leftTblRef_);
+    leftTblRef_.setJoinOp(getJoinOp().invert());
+    leftTblRef_.setLeftTblRef(this);
+    leftTblRef_.setOnClause(onClause_);
+    joinOp_ = null;
+    leftTblRef_ = null;
+    onClause_ = null;
+  }
+
   protected String tableRefToSql() {
     // Enclose the alias in quotes if Hive cannot parse it without quotes.
     // This is needed for view compatibility between Impala and Hive.
@@ -368,6 +401,7 @@ public class TableRef implements ParseNode {
     }
 
     StringBuilder output = new StringBuilder(" " + joinOp_.toString() + " ");
+    if(joinHints_ != null) output.append(ToSqlUtils.getPlanHintsSql(joinHints_) + " ");
     output.append(tableRefToSql());
     if (usingColNames_ != null) {
       output.append(" USING (").append(Joiner.on(", ").join(usingColNames_)).append(")");

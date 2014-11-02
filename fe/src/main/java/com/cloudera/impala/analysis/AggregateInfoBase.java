@@ -85,7 +85,9 @@ public abstract class AggregateInfoBase {
    * equality predicates between the grouping slots and the grouping exprs.
    */
   private TupleDescriptor createTupleDesc(Analyzer analyzer, boolean isOutputTuple) {
-    TupleDescriptor result = analyzer.getDescTbl().createTupleDescriptor();
+    TupleDescriptor result =
+        analyzer.getDescTbl().createTupleDescriptor(
+          tupleDebugName() + (isOutputTuple ? "-out" : "-intermed"));
     List<Expr> exprs = Lists.newArrayListWithCapacity(
         groupingExprs_.size() + aggregateExprs_.size());
     exprs.addAll(groupingExprs_);
@@ -185,4 +187,6 @@ public abstract class AggregateInfoBase {
         .toString());
     return out.toString();
   }
+
+  protected abstract String tupleDebugName();
 }

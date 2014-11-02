@@ -37,8 +37,13 @@ public class ScalarType extends Type {
   public static final int DEFAULT_PRECISION = 9;
   public static final int DEFAULT_SCALE = 0; // SQL standard
 
-  // Longest supported VARCHAR and CHAR. Chosen to match Oracle.
-  static final int MAX_VARCHAR_LENGTH = 32672;
+  // Longest supported VARCHAR and CHAR, chosen to match Hive.
+  static final int MAX_VARCHAR_LENGTH = 65355;
+  static final int MAX_CHAR_LENGTH = 255;
+
+  // Longest CHAR that we in line in the tuple.
+  // Keep consistent with backend ColumnType::CHAR_INLINE_LENGTH
+  static final int CHAR_INLINE_LENGTH = 128;
 
   // Hive, mysql, sql server standard.
   public static final int MAX_PRECISION = 38;
@@ -123,10 +128,13 @@ public class ScalarType extends Type {
       case CHAR:
       case VARCHAR: {
         String name;
+        int maxLen;
         if (type_ == PrimitiveType.VARCHAR) {
           name = "Varchar";
+          maxLen = MAX_VARCHAR_LENGTH;
         } else if (type_ == PrimitiveType.CHAR) {
           name = "Char";
+          maxLen = MAX_CHAR_LENGTH;
         } else {
           Preconditions.checkState(false);
           return;
@@ -134,11 +142,11 @@ public class ScalarType extends Type {
 
         if (len_ <= 0) {
           throw new AnalysisException(name +
-              " size must be > 0. Size was set to: " + len_ + ".");
+              " size must be > 0. Size is too small: " + len_ + ".");
         }
-        if (len_ > MAX_VARCHAR_LENGTH) {
+        if (len_ > maxLen) {
           throw new AnalysisException(name +
-              " size must be <= 32672. Size was set to: " + len_ + ".");
+              " size must be <= " + maxLen + ". Size is too large: " + len_ + ".");
         }
         break;
       }
@@ -166,6 +174,7 @@ public class ScalarType extends Type {
       if (isWildcardChar()) return "CHAR(*)";
       return "CHAR(" + len_ + ")";
     } else  if (type_ == PrimitiveType.DECIMAL) {
+      if (isWildcardDecimal()) return "DECIMAL(*,*)";
       return "DECIMAL(" + precision_ + "," + scale_ + ")";
     } else if (type_ == PrimitiveType.VARCHAR) {
       if (isWildcardVarchar()) return "VARCHAR(*)";
@@ -302,7 +311,9 @@ public class ScalarType extends Type {
   @Override
   public int getSlotSize() {
     switch (type_) {
-      case CHAR: return len_;
+      case CHAR:
+        if (len_ > CHAR_INLINE_LENGTH) return STRING.getSlotSize();
+        return len_;
       case DECIMAL: return TypesUtil.getDecimalSlotSize(this);
       default:
         return type_.getSlotSize();
@@ -420,6 +431,9 @@ public class ScalarType extends Type {
         return STRING;
       }
       if (t1.type_ == PrimitiveType.VARCHAR && t2.type_ == PrimitiveType.VARCHAR) {
+        return createVarcharType(Math.max(t1.len_, t2.len_));
+      }
+      if (t1.type_ == PrimitiveType.CHAR || t2.type_ == PrimitiveType.CHAR) {
         return createVarcharType(Math.max(t1.len_, t2.len_));
       }
       return INVALID;

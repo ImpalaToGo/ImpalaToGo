@@ -29,6 +29,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.cloudera.impala.authorization.AuthorizationConfig;
+import com.cloudera.impala.catalog.AggregateFunction;
 import com.cloudera.impala.catalog.Catalog;
 import com.cloudera.impala.catalog.Function;
 import com.cloudera.impala.catalog.ImpaladCatalog;
@@ -41,6 +43,7 @@ import com.cloudera.impala.testutil.ImpaladTestCatalog;
 import com.cloudera.impala.testutil.TestUtils;
 import com.cloudera.impala.thrift.TExpr;
 import com.cloudera.impala.thrift.TQueryCtx;
+import com.cloudera.impala.thrift.TQueryOptions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -73,7 +76,15 @@ public class AnalyzerTest {
   protected Analyzer createAnalyzer(String defaultDb) {
     TQueryCtx queryCtx =
         TestUtils.createQueryContext(defaultDb, System.getProperty("user.name"));
-    return new Analyzer(catalog_, queryCtx);
+    return new Analyzer(catalog_, queryCtx,
+        AuthorizationConfig.createAuthDisabledConfig());
+  }
+
+  protected Analyzer createAnalyzer(TQueryOptions queryOptions) {
+    TQueryCtx queryCtx = TestUtils.createQueryContext();
+    queryCtx.request.query_options = queryOptions;
+    return new Analyzer(catalog_, queryCtx,
+        AuthorizationConfig.createAuthDisabledConfig());
   }
 
   protected Analyzer createAnalyzerUsingHiveColLabels() {
@@ -104,6 +115,12 @@ public class AnalyzerTest {
     fn.setHasVarArgs(varArgs);
     catalog_.addFunction(fn);
     return fn;
+  }
+
+  protected void addTestUda(String name, Type retType, Type... argTypes) {
+    FunctionName fnName = new FunctionName("default", name);
+    catalog_.addFunction(new AggregateFunction(fnName,
+        new FunctionArgs(Lists.newArrayList(argTypes), false), retType));
   }
 
   /**
@@ -188,7 +205,8 @@ public class AnalyzerTest {
       analyzer_ = analyzer;
       AnalysisContext analysisCtx = new AnalysisContext(catalog_,
           TestUtils.createQueryContext(Catalog.DEFAULT_DB,
-              System.getProperty("user.name")));
+              System.getProperty("user.name")),
+              AuthorizationConfig.createAuthDisabledConfig());
       analysisCtx.analyze(stmt, analyzer);
       AnalysisContext.AnalysisResult analysisResult = analysisCtx.getAnalysisResult();
       if (expectedWarning != null) {
@@ -247,7 +265,8 @@ public class AnalyzerTest {
     try {
       AnalysisContext analysisCtx = new AnalysisContext(catalog_,
           TestUtils.createQueryContext(Catalog.DEFAULT_DB,
-              System.getProperty("user.name")));
+              System.getProperty("user.name")),
+              AuthorizationConfig.createAuthDisabledConfig());
       analysisCtx.analyze(stmt, analyzer);
       AnalysisContext.AnalysisResult analysisResult = analysisCtx.getAnalysisResult();
       Preconditions.checkNotNull(analysisResult.getStmt());
@@ -406,6 +425,13 @@ public class AnalyzerTest {
       int nullIndicatorByte, int nullIndicatorBit) {
     SlotDescriptor d = analyzer_.getSlotDescriptor(colAlias);
     checkLayoutParams(d, byteSize, byteOffset, nullIndicatorByte, nullIndicatorBit);
+  }
+
+  // Analyzes query and asserts that the first result expr returns the given type.
+  // Requires query to parse to a SelectStmt.
+  protected void checkExprType(String query, Type type) {
+    SelectStmt select = (SelectStmt) AnalyzesOk(query);
+    Assert.assertEquals(select.getResultExprs().get(0).getType(), type);
   }
 
   /**

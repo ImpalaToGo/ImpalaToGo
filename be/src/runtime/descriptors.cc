@@ -257,6 +257,21 @@ RowDescriptor::RowDescriptor(const DescriptorTbl& desc_tbl,
   InitTupleIdxMap();
 }
 
+RowDescriptor::RowDescriptor(const RowDescriptor& lhs_row_desc,
+    const RowDescriptor& rhs_row_desc) {
+  tuple_desc_map_.insert(tuple_desc_map_.end(), lhs_row_desc.tuple_desc_map_.begin(),
+      lhs_row_desc.tuple_desc_map_.end());
+  tuple_desc_map_.insert(tuple_desc_map_.end(), rhs_row_desc.tuple_desc_map_.begin(),
+      rhs_row_desc.tuple_desc_map_.end());
+  tuple_idx_nullable_map_.insert(tuple_idx_nullable_map_.end(),
+      lhs_row_desc.tuple_idx_nullable_map_.begin(),
+      lhs_row_desc.tuple_idx_nullable_map_.end());
+  tuple_idx_nullable_map_.insert(tuple_idx_nullable_map_.end(),
+      rhs_row_desc.tuple_idx_nullable_map_.begin(),
+      rhs_row_desc.tuple_idx_nullable_map_.end());
+  InitTupleIdxMap();
+}
+
 RowDescriptor::RowDescriptor(const vector<TupleDescriptor*>& tuple_descs,
                              const vector<bool>& nullable_tuples)
   : tuple_desc_map_(tuple_descs),
@@ -300,6 +315,13 @@ int RowDescriptor::GetTupleIdx(TupleId id) const {
 bool RowDescriptor::TupleIsNullable(int tuple_idx) const {
   DCHECK_LT(tuple_idx, tuple_idx_nullable_map_.size());
   return tuple_idx_nullable_map_[tuple_idx];
+}
+
+bool RowDescriptor::IsAnyTupleNullable() const {
+  for (int i = 0; i < tuple_idx_nullable_map_.size(); ++i) {
+    if (tuple_idx_nullable_map_[i]) return true;
+  }
+  return false;
 }
 
 void RowDescriptor::ToThrift(vector<TTupleId>* row_tuple_ids) {
@@ -527,6 +549,7 @@ StructType* TupleDescriptor::GenerateLlvmStruct(LlvmCodeGen* codegen) {
   // Add the slot types to the struct description.
   for (int i = 0; i < slots().size(); ++i) {
     SlotDescriptor* slot_desc = slots()[i];
+    if (slot_desc->type().type == TYPE_CHAR) return NULL;
     if (slot_desc->is_materialized()) {
       slot_desc->field_idx_ = slot_desc->slot_idx_ + num_null_bytes_;
       DCHECK_LT(slot_desc->field_idx(), struct_fields.size());
