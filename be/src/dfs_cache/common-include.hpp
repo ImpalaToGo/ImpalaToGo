@@ -123,8 +123,10 @@ struct NameNodeDescriptor{
 	}
 };
 
+/** Impala client code is aware of remote FileSystem mapping only */
+typedef NameNodeDescriptor     dfsFS;
 
-typedef NameNodeDescriptor dfsFS;
+/** Represent data set in terms of data string descriptors */
 typedef std::list<const char*> DataSet;
 
 /** bridge to abtract FileSystem */
@@ -141,7 +143,7 @@ typedef struct {
 		BUSY_OK,
 	} ConnectionState;
 
-	fSBridge  connection;      /**< the connection handle */
+	fSBridge         connection;      /**< the connection handle */
 	ConnectionState  state;           /**< connection status, to help manage it */
 } dfsConnection;
 

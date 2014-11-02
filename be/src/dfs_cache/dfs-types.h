@@ -45,7 +45,8 @@ enum dfsStreamType {
 };
 
 /**
- * The 'file-handle' to a file which represents the dfs file locally (cache).
+ * File stream accompanied with its type (input or output).
+ * Input stream is READ-ONLY.
  */
 struct dfsFile_internal {
 	void* file;

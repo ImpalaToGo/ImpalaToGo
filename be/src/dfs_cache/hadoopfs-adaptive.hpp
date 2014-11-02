@@ -72,9 +72,9 @@ fSBridge connectLocal(const fsConfiguration& conf);
  *        the file will be overwritten, and if false an error will be thrown. *
  * @param permission  - the permission of the file
  *
- * @return an output stream
+ * @return an output stream - org.apache.hadoop.fs.FSDataOutputStream
  */
- fSDataOutputStream create(fSBridge fs, const std::string& file, int bufferSize, std::list<boost::filesystem::createStreamFlag> createFlags,
+ dfsFile create(fSBridge fs, const std::string& file, int bufferSize, std::list<boost::filesystem::createStreamFlag> createFlags,
 		 short replication, long blockSize, bool overwrite, boost::filesystem::perms permission);
 
 /** create a directory with the provided permission
@@ -136,32 +136,16 @@ std::vector<fsBlockLocation> getFileBlockLocations(fSBridge fs, fileStatus file,
 std::vector<fsBlockLocation> getFileBlockLocations(fSBridge fsBridge, const std::string&  p, long start, long len);
 
 /**
- * Opens an fSDataInputStream at the indicated Path.
- *
- * @param fsBridge - filesystem handle
- * @param f          - the file name to open
- * @param bufferSize - the size of the buffer to be used.
- *
- * @return opened input stream
- */
-fSDataInputStream open(fSBridge fsBridge, const std::string& f, int bufferSize);
-
-/**
- * Opens an fSDataInputStream at the indicated Path.
- *
- * @param fsBridge - filesystem handle
- * @param f        - the file to open
- */
-fSDataInputStream open(fSBridge fsBridge, const std::string& f);
-
-/**
  * Append to an existing file (optional operation).
  * Same as append(f, getConf().getInt("io.file.buffer.size", 4096), null)
  *
  * @param fsBridge - filesystem handle
  * @param f        - the existing file to be appended.
+ *
+ * @return an opened stream to a file which was appended (org.apache.hadoop.fs.FSDataOutputStream)
+ * TODO: check where stream pointer is located for returned stream and document this
  */
-fSDataOutputStream append(fSBridge fsBridge, const std::string& f, int bufferSize);
+dfsFileInfo append(fSBridge fsBridge, const std::string& f, int bufferSize);
 
 /**
  * Concat existing files together.
@@ -388,6 +372,83 @@ fileStatus getFileStatus(fSBridge fsBridge, const std::string& f);
  */
 fsChecksum getFileChecksum(fSBridge fsBridge, const std::string& f);
 
+/**********************************  Operations with  org.apache.hadoop.fs.FSDataInputStream **/
+
+/**
+ * Opens an fSDataInputStream at the indicated Path.
+ *
+ * @param fsBridge   - filesystem handle
+ * @param f          - the file name to open
+ * @param bufferSize - the size of the buffer to be used.
+ *
+ * @return opened input stream
+ */
+dfsFile fopen(fSBridge fsBridge, const std::string& f, int flags, int bufferSize, short replication, tSize blockSize);
+
+/**
+ * Close an opened filestream.
+ *
+ * @param fsBridge - filesystem handle
+ * @param file     - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ *
+ * @return Returns 0 on success, -1 on error.
+ */
+int fclose(fSBridge fsBridge, dfsFile file);
+
+/**
+ * Seek to given offset in file stream.
+ * This works only for files opened in read-only mode (so that, for fSDataInputStream)
+ *
+ * @param fsBridge   - filesystem handle
+ * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ * @param desiredPos - offset into the file to seek into.
+ *
+ * @return Returns 0 on success, -1 on error.
+ */
+int fseek(fSBridge fsBridge, dfsFile file, tOffset desiredPos);
+
+/**
+ * Get the current offset in the file, in bytes
+ *
+ * @param fsBridge   - filesystem handle
+ * @param file       - file stream.
+ *
+ * @return Current offset, -1 on error.
+ */
+tOffset hdfsTell(fSBridge fsBridge, dfsFile file);
+
+/**
+ * Read data from an opened stream
+ *
+ * @param fsBridge   - filesystem handle
+ * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ * @param buffer     - the buffer to copy read bytes into.
+ * @param length     - the length of the buffer.
+ *
+ * @return Returns the number of bytes actually read, possibly less than than length;-1 on error.
+ */
+tSize hdfsRead(fSBridge fsBridge, dfsFile file, void* buffer, tSize length);
+
+/**
+ * hdfsWrite - Write data into an open file.
+ *
+ * @param fsBridge   - filesystem handle
+ * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ * @param buffer     - the data.
+ * @param length     - the no. of bytes to write.
+ *
+ * @return Returns the number of bytes written, -1 on error.
+ */
+tSize hdfsWrite(fSBridge fsBridge, dfsFile file, const void* buffer, tSize length);
+
+/**
+ * Flush the data.
+ *
+ * @param fs The configured filesystem handle.
+ * @param file The file handle.
+ * @return Returns 0 on success, -1 on error.
+ */
+int hdfsFlush(fSBridge fsBridge, dfsFile file);
 }
 
 

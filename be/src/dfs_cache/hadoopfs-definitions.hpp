@@ -156,12 +156,6 @@ typedef void* fsToken;
 /**  org.apache.hadoop.security.Credentials */
 typedef void* fsCredentials;
 
-/** org.apache.hadoop.fs.FSDataOutputStream */
-typedef void* fSDataOutputStream;
-
-/** org.apache.hadoop.fs.FSDataInputStream */
-typedef void* fSDataInputStream;
-
 /** org.apache.hadoop.fs.FileChecksum
  * An abstract class representing file checksums for files.*/
 typedef void* fsChecksum;
