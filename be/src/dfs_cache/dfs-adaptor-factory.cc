@@ -6,6 +6,7 @@
  * @date   Oct 10, 2014
  */
 
+#include <string>
 #include "dfs_cache/dfs-adaptor-factory.hpp"
 
 namespace impala{
@@ -18,12 +19,16 @@ std::ostream& operator<<(std::ostream &strm, const fsStatistics &statistic){
 
 std::ostream& operator<<(std::ostream &strm, const fileStatus &status)
 {
-	return strm << "path=" + status.path << "; isDirectory=" + status.isdir <<
-	    (!status.isdir ?  ("; length=" << status.length << "; replication=" << status.block_replication <<
-		"; blocksize=" << status.blocksize ) : "") << "; modification_time=" << status.modification_time <<
-	    "; access_time=" << status.access_time << "; owner=" << status.owner << "; group=" << status.group <<
-	    "; permission=" << status.permission << "; isSymlink=" << status.issymlink <<
-	    (status.issymlink ? "; symlink=" << status.symlink : "");
+	std::string forDir = !status.isdir ?  std::string("; length=") + std::to_string(status.length) +
+			"; replication=" + std::to_string(status.block_replication) +
+			"; blocksize=" + std::to_string(status.blocksize)  : "";
+
+	std::string forSymlink = status.issymlink ? std::string("; symlink=") + status.symlink : "";
+
+	return strm << "path=" << status.path << "; isDirectory=" << status.isdir << forDir <<
+			"; modification_time=" << status.modification_time << "; access_time=" <<
+			status.access_time << "; owner=" << status.owner << "; group=" << status.group <<
+			"; permission=" << status.permission << "; isSymlink=" << status.issymlink;
 }
 
 dfsAdaptorFactory::AdaptorState dfsAdaptorFactory::addAdaptor(const dfs::DFS_TYPE& dfsType,

@@ -1,8 +1,9 @@
 /*
- * fs-definitions.hpp
+ * @file  hadoop-fs-definitions.hpp
+ * @brief wraps hadoop FileSystem and around it Java types
  *
- *  Created on: Oct 30, 2014
- *      Author: elenav
+ * @date   Oct 30, 2014
+ * @author elenav
  */
 
 #include <boost/filesystem.hpp>
@@ -79,68 +80,10 @@ enum createStreamFlag {
 } // filesystem
 } // boost
 
-namespace impala{
-
-/** Represents org.apache.hadoop.fs.FileStatus */
-struct fileStatus {
-	boost::filesystem::path path;
-  	long       				length;
-  	bool        		    isdir;
-  	bool                    issymlink;
-  	short       			block_replication;
-  	long        		    blocksize;
-  	long       				modification_time;
-  	long        			access_time;
-
-  	enum boost::filesystem::perms permission;
-    std::string                   owner;
-    std::string                   group;
-    boost::filesystem::path       symlink;
-};
-
-/** Represent org.apache.hadoop.fs.FileSystem.Statistics
- *  The statistic of File System
- */
-struct fsStatistics final{
-	const std::string scheme;
-	std::atomic<long> bytesRead;
-	std::atomic<long> bytesWritten;
-	std::atomic<int>  readOps;
-	std::atomic<int>  largeReadOps;
-	std::atomic<int>  writeOps;
- };
-
-/** Represent org.apache.hadoop.fs.BlockLocation
- *  Represents the network location of a block, information about the hosts
- *  that contain block replicas, and other block metadata (E.g. the file
- *  offset associated with the block, length, whether it is corrupt, etc).
- * */
-struct fsBlockLocation {
-	std::vector<std::string> hosts;         /**< Datanode hostnames */
-	std::vector<std::string> names;         /**< Datanode IP:xferPort for accessing the block */
-	std::vector<std::string> topologyPaths; /**< Full path name in network topology */
-
-	long offset;  /**< Offset of the block in the file */
-	long length;  /**< file length */
-	bool corrupt; /**< flag, indicates whether the file is corrupted */
-};
-
-/** Represent org.apache.hadoop.fs.ContentSummary
- *  Store the summary of a content (a directory or a file).
- * */
-struct fsContentSummary {
-	long length;
-	long fileCount;
-	long directoryCount;
-	long quota;
-	long spaceConsumed;
-	long spaceQuota;
-};
-
-extern std::ostream& operator<<(std::ostream &strm, const fsStatistics &statistic);
-extern std::ostream& operator<<(std::ostream &strm, const fileStatus &status);
-
 /** Here defined java-managed types that are passed via c++ through without need of their details */
+
+/** bridge to abstract FileSystem */
+typedef void* fsBridge;
 
 /** org.apache.hadoop.conf.Configuration
  *  FileSystem configuration */
@@ -160,4 +103,126 @@ typedef void* fsCredentials;
  * An abstract class representing file checksums for files.*/
 typedef void* fsChecksum;
 
+/** file system object file */
+typedef enum tObjectKind {
+	kObjectKindFile = 'F', kObjectKindDirectory = 'D',
+} tObjectKind;
+
+/** The C equivalent of org.apache.org.hadoop.FSData(Input|Output)Stream */
+enum dfsStreamType {
+	UNINITIALIZED = 0, INPUT = 1, OUTPUT = 2,
+};
+
+/** File stream accompanied with its type (input or output).
+ * Input stream is READ-ONLY. */
+struct dfsFile_internal {
+	void* file;
+	enum dfsStreamType type;
+};
+
+/** A type definition for internal dfs file */
+typedef struct dfsFile_internal* dfsFile;
+
+typedef int32_t tSize;   /** size of data for read/write io ops */
+typedef time_t tTime;    /** time type in seconds */
+typedef int64_t tOffset; /** offset within the file */
+typedef uint16_t tPort;  /** port */
+
+/**
+ * The C reflection of org.apache.org.hadoop.FileSystem .
+ * We will use this entity to hold the connection handle to remote DFS.
+ * Currently this type is widely used by several impala layers but in the future it will be only
+ * available inside the Cache layer.
+ * All clients that distinguish remote DFS, should specify dfsClusterid instead (which has the form of "dfs_type-host"
+ * depicting the remote DFS).
+ */
+
+/** DFS Cluster unique representation. Currently "dfs_type-host". */
+typedef void* dfsclusterId;
+
+/** Information about a file/directory. */
+typedef struct {
+	tObjectKind mKind; 		  /**< file or directory */
+	char*       mName; 		  /**< the name of the file */
+	tTime       mLastMod; 	  /**< the last modification time for the file in seconds */
+	tOffset     mSize; 		  /**< the size of the file in bytes */
+	short       mReplication; /**< the count of replicas */
+	tOffset     mBlockSize;   /**< the block size for the file */
+	char*       mOwner; 	  /**< the owner of the file */
+	char*       mGroup;       /**< the group associated with the file */
+	short       mPermissions; /**< the permissions associated with the file */
+	tTime       mLastAccess;  /**< the last access time for the file in seconds */
+} dfsFileInfo;
+
+
+struct dfsReadStatistics {
+    uint64_t totalBytesRead;
+    uint64_t totalLocalBytesRead;
+    uint64_t totalShortCircuitBytesRead;
+    uint64_t totalZeroCopyBytesRead;
+};
+
+/** Represents org.apache.hadoop.fs.FileStatus */
+struct fileStatus {
+	boost::filesystem::path path;
+  	long       				length;
+  	bool        		    isdir;
+  	bool                    issymlink;
+  	short       			block_replication;
+  	long        		    blocksize;
+  	long       				modification_time;
+  	long        			access_time;
+
+  	enum boost::filesystem::perms permission;
+    char*                   owner;
+    char*                   group;
+    char*                   symlink;
+};
+
+/** Represent org.apache.hadoop.fs.FileSystem.Statistics
+ *  The statistic of File System
+ */
+struct fsStatistics {
+	char* scheme;
+	long  bytesRead;
+	long  bytesWritten;
+	int   readOps;
+	int   largeReadOps;
+	int   writeOps;
+ };
+
+/** Represent org.apache.hadoop.fs.BlockLocation
+ *  Represents the network location of a block, information about the hosts
+ *  that contain block replicas, and other block metadata (E.g. the file
+ *  offset associated with the block, length, whether it is corrupt, etc).
+ * */
+struct fsBlockLocation {
+	char** hosts;         /**< Datanode hostnames */
+	char** names;         /**< Datanode IP:xferPort for accessing the block */
+	int    numDatanodes;  /**< Number of data nodes */
+	char** topologyPaths; /**< Full path name in network topology */
+
+	long offset;  /**< Offset of the block in the file */
+	long length;  /**< file length */
+	bool corrupt; /**< flag, indicates whether the file is corrupted */
+};
+
+/** Represent org.apache.hadoop.fs.ContentSummary
+ *  Store the summary of a content (a directory or a file).
+ * */
+struct fsContentSummary {
+	long length;
+	long fileCount;
+	long directoryCount;
+	long quota;
+	long spaceConsumed;
+	long spaceQuota;
+};
+
+namespace impala{
+
+extern std::ostream& operator<<(std::ostream &strm, const fsStatistics &statistic);
+extern std::ostream& operator<<(std::ostream &strm, const fileStatus &status);
+
+}
 #endif /* FS_DEFINITIONS_HPP_ */

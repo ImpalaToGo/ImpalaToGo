@@ -28,7 +28,17 @@
 #include <boost/preprocessor/seq/seq.hpp>
 
 #include "common/logging.h"
-#include "dfs_cache/dfs-types.h"
+#include "dfs_cache/hadoop-fs-definitions.h"
+
+struct dfs {
+/** supported / configured DFS types */
+enum DFS_TYPE {
+	HDFS,
+	S3,
+	LOCAL,
+	OTHER,
+};
+};
 
 namespace impala {
 
@@ -87,17 +97,6 @@ enum taskOverallStatus{
             IS_NOT_MANAGED      /**< task is not managed */
 };
 
-
-namespace dfs {
-
-/** supported / configured DFS types */
-enum DFS_TYPE {
-	HDFS,
-	S3,
-	OTHER,
-};
-}
-
 /** Formatters for enumerations */
 extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
 extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
@@ -129,9 +128,6 @@ typedef NameNodeDescriptor     dfsFS;
 /** Represent data set in terms of data string descriptors */
 typedef std::list<const char*> DataSet;
 
-/** bridge to abtract FileSystem */
-typedef void* fSBridge;
-
 /**
  * Represent the single DFS connection
  */
@@ -143,7 +139,7 @@ typedef struct {
 		BUSY_OK,
 	} ConnectionState;
 
-	fSBridge         connection;      /**< the connection handle */
+	fsBridge         connection;      /**< the connection handle */
 	ConnectionState  state;           /**< connection status, to help manage it */
 } dfsConnection;
 

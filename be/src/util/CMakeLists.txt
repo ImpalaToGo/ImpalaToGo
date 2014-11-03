@@ -67,7 +67,8 @@ add_library(Util
   url-coding.cc
   llama-util.cc
   table-printer.cc
-  replacement-for-hdfs-inherited.cc
+  exception.c
+  jni-helper.c
 )
 
 add_library(Webserver STATIC

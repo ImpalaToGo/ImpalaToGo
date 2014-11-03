@@ -14,8 +14,6 @@
 
 #include "util/jni-util.h"
 
-// Elena : 08.10.2014 Remove hdfs dependency (1)
-// #include <hdfs.h>
 #include "dfs_cache/dfs-cache.h"
 #include <sstream>
 

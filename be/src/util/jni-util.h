@@ -22,6 +22,7 @@
 
 #include "common/status.h"
 #include "gen-cpp/Frontend_types.h"
+#include "util/jni-helper.h"
 
 #define THROW_IF_ERROR_WITH_LOGGING(stmt, env, adaptor) \
   do { \
@@ -135,9 +136,7 @@
     } \
   } while (false)
 
-// C linkage for helper functions in hdfsJniHelper.h
-// Elena. Cutoff libhdfs along with its JNI environment wrappers. We redefine facilities in Util itself, see replacement-for-hdfs-inherited.cc
-extern JNIEnv* getJNIEnv(void);
+//extern JNIEnv* getJNIEnv(void);
 
 
 // typedef JNIEnv* (*getJNIEnvRedirect)();
