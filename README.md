@@ -1,7 +1,7 @@
 ImpalaToGo
 ==========
 
-An impala-based product giving the ability to run queries on abstract distributed file system (described by great FileSystem Hadoop interface). Impala does not require hdfs more
+A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.
 
 ### Why ImpalaToGo
 ----
