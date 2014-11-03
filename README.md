@@ -28,7 +28,7 @@ Development environment prerequisites (Ubuntu)
     
   - install other prerequsites
       ```sh
-    sudo apt-get install git build-essential cmake bison flex pkg-config libsasl2-dev autoconf automake libtool maven subversion doxygen libbz2-dev zlib1g-dev python-setuptools python-dev -y
+    sudo apt-get install git build-essential cmake bison flex pkg-config libsasl2-dev autoconf automake libtool maven subversion doxygen libbz2-dev zlib1g-dev  python-setuptools python-dev libssl-dev -y
     ```
   - install recent gcc and g++ (4.9 for now)
    ```sh
@@ -42,6 +42,13 @@ Development environment prerequisites (Ubuntu)
     ```
     
   - **configure boost.** Default recent dev boost package is not compatible with impala. Download boost 1.46.1 and build packages required by impala (always can be found in ${IMPALA_HOME}/CMakeLists.txt):
+  you can download boost source this way:
+  ```sh
+  wget -c 'http://sourceforge.net/projects/boost/files/boost/1.46.1/boost_1_46_1.tar.bz2/download'
+  tar xf download
+
+  ```
+  
     ####thread regex-mt system-mt filesystem-mt date_time
 
     1. **First fix some bugs in boost sources.**
@@ -62,7 +69,7 @@ Development environment prerequisites (Ubuntu)
 	Thus need to patch the file "your boost folder"/boost/config/stdlib/libstdcpp3.hpp
 	Required change is described here: 					
 	https://svn.boost.org/trac/boost/attachment/ticket/6165/libstdcpp3.hpp.patch
-	In short, in file following should be changed:
+	In short, in file following should be changed (be careful not to introduce whitespace after backslashes - it will not compile):
 
 	```c
 	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
@@ -168,25 +175,33 @@ tar xvf apache-maven-3.0.5-bin.tar.gz && sudo mv apache-maven-3.0.5 /usr/local
 
 - Add the following three lines to your .bashrc:
 ```sh
-export M2_HOME=/usr/local/apache-maven-3.0.4
+export M2_HOME=/usr/local/apache-maven-3.0.5
 export M2=$M2_HOME/bin  
 export PATH=$M2:$PATH
 ```
 Confirm by running
 ```sh
+source ~/.bashrc
 mvn -version
 ```
 
 Impala build
 ----
+put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources
+```sh
+export JAVA_HOME=/usr/lib/jvm/java-7-oracle
+export IMPALA_HOME=YOUR_PATH/ImpalaToGo
+export BOOST_LIBRARYDIR=/usr/lib64
+export LD_LIBRARY_PATH=/usr/lib64
+```
+and then run
+```sh
+source ~/.bashrc
+```
 
 - cd to Impala source cloned dir, run 
 ```sh
-export JAVA_HOME=/usr/lib/jvm/java-7-oracle
-export IMPALA_HOME=/home/elenav/src/ImpalaToGo
-export BOOST_LIBRARYDIR=/usr/lib64
- . bin/impala-config.sh
-export LD_LIBRARY_PATH=/usr/lib64
+bin/impala-config.sh
 ```
 
 - build thirdparty :
@@ -197,6 +212,13 @@ export LD_LIBRARY_PATH=/usr/lib64
 - run impala build:
 ```sh
 ./buildall.sh
+```
+
+To run unit testing on backend , do the following in the ImpalaToGo bin directory
+```sh
+export IMPALA_BE_DIR=/root/ImpalaToGo/be/
+./run-backend-tests.sh
+
 ```
 
 Start work with impala
