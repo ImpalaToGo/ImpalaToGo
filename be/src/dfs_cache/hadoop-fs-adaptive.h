@@ -6,7 +6,6 @@
  * Hadoop sources used for this file to born:
  * - libhdfs
  * https://svn.apache.org/repos/asf/hadoop/common/tags/release-2.3.0/hadoop-hdfs-project/hadoop-hdfs/src/main/native/libhdfs/hdfs.h
- * https://svn.apache.org/repos/asf/hadoop/common/tags/release-2.3.0/hadoop-hdfs-project/hadoop-hdfs/src/main/native/libhdfs/hdfs.c
  *
  *
  * @date   Nov 1, 2014
@@ -16,282 +15,147 @@
 #ifndef HADOOPFS_ADAPTIVE_HPP_
 #define HADOOPFS_ADAPTIVE_HPP_
 
-#include "dfs_cache/common-include.hpp"
 #include "dfs_cache/hadoop-fs-definitions.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/****************************  Initialize and shutdown  ********************************/
+/**************************** hadoop configuration utilties ****************************/
 /**
- * Connect to the filesystem based on the uri, the passed
- * configuration and the user
+ * Get a configuration string.
  *
- * @param host     - filesystem host
- * @param port     - filesystem port
- * @param dfs_type - dfs type to be able to assemble corresponding configuration for FileSystem class resolver
- * @param user     - user to perform the get as
+ * @param [in]  key - key to find
+ * @param [out] val - value. This will be set to NULL if the key isn't found.
+ * 					  You must free this string with _dfsConfStrFree.
  *
- * @return filesystem handle
+ * @return         0 on success; nonzero error code otherwise.
+ *                 Failure to find the key is not an error.
  */
-fsBridge _dfsConnect(const char* host, int port, dfs::DFS_TYPE dfs_type, const char* user);
-
-/**
- * Disconnect from specified file system.
- *
- * @param filesystem  - file system handle
- *
- * @return Returns 0 on success, -1 on error.
- *         Even if there is an error, the resources associated with the
- *         hdfsFS will be freed.
- */
-int _dfsDisconnect(fsBridge filesystem);
-
-/****************************  Filesystem operations  ********************************/
+int _dfsConfGetStr(const char *key, char **val);
 
 /**
- * Checks if a given path exists on the filesystem
+ * Free a configuration string found with hdfsConfGetStr.
  *
- * @param filesystem - filesystem handle
- * @param path       - The path to look for
- *
- * @return Returns 0 on success, -1 on error.
+ * @param val - configuration string obtained from _dfsConfGetStr
  */
-int _dfsPathExists(fsBridge filesystem, const char *path);
+void _dfsConfStrFree(char *val);
 
 /**
- * Return an array containing hostnames, offset and size of
- * portions of the given file.  For a nonexistent
- * file or regions, null will be returned.
+ * Get a configuration integer.
  *
- * This call is most helpful with DFS, where it returns
- * hostnames of machines that contain the given file.
+ * @param key - key to find
+ * @param val - value. This will NOT be changed if the key isn't found.
  *
- * The FileSystem will simply return an elt containing 'localhost'.
- *
- * @param filesystem - filesystem connection
- * @param file       - FilesStatus to get data from
- * @param start      - offset into the given file
- * @param len        - length for which to get locations for
+ * @return         0 on success; nonzero error code otherwise.
+ *                 Failure to find the key is not an error.
  */
-fsBlockLocation* _dfsGetFileBlockLocations(fsBridge filesystem,
-		fileStatus file, long start, long len);
+int _dfsConfGetInt(const char *key, int32_t *val);
+
+/***************************** Connection builder **************************************/
 
 /**
- * Return an array containing hostnames, offset and size of
- * portions of the given file.  For a nonexistent
- * file or regions, null will be returned.
+ * Create an FS builder.
  *
- * This call is most helpful with DFS, where it returns
- * hostnames of machines that contain the given file.
- *
- * The FileSystem will simply return an elt containing 'localhost'.
- *
- * @param filesystem - filesystem connection
- * @param path       - path is used to identify an FS since an FS could have
- *          	       another FS that it could be delegating the call to
- *
- * @param start - offset into the given file
- * @param len   - length for which to get locations for
+ * @return The FS builder, or NULL on error.
  */
-fsBlockLocation* _dfsGetFileBlockLocations(fsBridge filesystem,
-		const char* path, long start, long len);
+struct fsBuilder* _dfsNewBuilder(void);
 
 /**
- * Append to an existing file (optional operation).
- * Same as append(f, getConf().getInt("io.file.buffer.size", 4096), null)
+ * Force the builder to always create a new instance of the FileSystem,
+ * rather than possibly finding one in the cache.
  *
- * @param filesystem - filesystem handle
- * @param f          - the existing file to be appended.
- *
- * @return an opened stream to a file which was appended (org.apache.hadoop.fs.FSDataOutputStream)
- * TODO: check where stream pointer is located for returned stream and document this
+ * @param bld - FS builder
  */
-dfsFileInfo _dfsAppend(fsBridge filesystem, const char* f, int bufferSize);
+void _dfsBuilderSetForceNewInstance(struct fsBuilder *bld);
 
 /**
- * Concat existing files together.
+ * Free an FS builder.
  *
- * @param filesystem - filesystem handle
- * @param trg        - the path to the target destination.
- * @param psrcs      - the paths to the sources to use for the concatenation.
+ * It is normally not necessary to call this function since
+ * fsBuilderConnect frees the builder.
+ *
+ * @param bld The FS builder
  */
-void _dfsConcat(fsBridge filesystem, const char* trg, char** psrcs);
+void _dfsFreeBuilder(struct fsBuilder* bld);
 
 /**
- * Mark a path to be deleted when FileSystem is closed.
- * When the JVM shuts down,
- * all FileSystem objects will be closed automatically.
- * Then,
- * the marked path will be deleted as a result of closing the FileSystem.
+ * Set the FS host (NameNode for hdfs) to connect to.
  *
- * The path has to exist in the file system.
+ * @param bld  - FS builder
+ * @param host - host to use.
+   *             If the string given is 'default', the default NameNode
+ *               configuration will be used (from the XML configuration files)
  *
- * @param filesystem - filesystem handle
- * @param path       - the path to delete.
+ *               If NULL is given, a LocalFileSystem will be created.
  *
- * @return  true if deleteOnExit is successful, otherwise false.
+ *               If the string starts with a protocol type such as file:// or
+ *               hdfs://, this protocol type will be used.  If not, the
+ *               hdfs:// protocol type will be used.
+ *
+ *               You may specify a host's port in the usual way by
+ *               passing a string of the format hdfs://<hostname>:<port>.
+ *               Alternately, you may set the port with
+ *               _dfsBuilderSetPort.  However, you must not pass the
+ *               port in two different ways.
  */
-bool _dfsDeleteOnExit(fsBridge filesystem, const char* path);
+void _dfsBuilderSetHost(struct fsBuilder *bld, const char* host);
 
 /**
- * Cancel the deletion of the path when the FileSystem is closed
+ * Set the FS host and filesystem type (NameNode for hdfs) to connect to.
  *
- * @param filesystem - filesystem handle
- * @param path       - the path to cancel deletion
+ * @param bld  - FS builder
+ * @param host - host to use.
+ *               You may specify a host's port as well in the usual way by
+ *               passing a string of the format hdfs://<hostname>:<port>.
+ *               Alternately, you may set the port with
+ *               _dfsBuilderSetPort.  However, you must not pass the
+ *               port in two different ways.
  *
- * @return true if cancellation was successful
+ * @param fs_type - fs type, help to create corresponding config
  */
-bool _dfsCancelDeleteOnExit(fsBridge filesystem, const char* path);
-
-/** True if the named path is a directory.
- * Note: Avoid using this method. Instead reuse the FileStatus
- * returned by getFileStatus() or listStatus() methods.
- *
- * @param filesystem  - filesystem handle
- * @param path        - path to check
- */
-bool _dfsIsDirectory(fsBridge filesystem, const char* path);
-
-/** True if the named path is a regular file.
- * Note: Avoid using this method. Instead reuse the FileStatus
- * returned by getFileStatus() or listStatus() methods.
- *
- * @param filesystem - filesystem handle
- * @param path       - path to check
- */
-bool _dfsIsFile(fsBridge filesystem, const char* path);
-
-/** Return the ContentSummary of a given path.
- *
- * @param filesystem - filesystem handle
- * @param path       - path to use
- */
-fsContentSummary _dfsGetContentSummary(fsBridge filesystem, const char* path);
+void _dfsBuilderSetHostAndFilesystemType(struct fsBuilder* bld, const char* host, DFS_TYPE fs_type);
 
 /**
- * @return an iterator over the corrupt files under the given path
- * (may contain duplicates if a file has more than one corrupt block)
+ * Set the port of the FS host (for hdfs, NameNode) to connect to.
  *
- * @param filesystem - filesystem handle
- * @param path       - path to check
- *
- * @return vector of corrupted files under given path. Note that in original org.apache.hadoop.fs.FileSystem API
- * return value of wrapped method which is public RemoteIterator<Path> listCorruptFileBlocks(Path path)
- * is the iterator, therefore, the implementation in order to avoid complexities should fetch all iterator
- * to the vector of paths.
+ * @param bld The FS builder
+ * @param port The port.
  */
-char** _dfsListCorruptFileBlocks(fsBridge filesystem,
-		const char* path);
+void _dfsBuilderSetPort(struct fsBuilder *bld, tPort port);
 
 /**
- * Filter files/directories in the given list of paths using default
- * path filter.
+ * Set the username to use when connecting to the HDFS cluster.
  *
- * @param filesystem - filesystem handle
- * @param files      - a list of paths
- *
- * @return a list of statuses for the files under the given paths after
- *         applying the filter default Path filter
+ * @param bld The HDFS builder
+ * @param userName The user name.  The string will be shallow-copied.
  */
-fileStatus* _dfsListStatus(fsBridge filesystem,	char** files);
-
-/** Return the current user's home directory in this filesystem.
- * The default implementation returns "/user/$USER/".
- *
- * @param filesystem - filesystem handle
- */
-char* _dfsGetHomeDirectory(fsBridge filesystem);
+void _dfsBuilderSetUserName(struct fsBuilder* bld, const char* userName);
 
 /**
- * Return the raw capacity of the filesystem.
+ * Set the path to the Kerberos ticket cache to use when connecting to
+ * the DFS cluster.
  *
- * @param filesystem - filesystem handle
- *
- * @return Returns the raw-capacity; -1 on error.
+ * @param bld The FS builder
+ * @param kerbTicketCachePath The Kerberos ticket cache path.  The string
+ *                            will be shallow-copied.
  */
-tOffset _dfsGetCapacity(fsBridge filesystem);
+void _dfsBuilderSetKerbTicketCachePath(struct fsBuilder *bld,
+		const char *kerbTicketCachePath);
 
 /**
- * Return the total raw size of all files in the filesystem.
+ * Set a configuration string for an fsBuilder.
  *
- * @param filesystem - filesystem handle
+ * @param key - key to set.
+ * @param val - value, or NULL to set no value.
+ *              This will be shallow-copied.  You are responsible for
+ *              ensuring that it remains valid until the builder is freed.
  *
- * @return Returns the total-size; -1 on error.
+ * @return         0 on success; nonzero error code otherwise.
  */
-tOffset _dfsGetUsed(fsBridge filesystem);
+int _dfsBuilderConfSetStr(struct fsBuilder *bld, const char *key,
+		const char *val);
 
-/**
- * The src file is on the local disk.  Add it to FS at
- * the given dst name and the source is kept intact afterwards
- *
- * @param fsBridge  - filesystem handle
- * @param src       - local file path
- * @param dst       - remote file path
- * @param overwrite - whether to overwrite an existing file
- */
-void _dfsCopyFromLocalFile(fsBridge filesystem, const char* src,
-		const char* dst, bool overwrite);
-
-/**
- * The src file is under FS, and the dst is on the local disk.
- * Copy it from FS control to the local dst name.
- *
- * @param filesystem - filesystem handle
- * @param src        - remote (FS) file path
- * @param dst path   - local path
- */
-void _dfsCopyToLocalFile(fsBridge filesystem, const char* src,
-		const char* dst);
-
-/**
- * Returns a local File that the user can write output to.  The caller
- * provides both the eventual FS target name and the local working
- * file.  If the FS is local, we write directly into the target.  If
- * the FS is remote, we write into the tmp local area.
- *
- * @param filesystem   - filesystem handle
- * @param fsOutputFile - path of output file
- * @param tmpLocalFile - path of local tmp file
- */
-const char* _dfsStartLocalOutput(fsBridge filesystem,
-		const char* fsOutputFile, const char* tmpLocalFile);
-
-/**
- * Called when we're all done writing to the target.  A local FS will
- * do nothing, because we've written to exactly the right place.  A remote
- * FS will copy the contents of tmpLocalFile to the correct target at
- * fsOutputFile.
- *
- * @param filesystem   - filesystem handle
- * @param fsOutputFile - path of output file
- * @param tmpLocalFile - path to local tmp file
- */
-void _dfsCompleteLocalOutput(fsBridge filesystem, const char* fsOutputFile,
-		const char* tmpLocalFile);
-
-/**
- * Return a file status object that represents the path.
- *
- * @param filesystem - filesystem handle
- * @param path       - the path we want information from
- *
- * @return a FileStatus object
- */
-fileStatus _dfsGetFileStatus(fsBridge filesystem, const char* path);
-
-/**
- * Get the checksum of a file.
- *
- * @param filesystem - filesystem handle
- * @param path       - The file path
- *
- * @return The file checksum.  The default return value is null,
- *  which indicates that no checksum algorithm is implemented
- *  in the corresponding FileSystem.
- */
-fsChecksum _dfsGetFileChecksum(fsBridge filesystem, const char* path);
 
 /****************************  FileSystem/File statistics API *********************************/
 /**
@@ -312,203 +176,163 @@ int _dfsFileIsOpenForRead(dfsFile file);
  */
 int _dfsFileIsOpenForWrite(dfsFile file);
 
-/**
- * Get read statistics about a file.  This is only applicable to files
- * opened for reading.
- *
- * @param [in]  file  - file stream
- * @param [out] stats - (out parameter) on a successful return, the read
- *                 	 statistics.  Unchanged otherwise.  You must free the
- *                 	 returned statistics with hdfsFileFreeReadStatistics.
- *
- * @return  0 if the statistics were successfully returned,
- *          -1 otherwise.
- *          On a failure, please check errno against ENOTSUP.
- *          webhdfs, LocalFilesystem, and so forth may
- *                 not support read statistics.
- */
-int _dfsFileGetReadStatistics(dfsFile file, struct dfsReadStatistics **stats);
+/****************************  Initialize and shutdown  ********************************/
 
 /**
- * Free some DFS read statistics.
+ * Connect to FS using the parameters defined by the builder.
  *
- * @param stats - DFS read statistics to free.
+ * The FS builder will be freed, whether or not the connection was
+ * successful.
+ *
+ * Every successful call to _dfsBuilderConnect should be matched with a call
+ * to _dfsDisconnect, when the fsBridge is no longer needed.
+ *
+ * @param bld - FS builder
+ *
+ * @return Returns a handle to the filesystem, or NULL on error.
  */
-void _dfsFileFreeReadStatistics(struct dfsReadStatistics *stats);
+fsBridge _dfsBuilderConnect(struct fsBuilder *bld);
 
 /**
- * @param stats    DFS read statistics for a file.
+ * Connect to the filesystem based on the host and port
  *
- * @return the number of remote bytes read.
+ * @param host     - filesystem host
+ * @param port     - filesystem port
+ * @param fs_type  - fs type to be able to assemble corresponding configuration for FileSystem class resolver
+ *
+ * @return filesystem handle
+ * @deprecated   Use _dfsBuilderConnect instead.
  */
-int64_t _dfsReadStatisticsGetRemoteBytesRead(const struct dfsReadStatistics *stats);
+fsBridge _dfsConnect(const char* host, int port, DFS_TYPE fs_type);
 
-/**********************************  Operations with org.apache.hadoop.fs.FSData(Output|Input)Stream and file objects **/
-/** Partially got from https://svn.apache.org/repos/asf/hadoop/common/tags/release-2.3.0/hadoop-hdfs-project/hadoop-hdfs/src/main/native/libhdfs/hdfs.h **/
-
-/** create a file with the provided permission
- * The permission of the file is set to be the provided permission as in
- * setPermission, not permission&~umask
+/**
+ * Connect to the file system.
  *
- * It is implemented using two RPCs. It is understood that it is inefficient,
- * but the implementation is thread-safe. The other option is to change the
- * value of umask in configuration to be 0, but it is not thread-safe.
+ * Forces a new instance to be created
+ *
+ * @param host    - host (NameNode for hdfs).  See _dfsBuilderSetHost for details.
+ * @param port    - port on which the server is listening.
+ * @param fs_type - fs type to be able to assemble corresponding configuration for FileSystem class resolver
+ *
+ * @return       Returns a handle to the filesystem or NULL on error.
+ * @deprecated   Use _dfsBuilderConnect instead.
+ */
+fsBridge _dfsConnectNewInstance(const char* host, tPort port, DFS_TYPE fs_type);
+
+/**
+ * Connect to the filesystem based on the host, port and the user
+ *
+ * @param host     - filesystem host
+ * @param port     - filesystem port
+ * @param user     - user to perform the get as
+ * @param fs_type  - fs type to be able to assemble corresponding configuration for FileSystem class resolver
+ *
+ * @return filesystem handle
+ * @deprecated   Use _dfsBuilderConnect instead.
+ */
+fsBridge _dfsConnectAsUser(const char* host, tPort port, const char *user, DFS_TYPE fs_type);
+
+/**
+ * Connect to the file system with user ticket.
+ *
+ * Forces a new instance to be created
+ *
+ * @param host    - host (NameNode for hdfs).  See _dfsBuilderSetHost for details.
+ * @param port    - port on which the server is listening.
+ * @param user    - user to perform the get as
+ * @param fs_type - fs type to be able to assemble corresponding configuration for FileSystem class resolver
+ *
+ * @return       Returns a handle to the filesystem or NULL on error.
+ * @deprecated   Use { _dfsBuilderSetForceNewInstance + _dfsBuilderConnect } instead.
+ */
+fsBridge _dfsConnectAsUserNewInstance(const char* host, tPort port,
+        const char *user, DFS_TYPE fs_type);
+
+/**
+ * Disconnect from specified file system.
  *
  * @param filesystem  - file system handle
- * @param file        - the name of the file to be created
- * @param bufferSize  - the size of the buffer to be used.
- * @param createFlags - flags to use for this stream
- * @param replication - required block replication for the file.
- * @param blockSize   - the size of the block to be used.
- * @param overwrite   - if a file with this name already exists, then if true,
- *        the file will be overwritten, and if false an error will be thrown. *
- * @param permission  - the permission of the file
- *
- * @return an output stream - org.apache.hadoop.fs.FSDataOutputStream
- */
-dfsFile _dfsCreate(fsBridge filesystem, const char* file, int bufferSize,
-		boost::filesystem::createStreamFlag* createFlags,
-		short replication, long blockSize, bool overwrite,
-		boost::filesystem::perms permission);
-
-/**
- * Opens an fSDataInputStream at the indicated Path in a given mode.
- *
- * @param fsBridge   - filesystem handle
- * @param f          - the file path to open
- * @param bufferSize - the size of the buffer to be used.
- *
- * @param flags       - an | of bits/fcntl.h file flags - supported flags are O_RDONLY, O_WRONLY (meaning create or overwrite i.e., implies O_TRUNCAT),
- *                      O_WRONLY|O_APPEND. Other flags are generally ignored other than (O_RDWR || (O_EXCL & O_CREAT)) which return NULL and set errno equal ENOTSUP.
- * @param bufferSize  - size of buffer for read/write - pass 0 if you want
- *                      to use the default configured values.
- * @param replication - block replication - pass 0 if default configured values are enough.
- * @param blocksize   - size of block - pass 0 if you default configured values are enough.
- *
- * @return Returns the opened file stream.
- */
-dfsFile _dfsOpen(fsBridge fsBridge, const char* path, int flags, int bufferSize,
-		short replication, tSize blocksize);
-
-/**
- * Close an opened filestream.
- *
- * @param filesystem - filesystem handle
- * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
  *
  * @return Returns 0 on success, -1 on error.
- * 		   On error, errno will be set appropriately.
- *         If the requested file was valid, the memory associated with it will be freed at the end of this call,
- *         even if there was an I/O error.
+ *         Even if there is an error, the resources associated with the @a fsBridge will be freed.
  */
-int _dfsClose(fsBridge fsBridge, dfsFile file);
+int _dfsDisconnect(fsBridge filesystem);
+
+/****************************  Filesystem operations  ********************************/
 
 /**
- * Get the current offset in the file, in bytes.
+ * Checks if a given path exists on the filesystem
+ *
  * @param filesystem - filesystem handle
- * @param file       - file stream
- *
- * @return Current offset, -1 on error.
- */
-tOffset _dfsTell(fsBridge filesystem, dfsFile file);
-
-/**
- * Seek to given offset in file stream.
- * This works only for files opened in read-only mode (so that, for fSDataInputStream)
- *
- * @param fsBridge   - filesystem handle
- * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
- * @param desiredPos - offset into the file to seek into.
+ * @param path       - The path to look for
  *
  * @return Returns 0 on success, -1 on error.
  */
-int _dfsSeek(fsBridge fsBridge, dfsFile file, tOffset desiredPos);
+int _dfsPathExists(fsBridge filesystem, const char *path);
 
 /**
- * Read data from an open file.
+ * Get hostnames where a particular block (determined by
+ * pos & blocksize) of a file is stored. The last element in the array
+ * is NULL. Due to replication, a single block could be present on
+ * multiple hosts.
  *
- * @param filesystem - filesystem handle
- * @param file       - file handle.
- * @param buffer     - buffer to copy read bytes into.
- * @param length     - length of the buffer.
- * @return      On success, a positive number indicating how many bytes
- *              were read.
- *              On end-of-file, 0.
- *              On error, -1.  Errno will be set to the error code.
- *              Just like the POSIX read function, hdfsRead will return -1
- *              and set errno to EINTR if data is temporarily unavailable,
- *              but we are not yet at the end of the file.
+ * @param filesystem - file system handle
+ * @param path       - file path
+ * @param start      - start of the block.
+ * @param length     - length of the block.
+ *
+ * @return Returns a dynamically-allocated 2-d array of blocks-hosts;
+ * NULL on error.
  */
-tSize _dfsRead(fsBridge filesystem, dfsFile file, void* buffer, tSize length);
+char*** _dfsGetHosts(fsBridge filesystem, const char* path, tOffset start,
+		tOffset length);
 
 /**
- * Positional read of data from an opened stream.
+ * Free up the structure returned by dfsGetHosts
  *
- * @param filesystem - filesystem handle
- * @param file       - file handle.
- * @param position   - position from which to read
- * @param buffer     - buffer to copy read bytes into.
- * @param length     - length of the buffer.
- *
- * @return      See dfsRead
+ * @param blockHosts - array of dynamically allocated  2-d array of blocks-hosts.
  */
-tSize _dfsPread(fsBridge filesystem, dfsFile file, tOffset position, void* buffer,
-		tSize length);
+void _dfsFreeHosts(char ***blockHosts);
 
 /**
- * Write data into an open file.
+ * Return the raw capacity of the filesystem.
  *
  * @param filesystem - filesystem handle
- * @param file       - file handle.
- * @param buffer     - data.
- * @param length     - no. of bytes to write.
  *
- * @return Returns the number of bytes written, -1 on error.
+ * @return Returns the raw-capacity; -1 on error.
  */
-tSize _dfsWrite(fsBridge filesystem, dfsFile file, const void* buffer, tSize length);
+tOffset _dfsGetCapacity(fsBridge filesystem);
 
 /**
- * Flush the data.
+ * Return the total raw size of all files in the filesystem.
  *
  * @param filesystem - filesystem handle
- * @param file       - file handle.
+ *
+ * @return Returns the total-size; -1 on error.
+ */
+tOffset _dfsGetUsed(fsBridge filesystem);
+
+/**
+ * hdfsGetWorkingDirectory - Get the current working directory for the given filesystem.
+ *
+ * @param filesystem - filesystem handle
+ * @param buffer     - user-buffer to copy path of cwd into.
+ * @param bufferSize - length of user-buffer.
+ *
+ * @return Returns buffer, NULL on error.
+ */
+char* _dfsGetWorkingDirectory(fsBridge filesystem, char *buffer,
+		size_t bufferSize);
+
+/**
+ * hdfsSetWorkingDirectory - Set the working directory. All relative paths will be resolved relative to it.
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - path of the new 'cwd'.
  *
  * @return Returns 0 on success, -1 on error.
  */
-int _dfsFlush(fsBridge filesystem, dfsFile file);
-
-/**
- * Flush out the data in client's user buffer. After the return of this call,
- * new readers will see the data.
- *
- * @param filesystem - filesystem handle
- * @param file       - file handle.
- *
- * @return 0 on success, -1 on error and sets errno
- */
-int _dfsHFlush(fsBridge filesystem, dfsFile file);
-
-/**
- * Similar to posix fsync, Flush out the data in client's
- * user buffer. all the way to the disk device (but the disk may have
- * it in its cache).
- *
- * @param filesystem - filesystem handle
- * @param file       - file handle.
- *
- * @return 0 on success, -1 on error and sets errno
- */
-int _dfsHSync(fsBridge filesystem, dfsFile file);
-
-/**
- * Return number of bytes that can be read from this input stream without blocking.
- *
- * @param filesystem - filesystem handle
- * @param file       - file handle.
- *
- * @return Returns available bytes; -1 on error.
- */
-int _dfsAvailable(fsBridge filesystem, dfsFile file);
+int _dfsSetWorkingDirectory(fsBridge filesystem, const char* path);
 
 /**
  * Copy file from one filesystem to another.
@@ -559,38 +383,14 @@ int _dfsDelete(fsBridge filesystem, const char* path, int recursive);
 int _dfsRename(fsBridge filesystem, const char* oldPath, const char* newPath);
 
 /**
- * hdfsGetWorkingDirectory - Get the current working directory for the given filesystem.
+ * Create directory
  *
  * @param filesystem - filesystem handle
- * @param buffer     - user-buffer to copy path of cwd into.
- * @param bufferSize - length of user-buffer.
- *
- * @return Returns buffer, NULL on error.
- */
-char* _dfsGetWorkingDirectory(fsBridge filesystem, char *buffer, size_t bufferSize);
-
-/**
- * hdfsSetWorkingDirectory - Set the working directory. All relative paths will be resolved relative to it.
- *
- * @param filesystem - filesystem handle
- * @param path       - path of the new 'cwd'.
+ * @param path       - path to create
  *
  * @return Returns 0 on success, -1 on error.
  */
-int _dfsSetWorkingDirectory(fsBridge filesystem, const char* path);
-
-/**
- * Create a directory with the provided permission.
- * The permission of the directory is set to be the provided permission as in
- * setPermission, not permission&~umask
- *
- * @param filesystem - file system handle
- * @param dir        - the name of the directory to be created
- * @param permission - the permission of the directory
- *
- * @return Returns 0 on success, -1 on error.
- */
-int _dfsCreateDirectory(fsBridge filesystem, const char* path, boost::filesystem::perms permission);
+int _dfsCreateDirectory(fsBridge filesystem, const char* path);
 
 /**
  * Set the replication of the specified file to the supplied value
@@ -600,11 +400,12 @@ int _dfsCreateDirectory(fsBridge filesystem, const char* path, boost::filesystem
  *
  * @return Returns 0 on success, -1 on error.
  */
-int _dfsSetReplication(fsBridge filesystem, const char* path, int16_t replication);
+int _dfsSetReplication(fsBridge filesystem, const char* path,
+		int16_t replication);
 
 /**
  * Get list of files/directories for a given
- * directory-path. hdfsFreeFileInfo should be called to deallocate memory.
+ * directory-path. _dfsFreeFileInfo should be called to deallocate memory.
  *
  * @param filesystem - file system handle
  * @param path       - path of the directory.
@@ -613,11 +414,12 @@ int _dfsSetReplication(fsBridge filesystem, const char* path, int16_t replicatio
  * @return Returns a dynamically-allocated array of hdfsFileInfo
  * objects; NULL on error.
  */
-dfsFileInfo * _dfsListDirectory(fsBridge filesystem, const char* path, int *numEntries);
+dfsFileInfo * _dfsListDirectory(fsBridge filesystem, const char* path,
+		int *numEntries);
 
 /**
  * Get information about a path as a (dynamically
- * allocated) single hdfsFileInfo struct. hdfsFreeFileInfo should be
+ * allocated) single dfsFileInfo struct. _dfsFreeFileInfo should be
  * called when the pointer is no longer needed.
  *
  * @param filesystem - file system handle
@@ -629,37 +431,21 @@ dfsFileInfo * _dfsListDirectory(fsBridge filesystem, const char* path, int *numE
 dfsFileInfo * _dfsGetPathInfo(fsBridge filesystem, const char* path);
 
 /**
- * Free up the hdfsFileInfo array (including fields)
+ * Free up the dfsFileInfo array (including fields)
  *
- * @param dfsFileInfo - array of dynamically-allocated hdfsFileInfo objects.
- * @param numEntries The size of the array.
+ * @param dfsFileInfo - array of dynamically-allocated dfsFileInfo objects.
+ * @param numEntries  - size of the array.
  */
 void _dfsFreeFileInfo(dfsFileInfo *hdfsFileInfo, int numEntries);
 
 /**
- * Get hostnames where a particular block (determined by
- * pos & blocksize) of a file is stored. The last element in the array
- * is NULL. Due to replication, a single block could be present on
- * multiple hosts.
+ * Get the default blocksize at the specified filesystem
  *
  * @param filesystem - file system handle
- * @param path       - file path
- * @param start      - start of the block.
- * @param length     - length of the block.
  *
- * @return Returns a dynamically-allocated 2-d array of blocks-hosts;
- * NULL on error.
+ * @return              Returns the default blocksize, or -1 on error.
  */
-char*** _dfsGetHosts(fsBridge filesystem, const char* path, tOffset start,
-		tOffset length);
-
-/**
- * Free up the structure returned by dfsGetHosts
- *
- * @param blockHosts - array of dynamically allocated  2-d array of blocks-hosts.
- * @param numEntries - size of the array.
- */
-void _dfsFreeHosts(char ***blockHosts, int numEntries);
+tOffset _dfsGetDefaultBlockSize(fsBridge fs);
 
 /**
  * Get the default blocksize at the filesystem indicated by a given path.
@@ -706,6 +492,289 @@ int _dfsChmod(fsBridge filesystem, const char* path, short mode);
  * @return 0 on success else -1
  */
 int _dfsUtime(fsBridge fs, const char* path, tTime mtime, tTime atime);
+
+
+/**********************************  Operations with org.apache.hadoop.fs.FSData(Output|Input)Stream and file objects **/
+
+/** Partially got from https://svn.apache.org/repos/asf/hadoop/common/tags/release-2.3.0/hadoop-hdfs-project/hadoop-hdfs/src/main/native/libhdfs/hdfs.h **/
+
+/**
+ * Opens an fSDataInputStream at the indicated Path in a given mode.
+ *
+ * @param fsBridge   - filesystem handle
+ * @param f          - the file path to open
+ * @param bufferSize - the size of the buffer to be used.
+ *
+ * @param flags       - an | of bits/fcntl.h file flags - supported flags are O_RDONLY, O_WRONLY (meaning create or overwrite i.e., implies O_TRUNCAT),
+ *                      O_WRONLY|O_APPEND. Other flags are generally ignored other than (O_RDWR || (O_EXCL & O_CREAT)) which return NULL and set errno equal ENOTSUP.
+ * @param bufferSize  - size of buffer for read/write - pass 0 if you want
+ *                      to use the default configured values.
+ * @param replication - block replication - pass 0 if default configured values are enough.
+ * @param blocksize   - size of block - pass 0 if you default configured values are enough.
+ *
+ * @return Returns the opened file stream.
+ */
+dfsFile _dfsOpenFile(fsBridge fsBridge, const char* path, int flags, int bufferSize,
+		short replication, tSize blocksize);
+
+/**
+ * Close an opened filestream.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ *
+ * @return Returns 0 on success, -1 on error.
+ * 		   On error, errno will be set appropriately.
+ *         If the requested file was valid, the memory associated with it will be freed at the end of this call,
+ *         even if there was an I/O error.
+ */
+int _dfsCloseFile(fsBridge fsBridge, dfsFile file);
+
+/**
+ * Get the current offset in the file, in bytes.
+ * @param filesystem - filesystem handle
+ * @param file       - file stream
+ *
+ * @return Current offset, -1 on error.
+ */
+tOffset _dfsTell(fsBridge filesystem, dfsFile file);
+
+/**
+ * Seek to given offset in file stream.
+ * This works only for files opened in read-only mode (so that, for fSDataInputStream)
+ *
+ * @param fsBridge   - filesystem handle
+ * @param file       - file stream (org.apache.hadoop.fs.FSDataInputStream or org.apache.hadoop.fs.FSDataOutputStream )
+ * @param desiredPos - offset into the file to seek into.
+ *
+ * @return Returns 0 on success, -1 on error.
+ */
+int _dfsSeek(fsBridge fsBridge, dfsFile file, tOffset desiredPos);
+
+/**
+ * Read data from an open file.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ * @param buffer     - buffer to copy read bytes into.
+ * @param length     - length of the buffer.
+ * @return      On success, a positive number indicating how many bytes
+ *              were read.
+ *              On end-of-file, 0.
+ *              On error, -1.  Errno will be set to the error code.
+ *              Just like the POSIX read function, hdfsRead will return -1
+ *              and set errno to EINTR if data is temporarily unavailable,
+ *              but we are not yet at the end of the file.
+ */
+tSize _dfsRead(fsBridge filesystem, dfsFile file, void* buffer, tSize length);
+
+/**
+ * Positional read of data from an opened stream.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ * @param position   - position from which to read
+ * @param buffer     - buffer to copy read bytes into.
+ * @param length     - length of the buffer.
+ *
+ * @return      See dfsRead
+ */
+tSize _dfsPread(fsBridge filesystem, dfsFile file, tOffset position,
+		void* buffer, tSize length);
+
+/**
+ * Write data into an open file.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ * @param buffer     - data.
+ * @param length     - no. of bytes to write.
+ *
+ * @return Returns the number of bytes written, -1 on error.
+ */
+tSize _dfsWrite(fsBridge filesystem, dfsFile file, const void* buffer,
+		tSize length);
+
+/**
+ * Flush the data.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ *
+ * @return Returns 0 on success, -1 on error.
+ */
+int _dfsFlush(fsBridge filesystem, dfsFile file);
+
+/**
+ * Flush out the data in client's user buffer. After the return of this call,
+ * new readers will see the data.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ *
+ * @return 0 on success, -1 on error and sets errno
+ */
+int _dfsHFlush(fsBridge filesystem, dfsFile file);
+
+/**
+ * Similar to posix fsync, Flush out the data in client's
+ * user buffer. all the way to the disk device (but the disk may have
+ * it in its cache).
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ *
+ * @return 0 on success, -1 on error and sets errno
+ */
+int _dfsHSync(fsBridge filesystem, dfsFile file);
+
+/**
+ * Return number of bytes that can be read from this input stream without blocking.
+ *
+ * @param filesystem - filesystem handle
+ * @param file       - file handle.
+ *
+ * @return Returns available bytes; -1 on error.
+ */
+int _dfsAvailable(fsBridge filesystem, dfsFile file);
+
+
+/****************************  NOT IMPLEMENTED ***********************************/
+
+/**
+ * The src file is on the local disk.  Add it to FS at
+ * the given dst name and the source is kept intact afterwards
+ *
+ * @param fsBridge  - filesystem handle
+ * @param src       - local file path
+ * @param dst       - remote file path
+ * @param overwrite - whether to overwrite an existing file
+ */
+void _dfsCopyFromLocalFile(fsBridge filesystem, const char* src,
+		const char* dst, bool overwrite);
+
+/**
+ * The src file is under FS, and the dst is on the local disk.
+ * Copy it from FS control to the local dst name.
+ *
+ * @param filesystem - filesystem handle
+ * @param src        - remote (FS) file path
+ * @param dst path   - local path
+ */
+void _dfsCopyToLocalFile(fsBridge filesystem, const char* src, const char* dst);
+
+/**
+ * Returns a local File that the user can write output to.  The caller
+ * provides both the eventual FS target name and the local working
+ * file.  If the FS is local, we write directly into the target.  If
+ * the FS is remote, we write into the tmp local area.
+ *
+ * @param filesystem   - filesystem handle
+ * @param fsOutputFile - path of output file
+ * @param tmpLocalFile - path of local tmp file
+ */
+const char* _dfsStartLocalOutput(fsBridge filesystem, const char* fsOutputFile,
+		const char* tmpLocalFile);
+
+/**
+ * Called when we're all done writing to the target.  A local FS will
+ * do nothing, because we've written to exactly the right place.  A remote
+ * FS will copy the contents of tmpLocalFile to the correct target at
+ * fsOutputFile.
+ *
+ * @param filesystem   - filesystem handle
+ * @param fsOutputFile - path of output file
+ * @param tmpLocalFile - path to local tmp file
+ */
+void _dfsCompleteLocalOutput(fsBridge filesystem, const char* fsOutputFile,
+		const char* tmpLocalFile);
+
+/**
+ * Append to an existing file (optional operation).
+ * Same as append(f, getConf().getInt("io.file.buffer.size", 4096), null)
+ *
+ * @param filesystem - filesystem handle
+ * @param f          - the existing file to be appended.
+ *
+ * @return an opened stream to a file which was appended (org.apache.hadoop.fs.FSDataOutputStream)
+ * TODO: check where stream pointer is located for returned stream and document this
+ */
+dfsFileInfo _dfsAppend(fsBridge filesystem, const char* f, int bufferSize);
+
+/**
+ * Concat existing files together.
+ *
+ * @param filesystem - filesystem handle
+ * @param trg        - the path to the target destination.
+ * @param psrcs      - the paths to the sources to use for the concatenation.
+ */
+void _dfsConcat(fsBridge filesystem, const char* trg, char** psrcs);
+
+/**
+ * Mark a path to be deleted when FileSystem is closed.
+ * When the JVM shuts down,
+ * all FileSystem objects will be closed automatically.
+ * Then,
+ * the marked path will be deleted as a result of closing the FileSystem.
+ *
+ * The path has to exist in the file system.
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - the path to delete.
+ *
+ * @return  true if deleteOnExit is successful, otherwise false.
+ */
+bool _dfsDeleteOnExit(fsBridge filesystem, const char* path);
+
+/**
+ * Cancel the deletion of the path when the FileSystem is closed
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - the path to cancel deletion
+ *
+ * @return true if cancellation was successful
+ */
+bool _dfsCancelDeleteOnExit(fsBridge filesystem, const char* path);
+
+/** Return the ContentSummary of a given path.
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - path to use
+ */
+fsContentSummary _dfsGetContentSummary(fsBridge filesystem, const char* path);
+
+/**
+ * @return an iterator over the corrupt files under the given path
+ * (may contain duplicates if a file has more than one corrupt block)
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - path to check
+ *
+ * @return vector of corrupted files under given path. Note that in original org.apache.hadoop.fs.FileSystem API
+ * return value of wrapped method which is public RemoteIterator<Path> listCorruptFileBlocks(Path path)
+ * is the iterator, therefore, the implementation in order to avoid complexities should fetch all iterator
+ * to the vector of paths.
+ */
+char*** _dfsListCorruptFileBlocks(fsBridge filesystem, const char* path);
+
+/** Return the current user's home directory in this filesystem.
+ * The default implementation returns "/user/$USER/".
+ *
+ * @param filesystem - filesystem handle
+ */
+char* _dfsGetHomeDirectory(fsBridge filesystem);
+
+/**
+ * Get the checksum of a file.
+ *
+ * @param filesystem - filesystem handle
+ * @param path       - The file path
+ *
+ * @return The file checksum.  The default return value is null,
+ *  which indicates that no checksum algorithm is implemented
+ *  in the corresponding FileSystem.
+ */
+fsChecksum _dfsGetFileChecksum(fsBridge filesystem, const char* path);
 
 #ifdef __cplusplus
 }

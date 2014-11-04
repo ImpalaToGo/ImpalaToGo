@@ -20,34 +20,23 @@ void CacheLayerRegistry::init() {
 	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry());
 }
 
-void CacheLayerRegistry::setupDFSPluginFactory(const boost::shared_ptr<dfsAdaptorFactory> & factory){
-	// just share the ownership of a factory:
-	m_dfsAdaptorFactory = factory;
-}
-
-status::StatusInternal CacheLayerRegistry::setupNamenode(const NameNodeDescriptor & namenode){
+status::StatusInternal CacheLayerRegistry::setupFileSystem(const FileSystemDescriptor & fsDescriptor){
 		boost::mutex::scoped_lock lockconn(m_connmux);
-		if(dfsConnections[namenode.dfs_type].count(namenode.host)){
+		if(dfsConnections[fsDescriptor.dfs_type].count(fsDescriptor.host)){
 			// descriptor is already a part of the registry, nothing to add
 			return status::StatusInternal::OK;
 		}
 		// create the dfs-bound descriptor and assign the DFS adaptor to it
-    	boost::shared_ptr<RemoteAdaptor>* adaptor;
-    	dfsAdaptorFactory::AdaptorState status = m_dfsAdaptorFactory->getAdaptor(namenode.dfs_type, adaptor);
-    	if(adaptor == nullptr || status != dfsAdaptorFactory::INITIALIZED)
-    		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
-
-		// create the dfs-bound descriptor and assign the DFS adaptor to it
-		boost::shared_ptr<NameNodeDescriptorBound> descriptor(new NameNodeDescriptorBound(*adaptor, namenode));
+		boost::shared_ptr<FileSystemDescriptorBound> descriptor(new FileSystemDescriptorBound(fsDescriptor));
     	// and insert new {key-value} under the apropriate DFS
-    	dfsConnections[namenode.dfs_type].insert(std::make_pair(namenode.host, descriptor));
+    	dfsConnections[fsDescriptor.dfs_type].insert(std::make_pair(fsDescriptor.host, descriptor));
     	return status::StatusInternal::OK;
 }
 
-const boost::shared_ptr<NameNodeDescriptorBound>* CacheLayerRegistry::getNamenode(const NameNodeDescriptor & namenodeDescriptor){
+const boost::shared_ptr<FileSystemDescriptorBound>* CacheLayerRegistry::getFileSystemDescriptor(const FileSystemDescriptor & fsDescriptor){
 		boost::mutex::scoped_lock lock(m_connmux);
-          if(dfsConnections.count(namenodeDescriptor.dfs_type) > 0 && dfsConnections[namenodeDescriptor.dfs_type].count(namenodeDescriptor.host) > 0){
-        	  return &(dfsConnections[namenodeDescriptor.dfs_type][namenodeDescriptor.host]);
+          if(dfsConnections.count(fsDescriptor.dfs_type) > 0 && dfsConnections[fsDescriptor.dfs_type].count(fsDescriptor.host) > 0){
+        	  return &(dfsConnections[fsDescriptor.dfs_type][fsDescriptor.host]);
           }
           return nullptr;
 	}

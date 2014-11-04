@@ -274,7 +274,7 @@ void CacheManager::dispatchRequest(requestPriority priority){
 		}
 	}
 
-void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, const NameNodeDescriptor & namenode,
+void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, const FileSystemDescriptor & fsDescriptor,
 		requestPriority priority, bool cancelled, bool async ){
 
 	if(m_shutdownFlag){
@@ -356,7 +356,7 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
 /***************************************   API  *************************************************************************************************/
 /************************************************************************************************************************************************/
 
-status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode, const DataSet& files, time_t& time,
+status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const FileSystemDescriptor & fsDescriptor, const DataSet& files, time_t& time,
 		   CacheEstimationCompletedCallback callback, requestIdentity & requestIdentity, bool async) {
 
 	if(m_shutdownFlag){
@@ -368,7 +368,7 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
     DataSetRequestCompletionFunctor functor = boost::bind(boost::mem_fn(&CacheManager::finalizeUserRequest), this, _1, _2, _3, _4, _5);
 
     // create the task "CacheEstimationTask"
-    boost::shared_ptr<MonitorRequest> request(new request::EstimateDatasetTask(callback, functor, functor, session, namenode, m_syncModule,
+    boost::shared_ptr<MonitorRequest> request(new request::EstimateDatasetTask(callback, functor, functor, session, fsDescriptor, m_syncModule,
     		&m_shortpool, files, async));
 
     // assign the request identity
@@ -411,7 +411,7 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
 	return status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED;
 }
 
-status::StatusInternal CacheManager::cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode, const DataSet& files,
+status::StatusInternal CacheManager::cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor, const DataSet& files,
      		  PrepareCompletedCallback callback, requestIdentity & requestIdentity){
 
 	if(m_shutdownFlag){
@@ -423,7 +423,7 @@ status::StatusInternal CacheManager::cachePrepareData(SessionContext session, co
     DataSetRequestCompletionFunctor functor = boost::bind(boost::mem_fn(&CacheManager::finalizeUserRequest), this, _1, _2, _3, _4, _5);
 
     // create the task "Cache Prepare Task"
-    boost::shared_ptr<MonitorRequest> request(new request::PrepareDatasetTask(callback, functor, functor, session, namenode, m_syncModule, &m_longpool, files));
+    boost::shared_ptr<MonitorRequest> request(new request::PrepareDatasetTask(callback, functor, functor, session, fsDescriptor, m_syncModule, &m_longpool, files));
 
     // assign the request identity
     requestIdentity.ctx = session;
@@ -531,7 +531,7 @@ status::StatusInternal CacheManager::cacheCheckPrepareStatus(const requestIdenti
 	return status::StatusInternal::REQUEST_IS_NOT_FOUND;
 }
 
-bool CacheManager::getFile(const NameNodeDescriptor & namenode, const char* path, ManagedFile::File*& file){
+bool CacheManager::getFile(const FileSystemDescriptor & fsDescriptor, const char* path, ManagedFile::File*& file){
 	return m_registry->getFileByPath(path, file);
 }
 

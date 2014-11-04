@@ -30,16 +30,6 @@
 #include "common/logging.h"
 #include "dfs_cache/hadoop-fs-definitions.h"
 
-struct dfs {
-/** supported / configured DFS types */
-enum DFS_TYPE {
-	HDFS,
-	S3,
-	LOCAL,
-	OTHER,
-};
-};
-
 namespace impala {
 
 /**
@@ -100,13 +90,13 @@ enum taskOverallStatus{
 /** Formatters for enumerations */
 extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
 extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
-extern std::ostream& operator<<(std::ostream& out, const dfs::DFS_TYPE value);
+extern std::ostream& operator<<(std::ostream& out, const DFS_TYPE value);
 
 /**
  * Connection details as configured
  */
-struct NameNodeDescriptor{
-	dfs::DFS_TYPE dfs_type;
+struct FileSystemDescriptor{
+	DFS_TYPE      dfs_type;
 	std::string   host;
 	int           port;
 	std::string   credentials;
@@ -115,15 +105,15 @@ struct NameNodeDescriptor{
 	bool          valid;      /** this flag is introduced in order to overcome the non-nullable struct nature.
 	                           *  an object with "valid" = false should be treated as non-usable (nullptr, NULL)
 	                           */
-	static NameNodeDescriptor getNull() {
-		NameNodeDescriptor descriptor;
+	static FileSystemDescriptor getNull() {
+		FileSystemDescriptor descriptor;
 		descriptor.valid = false;
 		return descriptor;
 	}
 };
 
 /** Impala client code is aware of remote FileSystem mapping only */
-typedef NameNodeDescriptor     dfsFS;
+typedef FileSystemDescriptor     dfsFS;
 
 /** Represent data set in terms of data string descriptors */
 typedef std::list<const char*> DataSet;
@@ -144,24 +134,6 @@ typedef struct {
 } dfsConnection;
 
 typedef boost::shared_ptr<dfsConnection> dfsConnectionPtr;
-
-/**
- * Remote DFS adaptor. Interface expected - similar to hdfs.h
- */
-class RemoteAdaptor {
-protected:
-	std::string m_name;         /**< adaptor name */
-	virtual ~RemoteAdaptor() {}
-
-public:
-	inline std::string name() { return m_name; }
-	inline void name(const std::string & name) { m_name = name;}
-
-	virtual int connect(dfsConnectionPtr & conn) = 0;
-	virtual int disconnect(dfsConnectionPtr & conn) = 0;
-	virtual int read(dfsConnectionPtr & conn) = 0;
-	virtual int write(dfsConnectionPtr & conn) = 0;
-};
 
 /**
  * File progress (prepare or any other operation) status.
@@ -187,7 +159,7 @@ struct FileProgress {
 	std::time_t estimatedTime;    /**< estimated time remained to get the file locally */
 	std::string localPath; 		  /**< file local path */
 	std::string dfsPath; 		  /**< file dfs path */
-    NameNodeDescriptor namenode;  /** focal namenode of the cluster which owns this file */
+    FileSystemDescriptor namenode;  /** focal namenode of the cluster which owns this file */
 	std::time_t processTime; 	  /**< time file operation was actively performed. It can be used to calculate bandwidth used by the operation */
 
 	FileProgressStatus::fileProgressStatus progressStatus; /**< file progress status */

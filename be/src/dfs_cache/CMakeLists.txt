@@ -29,9 +29,9 @@ add_library(dfs_cache
   sync-module.cc
   cache-mgr.cc
   cache-layer-registry.cc
-  dfs-adaptor-factory.cc
   managed-file.cc
-  namenode-descriptor-bound.cc  
+  filesystem-descriptor-bound.cc
+  hadoop-fs-adaptive.c
   test-utilities.cc
 )
 

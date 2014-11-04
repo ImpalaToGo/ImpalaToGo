@@ -234,7 +234,7 @@ void DiskIoMgrStress::NewClient(int i) {
     assigned_len += range_len;
   }
   // Elena : the connection is now to nullable type
-  Status status = io_mgr_->RegisterContext(NameNodeDescriptor::getNull(), &client.reader, NULL);
+  Status status = io_mgr_->RegisterContext(FileSystemDescriptor::getNull(), &client.reader, NULL);
   CHECK(status.ok());
   status = io_mgr_->AddScanRanges(client.reader, client.scan_ranges);
   CHECK(status.ok());

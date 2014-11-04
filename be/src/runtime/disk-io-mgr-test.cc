@@ -187,7 +187,7 @@ TEST_F(DiskIoMgrTest, SingleWriter) {
   DiskIoMgr::RequestContext* reader;
 
   // Elena : the connection is now to nullable type
-  status = read_io_mgr->RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+  status = read_io_mgr->RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
   ASSERT_TRUE(status.ok());
   for (int num_threads_per_disk = 1; num_threads_per_disk <= 5; ++num_threads_per_disk) {
     for (int num_disks = 1; num_disks <= 5; num_disks += 2) {
@@ -196,7 +196,7 @@ TEST_F(DiskIoMgrTest, SingleWriter) {
       status = io_mgr.Init(&mem_tracker);
       ASSERT_TRUE(status.ok());
       DiskIoMgr::RequestContext* writer;
-      io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &writer, &mem_tracker);
+      io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &writer, &mem_tracker);
       for (int i = 0; i < num_ranges; ++i) {
         int32_t* data = pool_->Add(new int32_t);
         *data = rand();
@@ -235,7 +235,7 @@ TEST_F(DiskIoMgrTest, InvalidWrite) {
   ASSERT_TRUE(status.ok());
   DiskIoMgr::RequestContext* writer;
   // Elena : the connection is now to nullable type
-  NameNodeDescriptor nulldescriptor;
+  FileSystemDescriptor nulldescriptor;
   nulldescriptor.valid = false;
 
   status = io_mgr.RegisterContext(nulldescriptor, &writer);
@@ -307,7 +307,7 @@ TEST_F(DiskIoMgrTest, SingleWriterCancel) {
 
   // Elena : the connection is now to nullable type
 
-  status = read_io_mgr->RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+  status = read_io_mgr->RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
   ASSERT_TRUE(status.ok());
   for (int num_threads_per_disk = 1; num_threads_per_disk <= 5; ++num_threads_per_disk) {
     for (int num_disks = 1; num_disks <= 5; num_disks += 2) {
@@ -315,7 +315,7 @@ TEST_F(DiskIoMgrTest, SingleWriterCancel) {
       DiskIoMgr io_mgr(num_disks, num_threads_per_disk, 1, 10);
       status = io_mgr.Init(&mem_tracker);
       DiskIoMgr::RequestContext* writer;
-      io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &writer, &mem_tracker);
+      io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &writer, &mem_tracker);
       Status validate_status = Status::OK;
       for (int i = 0; i < num_ranges; ++i) {
         if (i == num_ranges_before_cancel) {
@@ -379,7 +379,7 @@ TEST_F(DiskIoMgrTest, SingleReader) {
 
           // Elena : the connection is now to nullable type
 
-          status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+          status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
           ASSERT_TRUE(status.ok());
 
           vector<DiskIoMgr::ScanRange*> ranges;
@@ -434,7 +434,7 @@ TEST_F(DiskIoMgrTest, AddScanRangeTest) {
 
         // Elena : the connection is now to nullable type
 
-        status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+        status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
         ASSERT_TRUE(status.ok());
 
         vector<DiskIoMgr::ScanRange*> ranges_first_half;
@@ -507,7 +507,7 @@ TEST_F(DiskIoMgrTest, SyncReadTest) {
         DiskIoMgr::RequestContext* reader;
 
         // Elena : the connection is now to nullable type
-        status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+        status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
         ASSERT_TRUE(status.ok());
 
         DiskIoMgr::ScanRange* complete_range = InitRange(1, tmp_file, 0, strlen(data), 0);
@@ -576,7 +576,7 @@ TEST_F(DiskIoMgrTest, SingleReaderCancel) {
         DiskIoMgr::RequestContext* reader;
 
         // Elena : the connection is now to nullable type
-        status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+        status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
         ASSERT_TRUE(status.ok());
 
         vector<DiskIoMgr::ScanRange*> ranges;
@@ -641,7 +641,7 @@ TEST_F(DiskIoMgrTest, MemLimits) {
     DiskIoMgr::RequestContext* reader;
 
     // Elena : the connection is now to nullable type
-    status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+    status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
     ASSERT_TRUE(status.ok());
 
     vector<DiskIoMgr::ScanRange*> ranges;
@@ -716,7 +716,7 @@ TEST_F(DiskIoMgrTest, CachedReads) {
     DiskIoMgr::RequestContext* reader;
 
     // Elena : the connection is now to nullable type
-    status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &reader, &reader_mem_tracker);
+    status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &reader, &reader_mem_tracker);
     ASSERT_TRUE(status.ok());
 
     DiskIoMgr::ScanRange* complete_range =
@@ -787,7 +787,7 @@ TEST_F(DiskIoMgrTest, MultipleReaderWriter) {
 
         // Elena : the connection is now to nullable type
         for (int file_index = 0; file_index < num_contexts; ++file_index) {
-          status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &contexts[file_index]);
+          status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &contexts[file_index]);
           ASSERT_TRUE(status.ok());
         }
         pool_.reset(new ObjectPool);
@@ -897,7 +897,7 @@ TEST_F(DiskIoMgrTest, MultipleReader) {
 
           // Elena : the connection is now to nullable type
           for (int i = 0; i < NUM_READERS; ++i) {
-            status = io_mgr.RegisterContext(NameNodeDescriptor::getNull(), &readers[i], NULL);
+            status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &readers[i], NULL);
             ASSERT_TRUE(status.ok());
 
             vector<DiskIoMgr::ScanRange*> ranges;

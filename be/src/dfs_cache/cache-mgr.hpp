@@ -127,7 +127,7 @@ private:
 	 * Supposed to manage internal data structures representing history and pending/progress collections.
 	 *
 	 * @param requestIdentity - request identity
-	 * @param namenode        - affected dfs focal point
+	 * @param fsDescriptor    - affected fs focal point
 	 * @param canceled        - flag, indicates whether request was canceled
 	 * @param async           - flag, indicates that the request is async.
 	 * @param priority        - request priority to locate it on correct queue
@@ -135,7 +135,7 @@ private:
 	 * @return overall status
 	 */
 	void finalizeUserRequest(const requestIdentity& requestIdentity,
-			const NameNodeDescriptor & namenode, requestPriority priority, bool canceled = false, bool async = true );
+			const FileSystemDescriptor & fsDescriptor, requestPriority priority, bool canceled = false, bool async = true );
 
 	/** Run finalization on the specified requests queue
 	 *
@@ -200,10 +200,10 @@ public:
         *
         *        TODO: whether this operation async? If so - need to add the SessionContext here and the callback.
         *
-        * @param[In]  namenode    - namenode connection details
-        * @param[In]  files       - List of files required to be locally.
-        * @param[Out] time        - time required to get all requested files locally (if any).
-        * Zero time means all data is in place
+        * @param[In]  fsDescriptor - fs connection details
+        * @param[In]  files        - List of files required to be locally.
+        * @param[Out] time         - time required to get all requested files locally (if any).
+        * 							 Zero time means all data is in place
         *
         * @param[In]  callback        - callback that should be invoked on completion in case if async mode is selected
         * @param[Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
@@ -212,7 +212,7 @@ public:
         * @return Operation status. If either file is not available in specified @a cluster
         * the status will be "Canceled"
         */
-       status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode, const DataSet& files, time_t& time,
+       status::StatusInternal cacheEstimate(SessionContext session, const FileSystemDescriptor & fsDescriptor, const DataSet& files, time_t& time,
     		   CacheEstimationCompletedCallback callback, requestIdentity & requestIdentity, bool async = true);
 
        /**
@@ -238,7 +238,7 @@ public:
         *
         * @return Operation status
         */
-       status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
+       status::StatusInternal cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
     		   const DataSet& files,
     		   PrepareCompletedCallback callback, requestIdentity & requestIdentity);
 
@@ -268,13 +268,13 @@ public:
        /**
         * Get the file.
         *
-        * @param[in]     namenode   - namenode the file belongs to
-        * @param[in]     path       - file path
-        * @param[in/out] file       - managed file metadata
+        * @param[in]     fsDescriptor - file system conn the file belongs to
+        * @param[in]     path         - file path
+        * @param[in/out] file         - managed file metadata
         *
         * @return true if the file exists.
         */
-        bool getFile(const NameNodeDescriptor & namenode, const char* path, ManagedFile::File*& file);
+        bool getFile(const FileSystemDescriptor & fsDescriptor, const char* path, ManagedFile::File*& file);
 
 };
 } /** namespace impala */

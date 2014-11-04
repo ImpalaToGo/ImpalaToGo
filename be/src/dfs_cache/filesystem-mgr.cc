@@ -32,7 +32,7 @@ void FileSystemManager::init() {
 	  FileSystemManager::instance_.reset(new FileSystemManager());
 }
 
-dfsFile FileSystemManager::dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & namenode, const char* path, int flags,
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
 	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
@@ -95,7 +95,7 @@ dfsFile FileSystemManager::dfsOpenFile(const NameNodeDescriptor & namenode, cons
 	return file;
 }
 
-status::StatusInternal FileSystemManager::dfsCloseFile(const NameNodeDescriptor & namenode, dfsFile file){
+status::StatusInternal FileSystemManager::dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file){
 	if(file->file == nullptr)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	int fd = fileno((FILE *)file->file);
@@ -106,14 +106,14 @@ status::StatusInternal FileSystemManager::dfsCloseFile(const NameNodeDescriptor 
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal FileSystemManager::dfsExists(const NameNodeDescriptor & namenode, const char *path){
+status::StatusInternal FileSystemManager::dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path){
 	Uri uri = Uri::Parse(path);
 
 	 std::ifstream infile(uri.FilePath.c_str());
 	    return infile.good() ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 }
 
-status::StatusInternal FileSystemManager::dfsSeek(const NameNodeDescriptor & namenode, dfsFile file, tOffset desiredPos){
+status::StatusInternal FileSystemManager::dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos){
 	if(file->file == nullptr)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	int ret = 0;
@@ -121,14 +121,14 @@ status::StatusInternal FileSystemManager::dfsSeek(const NameNodeDescriptor & nam
 	return ret == 0 ? status::StatusInternal::OK : status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 }
 
-tOffset FileSystemManager::dfsTell(const NameNodeDescriptor & namenode, dfsFile file){
+tOffset FileSystemManager::dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file){
 	if(file->file == nullptr)
 		return -1;
 
 	return ftell ((FILE*)file->file);
 }
 
-tSize FileSystemManager::dfsRead(const NameNodeDescriptor & namenode, dfsFile file, void* buffer, tSize length){
+tSize FileSystemManager::dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buffer, tSize length){
 	//Sanity check
 	if (!file || file->type == UNINITIALIZED) {
 		return -1;
@@ -142,7 +142,7 @@ tSize FileSystemManager::dfsRead(const NameNodeDescriptor & namenode, dfsFile fi
    return fread(buffer, 1, length, (FILE*)file->file);
 }
 
-tSize FileSystemManager::dfsPread(const NameNodeDescriptor & namenode, dfsFile file, tOffset position, void* buffer, tSize length){
+tSize FileSystemManager::dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset position, void* buffer, tSize length){
 	ssize_t bytes_read;
 	if(file->file == nullptr)
 		return -1;
@@ -153,7 +153,7 @@ tSize FileSystemManager::dfsPread(const NameNodeDescriptor & namenode, dfsFile f
 	return bytes_read;
 }
 
-tSize FileSystemManager::dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length){
+tSize FileSystemManager::dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length){
 	if(file->file == nullptr)
 			return -1;
 
@@ -163,44 +163,44 @@ tSize FileSystemManager::dfsWrite(const NameNodeDescriptor & namenode, dfsFile f
 	return bytes_written;
 }
 
-status::StatusInternal FileSystemManager::dfsFlush(const NameNodeDescriptor & namenode, dfsFile file){
+status::StatusInternal FileSystemManager::dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsHFlush(const NameNodeDescriptor & namenode, dfsFile file){
+status::StatusInternal FileSystemManager::dfsHFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-tOffset FileSystemManager::dfsAvailable(const NameNodeDescriptor & namenode, dfsFile file){
+tOffset FileSystemManager::dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file){
 	return -1;
 }
 
-status::StatusInternal FileSystemManager::dfsCopy(const NameNodeDescriptor & namenode, const char* src, const char* dst){
+status::StatusInternal FileSystemManager::dfsCopy(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsCopy(const NameNodeDescriptor & namenode1, const char* src,
-		const NameNodeDescriptor & namenode2, const char* dst){
+status::StatusInternal FileSystemManager::dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
+		const FileSystemDescriptor & namenode2, const char* dst){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsMove(const NameNodeDescriptor & namenode, const char* src, const char* dst){
+status::StatusInternal FileSystemManager::dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsDelete(const NameNodeDescriptor & namenode, const char* path, int recursive){
+status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsRename(const NameNodeDescriptor & namenode, const char* oldPath, const char* newPath){
+status::StatusInternal FileSystemManager::dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath, const char* newPath){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsCreateDirectory(const NameNodeDescriptor & namenode, const char* path){
+status::StatusInternal FileSystemManager::dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path){
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal FileSystemManager::dfsSetReplication(const NameNodeDescriptor & namenode, const char* path, int16_t replication){
+status::StatusInternal FileSystemManager::dfsSetReplication(const FileSystemDescriptor & fsDescriptor, const char* path, int16_t replication){
 	return status::StatusInternal::OK;
 }
 
@@ -223,7 +223,7 @@ getFileInfoInternal(dirent ent, dfsFileInfo *fileInfo)
     return 1;
 }
 
-dfsFileInfo * FileSystemManager::dfsListDirectory(const NameNodeDescriptor & namenode, const char* path,
+dfsFileInfo * FileSystemManager::dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
                                 int *numEntries){
 	DIR *dir;
 	struct dirent *ent;
@@ -256,11 +256,11 @@ dfsFileInfo * FileSystemManager::dfsListDirectory(const NameNodeDescriptor & nam
 	return reply;
 }
 
-dfsFileInfo * FileSystemManager::dfsGetPathInfo(const NameNodeDescriptor & namenode, const char* path){
+dfsFileInfo * FileSystemManager::dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path){
 	return nullptr;
 }
 
-void FileSystemManager::dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfsFileInfo *dfsFileInfo, int numEntries){
+void FileSystemManager::dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries){
     // Free the mName, mOwner, and mGroup
     int i;
     for (i = 0; i < numEntries; ++i) {
@@ -279,19 +279,19 @@ void FileSystemManager::dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfs
 
 }
 
-tOffset FileSystemManager::dfsGetCapacity(const NameNodeDescriptor & namenode, const char* host){
+tOffset FileSystemManager::dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host){
 	return status::StatusInternal::OK;
 }
 
-tOffset FileSystemManager::dfsGetUsed(const NameNodeDescriptor & namenode, const char* host){
+tOffset FileSystemManager::dfsGetUsed(const FileSystemDescriptor & fsDescriptor, const char* host){
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal FileSystemManager::dfsChown(const NameNodeDescriptor & namenode, const char* path, const char *owner, const char *group){
+status::StatusInternal FileSystemManager::dfsChown(const FileSystemDescriptor & fsDescriptor, const char* path, const char *owner, const char *group){
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal FileSystemManager::dfsChmod(const NameNodeDescriptor & namenode, const char* path, short mode){
+status::StatusInternal FileSystemManager::dfsChmod(const FileSystemDescriptor & fsDescriptor, const char* path, short mode){
 	return status::StatusInternal::OK;
 }
 

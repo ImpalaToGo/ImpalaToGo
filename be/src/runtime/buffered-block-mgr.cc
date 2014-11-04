@@ -271,7 +271,7 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, MemTracker* parent,
   // Create a new mem_tracker and allocate buffers.
   mem_tracker_.reset(new MemTracker(mem_limit, -1, "Block Manager", parent));
   buffer_pool_.reset(new MemPool(mem_tracker_.get(), block_size));
-  NameNodeDescriptor nulldescriptor;
+  FileSystemDescriptor nulldescriptor;
   nulldescriptor.valid = false;
   state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
 }

@@ -26,7 +26,7 @@ namespace ph = std::placeholders;
 
 namespace impala {
 
-NameNodeDescriptor CacheMgrTest::m_namenode1;
+FileSystemDescriptor CacheMgrTest::m_namenode1;
 
 TEST_F(CacheMgrTest, OpenFileCheckOpened) {
     const char* path = "/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/hello.txt";

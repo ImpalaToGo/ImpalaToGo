@@ -1,0 +1,95 @@
+/*
+ * @file filesystem-descriptor-bound.cc
+ * @brief implementation of hadoop FileSystem mediator (mainly types translator)
+ *
+ * @date   Oct 10, 2014
+ * @author elenav
+ */
+
+#include "dfs_cache/filesystem-descriptor-bound.hpp"
+#include "dfs_cache/hadoop-fs-adaptive.h"
+
+namespace impala {
+
+std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
+	static std::map<DFS_TYPE, std::string> strings;
+	if (strings.size() == 0) {
+#define INSERT_ELEMENT(p) strings[p] = #p
+		INSERT_ELEMENT(HDFS);
+		INSERT_ELEMENT(S3);
+		INSERT_ELEMENT(OTHER);
+#undef INSERT_ELEMENT
+	}
+	return out << strings[value];
+}
+
+fsBridge FileSystemDescriptorBound::connect() {
+	fsBuilder* fs_builder = _dfsNewBuilder();
+	if (!m_fsDescriptor.host.empty()) {
+		_dfsBuilderSetHostAndFilesystemType(fs_builder,	m_fsDescriptor.host.c_str(),
+				m_fsDescriptor.dfs_type);
+	} else {
+		// Connect to local filesystem
+		_dfsBuilderSetHost(fs_builder, NULL);
+	}
+	_dfsBuilderSetPort(fs_builder, m_fsDescriptor.port);
+	return _dfsBuilderConnect(fs_builder);
+}
+
+raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
+	freeConnectionPredicate predicateFreeConnection;
+
+	boost::mutex::scoped_lock(m_mux);
+	std::list<boost::shared_ptr<dfsConnection> >::iterator i1;
+
+	// First try to find the free connection:
+	i1 = std::find_if(m_connections.begin(), m_connections.end(),
+			predicateFreeConnection);
+	if (i1 != m_connections.end()) {
+		LOG (INFO)<< "Existing free connection is found and will be used for file system \"" << m_fsDescriptor.dfs_type << ":"
+		<< m_fsDescriptor.host << "\"" << "\n";
+		// return the connection, mark it busy!
+		(*i1)->state = dfsConnection::BUSY_OK;
+		return std::move(raiiDfsConnection(*i1));
+	}
+
+	// check any other connections except in "BUSY_OK" or "FREE_INITIALIZED" state.
+	anyNonInitializedConnectionPredicate uninitializedPredicate;
+	std::list<boost::shared_ptr<dfsConnection> >::iterator i2;
+
+	i2 = std::find_if(m_connections.begin(), m_connections.end(),
+			uninitializedPredicate);
+	if (i2 != m_connections.end()) {
+		// have ubnormal connections, get the first and reinitialize it:
+		fsBridge conn = connect();
+		if (conn != NULL) {
+			LOG (INFO)<< "Existing non-initialized connection is initialized and will be used for file system \"" << m_fsDescriptor.dfs_type << ":"
+			<< m_fsDescriptor.host << "\"" << "\n";
+			(*i2)->connection = conn;
+			(*i2)->state = dfsConnection::BUSY_OK;
+			return std::move(raiiDfsConnection(*i2));
+		}
+		else
+		return std::move(raiiDfsConnection(dfsConnectionPtr())); // no connection can be established. No retries right now.
+	}
+
+	// seems there're no unused connections right now.
+	// need to create new connection to DFS:
+	LOG (INFO)<< "No free connection exists for file system \"" << m_fsDescriptor.dfs_type << ":" << m_fsDescriptor.host << "\", going to create one." << "\n";
+	boost::shared_ptr<dfsConnection> connection(new dfsConnection());
+	connection->state = dfsConnection::NON_INITIALIZED;
+
+	fsBridge conn = connect();
+	if (conn != NULL) {
+		connection->connection = conn;
+		connection->state = dfsConnection::FREE_INITIALIZED;
+		m_connections.push_back(connection);
+		return getFreeConnection();
+	}
+	LOG (ERROR)<< "Unable to connect to file system \"." << "\"" << "\n";
+	// unable to connect to DFS.
+	return std::move(raiiDfsConnection(dfsConnectionPtr()));
+}
+
+} /** namespace impala */
+

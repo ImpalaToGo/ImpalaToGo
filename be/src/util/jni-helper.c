@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-#include "config.h"
 #include "util/exception.h"
 #include "util/jni-helper.h"
 

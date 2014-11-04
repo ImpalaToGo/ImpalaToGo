@@ -43,29 +43,29 @@ public:
 
 	/**
 	 * estimateTimeToGetFileLocally - estimates how much time will take to get the file with specified @a path
-	 * locally (within the cluster @a cluster)
+	 * locally (within the file system @a fsDescriptor)
 	 *
-	 * @param[in] namenode    - namenode connection details
-	 * @param[in] path        - file path
-	 * @param[in] task        - task to run in operation
+	 * @param[in] fsDescriptor - fs connection details
+	 * @param[in] path         - file path
+	 * @param[in] task         - task to run in operation
 	 *
 	 * @return operation status
 	 */
-	status::StatusInternal estimateTimeToGetFileLocally(const NameNodeDescriptor & namenode, const char* path,
+	status::StatusInternal estimateTimeToGetFileLocally(const FileSystemDescriptor & fsDescriptor, const char* path,
 			request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task);
 
 	/**
 	 * prepareFile - download file locally and update the registry.
 	 * Reentrant as only rely on its parameters
 	 *
-	 * @param[in] namenode - namenode connection details
-	 * @param[in] path     - file path
+	 * @param[in] fsDescriptor - fs connection details
+	 * @param[in] path         - file path
 	 *
-	 * @param[in] task     - task to run in operation
+	 * @param[in] task         - task to run in operation
 	 *
 	 * @return operation status
 	 */
-	status::StatusInternal prepareFile(const NameNodeDescriptor & namenode, const char* path,
+	status::StatusInternal prepareFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 			request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task);
 
 	/**

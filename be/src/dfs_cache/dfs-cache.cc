@@ -5,7 +5,7 @@
  *  Internal modules:
  *  0. CacheLayerRegistry - is responsible to hold and share in the safe way data that is required to:
  *                          > track the local cache (dfs mapping -> catalogs system -> files) from filesystem perspective
- *                          > track the configured remote DFS namenodes to access the data from
+ *                          > track the configured remote DFS fsDescriptors to access the data from
  *                          > hold the DFS Plugins Factory which provides Plugins to work with remote DFSs.
  *
  *  1. CacheManager       - is responsible for cache-related operations (estimation, handling, report for progress by polling or by callback to subscribers)
@@ -48,13 +48,8 @@ status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath){
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal cacheConfigureDFSPluginFactory(const boost::shared_ptr<dfsAdaptorFactory>& factory){
-	CacheLayerRegistry::instance()->setupDFSPluginFactory(factory);
-	return status::StatusInternal::OK;
-}
-
-status::StatusInternal cacheConfigureNameNode(const NameNodeDescriptor& namenode){
-	CacheLayerRegistry::instance()->setupNamenode(namenode);
+status::StatusInternal cacheConfigureClusterFocalPoint(const FileSystemDescriptor& fsDescriptor){
+	CacheLayerRegistry::instance()->setupFileSystem(fsDescriptor);
 	return status::StatusInternal::OK;
 }
 
@@ -63,16 +58,16 @@ status::StatusInternal cacheShutdown(bool force, bool updateClients) {
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode,
+status::StatusInternal cacheEstimate(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, time_t & time, CacheEstimationCompletedCallback callback,
 		requestIdentity & requestIdentity, bool async) {
-	return CacheManager::instance()->cacheEstimate(session, namenode, files, time, callback,
+	return CacheManager::instance()->cacheEstimate(session, fsDescriptor, files, time, callback,
 			requestIdentity, async);
 }
 
-status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
+status::StatusInternal cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity) {
-	return CacheManager::instance()->cachePrepareData(session, namenode, files, callback, requestIdentity);
+	return CacheManager::instance()->cachePrepareData(session, fsDescriptor, files, callback, requestIdentity);
 }
 
 status::StatusInternal cacheCancelPrepareData(const requestIdentity & requestIdentity) {
@@ -88,7 +83,7 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  * ***********************   APIs to work with files. Inherited from libhdfs  *******************
  * **********************************************************************************************
  */
-dfsFile dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
 	// cut the file path only without a host to get the file name:
 	Uri uri = Uri::Parse(path);
@@ -117,105 +112,105 @@ dfsFile dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int f
 	 return file->m_handle;
 	 */
 	file = new ManagedFile::File(path, path);
-	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(namenode, uri.FilePath.c_str(), flags,
+	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, uri.FilePath.c_str(), flags,
 			bufferSize, replication, blocksize, available);
 	file->open(handle);
 	return handle;
 }
 
-status::StatusInternal dfsCloseFile(const NameNodeDescriptor & namenode, dfsFile file) {
-	return filemgmt::FileSystemManager::instance()->dfsCloseFile(namenode, file);
+status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	return filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
 }
 
-status::StatusInternal dfsExists(const NameNodeDescriptor & namenode, const char *path) {
-	return filemgmt::FileSystemManager::instance()->dfsExists(namenode, path);
+status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path) {
+	return filemgmt::FileSystemManager::instance()->dfsExists(fsDescriptor, path);
 }
 
-status::StatusInternal dfsSeek(const NameNodeDescriptor & namenode, dfsFile file, tOffset desiredPos) {
-	return filemgmt::FileSystemManager::instance()->dfsSeek(namenode, file, desiredPos);
+status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos) {
+	return filemgmt::FileSystemManager::instance()->dfsSeek(fsDescriptor, file, desiredPos);
 }
 
-tOffset dfsTell(const NameNodeDescriptor & namenode, dfsFile file) {
-	return filemgmt::FileSystemManager::instance()->dfsTell(namenode, file);
+tOffset dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	return filemgmt::FileSystemManager::instance()->dfsTell(fsDescriptor, file);
 }
 
-tSize dfsRead(const NameNodeDescriptor & namenode, dfsFile file, void* buffer, tSize length) {
-	return filemgmt::FileSystemManager::instance()->dfsRead(namenode, file, buffer, length);
+tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buffer, tSize length) {
+	return filemgmt::FileSystemManager::instance()->dfsRead(fsDescriptor, file, buffer, length);
 }
 
-tSize dfsPread(const NameNodeDescriptor & namenode, dfsFile file, tOffset position, void* buffer, tSize length) {
-	return filemgmt::FileSystemManager::instance()->dfsPread(namenode, file, position, buffer, length);
+tSize dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset position, void* buffer, tSize length) {
+	return filemgmt::FileSystemManager::instance()->dfsPread(fsDescriptor, file, position, buffer, length);
 }
 
-tSize dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length) {
-	return filemgmt::FileSystemManager::instance()->dfsWrite(namenode, file, buffer, length);
+tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length) {
+	return filemgmt::FileSystemManager::instance()->dfsWrite(fsDescriptor, file, buffer, length);
 }
 
-status::StatusInternal dfsFlush(const NameNodeDescriptor & namenode, dfsFile file) {
-	return filemgmt::FileSystemManager::instance()->dfsFlush(namenode, file);
+status::StatusInternal dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	return filemgmt::FileSystemManager::instance()->dfsFlush(fsDescriptor, file);
 }
 
-tOffset dfsAvailable(const NameNodeDescriptor & namenode, dfsFile file) {
-	return filemgmt::FileSystemManager::instance()->dfsAvailable(namenode, file);
+tOffset dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	return filemgmt::FileSystemManager::instance()->dfsAvailable(fsDescriptor, file);
 }
 
-status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode1, const char* src,
-		const NameNodeDescriptor & namenode2, const char* dst) {
-	return filemgmt::FileSystemManager::instance()->dfsCopy(namenode1, src, namenode2, dst);
+status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
+		const FileSystemDescriptor & fsDescriptor2, const char* dst) {
+	return filemgmt::FileSystemManager::instance()->dfsCopy(fsDescriptor1, src, fsDescriptor2, dst);
 }
 
-status::StatusInternal dfsMove(const NameNodeDescriptor & namenode, const char* src, const char* dst) {
-	return filemgmt::FileSystemManager::instance()->dfsMove(namenode, src, dst);
+status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst) {
+	return filemgmt::FileSystemManager::instance()->dfsMove(fsDescriptor, src, dst);
 }
 
-status::StatusInternal dfsDelete(const NameNodeDescriptor & namenode, const char* path, int recursive = 1) {
-	return filemgmt::FileSystemManager::instance()->dfsDelete(namenode, path, recursive);
+status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive = 1) {
+	return filemgmt::FileSystemManager::instance()->dfsDelete(fsDescriptor, path, recursive);
 }
 
-status::StatusInternal dfsRename(const NameNodeDescriptor & namenode, const char* oldPath,
+status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath,
 		const char* newPath) {
-	return filemgmt::FileSystemManager::instance()->dfsRename(namenode, oldPath, newPath);
+	return filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor, oldPath, newPath);
 }
 
-status::StatusInternal dfsCreateDirectory(const NameNodeDescriptor & namenode, const char* path) {
-	return filemgmt::FileSystemManager::instance()->dfsCreateDirectory(namenode, path);
+status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path) {
+	return filemgmt::FileSystemManager::instance()->dfsCreateDirectory(fsDescriptor, path);
 }
 
-status::StatusInternal dfsSetReplication(const NameNodeDescriptor & namenode, const char* path, int16_t replication) {
-	return filemgmt::FileSystemManager::instance()->dfsSetReplication(namenode, path, replication);
+status::StatusInternal dfsSetReplication(const FileSystemDescriptor & fsDescriptor, const char* path, int16_t replication) {
+	return filemgmt::FileSystemManager::instance()->dfsSetReplication(fsDescriptor, path, replication);
 }
 
-dfsFileInfo *dfsListDirectory(const NameNodeDescriptor & namenode, const char* path,
+dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
 		int *numEntries) {
-	return filemgmt::FileSystemManager::instance()->dfsListDirectory(namenode, path, numEntries);
+	return filemgmt::FileSystemManager::instance()->dfsListDirectory(fsDescriptor, path, numEntries);
 }
 
-dfsFileInfo *dfsGetPathInfo(const NameNodeDescriptor & namenode, const char* path) {
-	return filemgmt::FileSystemManager::instance()->dfsGetPathInfo(namenode, path);
+dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path) {
+	return filemgmt::FileSystemManager::instance()->dfsGetPathInfo(fsDescriptor, path);
 }
 
-void dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfsFileInfo *dfsFileInfo, int numEntries) {
-	return filemgmt::FileSystemManager::instance()->dfsFreeFileInfo(namenode, dfsFileInfo, numEntries);
+void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries) {
+	return filemgmt::FileSystemManager::instance()->dfsFreeFileInfo(fsDescriptor, dfsFileInfo, numEntries);
 }
 
-tOffset dfsGetCapacity(const NameNodeDescriptor & namenode, const char* host) {
-	return filemgmt::FileSystemManager::instance()->dfsGetCapacity(namenode, host);
+tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host) {
+	return filemgmt::FileSystemManager::instance()->dfsGetCapacity(fsDescriptor, host);
 }
 
-tOffset dfsGetUsed(const NameNodeDescriptor & namenode, const char* host) {
-	return filemgmt::FileSystemManager::instance()->dfsGetUsed(namenode, host);
+tOffset dfsGetUsed(const FileSystemDescriptor & fsDescriptor, const char* host) {
+	return filemgmt::FileSystemManager::instance()->dfsGetUsed(fsDescriptor, host);
 }
 
-status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
+status::StatusInternal dfsChown(const FileSystemDescriptor & fsDescriptor, const char* path,
 		const char *owner, const char *group) {
-	return filemgmt::FileSystemManager::instance()->dfsChown(namenode, path, owner, group);
+	return filemgmt::FileSystemManager::instance()->dfsChown(fsDescriptor, path, owner, group);
 }
 
-status::StatusInternal dfsChmod(const NameNodeDescriptor & namenode, const char* path, short mode) {
-	return filemgmt::FileSystemManager::instance()->dfsChmod(namenode, path, mode);
+status::StatusInternal dfsChmod(const FileSystemDescriptor & fsDescriptor, const char* path, short mode) {
+	return filemgmt::FileSystemManager::instance()->dfsChmod(fsDescriptor, path, mode);
 }
 
-int dfsFileGetReadStatistics(const NameNodeDescriptor & namenode, dfsFile file,
+int dfsFileGetReadStatistics(const FileSystemDescriptor & fsDescriptor, dfsFile file,
 		struct dfsReadStatistics **stats){
 	return -1;
 }
@@ -224,7 +219,7 @@ int64_t dfsReadStatisticsGetRemoteBytesRead(const struct dfsReadStatistics *stat
 	return -1;
 }
 
-void dfsFileFreeReadStatistics(const NameNodeDescriptor & namenode, struct dfsReadStatistics *stats){
+void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct dfsReadStatistics *stats){
 }
 
 }

@@ -38,7 +38,7 @@ namespace ph = std::placeholders;
 
 namespace impala {
 
-NameNodeDescriptor CacheMgrTest::m_namenode1;
+FileSystemDescriptor CacheMgrTest::m_namenode1;
 
 SessionContext CacheMgrTest::m_ctx1 = nullptr;
 SessionContext CacheMgrTest::m_ctx2 = nullptr;

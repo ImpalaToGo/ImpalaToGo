@@ -15,23 +15,21 @@
 
 namespace impala {
 
-status::StatusInternal Sync::estimateTimeToGetFileLocally(const NameNodeDescriptor & namenode, const char* path,
+status::StatusInternal Sync::estimateTimeToGetFileLocally(const FileSystemDescriptor & fsDescriptor, const char* path,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
 
 	// Get the Namenode adaptor from the registry for requested namenode:
-	boost::shared_ptr<NameNodeDescriptorBound> namenodeAdaptor = (*m_registry->getNamenode(namenode));
+	boost::shared_ptr<FileSystemDescriptorBound> namenodeAdaptor = (*m_registry->getFileSystemDescriptor(fsDescriptor));
     if(namenodeAdaptor == nullptr){
     	// no namenode adaptor configured, go out
     	return status::StatusInternal::NAMENODE_IS_NOT_CONFIGURED;
     }
     raiiDfsConnection connection(namenodeAdaptor->getFreeConnection());
     if(!connection.valid()) {
-    	LOG (ERROR) << "No connection to dfs available, no estimate actions will be taken for namenode \"" << namenode.dfs_type << ":" <<
-    			namenode.host << "\"" << "\n";
+    	LOG (ERROR) << "No connection to dfs available, no estimate actions will be taken for namenode \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
     }
-
-    boost::shared_ptr<RemoteAdaptor> adaptor    = namenodeAdaptor->adaptor();
 
     // Execute the remote estimation operation on the adaptor.
     // wait for execution.
@@ -44,10 +42,10 @@ status::StatusInternal Sync::estimateTimeToGetFileLocally(const NameNodeDescript
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal Sync::prepareFile(const NameNodeDescriptor & namenode, const char* path,
+status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
 	// Get the Namenode adaptor from the registry for requested namenode:
-	boost::shared_ptr<NameNodeDescriptorBound> namenodeAdaptor = (*m_registry->getNamenode(namenode));
+	boost::shared_ptr<FileSystemDescriptorBound> namenodeAdaptor = (*m_registry->getFileSystemDescriptor(fsDescriptor));
     if(namenodeAdaptor == nullptr){
     	// no namenode adaptor configured, go out
     	return status::StatusInternal::NAMENODE_IS_NOT_CONFIGURED;
@@ -55,16 +53,14 @@ status::StatusInternal Sync::prepareFile(const NameNodeDescriptor & namenode, co
 
     raiiDfsConnection connection(namenodeAdaptor->getFreeConnection());
     if(!connection.valid()) {
-    	LOG (ERROR) << "No connection to dfs available, no prepare actions will be taken for namenode \"" << namenode.dfs_type << ":" <<
-    			namenode.host << "\"" << "\n";
+    	LOG (ERROR) << "No connection to dfs available, no prepare actions will be taken for namenode \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
     }
 
-    boost::shared_ptr<RemoteAdaptor> adaptor = namenodeAdaptor->adaptor();
-
     // get the file progress reference:
     boost::shared_ptr<FileProgress> fp = task->progress();
-    adaptor->read(connection.connection());
+    //adaptor->read(connection.connection());
 
 
     // Pure academic part.

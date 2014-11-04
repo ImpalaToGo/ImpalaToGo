@@ -30,6 +30,7 @@ class FileSystemManager {
 private:
 	// Singleton instance. Instantiated in Init().
 	static boost::scoped_ptr<FileSystemManager> instance_;
+
 	CacheLayerRegistry*                         m_registry; /**< reference to metadata registry instance */
 
 	FileSystemManager() : m_registry(nullptr) { };
@@ -52,12 +53,12 @@ public:
 	}
 
 	/**
-	 * @fn  dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+	 * @fn  dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 	 *                    int bufferSize, short replication, tSize blocksize)
-	 * @brief Open the file in given mode.This will be done locally but @a cluster is required
+	 * @brief Open the file in given mode.This will be done locally but @a fsDescriptoris required
 	 * for path resolution.
 	 *
-	 * @param namenode - namenode descriptor, to locate the file locally.
+	 * @param fsDescriptor - fsDescriptor descriptor, to locate the file locally.
 	 * @param path     - The full path to the file.
 	 * @param flags    - an | of bits/fcntl.h file flags - supported flags are O_RDONLY, O_WRONLY (meaning create or overwrite i.e., implies O_TRUNCAT),
 	 * O_WRONLY|O_APPEND. Other flags are generally ignored other than (O_RDWR || (O_EXCL & O_CREAT)) which return NULL and set errno equal ENOTSUP.
@@ -72,7 +73,7 @@ public:
 	 *
 	 * @return Returns the handle to the open file or NULL on error.
 	 */
-	dfsFile dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+	dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 			int bufferSize, short replication, tSize blocksize,
 			bool& available);
 
@@ -85,17 +86,17 @@ public:
 	 *
 	 * @return Operation status.
 	 */
-	status::StatusInternal dfsCloseFile(const NameNodeDescriptor & namenode, dfsFile file);
+	status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 	/**
-	 * @fn int dfsExists(const NameNodeDescriptor & namenode, const char *path)
+	 * @fn int dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path)
 	 * @brief Checks if a given path exists on the remote cluster
 	 *
-	 * @param cluster - data cluster id
+	 * @param fsDescriptor- data fsDescriptorid
 	 * @param path    - The path to look for
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsExists(const NameNodeDescriptor & namenode, const char *path);
+	status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path);
 
 	/**
 	 * dfsSeek - Seek to given offset in file.
@@ -106,7 +107,7 @@ public:
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsSeek(const NameNodeDescriptor & namenode, dfsFile file, tOffset desiredPos);
+	status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos);
 
 	/**
 	 * dfsTell - Get the current offset in the file, in bytes.
@@ -115,7 +116,7 @@ public:
 	 *
 	 * @return Current offset, -1 on error.
 	 */
-	tOffset dfsTell(const NameNodeDescriptor & namenode, dfsFile file);
+	tOffset dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 	/**
 	 * dfsRead - Read data from an open file.
@@ -127,11 +128,10 @@ public:
 	 * @return Returns the number of bytes actually read, possibly less
 	 * than than length;-1 on error.
 	 */
-	tSize dfsRead(const NameNodeDescriptor & namenode, dfsFile file, void* buffer, tSize length);
+	tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buffer, tSize length);
 
 	/**
-	 * @fn tSize hdfsPread(dfsFile file, tOffset position, void* buffer, tSize length)
-	 * @brief Positional read of data from an open file.
+	 * Positional read of data from an open file.
 	 *
 	 * @param file     - The file handle.
 	 * @param position - Position from which to read
@@ -141,11 +141,10 @@ public:
 	 * @return Returns the number of bytes actually read, possibly less than
 	 * than length;-1 on error.
 	 */
-	tSize dfsPread(const NameNodeDescriptor & namenode, dfsFile file, tOffset position, void* buffer, tSize length);
+	tSize dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset position, void* buffer, tSize length);
 
 	/**
-	 * @fn tSize hdfsWrite(dfsFile file, const void* buffer, tSize length)
-	 * @brief Write data into an open file.
+	 * Write data into an open file.
 	 *
 	 * @param file   - The file handle.
 	 * @param buffer - The data.
@@ -153,28 +152,26 @@ public:
 	 *
 	 * @return Returns the number of bytes written, -1 on error.
 	 */
-	tSize dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length);
+	tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length);
 
 	/**
-	 * @fn int dfsFlush(dfsFile file)
-	 * @brief Flush the data
+	 * Flush the data
 	 *
 	 * @param file - The file handle.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsFlush(const NameNodeDescriptor & namenode, dfsFile file);
+	status::StatusInternal dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 	/**
-	 * @fn int dfsHFlush(dfsFile file)
-	 * @brief Flush out the data in client's user buffer. After the
+	 * Flush out the data in client's user buffer. After the
 	 * return of this call, new readers will see the data.
 	 *
 	 * @param file - file handle
 	 *
 	 * @return 0 on success, -1 on error and sets errno
 	 */
-	status::StatusInternal dfsHFlush(const NameNodeDescriptor & namenode, dfsFile file);
+	status::StatusInternal dfsHFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 	/**
 	 * @fn int dfsAvailable(dfsFile file)
@@ -185,86 +182,78 @@ public:
 	 *
 	 * @return Returns available bytes; -1 on error.
 	 */
-	tOffset dfsAvailable(const NameNodeDescriptor & namenode, dfsFile file);
+	tOffset dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 	/**
-	 * @fn int dfsCopy(const char* src, const char* dst)
-	 * @brief Copy file from one filesystem to another.
-	 * Is available inside single cluster (because of credentials only)
+	 * Copy file from one filesystem to another.
+	 * Is available inside single fsDescriptor(because of credentials only)
 	 *
 	 * @param src - The path of source file.
 	 * @param dst - The path of destination file.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode, const char* src, const char* dst);
+	status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst);
 
 	/**
-	 * @fn int dfsCopy(const char* src, const char* dst)
-	 * @brief Copy file from one filesystem to another.
-	 * Is available inside single cluster (because of credentials only)
+	 * Copy file from one filesystem to another.
+	 * Is available inside single fsDescriptor(because of credentials only)
 	 *
 	 * @param src - The path of source file.
 	 * @param dst - The path of destination file.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode1, const char* src,
-			const NameNodeDescriptor & namenode2, const char* dst);
+	status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
+			const FileSystemDescriptor & fsDescriptor2, const char* dst);
 
 	/**
-	 * @fn int dfsMove(const char* src, const char* dst)
-	 * @brief Move file from one filesystem to another.
-	 * Is available inside single cluster (because of credentials only)
+	 * Move file from one filesystem to another.
+	 * Is available inside single fsDescriptor(because of credentials only)
 	 *
 	 * @param src - The path of source file.
 	 * @param dst - The path of destination file.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsMove(const NameNodeDescriptor & namenode, const char* src, const char* dst);
+	status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst);
 
 	/**
-	 * @fn int dfsDelete(const char* path)
-	 * @brief Delete file.
+	 * Delete file.
 	 *
 	 * @param path The path of the file.
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsDelete(const NameNodeDescriptor & namenode, const char* path, int recursive);
+	status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive);
 
 	/**
-	 * @fn int dfsRename(const char* oldPath, const char* newPath)
-	 * @brief Rename the file.
+	 * Rename the file.
 	 *
 	 * @param oldPath - The path of the source file.
 	 * @param newPath - The path of the destination file.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsRename(const NameNodeDescriptor & namenode, const char* oldPath, const char* newPath);
+	status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath, const char* newPath);
 
 	/**
-	 * @fn int dfsCreateDirectory(const char* path)
-	 * @brief Make the given file and all non-existent
+	 * Make the given file and all non-existent
 	 * parents into directories.
 	 *
 	 * @param path - The path of the directory.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsCreateDirectory(const NameNodeDescriptor & namenode, const char* path);
+	status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path);
 
 	/**
-	 * @fn int dfsSetReplication(const char* path, int16_t replication)
-	 * @brief Set the replication of the specified
-	 * file to the supplied value
+	 * Set the replication of the specified file to the supplied value
 	 *
 	 * @param path - The path of the file.
 	 *
 	 * @return Returns 0 on success, -1 on error.
 	 */
-	status::StatusInternal dfsSetReplication(const NameNodeDescriptor & namenode, const char* path, int16_t replication);
+	status::StatusInternal dfsSetReplication(const FileSystemDescriptor & fsDescriptor, const char* path, int16_t replication);
 
 	/**
 	 * @fn dfsFileInfo *dfsListDirectory(clusterId cluster, const char* path,
@@ -272,14 +261,14 @@ public:
 	 * @brief Get list of files/directories for a given
 	 * directory-path. dfsFreeFileInfo should be called to deallocate memory.
 	 *
-	 * @param cluster    - the cluster this path belongs to.
-	 * @param path       - The path of the directory.
-	 * @param numEntries -  Set to the number of files/directories in path.
+	 * @param fsDescriptor - the fs path belongs to.
+	 * @param path         - The path of the directory.
+	 * @param numEntries   - Set to the number of files/directories in path.
 	 *
 	 * @return Returns a dynamically-allocated array of dfsFileInfo
 	 * objects; NULL on error.
 	 */
-	dfsFileInfo *dfsListDirectory(const NameNodeDescriptor & namenode, const char* path,
+	dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
 			int *numEntries);
 
 	/**
@@ -288,13 +277,13 @@ public:
 	 * allocated) single dfsFileInfo struct. dfsFreeFileInfo should be
 	 * called when the pointer is no longer needed.
 	 *
-	 * @param cluster - the cluster this path belongs to.
-	 * @param path    - The path of the file.
+	 * @param fsDescriptor - the fs path belongs to.
+	 * @param path         - The path of the file.
 	 *
 	 * @return Returns a dynamically-allocated dfsFileInfo object;
 	 * NULL on error.
 	 */
-	dfsFileInfo *dfsGetPathInfo(const NameNodeDescriptor & namenode, const char* path);
+	dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path);
 
 	/**
 	 * @fn void dfsFreeFileInfo(dfsFileInfo *dfsFileInfo, int numEntries
@@ -305,52 +294,52 @@ public:
 	 *
 	 * @param numEntries The size of the array.
 	 */
-	void dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfsFileInfo *dfsFileInfo, int numEntries);
+	void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries);
 
 	/**
 	 * @fn tOffset dfsGetCapacity(hdfsFS fs)
 	 * @brief Return the raw capacity of the local filesystem.
 	 *
-	 * @param cluster - cluster the machine belongs to
-	 * @param host    - hostname
+	 * @param fsDescriptor - fs machine belongs to
+	 * @param host         - hostname
 	 *
 	 * @return Returns the raw-capacity; -1 on error.
 	 */
-	tOffset dfsGetCapacity(const NameNodeDescriptor & namenode, const char* host);
+	tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host);
 
 	/**
 	 * @fn tOffset dfsGetUsed(clusterId cluster, const char* host)
 	 * Return the total raw size of all files in the filesystem.
 	 *
-	 * @param cluster - cluster the machine belongs to
-	 * @param host    - hostname
+	 * @param fsDescriptor - fs machine belongs to
+	 * @param host         - hostname
 	 *
 	 * @return Returns the total-size; -1 on error.
 	 */
-	tOffset dfsGetUsed(const NameNodeDescriptor & namenode, const char* host);
+	tOffset dfsGetUsed(const FileSystemDescriptor & fsDescriptor, const char* host);
 
 	/**
 	 * @fn int dfsChown(clusterId cluster, const char* path, const char *owner, const char *group)
 	 * @brief Change owner of the specified path
 	 *
-	 * @param cluster - the cluster the path belongs to
-	 * @param path    - the path to the file or directory
-	 * @param owner   - Set to null or "" if only setting group
-	 * @param group   - Set to null or "" if only setting user
+	 * @param fsDescriptor - fs the path belongs to
+	 * @param path         - the path to the file or directory
+	 * @param owner        - Set  to null or "" if only setting group
+	 * @param group        - Set to null or "" if only setting user
 	 * @return 0 on success else -1
 	 */
-	status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
+	status::StatusInternal dfsChown(const FileSystemDescriptor & fsDescriptor, const char* path,
 			const char *owner, const char *group);
 
 	/**
 	 * @fn int dfsChmod(clusterId Cluster, const char* path, short mode)
 	 * @brief Change mode of specified path @a path within the specified @a cluster
-	 * @param cluster - the cluster the path belongs to
-	 * @param path    - the path to the file or directory
-	 * @param mode    - the bitmask to set it to
+	 * @param fsDescriptor - fs the path belongs to
+	 * @param path         - the path to the file or directory
+	 * @param mode         - the bitmask to set it to
 	 * @return 0 on success else -1
 	 */
-	status::StatusInternal dfsChmod(const NameNodeDescriptor & namenode, const char* path, short mode);
+	status::StatusInternal dfsChmod(const FileSystemDescriptor & fsDescriptor, const char* path, short mode);
 };
 
 } // filemgmt

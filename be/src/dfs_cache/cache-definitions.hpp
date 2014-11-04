@@ -139,11 +139,11 @@ struct FileProgress;
  */
 typedef boost::function<void (const boost::shared_ptr<FileProgress>& progress)> SingleFileProgressCompletedCallback;
 
-typedef boost::function<status::StatusInternal (const NameNodeDescriptor & namenode, const char* filepath,
+typedef boost::function<status::StatusInternal (const FileSystemDescriptor & namenode, const char* filepath,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task)> SingleFileMakeProgressFunctor;
 
 /** Functor to run on manager when the request is completed */
-typedef boost::function<void (const requestIdentity& requestIdentity, const NameNodeDescriptor & namenode,
+typedef boost::function<void (const requestIdentity& requestIdentity, const FileSystemDescriptor & namenode,
 		requestPriority priority, bool canceled, bool async)> DataSetRequestCompletionFunctor;
 
 typedef boost::function<status::StatusInternal (bool async, request::CancellableTask* const & cancellable)> CancellationFunctor;

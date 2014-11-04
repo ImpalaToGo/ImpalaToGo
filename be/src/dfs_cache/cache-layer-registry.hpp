@@ -20,16 +20,14 @@
 
 #include "dfs_cache/cache-definitions.hpp"
 #include "dfs_cache/common-include.hpp"
-#include "dfs_cache/dfs-adaptor-factory.hpp"
-#include "dfs_cache/namenode-descriptor-bound.hpp"
+#include "dfs_cache/filesystem-descriptor-bound.hpp"
 
 /**
  * @namespace impala
  */
 namespace impala {
 
-typedef std::map<dfs::DFS_TYPE, std::map<std::string, boost::shared_ptr<NameNodeDescriptorBound> > > DFSConnections;
-typedef std::map<dfs::DFS_TYPE, boost::shared_ptr<RemoteAdaptor> > DFSAdaptors;
+typedef std::map<DFS_TYPE, std::map<std::string, boost::shared_ptr<FileSystemDescriptorBound> > > DFSConnections;
 
 /**
  * Represent cache data registry.
@@ -42,9 +40,7 @@ private:
 	FileRegistry        cache;            					   /**< Registry of cache-managed files */
 	DFSConnections      dfsConnections;    					   /**< Registry of DFS connections */
 
-	boost::shared_ptr<dfsAdaptorFactory>  m_dfsAdaptorFactory; /**< dfs adaptor factory */
-
-	std::string m_localstorageRoot;       /**< path to local file system storage root */
+	std::string m_localstorageRoot;   /**< path to local file system storage root */
 
 	boost::mutex m_cachemux;           /**< mutex for file cache collection */
 	boost::mutex m_connmux;            /**< mutex for connections collection */
@@ -71,32 +67,25 @@ public:
     inline std::string localstorage() {return m_localstorageRoot;}
 
 	/**
-	 * setup remote DFS adaptors factory
-	 *
-	 * @param factory - DFS Plugins factory
-	 */
-	void setupDFSPluginFactory(const boost::shared_ptr<dfsAdaptorFactory> & factory);
-
-	/**
 	 * Setup namenode
 	 *
-	 * @param namenode - namenode connection details
+	 * @param fsDescriptor - file system connection details
 	 *
 	 * @return Operation status
 	 */
-	status::StatusInternal setupNamenode(const NameNodeDescriptor & namenode);
+	status::StatusInternal setupFileSystem(const FileSystemDescriptor & fsDescriptor);
 
 
 	/** ***************************  DFS related registry API  ***********************************************************/
 
 	/**
-	 * Get connected namenode descriptor by its connection descriptor
+	 * Get connected FileSystem descriptor by its connection descriptor
 	 *
-	 * @param namenode - configured namenode connection details
+	 * @param fsDescriptor - configured file system connection details
 	 *
 	 * @return namenode adaptor
 	 */
-	const boost::shared_ptr<NameNodeDescriptorBound>* getNamenode(const NameNodeDescriptor & namenodeDescriptor);
+	const boost::shared_ptr<FileSystemDescriptorBound>* getFileSystemDescriptor(const FileSystemDescriptor & fsDescriptor);
 
 	/** *************************** Local file system registry API *****************************************************/
 
@@ -120,12 +109,12 @@ public:
 	struct StrExpComp
 	{
 	   bool operator()(const std::string & str, const ManagedFile::File& file) const
-	   {  //return std::strcmp(str, file.fqp().c_str()) < 0;
+	   {
 		   return str.compare(file.fqp()) == 0;
 	   }
 
 	   bool operator()(const ManagedFile::File& file, const std::string & str) const
-	   {  //return std::strcmp(file.fqp().c_str(), str) < 0;
+	   {
 		   return file.fqp().compare(str) == 0;
 	   }
 	};

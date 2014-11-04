@@ -24,21 +24,10 @@
 
 namespace impala{
 
-/** Mock dfs adaptor implementation */
-class TestDFSAdaptor : public RemoteAdaptor{
-public:
-	~TestDFSAdaptor() = default;
-
-	int connect(boost::shared_ptr<dfsConnection> & conn) { return 0; }
-	int disconnect(boost::shared_ptr<dfsConnection> & conn) { return 0; }
-	int read(boost::shared_ptr<dfsConnection> & conn) { return 0; }
-	int write(boost::shared_ptr<dfsConnection> & conn) { return 0; }
-};
-
 /** Fixture for Cache Manager tests */
 class CacheMgrTest : public ::testing::Test {
  protected:
-	static NameNodeDescriptor m_namenode1;   /**< namenode 1 */
+	static FileSystemDescriptor m_namenode1;   /**< file system host 1 */
 
 	static SessionContext m_ctx1;  /**< session context 1 (shell/web client 1) */
 	static SessionContext m_ctx2;  /**< session context 2 (shell/web client 2) */
@@ -59,15 +48,10 @@ class CacheMgrTest : public ::testing::Test {
 
 	  cacheInit();
 	  cacheConfigureLocalStorage("/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/");
-	  m_namenode1 = {dfs::DFS_TYPE::OTHER, "localhost", 8080, "", "", true};
+	  m_namenode1 = {DFS_TYPE::OTHER, "localhost", 8080, "", "", true};
 
-	  boost::shared_ptr<dfsAdaptorFactory> factory(new dfsAdaptorFactory());
-	  boost::shared_ptr<RemoteAdaptor> adaptor(new TestDFSAdaptor());
-	  factory->addAdaptor(dfs::DFS_TYPE::OTHER, adaptor);
-
-	  cacheConfigureDFSPluginFactory(factory);
-	  // configure some test-purpose namenode:
-	  cacheConfigureNameNode(m_namenode1);
+	  // configure some test-purpose file system:
+	  cacheConfigureFileSystem(m_namenode1);
   }
 
   // virtual void TearDown() {}

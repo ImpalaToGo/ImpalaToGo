@@ -1,4 +1,4 @@
-/** @file cache-tasks.h
+/** @file tasks-impl.h
  *  @brief Contains definitions of tasks managed by Cache layer.
  *  Additional tasks should be declared here.
  *
@@ -58,14 +58,14 @@ public:
 	 * @param callback     - request completion callback
 	 * @param functor      - execution routine
 	 * @param cancellation - cancellation routine
-	 * @param dfsCluster   - dfs cluster
-	 * @param file         - file path within the cluster
+	 * @param fsDescriptor - target file system
+	 * @param file         - file path within the file system
 	 */
 	FileDownloadTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
-			const NameNodeDescriptor & namenode, const char* path)
+			const FileSystemDescriptor & fsDescriptor, const char* path)
 		try : FileProgressTaskType(callback, functor, cancellation){
 			this->m_progress.reset(new FileProgress());
-			this->m_progress->namenode = namenode;
+			this->m_progress->namenode = fsDescriptor;
 			this->m_progress->dfsPath = path;
 		}
 		catch(...)
@@ -110,14 +110,14 @@ public:
 	 * @param callback     - request completion callback
 	 * @param functor      - execution routine
 	 * @param cancellation - cancellation routine
-	 * @param dfsCluster   - dfs cluster
+	 * @param fsDescriptor - target file system
 	 * @param file         - file path within the cluster
 	 */
 	FileEstimateTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
-			const NameNodeDescriptor & namenode, const char* path)
+			const FileSystemDescriptor & fsDescriptor, const char* path)
 		try : FileProgressTaskType(callback, functor, cancellation){
              this->m_progress.reset(new FileProgress());
-             this->m_progress->namenode = namenode;
+             this->m_progress->namenode = fsDescriptor;
              this->m_progress->dfsPath = path;
 		}
 		catch(...)
@@ -152,7 +152,7 @@ public:
 class PrepareDatasetTask : public ContextBoundPrepareTaskType{
 private:
 	DataSet                  m_files;            /**< requested dataset */
-	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
+	FileSystemDescriptor     m_namenode;         /**< namenode descriptor */
 
 	boost::shared_ptr<Sync>       m_syncModule;       /** reference to Sync module */
 	int                           m_remainedFiles;    /**< non-processed yet files */
@@ -175,9 +175,9 @@ protected:
 
 public:
 	PrepareDatasetTask(PrepareCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation, const SessionContext& session,
-			const NameNodeDescriptor& namenode, boost::shared_ptr<Sync> sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
+			const FileSystemDescriptor& fsDescriptor, boost::shared_ptr<Sync> sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
         try : ContextBoundPrepareTaskType(callback, functor, cancelation, session, pool, async),
-        			m_files(files), m_namenode(namenode){
+        			m_files(files), m_namenode(fsDescriptor){
 
 				m_syncModule = sync;
 				// note remained files to check - set size
@@ -226,7 +226,7 @@ public:
 class EstimateDatasetTask : public ContextBoundEstimateTaskType{
 private:
 	DataSet                  m_files;            /**< requested dataset */
-	NameNodeDescriptor       m_namenode;         /**< namenode descriptor */
+	FileSystemDescriptor     m_namenode;         /**< namenode descriptor */
 
 	boost::shared_ptr<Sync>  m_syncModule;       /** reference to Sync module */
 	int                      m_remainedFiles;    /**< non-processed yet files */
@@ -246,9 +246,9 @@ protected:
 
 public:
 	EstimateDatasetTask(CacheEstimationCompletedCallback callback, DataSetRequestCompletionFunctor functor, DataSetRequestCompletionFunctor cancelation,
-			const SessionContext& session, const NameNodeDescriptor& namenode, const boost::shared_ptr<Sync> & sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
+			const SessionContext& session, const FileSystemDescriptor& fsDescriptor, const boost::shared_ptr<Sync> & sync, dfsThreadPool* pool, const DataSet& files, bool async = true)
         try : ContextBoundEstimateTaskType(callback, functor, cancelation, session, pool, async),
-        			m_files(files), m_namenode(namenode){
+        			m_files(files), m_namenode(fsDescriptor){
 
 				m_syncModule = sync;
 				// note remained files to check - set size

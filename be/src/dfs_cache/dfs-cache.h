@@ -24,7 +24,6 @@
 #include <boost/bind.hpp>
 
 #include "dfs_cache/common-include.hpp"
-#include "dfs_cache/dfs-adaptor-factory.hpp"
 
 /** @namespace impala */
 namespace impala {
@@ -52,24 +51,14 @@ status::StatusInternal cacheInit();
 status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath);
 
 /**
- * @fn StatusInternal StatusInternal cacheConfigureDFSPluginFactory(const boost::shared_ptr<dfsAdaptorFactory>& dfsPluginFactory)
- * @brief Configure DFS adaptors (Plugins) factory
- *
- * @param [In] factory  - DFS plugins(adaptors) factory, the source of DFS Plugins, one plugin per dfs type.
- *
- * @return operation status
- */
-status::StatusInternal cacheConfigureDFSPluginFactory(const boost::shared_ptr<dfsAdaptorFactory>& factory);
-
-/**
- * @fn StatusInternal cacheConfigureNameNode(const NameNodeDescriptor & adaptor)
+ * @fn StatusInternal cacheConfigureNameNode(const FileSystemDescriptor & adaptor)
  * @brief Configure DFS NameNode (with connection details)
  *
- * @param [In] adaptor  - DFS Namenode connection details
+ * @param [In] fs - FS connection details
  *
  * @return operation status
  */
-status::StatusInternal cacheConfigureNameNode(const NameNodeDescriptor & adaptor);
+status::StatusInternal cacheConfigureFileSystem(const FileSystemDescriptor & fs);
 
 /**
  * @fn Status cacheShutdown(bool force = true)
@@ -86,7 +75,7 @@ status::StatusInternal cacheConfigureNameNode(const NameNodeDescriptor & adaptor
 status::StatusInternal cacheShutdown(bool force = true, bool updateClients = true);
 
 /**
- * @fn status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode,
+ * @fn status::StatusInternal cacheEstimate(SessionContext session, const FileSystemDescriptor & fs,
 		const std::list<const char*>& files, time_t& time,
 		CacheEstimationCompletedCallback callback, bool async = true)
 
@@ -94,11 +83,11 @@ status::StatusInternal cacheShutdown(bool force = true, bool updateClients = tru
  *        estimate the time required to get them all locally - if any specified
  *        file is not available locally yet.
  *
- * @param [In]  session     - Request session id.
- * @param [In]  namenode    - namenode descriptor, connection details
- * @param [In]  files       - List of files required to be locally.
- * @param [Out] time        - time required to get all requested files locally (if any).
- * Zero time means all data is in place (if the operation status is "OK")
+ * @param [In]  session      - Request session id.
+ * @param [In]  fsDescriptor - file system descriptor, connection details
+ * @param [In]  files        - List of files required to be locally.
+ * @param [Out] time         - time required to get all requested files locally (if any).
+ * 							   Zero time means all data is in place (if the operation status is "OK")
  *
  * @param [In]  callback        - callback that should be invoked on completion in case if async mode is selected.
  * @param [Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
@@ -106,30 +95,30 @@ status::StatusInternal cacheShutdown(bool force = true, bool updateClients = tru
  * @return Operation status.
  * In async call, in case of successful operation scheduling, the status should be "OPERATION_ASYNC_SCHEDULED".
  *
- * In sync call. If either file is not available in specified @a namenode, the status will be "DFS_OBJECT_DOES_NOT_EXIST".
+ * In sync call. If either file is not available in specified @a fsDescriptor, the status will be "DFS_OBJECT_DOES_NOT_EXIST".
  * The only accepted result of sync call here is "OK", all other statuses should be treated as failure.
  */
-status::StatusInternal cacheEstimate(SessionContext session, const NameNodeDescriptor & namenode,
+status::StatusInternal cacheEstimate(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, time_t& time,
 		CacheEstimationCompletedCallback callback, requestIdentity & requestIdentity, bool async = true);
 
 /**
- * @fn status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
+ * @fn status::StatusInternal cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const std::list<const char*>& files, PrepareCompletedCallback callback)
 
- * @brief Run load scenario for specified files list @a files from the @a namenode.
+ * @brief Run load scenario for specified files list @a files from the @a fsDescriptor.
  * This is async operation.
  *
- * @param [In]  session     - Request session id.
- * @param [In]  namenode    - namenode connection details
- * @param [In]  files       - List of files required to be locally.
- * @param [Out] callback    - callback to invoke when prepare is finished (whatever the status).
+ * @param [In]  session      - Request session id.
+ * @param [In]  fsDescriptor - file system connection details
+ * @param [In]  files        - List of files required to be locally.
+ * @param [Out] callback     - callback to invoke when prepare is finished (whatever the status).
  *
  * @param [Out] requestIdentity - request identity assigned to this request, should be used to poll it for progress later.
  *
  * @return Operation status
  */
-status::StatusInternal cachePrepareData(SessionContext session, const NameNodeDescriptor & namenode,
+status::StatusInternal cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity);
 
 /**
@@ -165,7 +154,7 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  */
 
 /**
- * @fn  dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+ * @fn  dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available)
 
  * @brief Open the file in given mode.This will be done locally but @a namenode is required
@@ -184,359 +173,338 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  *
  * @return Returns the handle to the open file or NULL on error.
  */
-dfsFile dfsOpenFile(const NameNodeDescriptor & namenode, const char* path, int flags,
+dfsFile dfsOpenFile(const FileSystemDescriptor & fsDesciptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available);
 
 /**
- * @fn status::StatusInternal dfsCloseFile(const NameNodeDescriptor & namenode, dfsFile file)
+ * @fn status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file)
  *
  * @brief Close an opened file. File is always local. Namenode parameter is not needed and should be removed.
  * Cuurently it is just ignored.
- * TODO: remove namenode parameter.
  *
- * @param namenode  - The configured filesystem handle.
- * @param file      - The file handle.
+ * @param fsDescriptor  - The configured filesystem.
+ * @param file          - The file handle.
  *
  * @return Operation status.
  */
-status::StatusInternal dfsCloseFile(const NameNodeDescriptor & namenode, dfsFile file);
+status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 /**
- * @fn status::StatusInternal dfsExists(const NameNodeDescriptor & namenode, const char *path)
+ * @fn status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path)
  * @brief Checks if a given path exists. In past, this check was done on remote dfs,
  * now all file-related operations are performed locally. Therefore, for clients of this API the
  * usage semantic should be checked.
  *
- * @param namenode  - Namenode connection details, may be need to locate the file locally.
- *                    Check what we receive in "path" here.
- * @param path      - The path to look for
+ * @param fsDescriptor  - FS connection details, may be need to locate the file locally.
+ *                        Check what we receive in "path" here.
+ * @param path          - The path to look for
  *
  * @return Operation status
  */
-status::StatusInternal dfsExists(const NameNodeDescriptor & namenode, const char *path);
+status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path);
 
 /**
- * @fn status::StatusInternal dfsSeek(const NameNodeDescriptor & namenode, dfsFile file, tOffset desiredPos)
+ * @fn status::StatusInternal dfsSeek(const FileSystemDescriptor & namenode, dfsFile file, tOffset desiredPos)
  * @brief Seek to given offset in file. This works only for files opened in read-only mode.
  *
- * @param namenode   - namenode descriptor
- * @param file       - The file handle.
- * @param desiredPos - Offset into the file to seek into.
+ * @param fsDescriptor - FS descriptor
+ * @param file         - The file handle.
+ * @param desiredPos   - Offset into the file to seek into.
  *
  * @return Operation status
  */
-status::StatusInternal dfsSeek(const NameNodeDescriptor & namenode, dfsFile file, tOffset desiredPos);
+status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos);
 
 /**
- * @fn ttOffset dfsTell(const NameNodeDescriptor & namenode, dfsFile file)
+ * @fn ttOffset dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file)
  * @brief Get the current offset in the file, in bytes.
  *
- * @param namenode - original dfs namenode
- * @param file     - The file handle.
+ * @param fsDescriptor - original dfs namenode
+ * @param file         - The file handle.
  *
  * @return Current offset, -1 on error.
  */
-tOffset dfsTell(const NameNodeDescriptor & namenode, dfsFile file);
+tOffset dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 /**
- * @fn tSize dfsRead(const NameNodeDescriptor & namenode, dfsFile file, void* buffer, tSize length)
+ * @fn tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buffer, tSize length)
  * @brief Read data from an open file.
  *
- * @param namenode - file's namenode
- * @param file     - The file handle.
- * @param buffer   - The buffer to copy read bytes into.
- * @param length   - The length of the buffer.
+ * @param fsDescriptor - file's namenode
+ * @param file         - The file handle.
+ * @param buffer       - The buffer to copy read bytes into.
+ * @param length       - The length of the buffer.
  *
  * @return Returns the number of bytes actually read, possibly less than than length;
  * -1 on error.
  */
-tSize dfsRead(const NameNodeDescriptor & namenode, dfsFile file, void* buffer, tSize length);
+tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buffer, tSize length);
 
 /**
- * @fn tSize dfsPread(const NameNodeDescriptor & namenode, tOffset position, void* buffer, tSize length)
+ * @fn tSize dfsPread(const FileSystemDescriptor & fsDescriptor, tOffset position, void* buffer, tSize length)
  * @brief Positional read of data from an open file.
  *
- * @param namenode - file's original namenode
- * @param file     - The file handle.
- * @param position - Position from which to read
- * @param buffer   - The buffer to copy read bytes into.
- * @param length   - The length of the buffer.
+ * @param fsDescriptor - file's original fsDescriptor
+ * @param file         - The file handle.
+ * @param position     - Position from which to read
+ * @param buffer       - The buffer to copy read bytes into.
+ * @param length       - The length of the buffer.
  *
  * @return Returns the number of bytes actually read, possibly less than
  * than length;-1 on error.
  */
-tSize dfsPread(const NameNodeDescriptor & namenode, tOffset position, void* buffer, tSize length);
+tSize dfsPread(const FileSystemDescriptor & fsDescriptor, tOffset position, void* buffer, tSize length);
 
 /**
- * @fn tSize dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length)
- * @brief Write data into an open file.
+ * Write data into an open file.
  *
- * @param namenode - namenode
- * @param file     - The file handle.
- * @param buffer   - The data.
- * @param length   - The no. of bytes to write.
+ * @param fsDescriptor - fs
+ * @param file         - The file handle.
+ * @param buffer       - The data.
+ * @param length       - The no. of bytes to write.
  *
  * @return Returns the number of bytes written, -1 on error.
  */
-tSize dfsWrite(const NameNodeDescriptor & namenode, dfsFile file, const void* buffer, tSize length);
+tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length);
 
 /**
- * @fn status::StatusInternal dfsFlush(const NameNodeDescriptor & namenode, dfsFile file)
+ * @fn status::StatusInternal dfsFlush(const FileSystemDescriptor & namenode, dfsFile file)
  * @brief Flush the data.
  *
- * @param namenode - namenode file belongs to
- * @param file     - The file handle.
+ * @param fsDescriptor - fs file belongs to
+ * @param file         - The file handle.
  *
  * @return Operation status
  */
-status::StatusInternal dfsFlush(const NameNodeDescriptor & namenode, dfsFile file);
+status::StatusInternal dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 /**
- * @fn status::StatusInternal dfsHFlush(const NameNodeDescriptor & namenode, dfsFile file)
- * @brief Flush out the data in client's user buffer. After the
+ * Flush out the data in client's user buffer. After the
  * return of this call, new readers will see the data.
  *
- * @param namenode - namenode file belongs to
- * @param file - file handle
+ * @param fsDescriptor - fs file belongs to
+ * @param file         - file handle
  *
  * @return Operation status
  */
-status::StatusInternal dfsHFlush(const NameNodeDescriptor & namenode, dfsFile file);
+status::StatusInternal dfsHFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 /**
- * @fn int dfsAvailable(dfsFile file)
- * @brief Number of bytes that can be read from this input stream without blocking.
+ * Number of bytes that can be read from this input stream without blocking.
  * TODO: remove this comment when DFS adaptors are designed.
  * Comment: Useful function to estimate file readiness and progress in "Prepare"
  *
- * @param namenode - namenode file belongs to
- * @param file - The file handle.
+ * @param fsDescriptor - fs file belongs to
+ * @param file         - The file handle.
  *
  * @return Returns available bytes; -1 on error.
  */
-tOffset dfsAvailable(const NameNodeDescriptor & namenode, dfsFile file);
+tOffset dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file);
 
 /**
- * @fn status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode1, const char* src, const NameNodeDescriptor & namenode2,
-		const char* dst)
- * @brief Copy file from one filesystem to another.
+ * Copy file from one filesystem to another.
  * Is available inside single cluster (because of credentials only)
  *
- * @param namenode - namenode file belongs to
- * @param src      - The path of source file.
- * @param dst      - The path of destination file.
+ * @param fsDescriptor1 - fs src belongs to
+ * @param src           - The path of source file.
+ * @param fsDescriptor2 - fs destimation belongs to
+ * @param dst           - The path of destination file.
  *
  * @return Operation status
  */
-status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode1, const char* src, const NameNodeDescriptor & namenode2,
+status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src, const FileSystemDescriptor & fsDescriptor2,
 		const char* dst);
 
 /**
- * @fn status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode, const char* src, const char* dst)
- * @brief Copy file within filesystem
+ * Copy file within filesystem
  * Is available inside single cluster (because of credentials only)
  *
- * @param namenode - namenode file belongs to
- * @param src      - The path of source file.
- * @param dst      - The path of destination file.
+ * @param fsDescriptor - fs file belongs to
+ * @param src          - The path of source file.
+ * @param dst          - The path of destination file.
  *
  * @return Returns 0 on success, -1 on error.
  */
-status::StatusInternal dfsCopy(const NameNodeDescriptor & namenode, const char* src, const char* dst);
+status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst);
 
 /**
- * @fn status::StatusInternal dfsMove(const NameNodeDescriptor & namenode, const char* src, const char* dst)
- * @brief Move file from one filesystem to another.
+ * Move file from one filesystem to another.
  * Is available inside single cluster (because of credentials only)
  *
- * @param namenode - namenode file belongs to
- * @param src      - The path of source file.
- * @param dst      - The path of destination file.
+ * @param fsDescriptor - fs file belongs to
+ * @param src          - The path of source file.
+ * @param dst          - The path of destination file.
  *
  * @return Operation status
  */
-status::StatusInternal dfsMove(const NameNodeDescriptor & namenode, const char* src, const char* dst);
+status::StatusInternal dfsMove(const FileSystemDescriptor & namenode, const char* src, const char* dst);
 
 /**
- * @fn status::StatusInternal dfsDelete(const NameNodeDescriptor & namenode, const char* path, int recursive)
- * @brief Delete file.
+ * Delete file.
  *
- * @param namenode  - namenode file belongs to
- * @param path      - The path of the file/folder.
- * @param recursive - if path is a directory and set to
- * non-zero, the directory is deleted else throws an exception. In
- * case of a file the recursive argument is irrelevant.
+ * @param fsDescriptor  - fs file belongs to
+ * @param path          - The path of the file/folder.
+ * @param recursive     - if path is a directory and set to
+ * 						  non-zero, the directory is deleted else throws an exception. In
+ * 						  case of a file the recursive argument is irrelevant.
  *
  * @return Operation status
  */
-status::StatusInternal dfsDelete(const NameNodeDescriptor & namenode, const char* path, int recursive);
+status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive);
 
 /**
- * @fn status::StatusInternal dfsRename(const NameNodeDescriptor & namenode, const char* oldPath,
-		const char* newPath)
- * @brief Rename the file.
+ * Rename the file.
  *
- * @param namenode  - namenode file belongs to
+ * @param fsDescriptor  - fs file belongs to
  * @param oldPath   - The path of the source file.
  * @param newPath   - The path of the destination file.
  *
  * @return Operation status
  */
-status::StatusInternal dfsRename(const NameNodeDescriptor & namenode, const char* oldPath,
+status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath,
 		const char* newPath);
 
 /**
- * @fn status::StatusInternal dfsCreateDirectory(const NameNodeDescriptor & namenode, const char* path)
- * @brief Make the given file and all non-existent
+ * Make the given file and all non-existent
  * parents into directories.
  *
- * @param namenode  - namenode file belongs to
- * @param path      - The path of the directory.
+ * @param fsDescriptor  - fs file belongs to
+ * @param path          - The path of the directory.
  *
  * @return Returns 0 on success, -1 on error.
  */
-status::StatusInternal dfsCreateDirectory(const NameNodeDescriptor & namenode, const char* path);
+status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path);
 
 /**
- * @fn status::StatusInternal dfsSetReplication(const NameNodeDescriptor & namenode, const char* path, int16_t replication)
- * @brief Set the replication of the specified
+ * Set the replication of the specified
  * file to the supplied value
  *
- * @param namenode  - namenode file belongs to
- * @param path - The path of the file.
+ * @param fsDescriptor  - fs file belongs to
+ * @param path          - The path of the file.
  *
  * @return Operation status
  */
-status::StatusInternal dfsSetReplication(const NameNodeDescriptor & namenode, const char* path, int16_t replication);
+status::StatusInternal dfsSetReplication(const FileSystemDescriptor & fsDescriptor, const char* path, int16_t replication);
 
 /**
- * @fn dfsFileInfo *dfsListDirectory(const NameNodeDescriptor & namenode, const char* path,
-		int *numEntries)
- * @brief Get list of files/directories for a given
+ * Get list of files/directories for a given
  * directory-path. dfsFreeFileInfo should be called to deallocate memory.
  *
- * @param namenode   - namenode file belongs to
- * @param path       - The path of the directory.
- * @param numEntries -  Set to the number of files/directories in path.
+ * @param fsDescriptor - fs file belongs to
+ * @param path         - The path of the directory.
+ * @param numEntries   - Set to the number of files/directories in path.
  *
  * @return Returns a dynamically-allocated array of dfsFileInfo
  * objects; NULL on error.
  */
-dfsFileInfo *dfsListDirectory(const NameNodeDescriptor & namenode, const char* path,
+dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
 		int *numEntries);
 
 /**
- * @fn dfsFileInfo *dfsGetPathInfo(const NameNodeDescriptor & namenode, const char* path)
- * @brief Get information about a path as a (dynamically
+ * Get information about a path as a (dynamically
  * allocated) single dfsFileInfo struct. dfsFreeFileInfo should be
  * called when the pointer is no longer needed.
  *
- * @param namenode - namenode file belongs to
- * @param path     - The path of the file.
+ * @param fsDescriptor - fs file belongs to
+ * @param path         - The path of the file.
  *
  * @return Returns a dynamically-allocated dfsFileInfo object;
  * NULL on error.
  */
-dfsFileInfo *dfsGetPathInfo(const NameNodeDescriptor & namenode, const char* path);
+dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path);
 
 /**
- * @fn void dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfsFileInfo *dfsFileInfo, int numEntries)
- * @brief Free up the dfsFileInfo array (including fields)
+ * Free up the dfsFileInfo array (including fields)
  *
- * @param namenode    - namenode file belongs to
- * @param dfsFileInfo - The array of dynamically-allocated dfsFileInfo
+ * @param fsDescriptor - fs file belongs to
+ * @param dfsFileInfo  - The array of dynamically-allocated dfsFileInfo
  * objects.
  *
  * @param numEntries The size of the array.
  */
-void dfsFreeFileInfo(const NameNodeDescriptor & namenode, dfsFileInfo *dfsFileInfo, int numEntries);
+void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries);
 
 /**
- * @fn tOffset dfsGetCapacity(const NameNodeDescriptor & namenode, const char* host)
+ * @fn tOffset dfsGetCapacity(const FileSystemDescriptor & namenode, const char* host)
  * @brief Return the raw capacity of the local filesystem.
  *
- * @param namenode - namenode file belongs to
- * @param host     - hostname
+ * @param fsDescriptor - fs file belongs to
+ * @param host         - hostname
  *
  * @return Returns the raw-capacity; -1 on error.
  */
-tOffset dfsGetCapacity(const NameNodeDescriptor & namenode, const char* host);
+tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host);
 
 /**
- * @fn tOffset dfsGetUsed(const NameNodeDescriptor & namenode, const char* host)
  * Return the total raw size of all files in the filesystem.
  *
- * @param namenode - namenode file belongs to
- * @param host     - hostname
+ * @param fsDescriptor - fs file belongs to
+ * @param host         - hostname
  *
  * @return Returns the total-size; -1 on error.
  */
-tOffset dfsGetUsed(const NameNodeDescriptor & namenode, const char* host);
+tOffset dfsGetUsed(const FileSystemDescriptor & fsDescriptor, const char* host);
 
 /**
- * @fn status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
-		const char *owner, const char *group)
- * @brief Change owner of the specified path
+ * Change owner of the specified path
  *
- * @param namenode - configured namenode.
- * @param path     - the path to the file or directory
- * @param owner    - Set to null or "" if only setting group
- * @param group    - Set to null or "" if only setting user
+ * @param fsDescriptor - configured fs.
+ * @param path         - the path to the file or directory
+ * @param owner        - Set to null or "" if only setting group
+ * @param group        - Set to null or "" if only setting user
+ *
  * @return Operation status
  */
-status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
+status::StatusInternal dfsChown(const FileSystemDescriptor & fsDescriptor, const char* path,
 		const char *owner, const char *group);
 
 /**
- * @fn status::StatusInternal dfsChmod(const NameNodeDescriptor & namenode, const char* path, short mode)
- * @brief Change mode of specified path @a path within the specified @a cluster
+ * Change mode of specified path @a path within the specified @a cluster
  *
- * @param namenode - configured namenode
- * @param path     - the path to the file or directory
- * @param mode     - the bitmask to set it to
+ * @param fsDescriptor - configured fs
+ * @param path         - the path to the file or directory
+ * @param mode         - the bitmask to set it to
  *
  * @return Operation status
  */
-status::StatusInternal dfsChmod(const NameNodeDescriptor & namenode, const char* path, short mode);
+status::StatusInternal dfsChmod(const FileSystemDescriptor & fsDescriptor, const char* path, short mode);
 
 /**
- * @fn status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
-		const char *owner, const char *group)
- * @brief Get read statistics about a file.  This is only applicable to files
+ * Get read statistics about a file.  This is only applicable to files
  * opened for reading.
  *
- * @param namenode - configured namenode
- * @param file     - The HDFS file
- * @param stats    - (out parameter) on a successful return, the read
- *                 statistics.  Unchanged otherwise.  You must free the
- *                 returned statistics with dfsFileFreeReadStatistics.
+ * @param fsDescriptor - configured fs
+ * @param file         - The HDFS file
+ * @param stats        - (out parameter) on a successful return, the read
+ *                		 statistics.  Unchanged otherwise.  You must free the
+ *                		 returned statistics with dfsFileFreeReadStatistics.
  *
  * @return         0 if the statistics were successfully returned,
  *                 -1 otherwise.  On a failure, please check errno against
  *                 ENOTSUP.  webhdfs, LocalFilesystem, and so forth may
  *                 not support read statistics.
  */
-int dfsFileGetReadStatistics(const NameNodeDescriptor & namenode,
+int dfsFileGetReadStatistics(const FileSystemDescriptor & fsDescriptor,
 		dfsFile file,
 		struct dfsReadStatistics **stats);
 
 /**
- * @fn status::StatusInternal dfsChown(const NameNodeDescriptor & namenode, const char* path,
-		const char *owner, const char *group)
- * @brief Get read statistics about a file.  This is only applicable to files
+ * Get read statistics about a file.  This is only applicable to files
  * @param stats    HDFS read statistics for a file.
  *
  * @return the number of remote bytes read.
+ *
+ * TODO: this method is specific for HDFS FileSystem. Should be replaced to other with similar meaning
  */
 int64_t dfsReadStatisticsGetRemoteBytesRead(const struct dfsReadStatistics *stats);
 
 /**
  * Free some HDFS read statistics.
  *
- * @param namenode - configured namenode
- * @param stats    - the HDFS read statistics to free.
+ * @param fsDescriptor - configured fs
+ * @param stats        - the HDFS read statistics to free.
  */
-void dfsFileFreeReadStatistics(const NameNodeDescriptor & namenode, struct dfsReadStatistics *stats);
+void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct dfsReadStatistics *stats);
 }
 
 #endif /* LIBDFS_CACHE_H_ */
