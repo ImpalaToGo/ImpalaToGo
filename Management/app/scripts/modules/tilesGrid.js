@@ -3,13 +3,26 @@
 
 var app=angular.module('impala2GoApp.tilesGrid');
 
+
+/**
+ * @ngdoc service
+ * @name impala2GoApp.tilesGrid:tilesGridCacheService
+ * @description
+ * # tiles Grid cache service
+ */
+
+// Set up the cache ‘tilesGrid’ service
+app.factory('tilesGridCacheService', function($cacheFactory) {
+    return $cacheFactory('tilesGridCache');
+});
+
 /**
  * @ngdoc directive
  * @name impala2GoApp.tilesGrid:tilesGrid
  * @description
  * # tiles Grid directive
  */
-app.directive('tilesGrid', function ($compile,utilities,logger) {
+app.directive('tilesGrid', function ($compile,utilities,logger,tilesGridCacheService) {
     return {
         restrict: 'EA',
         replace:true,
@@ -31,6 +44,7 @@ app.directive('tilesGrid', function ($compile,utilities,logger) {
                         //  return;
                     }
 
+                    tilesGridCacheService.put("gridOptions",options);
                     function init(data){
                         // var gridOptions=scope.tilesGrid;
                         scope.dataArray=data;
@@ -59,8 +73,8 @@ app.directive('tilesGrid', function ($compile,utilities,logger) {
                         iElement.html(compiledHtml);
 
 
-                        logger.log("Tile Grid updated","",logName,true);
-                        //rgba(255, 0, 0, 0.97)
+                       // Dispatches an event name upwards through the scope hierarchy notifying the listeners
+                        scope.$emit('tileGridUpdated', data);
                     }
                     function buildColumns(data){
                         gridColumn="";
@@ -82,7 +96,11 @@ app.directive('tilesGrid', function ($compile,utilities,logger) {
                             gridColumn+="<th >"+value+"</th>";
                         });
                     }
+                },
+                controller: function(scope){
+                    this.gridOptions=scope.gridOptions;
                 }
+
             }
         }
 
@@ -95,7 +113,7 @@ app.directive('tilesGrid', function ($compile,utilities,logger) {
  * @description
  * # tile row directive
  */
-app.directive('tileRow',function(utilities,$compile){
+app.directive('tileRow',function(utilities,$compile,tilesGridCacheService){
     return {
         restrict: 'EA',
         scope:true,
@@ -103,29 +121,25 @@ app.directive('tileRow',function(utilities,$compile){
             scope.tileRow = scope.$eval(attrs.tileRow) || {};
             scope.tileColumns = scope.$eval(attrs.tileColumns) || {};
             scope.controlsTemplate = scope.$eval(attrs.controlsTemplate) || {};
+            var gridOptions=tilesGridCacheService.get("gridOptions");
             renderRow();
-            //render row on object change
-            scope.$watch("tileRow", function (newVal) {
-                if(newVal){
-                    renderRow();
-                }
-            },true);
 
-            //build td
             function renderRow(){
-                var gridData="",template="",captionClass="";
+                var gridData="",template="",elementList=[];
                 if(utilities.isObject(scope.tileRow) && angular.isArray(scope.tileColumns) &&  scope.tileColumns.length){
                     angular.forEach(scope.tileColumns,function(col){
-                        var value=scope.tileRow[col.name] || "";
+                        scope.tileData=scope.tileRow[col.name] || "";
                         //  var className=col.class|| "";
                         if(scope.controlsTemplate && angular.isString(scope.controlsTemplate)){
                             template= "<div class='tile-caption'>" +scope.controlsTemplate+"</div>"
-                            captionClass="tile-mask";
                         }
-                        gridData+="<td  class='"+captionClass+"'><span>"+value+"</span>"+template+"</td>";
+                        var gridDataHtml="<td color-state='tileData'><div class='tileContainer' ng-class='{\"tile-mask\":controlsTemplate}'><div class='tile-text' tile-data='tileData'></div>"+template+"</div></td>";
+                        gridData=$compile(gridDataHtml)(scope);
+                        elementList.push(gridData);
+
                     });
                 }
-                element.html($compile(gridData)(scope));
+                element.html(elementList);
             }
         }
     };
@@ -133,20 +147,85 @@ app.directive('tileRow',function(utilities,$compile){
 
 /**
  * @ngdoc directive
- * @name impala2GoApp.tilesGrid:jTile
+ * @name impala2GoApp.tilesGrid:tileData
  * @description
- * # tile control directive
+ * # tile data directive
  */
-//app.directive('jTile',function(utilities){
-//    return {
-//        restrict: 'EA',
-//        scope:true,
-//        link: function postLink(scope, element, attrs) {
-//
-//            scope.$evalAsync(function(){
-//              //  $(element).jTile();
-//            });
-//        }
-//    };
-//});
+app.directive('tileData',function(utilities,$compile,tilesGridCacheService,$filter){
+    return {
+        restrict: 'EA',
+        scope:true,
+        link: function postLink(scope, element, attrs) {
+            var order = function(data,predicate, reverse) {
+                var orderBy = $filter('orderBy');
+                scope.tileData = orderBy(data, predicate,reverse);
+            };
+            var tileData,dataList=[];
+            scope.tileData = scope.$eval(attrs.tileData) || {};
+            tileData=scope.tileData;
+            if(utilities.isObject(tileData)){
+                scope.gridOptions=tilesGridCacheService.get("gridOptions");
+                scope.valueSort=scope.gridOptions.valueSort;
+                if(utilities.isObject(scope.valueSort)){
+
+                    var sign=scope.valueSort.ascending?"+":"-";
+                    var predicate = scope.valueSort.predicate;
+                 //   order(utilities.toArray(tileData),predicate,true);
+                }
+                scope.ignoreProperties=scope.gridOptions.ignoreProperties||[];
+                angular.forEach(scope.gridOptions.ignoreProperties,function(prop){
+                    scope.ignoreProperties[prop]=true;
+                });
+                //    var items=Object.keys(tileData).length-gridOptions.ignoreProperties.length;
+                //   var calcWidth=Math.round(100/items);
+                //     var width=calcWidth+"%";
+                dataList=$compile("<span  class='tile-item' ng-repeat='(key,value) in tileData track by $index' ng-hide='ignoreProperties[key]'><span >{{value}}</span><span ng-show='gridOptions.valueSign.name==key'>{{gridOptions.valueSign.sign}}</span></span>")(scope);
+                element.html(dataList);
+            }
+            else if(angular.isString(tileData)){
+                element.html("<span class='tile-item'>"+tileData+"</span>");
+            }
+
+        }
+    };
+});
+
+
+/**
+ * @ngdoc directive
+ * @name impala2GoApp.tilesGrid:colorState
+ * @description
+ * # tile color state directive
+ */
+app.directive('colorState',function(utilities,$compile,tilesGridCacheService){
+    return {
+        restrict: 'EA',
+        scope:true,
+        link: function postLink(scope, element, attrs) {
+            var colorState,tileData;
+            var gridOptions=tilesGridCacheService.get("gridOptions");
+            colorState=gridOptions.colorState;
+            scope.tileData = scope.$eval(attrs.colorState) || {};
+            tileData=scope.tileData;
+            if(!gridOptions || !angular.isArray(gridOptions.colorState)|| angular.isString(tileData)){
+                return;
+            }
+            scope.$watch("tileData",function(val){
+                if(utilities.isObject(val)){
+                    setColor();
+                }
+            },true);
+            function setColor(){
+                if(utilities.isObject(tileData)){
+                    angular.forEach(colorState,function(state){
+                        var value=tileData[state.name];
+                        if(value>=state.min && value<=state.max){
+                            element.css({"background-color":state.background,color:state.color});
+                        }
+                    });
+                }
+            }
+        }
+    };
+});
 

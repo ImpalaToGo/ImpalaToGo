@@ -1,0 +1,25 @@
+#cluster-container {
+  border: 1px solid #c2c2c2 !important; }
+
+#cluster-container .panel-heading {
+  background-color: powderblue;
+  padding-bottom: 0;
+  padding-top: 0; }
+
+#cluster-container label {
+  margin-bottom: 0px; }
+
+#cluster-container .icheckbox_square-blue {
+  margin-left: 10px !important; }
+
+#cluster-container .heading-icon {
+  font-size: 20px;
+  margin-top: 6px; }
+
+.cluster-heading-font {
+  font-size: 20px; }
+
+.icheckbox_square-blue {
+  background-position: -24px 0; }
+
+/*# sourceMappingURL=cluster.css.map */

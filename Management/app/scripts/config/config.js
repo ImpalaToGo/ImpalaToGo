@@ -18,7 +18,7 @@ app.config(['$logProvider', function ($logProvider) {
 var config = {
     appErrorPrefix: '[impala2GoApp Error] ', //Configure the exceptionHandler decorator
     docTitle: 'impala2Go: ',
-    remoteServiceName: remoteServiceName,
+   // remoteServiceName: remoteServiceName,
     version: '1.0'
 };
 

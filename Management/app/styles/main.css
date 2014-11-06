@@ -1,6 +1,17 @@
 body {
   padding-top: 50px;
-  font-family: 'Segoe UI', Arial, Helvetica, sans-serif; }
+  font-family: 'Open Sans', Arial, Helvetica, sans-serif; }
+
+h2 {
+  height: 100%;
+  width: auto;
+  display: inline-block;
+  font-size: 14px;
+  position: relative;
+  margin: 0;
+  line-height: 34px;
+  font-weight: 400;
+  letter-spacing: 0; }
 
 #impala2GoMain .container {
   width: 100%; }
@@ -9,27 +20,14 @@ body {
   margin-top: 30px;
   padding: 0px 15px 0px 15px; }
 
-#cluster-container .panel-heading {
-  background-color: lightblue; }
-
-#cluster-container label {
-  margin-bottom: 0px; }
-
-#cluster-container .icheckbox_square-blue {
-  margin-top: -5px !important;
-  margin-left: 10px !important; }
+.main-container .navbar-inverse {
+  background: #3a3633; }
 
 .no-margin-top-bottom {
   margin-top: 0;
   margin-bottom: 0; }
 
-.cluster-heading-font {
-  font-size: 20px; }
-
 .bold {
   font-weight: bold; }
-
-.icheckbox_square-blue {
-  background-position: -24px 0; }
 
 /*# sourceMappingURL=main.css.map */

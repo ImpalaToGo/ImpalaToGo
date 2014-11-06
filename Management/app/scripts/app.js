@@ -11,7 +11,7 @@
  */
 angular.module('impala2GoApp', [
         'ngRoute',                   // routing
-        'ui.bootstrap',              // bootstrap for angular
+     //   'ui.bootstrap',              // bootstrap for angular
         'impala2GoApp.config' ,      // config
         'impala2GoApp.services',     // common services like data access, logger, etc.
         'impala2GoApp.directives',   // directives

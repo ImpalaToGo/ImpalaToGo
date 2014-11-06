@@ -11,24 +11,310 @@
 angular.module('impala2GoApp.services')
   .factory('dataContext', function dataContext($q) {
         var service = {
-            getPeople: getPeople,
-            getMessageCount: getMessageCount
+            getAllClusters: getAllClusters,
+            getSumClusters: getSumClusters
         };
 
         return service;
 
-        function getMessageCount() { return $q.when(72); }
+        function getAllClusters() {
+            var clusters =  [
+                {
+                    "name": "Node 1",
+                    "id": "34",
+                    "ram": {
+                        "value": "10",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "20",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "50",
+                            "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "20",
+                        "info": "used"
 
-        function getPeople() {
-            var people = [
-                { firstName: 'John', lastName: 'Papa', age: 25, location: 'Florida' },
-                { firstName: 'Ward', lastName: 'Bell', age: 31, location: 'California' },
-                { firstName: 'Colleen', lastName: 'Jones', age: 21, location: 'New York' },
-                { firstName: 'Madelyn', lastName: 'Green', age: 18, location: 'North Dakota' },
-                { firstName: 'Ella', lastName: 'Jobs', age: 18, location: 'South Dakota' },
-                { firstName: 'Landon', lastName: 'Gates', age: 11, location: 'South Carolina' },
-                { firstName: 'Haley', lastName: 'Guthrie', age: 35, location: 'Wyoming' }
+                    },
+                    "dfsBandwith": {
+                        "value": "30",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "65",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 2",
+                    "id": "34",
+                    "ram": {
+                        "value": "10",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "20",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "24",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "20",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "30",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "65",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 3",
+                    "id": "35",
+                    "ram": {
+                        "value": "2",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "79",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "56",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "86",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "45",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "22",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 4",
+                    "id": "34",
+                    "ram": {
+                        "value": "45",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "88",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "58",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "25",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "11",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "78",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 5",
+                    "id": "34",
+                    "ram": {
+                        "value": "26",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "20",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "5",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "50",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "67",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "65",
+                        "info": "free"
+                    }
+                },
             ];
-            return $q.when(people);
+            return $q.when(clusters);
+        }
+        function getSumClusters() {
+            var clusters =   [
+                {
+                    "name": "Node 1",
+                    "id": "34",
+                    "ram": {
+                        "value": "78",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "45",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "50",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "27",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "50",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "75",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 2",
+                    "id": "34",
+                    "ram": {
+                        "value": "70",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "30",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "27",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "36",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "67",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "65",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 3",
+                    "id": "35",
+                    "ram": {
+                        "value": "2",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "79",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "56",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "86",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "45",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "22",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 4",
+                    "id": "34",
+                    "ram": {
+                        "value": "88",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "48",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "28",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "25",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "28",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "78",
+                        "info": "free"
+                    }
+                },
+                {
+                    "name": "Node 5",
+                    "id": "34",
+                    "ram": {
+                        "value": "29",
+                        "info": "used"
+                    },
+                    "diskSpace": {
+                        "value": "30",
+                        "info": "free"
+                    },
+                    "cpu": {
+                        "value": "55",
+                        "info": "free"
+                    },
+                    "networkUsage": {
+                        "value": "30",
+                        "info": "used"
+
+                    },
+                    "dfsBandwith": {
+                        "value": "47",
+                        "info": "free"
+                    },
+                    "localDiskIO": {
+                        "value": "25",
+                        "info": "free"
+                    }
+                },
+            ];
+            return $q.when(clusters);
         }
   });

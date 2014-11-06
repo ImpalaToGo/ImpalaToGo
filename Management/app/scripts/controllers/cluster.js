@@ -8,27 +8,55 @@
  * Controller of the impala2GoApp
  */
 angular.module('impala2GoApp')
-    .controller('ClusterCtrl', function ($scope,logger,$interval,$timeout) {
-        var log= logger.getLogFn("ClusterCtrl");
+    .controller('ClusterCtrl', function ($scope,logger,$interval,dataContext) {
+        var logName="ClusterCtrl;"
+        var log= logger.getLogFn(logName);
         log("cluster controller","",true);
-         // some mock data
-        $scope.dataList= [
-            {node:"Node 1",ram:10, diskSpace:20, cpu:80, networkUsage:20, dfsBandwith:10, localDiskIO:50},
-            {node:"Node 2",ram:10, diskSpace:25, cpu:30, networkUsage:22, dfsBandwith:15, localDiskIO:90},
-            {node:"Node 3",ram:10, diskSpace:25, cpu:30, networkUsage:22, dfsBandwith:15, localDiskIO:90},
-            {node:"Node 4",ram:10, diskSpace:25, cpu:30, networkUsage:22, dfsBandwith:15, localDiskIO:90},
-            {node:"Node 5",ram:10, diskSpace:25, cpu:40, networkUsage:22, dfsBandwith:15, localDiskIO:20}
-        ];
 
+        //fetch data from server
+        dataContext.getAllClusters().then(function(data){
+            $scope.dataList= data;
+        });
 
-
-
+        $scope.getSum=function(state){
+            if(state){
+                if($scope.warmUp){
+                    $scope.allProcess=true;
+                }
+                else{
+                    $scope.allProcess=false;
+                }
+                dataContext.getSumClusters().then(function(data){
+                    $scope.dataList= data;
+                });
+            }
+            else{
+                $scope.allProcess=false;
+            }
+        }
+        $scope.getAll=function(state){
+            if(state){
+                $scope.sum=true;
+                $scope.warmUp=true;
+                //fetch data from server
+                dataContext.getAllClusters().then(function(data){
+                    $scope.dataList= data;
+                });
+            }
+        }
 
         $scope.gridOptions={
             data:"dataList",
-            controlsTemplate:"<button type='button' class='btn btn-info btn-sm margin-right-4'><span class='glyphicon glyphicon-cog'></span> LinkA</button><button type='button' class='btn btn-info btn-sm'><span class='glyphicon glyphicon-wrench'></span> LinkB</button>",
+            valueSign:{sign:"%",name:"value"},
+            valueSort:{predicate:"value",reverse:true},
+            controlsTemplate:"<button type='button' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-cog'></i></button>" +
+                "<button type='button' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-wrench'></i></button>" +
+                "<button type='button' class='btn btn-info btn-sm'><i class='glyphicon glyphicon-th'></i></button>",
+
+            //  ignoreProperties:["severity"],
+            colorState:[{name:"value",min:0,max:25,background:"#57889c",color:"#fff"},{name:"value",min:26,max:50,background:"#71843f",color:"#fff"},{name:"value",min:51,max:75,background:"#c79121",color:"#fff"},{name:"value",min:76,max:100,background:"#a90329",color:"#fff"}],
             columns:
-                [   {name:"node" ,displayName:"Nodes"},
+                [   {name:"name" ,displayName:"Nodes" },
                     {name:"ram" ,displayName:"Ram"},
                     {name:"diskSpace" ,displayName:"Disk Space"},
                     {name:"cpu" ,displayName:"Cpu"},
@@ -37,14 +65,18 @@ angular.module('impala2GoApp')
                 ]
         }
 
-    //test live data change
-//        $interval(function(){
-//            $scope.dataList[0].ram++;
-//        },1000);
-//        $interval(function(){
-//            $scope.dataList[1].networkUsage++;
-//            $scope.dataList[2].cpu++;
-//        },2000);
+        //test live data change
+        $interval(function(){
+            $scope.dataList[0].ram.value++;
+        },2000);
+        //test live data change
+        $interval(function(){
+            $scope.dataList[1].networkUsage.value++;
+        },1000);
+
+        $scope.$on('tileGridUpdated',function(event,data){
+            logger.log("Tile Grid updated","",logName,true);
+        })
 
     });
 

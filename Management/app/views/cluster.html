@@ -1,22 +1,30 @@
 <div id="cluster-container">
     <div class="panel-heading">
         <div class="row">
-            <div class="col-md-3">
-                <label class="cluster-heading-font" >Cluster Grid</label>
+            <div class="col-md-3 heading-icon">
+                <i class="glyphicon glyphicon-th-large"></i>
+                <h2 class="cluster-heading-font" >Cluster Grid</h2>
             </div>
             <div class="col-md-3">
-                <label class="cluster-heading-font" for="proc">All Processes:</label>
-                <input   type="checkbox" class="cluster-heading-checkbox" icheck ng-model="allProcess" id="proc">
-            </div>
-            <div class="col-md-3">
-                <label class="cluster-heading-font" for="sum">Select Sum</label>
-                <input  type="checkbox" class="cluster-heading-checkbox" icheck ng-model="sum" id="sum">
-
+                <div class="checkbox">
+                    <label class="cluster-heading-font col-lg-5 col-md-10 col-sm-3 col-xs-3" for="proc">All Processes</label>
+                    <input type="checkbox" ng-change="getAll(allProcess)" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="allProcess" id="proc">
+                </div>
 
             </div>
             <div class="col-md-3">
-                <label class="cluster-heading-font" for="warm">Warm Up for...</label>
-                <input type="checkbox" class="cluster-heading-checkbox" icheck ng-model="warmUp" id="warm">
+                <div class="checkbox">
+                    <label class="cluster-heading-font col-lg-3 col-md-6 col-sm-3 col-xs-3" for="sum">Sum</label>
+                    <input  type="checkbox" ng-change="getSum(sum)" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="sum" id="sum">
+                </div>
+
+            </div>
+            <div class="col-md-3">
+                <div class="checkbox">
+                    <label class="cluster-heading-font col-lg-4 col-md-10 col-sm-3 col-xs-3" for="warm">Warm Up</label>
+                    <input type="checkbox" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="warmUp" id="warm">
+                </div>
+
 
             </div>
 

@@ -32,8 +32,23 @@ angular.module('impala2GoApp.services')
             }
             return 0;
         }
+        function toObjectFn(arr) {
+            var rv = {};
+            for (var i = 0; i < arr.length; ++i)
+                rv[i] = arr[i];
+            return rv;
+        }
+        function toArrayFn(obj){
+          return Object.keys(obj).map(function (key) {
+                return obj[key]
+                }
+            );
+
+        }
         return{
             createGuid:createGuidFn,
+            toArray:toArrayFn,
+            toObject:toObjectFn,
             getPercentage:getPercentageFn,
             isObjectEmpty:isObjectEmptyFn,
             isObject:isObjectFn
