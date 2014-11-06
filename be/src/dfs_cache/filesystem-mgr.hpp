@@ -53,6 +53,16 @@ public:
 	}
 
 	/**
+	 * Construct local fully qualified path basing on file with @path and its @fsDescriptor owner
+	 *
+	 * @param fsDescriptor - file system descriptor
+	 * @param path         - file path
+	 *
+	 * @return fully qualified local path
+	 */
+	std::string constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path);
+
+	/**
 	 * @fn  dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 	 *                    int bufferSize, short replication, tSize blocksize)
 	 * @brief Open the file in given mode.This will be done locally but @a fsDescriptoris required

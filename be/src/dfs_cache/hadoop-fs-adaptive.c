@@ -691,7 +691,25 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
 
     if (!bld->host)
         return EINVAL;
-    scheme = (strstr(bld->host, "://")) ? "" : "file://";
+
+    const char* explicitScheme;
+    // check the requested scheme:
+    switch(bld->fs_type){
+    case HDFS:
+    	explicitScheme = "hdfs://";
+    	break;
+    case S3:
+    	explicitScheme = "s3n";
+    	break;
+    case LOCAL:
+    	explicitScheme = "file://";
+    	break;
+    default:
+    	explicitScheme = "file://";
+    	break;
+    }
+    // if there's already uri with a scheme provided, just skip changes:
+    scheme = (strstr(bld->host, "://")) ? "" : explicitScheme;
     if (bld->port == 0) {
         suffix[0] = '\0';
     } else {

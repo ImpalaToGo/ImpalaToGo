@@ -25,9 +25,10 @@
 namespace impala{
 
 /** Fixture for Cache Manager tests */
-class CacheMgrTest : public ::testing::Test {
+class CacheLayerTest : public ::testing::Test {
  protected:
-	static FileSystemDescriptor m_namenode1;   /**< file system host 1 */
+	static FileSystemDescriptor m_namenode1;      /**< file system host 1 */
+	static FileSystemDescriptor m_namenodeHdfs;   /**< file system hdfs */
 
 	static SessionContext m_ctx1;  /**< session context 1 (shell/web client 1) */
 	static SessionContext m_ctx2;  /**< session context 2 (shell/web client 2) */
@@ -47,11 +48,18 @@ class CacheMgrTest : public ::testing::Test {
 	  cacheInit();
 
 	  cacheInit();
-	  cacheConfigureLocalStorage("/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/");
-	  m_namenode1 = {DFS_TYPE::OTHER, "localhost", 8080, "", "", true};
+	  cacheConfigureLocalStorage("/home/elenav/src/ImpalaToGo/datastorage/local_root/");
+	  m_namenode1    = {DFS_TYPE::OTHER, "", 0, "", "", true};
+	  m_namenodeHdfs = {DFS_TYPE::HDFS, "104.236.39.60", 8020, "", "", true};
+	  // reset session contexts
+	  m_ctx1 = nullptr;
+	  m_ctx2 = nullptr;
 
 	  // configure some test-purpose file system:
 	  cacheConfigureFileSystem(m_namenode1);
+
+	  // configure Digital Ocean hdfs:
+	  cacheConfigureFileSystem(m_namenodeHdfs);
   }
 
   // virtual void TearDown() {}

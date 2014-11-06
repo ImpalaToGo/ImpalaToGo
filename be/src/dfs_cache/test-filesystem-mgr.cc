@@ -19,16 +19,20 @@
 
 #include "dfs_cache/filesystem-mgr.hpp"
 #include "dfs_cache/cache-mgr.hpp"
-#include "gtest-fixtures.hpp"
+#include "dfs_cache/gtest-fixtures.hpp"
 #include "dfs_cache/test-utilities.hpp"
 
 namespace ph = std::placeholders;
 
 namespace impala {
 
-FileSystemDescriptor CacheMgrTest::m_namenode1;
+FileSystemDescriptor CacheLayerTest::m_namenode1;
+FileSystemDescriptor CacheLayerTest::m_namenodeHdfs;
 
-TEST_F(CacheMgrTest, OpenFileCheckOpened) {
+SessionContext CacheLayerTest::m_ctx1 = nullptr;
+SessionContext CacheLayerTest::m_ctx2 = nullptr;
+
+TEST_F(CacheLayerTest, OpenFileCheckOpened) {
     const char* path = "/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/hello.txt";
     int flags        =  O_RDONLY;
     int buffer_size  = 0;

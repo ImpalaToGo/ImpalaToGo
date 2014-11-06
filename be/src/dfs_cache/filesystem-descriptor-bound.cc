@@ -36,6 +36,13 @@ fsBridge FileSystemDescriptorBound::connect() {
 	return _dfsBuilderConnect(fs_builder);
 }
 
+FileSystemDescriptorBound::~FileSystemDescriptorBound(){
+	// Disconnect any conections we have to a target file system:
+	for(auto item : m_connections){
+		_dfsDisconnect(item->connection);
+	}
+}
+
 raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
 	freeConnectionPredicate predicateFreeConnection;
 
@@ -90,6 +97,35 @@ raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
 	// unable to connect to DFS.
 	return std::move(raiiDfsConnection(dfsConnectionPtr()));
 }
+
+dfsFile FileSystemDescriptorBound::fileOpen(raiiDfsConnection& conn, const char* path, int flags, int bufferSize,
+		short replication, tSize blocksize){
+	return _dfsOpenFile(conn.connection()->connection, path, flags, bufferSize, replication, blocksize);
+}
+
+int FileSystemDescriptorBound::fileClose(raiiDfsConnection& conn, dfsFile file){
+	return _dfsCloseFile(conn.connection()->connection, file);
+}
+
+tOffset FileSystemDescriptorBound::fileTell(raiiDfsConnection& conn, dfsFile file){
+    return _dfsTell(conn.connection()->connection, file);
+}
+
+int FileSystemDescriptorBound::fileSeek(raiiDfsConnection& conn, dfsFile file,
+		tOffset desiredPos){
+	return _dfsSeek(conn.connection()->connection, file, desiredPos);
+}
+
+tSize FileSystemDescriptorBound::fileRead(raiiDfsConnection& conn, dfsFile file,
+		void* buffer, tSize length){
+	return _dfsRead(conn.connection()->connection, file, buffer, length);
+}
+
+tSize FileSystemDescriptorBound::filePread(raiiDfsConnection& conn, dfsFile file, tOffset position,
+		void* buffer, tSize length){
+	return _dfsPread(conn.connection()->connection, file, position, buffer, length);
+}
+
 
 } /** namespace impala */
 

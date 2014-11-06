@@ -22,21 +22,21 @@ void CacheLayerRegistry::init() {
 
 status::StatusInternal CacheLayerRegistry::setupFileSystem(const FileSystemDescriptor & fsDescriptor){
 		boost::mutex::scoped_lock lockconn(m_connmux);
-		if(dfsConnections[fsDescriptor.dfs_type].count(fsDescriptor.host)){
+		if(m_filesystems[fsDescriptor.dfs_type].count(fsDescriptor.host)){
 			// descriptor is already a part of the registry, nothing to add
 			return status::StatusInternal::OK;
 		}
-		// create the dfs-bound descriptor and assign the DFS adaptor to it
+		// create the FileSystem-bound descriptor and assign the File System adaptor to it
 		boost::shared_ptr<FileSystemDescriptorBound> descriptor(new FileSystemDescriptorBound(fsDescriptor));
-    	// and insert new {key-value} under the apropriate DFS
-    	dfsConnections[fsDescriptor.dfs_type].insert(std::make_pair(fsDescriptor.host, descriptor));
+    	// and insert new {key-value} under the appropriate FileSystem type
+		m_filesystems[fsDescriptor.dfs_type].insert(std::make_pair(fsDescriptor.host, descriptor));
     	return status::StatusInternal::OK;
 }
 
 const boost::shared_ptr<FileSystemDescriptorBound>* CacheLayerRegistry::getFileSystemDescriptor(const FileSystemDescriptor & fsDescriptor){
 		boost::mutex::scoped_lock lock(m_connmux);
-          if(dfsConnections.count(fsDescriptor.dfs_type) > 0 && dfsConnections[fsDescriptor.dfs_type].count(fsDescriptor.host) > 0){
-        	  return &(dfsConnections[fsDescriptor.dfs_type][fsDescriptor.host]);
+          if(m_filesystems.count(fsDescriptor.dfs_type) > 0 && m_filesystems[fsDescriptor.dfs_type].count(fsDescriptor.host) > 0){
+        	  return &(m_filesystems[fsDescriptor.dfs_type][fsDescriptor.host]);
           }
           return nullptr;
 	}
@@ -45,8 +45,8 @@ bool CacheLayerRegistry::getFileByPath(const char* key, ManagedFile::File*& file
 	{
 		file = nullptr;
 		boost::mutex::scoped_lock lock(m_cachemux);
-		FileRegistry::iterator it = cache.find(key, StrExpComp());
-		if( it == cache.end() )
+		FileRegistry::iterator it = m_cache.find(key, StrExpComp());
+		if( it == m_cache.end() )
 	    	return false;
 		file = &*it;
 	    return true;
@@ -57,8 +57,8 @@ bool CacheLayerRegistry::addFileByPath(ManagedFile::File file)
 	boost::mutex::scoped_lock lock(m_cachemux);
     boost::intrusive::set<ManagedFile::File>::insert_commit_data insert_data;
 
-    bool success = cache.insert_check(file.fqp(), StrExpComp(), insert_data).second;
-    if(success) cache.insert_commit(file, insert_data);
+    bool success = m_cache.insert_check(file.fqp(), StrExpComp(), insert_data).second;
+    if(success) m_cache.insert_commit(file, insert_data);
 	   return success;
 }
 }

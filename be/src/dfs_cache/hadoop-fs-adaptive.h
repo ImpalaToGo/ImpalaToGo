@@ -512,7 +512,7 @@ int _dfsUtime(fsBridge fs, const char* path, tTime mtime, tTime atime);
  * @param replication - block replication - pass 0 if default configured values are enough.
  * @param blocksize   - size of block - pass 0 if you default configured values are enough.
  *
- * @return Returns the opened file stream.
+ * @return Returns the opened file stream on success or NULL otherwise.
  */
 dfsFile _dfsOpenFile(fsBridge fsBridge, const char* path, int flags, int bufferSize,
 		short replication, tSize blocksize);
@@ -577,7 +577,7 @@ tSize _dfsRead(fsBridge filesystem, dfsFile file, void* buffer, tSize length);
  * @param buffer     - buffer to copy read bytes into.
  * @param length     - length of the buffer.
  *
- * @return      See dfsRead
+ * @return      See _dfsRead
  */
 tSize _dfsPread(fsBridge filesystem, dfsFile file, tOffset position,
 		void* buffer, tSize length);

@@ -32,17 +32,24 @@ void FileSystemManager::init() {
 	  FileSystemManager::instance_.reset(new FileSystemManager());
 }
 
-dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & namenode, const char* path, int flags,
+std::string FileSystemManager::constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path){
+    std::string localPath(CacheLayerRegistry::instance()->localstorage());
+    localPath += fsDescriptor.host;
+    localPath += path;
+    return localPath;
+}
+
+dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
+	Uri uri = Uri::Parse(path);
 	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
 
-	//std::string filepath(path);
-	// filepath.insert(0, 1, '\\');
-	// Add the configured root to a file path basing on cluster id.
-	//filepath.insert(0, m_registry->localstorage());
+	// calculate fully qualified local path from requested
+	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+    const char* localPathAnsi = localPath.c_str();
 
-	// check we are able to process requested file mode.
+    // check we are able to process requested file mode.
 	// if no,  take no actions.
 	std::string mode;
 	// get the mode to open the file in:
@@ -56,19 +63,44 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & namenode, co
 	    case O_RDWR:
 	    	mode = "rw";
 	    	break;
+	    case O_CREAT:
+	    	mode = "w+b";
+	    	break;
+	    default:
+	    	break;
 	}
 	if(mode.empty()){
 		available = false;
 		return NULL;
 	}
 
+	// create file scenario. It is only for internal layer usage:
+	if(flags == O_CREAT){
+		FILE *lofile;
+		// first check if the file exists:
+		lofile = fopen(localPathAnsi, "rw");
+		if (lofile == NULL)
+			available = false;
+		else {
+			available = true;
+			fclose(lofile);
+		}
+		if(!available){
+			lofile = fopen(localPathAnsi, mode.c_str());
+			if(lofile != NULL){
+				available = true;
+				fclose(lofile);
+			}
+			else{
+				// there was a problem to create the file..
+				return NULL;
+			}
+		}
+	}
 	// If this file is not available locally, reply with error.
 	int pfd; /* Integer for file descriptor returned by open() call. */
 
-	// get the rid of protocol
-	Uri uri = Uri::Parse(path);
-
-	if ((pfd = open(uri.FilePath.c_str(), flags,
+	if ((pfd = open(localPathAnsi, flags,
 	    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1)
 	{
 	    available = false;
@@ -108,8 +140,9 @@ status::StatusInternal FileSystemManager::dfsCloseFile(const FileSystemDescripto
 
 status::StatusInternal FileSystemManager::dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path){
 	Uri uri = Uri::Parse(path);
+	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
 
-	 std::ifstream infile(uri.FilePath.c_str());
+	 std::ifstream infile(localPath.c_str());
 	    return infile.good() ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 }
 
@@ -189,7 +222,13 @@ status::StatusInternal FileSystemManager::dfsMove(const FileSystemDescriptor & f
 }
 
 status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive){
-	return status::StatusInternal::NOT_IMPLEMENTED;
+	// construct the fqlp:
+	Uri uri = Uri::Parse(path);
+	std::string localPath = constructLocalPath(fsDescriptor,  uri.FilePath.c_str());
+
+	if(std::remove(localPath.c_str()) == 0)
+		return status::StatusInternal::OK;
+	return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 }
 
 status::StatusInternal FileSystemManager::dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath, const char* newPath){
@@ -229,9 +268,12 @@ dfsFileInfo * FileSystemManager::dfsListDirectory(const FileSystemDescriptor & f
 	struct dirent *ent;
 	std::vector<dirent> entries;
 
+	Uri uri = Uri::Parse(path);
+	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+
 	dfsFileInfo* reply;
 
-	if ((dir = opendir (path)) != NULL) {
+	if ((dir = opendir (localPath.c_str())) != NULL) {
 	  /* print all the files and directories within directory */
 	  while ((ent = readdir (dir)) != NULL) {
 		  entries.push_back(*ent);

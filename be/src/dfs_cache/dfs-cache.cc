@@ -48,7 +48,7 @@ status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath){
 	return status::StatusInternal::OK;
 }
 
-status::StatusInternal cacheConfigureClusterFocalPoint(const FileSystemDescriptor& fsDescriptor){
+status::StatusInternal cacheConfigureFileSystem(const FileSystemDescriptor& fsDescriptor){
 	CacheLayerRegistry::instance()->setupFileSystem(fsDescriptor);
 	return status::StatusInternal::OK;
 }

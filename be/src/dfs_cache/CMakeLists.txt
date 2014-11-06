@@ -37,3 +37,4 @@ add_library(dfs_cache
 
 ADD_BE_TEST(test-filesystem-mgr)
 ADD_BE_TEST(test-cache-manager)
+ADD_BE_TEST(test-hadoop-fs-adaptive)

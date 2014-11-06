@@ -462,8 +462,10 @@ static JNIEnv* getGlobalJNIEnv(void)
         snprintf(optHadoopClassPath, optHadoopClassPathLen,
                 "%s%s", hadoopClassPathVMArg, hadoopClassPath);
 
+        fprintf(stderr, "optHadoopClassPath = %s\n", optHadoopClassPath);
+
         // Determine the # of LIBHDFS_OPTS args
-        int noArgs = 1;
+        int noArgs = 2;
         char *hadoopJvmArgs = getenv("LIBHDFS_OPTS");
         char jvmArgDelims[] = " ";
         char *str, *token, *savePtr;
@@ -481,6 +483,7 @@ static JNIEnv* getGlobalJNIEnv(void)
         // Now that we know the # args, populate the options array
         JavaVMOption options[noArgs];
         options[0].optionString = optHadoopClassPath;
+        options[1].optionString = "-verbose:jni";
         hadoopJvmArgs = getenv("LIBHDFS_OPTS");
 	if (hadoopJvmArgs != NULL)  {
           hadoopJvmArgs = strdup(hadoopJvmArgs);

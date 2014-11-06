@@ -27,6 +27,14 @@
  */
 namespace impala {
 
+/** defines the map of maps of remote FileSystem descriptors.
+ *  Key   - supported filesystem type
+ *  Value - map of known filesystems of this type
+ *
+ *  For map of known filesystems of same type:
+ *  Key   - FileSystem address
+ *  Value - adaptor to FileSystem described by @address
+ * */
 typedef std::map<DFS_TYPE, std::map<std::string, boost::shared_ptr<FileSystemDescriptorBound> > > DFSConnections;
 
 /**
@@ -37,8 +45,8 @@ private:
 	/** Singleton instance. Instantiated in Init(). */
 	static boost::scoped_ptr<CacheLayerRegistry> instance_;
 
-	FileRegistry        cache;            					   /**< Registry of cache-managed files */
-	DFSConnections      dfsConnections;    					   /**< Registry of DFS connections */
+	FileRegistry        m_cache;            					   /**< Registry of cache-managed files */
+	DFSConnections      m_filesystems; 			        		   /**< Registry of file systems adaptors registered as a target for impala as a client */
 
 	std::string m_localstorageRoot;   /**< path to local file system storage root */
 
@@ -83,7 +91,7 @@ public:
 	 *
 	 * @param fsDescriptor - configured file system connection details
 	 *
-	 * @return namenode adaptor
+	 * @return filesystem adaptor
 	 */
 	const boost::shared_ptr<FileSystemDescriptorBound>* getFileSystemDescriptor(const FileSystemDescriptor & fsDescriptor);
 
