@@ -1,0 +1,388 @@
+From 61e4c90b002ff27e372d11d46298cc4cc3a7c1c0 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Thu, 31 Jul 2014 19:54:15 +0100
+Subject: [PATCH 81/86] HBASE-11609 LoadIncrementalHFiles fails if the namespace is specified (addendum)
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-20550
+---
+ .../hbase/mapreduce/TestLoadIncrementalHFiles.java |  230 +++++++++++---------
+ .../mapreduce/TestSecureLoadIncrementalHFiles.java |    2 +
+ 2 files changed, 131 insertions(+), 101 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
+index 3d69fed..29ca70d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
+@@ -24,26 +24,28 @@ import static org.junit.Assert.assertTrue;
+ import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+-import java.util.Collection;
+ import java.util.TreeMap;
+-import java.util.List;
+ 
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+-import org.apache.hadoop.hbase.*;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.LargeTests;
++import org.apache.hadoop.hbase.NamespaceDescriptor;
++import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+-import org.apache.hadoop.hbase.client.Put;
+-import org.apache.hadoop.hbase.io.compress.Compression;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+ import org.apache.hadoop.hbase.io.hfile.HFile;
+ import org.apache.hadoop.hbase.io.hfile.HFileScanner;
+ import org.apache.hadoop.hbase.regionserver.BloomType;
+-import org.apache.hadoop.hbase.regionserver.StoreFile;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.HFileTestUtil;
+-import org.junit.*;
++import org.junit.AfterClass;
++import org.junit.BeforeClass;
++import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
+ /**
+@@ -55,6 +57,8 @@ import org.junit.experimental.categories.Category;
+ public class TestLoadIncrementalHFiles {
+   private static final byte[] QUALIFIER = Bytes.toBytes("myqual");
+   private static final byte[] FAMILY = Bytes.toBytes("myfam");
++  private static final String NAMESPACE = "bulkNS";
++
+   static final String EXPECTED_MSG_FOR_NON_EXISTING_FAMILY = "Unmatched family names found";
+   static final int MAX_FILES_PER_REGION_PER_FAMILY = 4;
+ 
+@@ -71,6 +75,12 @@ public class TestLoadIncrementalHFiles {
+       LoadIncrementalHFiles.MAX_FILES_PER_REGION_PER_FAMILY,
+       MAX_FILES_PER_REGION_PER_FAMILY);
+     util.startMiniCluster();
++
++    setupNamespace();
++  }
++
++  protected static void setupNamespace() throws Exception {
++    util.getHBaseAdmin().createNamespace(NamespaceDescriptor.create(NAMESPACE).build());
+   }
+ 
+   @AfterClass
+@@ -115,7 +125,7 @@ public class TestLoadIncrementalHFiles {
+           new byte[][]{ Bytes.toBytes("fff"), Bytes.toBytes("zzz") },
+     });
+   }
+-
++  
+   /**
+    * Test loading into a column family that has a ROWCOL bloom filter.
+    */
+@@ -128,8 +138,94 @@ public class TestLoadIncrementalHFiles {
+     });
+   }
+ 
++  /**
++   * Test case that creates some regions and loads HFiles that have
++   * different region boundaries than the table pre-split.
++   */
++  @Test
++  public void testSimpleHFileSplit() throws Exception {
++    runTest("testHFileSplit", BloomType.NONE,
++        new byte[][] {
++          Bytes.toBytes("aaa"), Bytes.toBytes("fff"), Bytes.toBytes("jjj"),
++          Bytes.toBytes("ppp"), Bytes.toBytes("uuu"), Bytes.toBytes("zzz"),
++        },
++        new byte[][][] {
++          new byte[][]{ Bytes.toBytes("aaaa"), Bytes.toBytes("lll") },
++          new byte[][]{ Bytes.toBytes("mmm"), Bytes.toBytes("zzz") },
++        }
++    );
++  }
++
++  /**
++   * Test case that creates some regions and loads HFiles that cross the boundaries
++   * and have different region boundaries than the table pre-split.
++   */
++  @Test
++  public void testRegionCrossingHFileSplit() throws Exception {
++    testRegionCrossingHFileSplit(BloomType.NONE);
++  }
++
++  /**
++   * Test case that creates some regions and loads HFiles that cross the boundaries
++   * have a ROW bloom filter and a different region boundaries than the table pre-split.
++   */
++  @Test
++  public void testRegionCrossingHFileSplitRowBloom() throws Exception {
++    testRegionCrossingHFileSplit(BloomType.ROW);
++  }
++
++  /**
++   * Test case that creates some regions and loads HFiles that cross the boundaries
++   * have a ROWCOL bloom filter and a different region boundaries than the table pre-split.
++   */
++  @Test
++  public void testRegionCrossingHFileSplitRowColBloom() throws Exception {
++    testRegionCrossingHFileSplit(BloomType.ROWCOL);
++  }
++
++  private void testRegionCrossingHFileSplit(BloomType bloomType) throws Exception {
++    runTest("testHFileSplit" + bloomType + "Bloom", bloomType,
++        new byte[][] {
++          Bytes.toBytes("aaa"), Bytes.toBytes("fff"), Bytes.toBytes("jjj"),
++          Bytes.toBytes("ppp"), Bytes.toBytes("uuu"), Bytes.toBytes("zzz"),
++        },
++        new byte[][][] {
++          new byte[][]{ Bytes.toBytes("aaaa"), Bytes.toBytes("eee") },
++          new byte[][]{ Bytes.toBytes("fff"), Bytes.toBytes("zzz") },
++        }
++    );
++  }
++
++  private void runTest(String testName, BloomType bloomType,
++      byte[][][] hfileRanges) throws Exception {
++    runTest(testName, bloomType, null, hfileRanges);
++  }
++
+   private void runTest(String testName, BloomType bloomType,
+-          byte[][][] hfileRanges) throws Exception {
++      byte[][] tableSplitKeys, byte[][][] hfileRanges) throws Exception {
++    final byte[] TABLE_NAME = Bytes.toBytes("mytable_"+testName);
++    final boolean preCreateTable = tableSplitKeys != null;
++
++    // Run the test bulkloading the table to the default namespace
++    final TableName TABLE_WITHOUT_NS = TableName.valueOf(TABLE_NAME);
++    runTest(testName, TABLE_WITHOUT_NS, bloomType, preCreateTable, tableSplitKeys, hfileRanges);
++
++    // Run the test bulkloading the table to the specified namespace
++    final TableName TABLE_WITH_NS = TableName.valueOf(Bytes.toBytes(NAMESPACE), TABLE_NAME);
++    runTest(testName, TABLE_WITH_NS, bloomType, preCreateTable, tableSplitKeys, hfileRanges);
++  }
++
++  private void runTest(String testName, TableName tableName, BloomType bloomType,
++      boolean preCreateTable, byte[][] tableSplitKeys, byte[][][] hfileRanges) throws Exception {
++    HTableDescriptor htd = new HTableDescriptor(tableName);
++    HColumnDescriptor familyDesc = new HColumnDescriptor(FAMILY);
++    familyDesc.setBloomFilterType(bloomType);
++    htd.addFamily(familyDesc);
++    runTest(testName, htd, bloomType, preCreateTable, tableSplitKeys, hfileRanges);
++  }
++
++  private void runTest(String testName, HTableDescriptor htd, BloomType bloomType,
++      boolean preCreateTable, byte[][] tableSplitKeys, byte[][][] hfileRanges) throws Exception {
+     Path dir = util.getDataTestDirOnTestFS(testName);
+     FileSystem fs = util.getTestFileSystem();
+     dir = dir.makeQualified(fs);
+@@ -144,21 +240,23 @@ public class TestLoadIncrementalHFiles {
+     }
+     int expectedRows = hfileIdx * 1000;
+ 
+-    final byte[] TABLE = Bytes.toBytes("mytable_"+testName);
+-
+-    HBaseAdmin admin = new HBaseAdmin(util.getConfiguration());
+-    HTableDescriptor htd = new HTableDescriptor(TableName.valueOf(TABLE));
+-    HColumnDescriptor familyDesc = new HColumnDescriptor(FAMILY);
+-    familyDesc.setBloomFilterType(bloomType);
+-    htd.addFamily(familyDesc);
+-    admin.createTable(htd, SPLIT_KEYS);
++    if (preCreateTable) {
++      util.getHBaseAdmin().createTable(htd, tableSplitKeys);
++    }
+ 
+-    HTable table = new HTable(util.getConfiguration(), TABLE);
+-    util.waitTableEnabled(TABLE);
++    final TableName tableName = htd.getTableName();
+     LoadIncrementalHFiles loader = new LoadIncrementalHFiles(util.getConfiguration());
+-    loader.doBulkLoad(dir, table);
++    String [] args= {dir.toString(), tableName.toString()};
++    loader.run(args);
++
++    HTable table = new HTable(util.getConfiguration(), tableName);
++    try {
++      assertEquals(expectedRows, util.countRows(table));
++    } finally {
++      table.close();
++    }
+ 
+-    assertEquals(expectedRows, util.countRows(table));
++    util.deleteTable(tableName);
+   }
+ 
+   /**
+@@ -167,40 +265,21 @@ public class TestLoadIncrementalHFiles {
+   @Test
+   public void testNonexistentColumnFamilyLoad() throws Exception {
+     String testName = "testNonexistentColumnFamilyLoad";
+-    byte[][][] hfileRanges = new byte[][][] {
++    byte[][][] hFileRanges = new byte[][][] {
+       new byte[][]{ Bytes.toBytes("aaa"), Bytes.toBytes("ccc") },
+       new byte[][]{ Bytes.toBytes("ddd"), Bytes.toBytes("ooo") },
+     };
+ 
+-    Path dir = util.getDataTestDirOnTestFS(testName);
+-    FileSystem fs = util.getTestFileSystem();
+-    dir = dir.makeQualified(fs);
+-    Path familyDir = new Path(dir, Bytes.toString(FAMILY));
+-
+-    int hfileIdx = 0;
+-    for (byte[][] range : hfileRanges) {
+-      byte[] from = range[0];
+-      byte[] to = range[1];
+-      HFileTestUtil.createHFile(util.getConfiguration(), fs, new Path(familyDir, "hfile_"
+-          + hfileIdx++), FAMILY, QUALIFIER, from, to, 1000);
+-    }
+-
+     final byte[] TABLE = Bytes.toBytes("mytable_"+testName);
+-
+-    HBaseAdmin admin = new HBaseAdmin(util.getConfiguration());
+     HTableDescriptor htd = new HTableDescriptor(TableName.valueOf(TABLE));
+     // set real family name to upper case in purpose to simulate the case that
+     // family name in HFiles is invalid
+     HColumnDescriptor family =
+         new HColumnDescriptor(Bytes.toBytes(new String(FAMILY).toUpperCase()));
+     htd.addFamily(family);
+-    admin.createTable(htd, SPLIT_KEYS);
+ 
+-    HTable table = new HTable(util.getConfiguration(), TABLE);
+-    util.waitTableEnabled(TABLE);
+-    LoadIncrementalHFiles loader = new LoadIncrementalHFiles(util.getConfiguration());
+     try {
+-      loader.doBulkLoad(dir, table);
++      runTest(testName, htd, BloomType.NONE, true, SPLIT_KEYS, hFileRanges);
+       assertTrue("Loading into table with non-existent family should have failed", false);
+     } catch (Exception e) {
+       assertTrue("IOException expected", e instanceof IOException);
+@@ -210,57 +289,6 @@ public class TestLoadIncrementalHFiles {
+           + EXPECTED_MSG_FOR_NON_EXISTING_FAMILY + "], current message: [" + errMsg + "]",
+           errMsg.contains(EXPECTED_MSG_FOR_NON_EXISTING_FAMILY));
+     }
+-    table.close();
+-    admin.close();
+-  }
+-
+-  private void verifyAssignedSequenceNumber(String testName,
+-      byte[][][] hfileRanges, boolean nonZero) throws Exception {
+-    Path dir = util.getDataTestDir(testName);
+-    FileSystem fs = util.getTestFileSystem();
+-    dir = dir.makeQualified(fs);
+-    Path familyDir = new Path(dir, Bytes.toString(FAMILY));
+-
+-    int hfileIdx = 0;
+-    for (byte[][] range : hfileRanges) {
+-      byte[] from = range[0];
+-      byte[] to = range[1];
+-      HFileTestUtil.createHFile(util.getConfiguration(), fs, new Path(familyDir, "hfile_"
+-          + hfileIdx++), FAMILY, QUALIFIER, from, to, 1000);
+-    }
+-
+-    final byte[] TABLE = Bytes.toBytes("mytable_"+testName);
+-
+-    HBaseAdmin admin = new HBaseAdmin(util.getConfiguration());
+-    HTableDescriptor htd = new HTableDescriptor(TABLE);
+-    HColumnDescriptor familyDesc = new HColumnDescriptor(FAMILY);
+-    htd.addFamily(familyDesc);
+-    admin.createTable(htd, SPLIT_KEYS);
+-
+-    HTable table = new HTable(util.getConfiguration(), TABLE);
+-    util.waitTableEnabled(TABLE);
+-    LoadIncrementalHFiles loader = new LoadIncrementalHFiles(
+-      util.getConfiguration());
+-
+-    // Do a dummy put to increase the hlog sequence number
+-    Put put = new Put(Bytes.toBytes("row"));
+-    put.add(FAMILY, QUALIFIER, Bytes.toBytes("value"));
+-    table.put(put);
+-
+-    loader.doBulkLoad(dir, table);
+-
+-    // Get the store files
+-    Collection<StoreFile> files = util.getHBaseCluster().
+-        getRegions(TABLE).get(0).getStore(FAMILY).getStorefiles();
+-    for (StoreFile file: files) {
+-      // the sequenceId gets initialized during createReader
+-      file.createReader();
+-
+-      if (nonZero)
+-        assertTrue(file.getMaxSequenceId() > 0);
+-      else
+-        assertTrue(file.getMaxSequenceId() == -1);
+-    }
+   }
+ 
+   @Test
+@@ -303,14 +331,14 @@ public class TestLoadIncrementalHFiles {
+   }
+ 
+   private void addStartEndKeysForTest(TreeMap<byte[], Integer> map, byte[] first, byte[] last) {
+-    Integer value = map.containsKey(first)?(Integer)map.get(first):0;
++    Integer value = map.containsKey(first)?map.get(first):0;
+     map.put(first, value+1);
+ 
+-    value = map.containsKey(last)?(Integer)map.get(last):0;
++    value = map.containsKey(last)?map.get(last):0;
+     map.put(last, value-1);
+   }
+ 
+-  @Test
++  @Test 
+   public void testInferBoundaries() {
+     TreeMap<byte[], Integer> map = new TreeMap<byte[], Integer>(Bytes.BYTES_COMPARATOR);
+ 
+@@ -320,8 +348,8 @@ public class TestLoadIncrementalHFiles {
+      *
+      * Should be inferred as:
+      * a-----------------k   m-------------q   r--------------t  u---------x
+-     *
+-     * The output should be (m,r,u)
++     * 
++     * The output should be (m,r,u) 
+      */
+ 
+     String first;
+@@ -329,7 +357,7 @@ public class TestLoadIncrementalHFiles {
+ 
+     first = "a"; last = "e";
+     addStartEndKeysForTest(map, first.getBytes(), last.getBytes());
+-
++    
+     first = "r"; last = "s";
+     addStartEndKeysForTest(map, first.getBytes(), last.getBytes());
+ 
+@@ -350,14 +378,14 @@ public class TestLoadIncrementalHFiles {
+ 
+     first = "s"; last = "t";
+     addStartEndKeysForTest(map, first.getBytes(), last.getBytes());
+-
++    
+     first = "u"; last = "w";
+     addStartEndKeysForTest(map, first.getBytes(), last.getBytes());
+ 
+     byte[][] keysArray = LoadIncrementalHFiles.inferBoundaries(map);
+     byte[][] compare = new byte[3][];
+     compare[0] = "m".getBytes();
+-    compare[1] = "r".getBytes();
++    compare[1] = "r".getBytes(); 
+     compare[2] = "u".getBytes();
+ 
+     assertEquals(keysArray.length, 3);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestSecureLoadIncrementalHFiles.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestSecureLoadIncrementalHFiles.java
+index 18df7f6..bac110d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestSecureLoadIncrementalHFiles.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestSecureLoadIncrementalHFiles.java
+@@ -56,6 +56,8 @@ public class TestSecureLoadIncrementalHFiles extends  TestLoadIncrementalHFiles{
+ 
+     // Wait for the ACL table to become available
+     util.waitTableEnabled(AccessControlLists.ACL_TABLE_NAME.getName());
++
++    setupNamespace();
+   }
+ 
+ }
+-- 
+1.7.0.4
+

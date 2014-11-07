@@ -1,0 +1,47 @@
+From 644ae50def3d30b9673512bcd3ae287861852450 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Wed, 29 Jan 2014 10:08:24 +0000
+Subject: [PATCH 21/86] HBASE-10435 Lower the log level of Canary region server match
+
+Reason: Usability
+Author: Matteo Bertozzi
+Ref: CDH-17053
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1562393 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/tool/Canary.java  |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
+index 47504d0..151cacc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
+@@ -425,7 +425,7 @@ public final class Canary implements Tool {
+         if(tmpTables.size() > 0) {
+           returnTables = tmpTables.toArray(new String[tmpTables.size()]);
+         } else {
+-          String msg = "No any HTable found, tablePattern:"
++          String msg = "No HTable found, tablePattern:"
+               + Arrays.toString(monitorTargets);
+           LOG.error(msg);
+           this.errorCode = INIT_ERROR_EXIT_CODE;
+@@ -729,14 +729,14 @@ public final class Canary implements Tool {
+               }
+             }
+             if (!regExpFound) {
+-              LOG.error("No any RegionServerInfo found, regionServerPattern:" + rsName);
++              LOG.info("No RegionServerInfo found, regionServerPattern:" + rsName);
+               this.errorCode = INIT_ERROR_EXIT_CODE;
+             }
+           } else {
+             if (fullRsAndRMap.containsKey(rsName)) {
+               filteredRsAndRMap.put(rsName, fullRsAndRMap.get(rsName));
+             } else {
+-              LOG.error("No any RegionServerInfo found, regionServerName:" + rsName);
++              LOG.info("No RegionServerInfo found, regionServerName:" + rsName);
+               this.errorCode = INIT_ERROR_EXIT_CODE;
+             }
+           }
+-- 
+1.7.0.4
+

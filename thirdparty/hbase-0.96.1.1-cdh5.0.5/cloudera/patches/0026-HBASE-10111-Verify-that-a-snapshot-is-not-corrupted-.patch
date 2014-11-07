@@ -1,0 +1,219 @@
+From ba4f4360a36fca355d9873aa38087a8519104c39 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Tue, 10 Dec 2013 11:44:31 +0000
+Subject: [PATCH 26/86] HBASE-10111 Verify that a snapshot is not corrupted before restoring it
+
+Reason: Usability
+Author: Matteo Bertozzi
+Ref: CDH-16074
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1549819 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/master/snapshot/SnapshotManager.java     |    4 ++
+ .../hadoop/hbase/regionserver/StoreFileInfo.java   |    2 +-
+ .../hbase/snapshot/SnapshotReferenceUtil.java      |   30 ++++++++++++++++
+ .../client/TestRestoreSnapshotFromClient.java      |   18 ++++++++++
+ .../hbase/snapshot/SnapshotTestingUtils.java       |   36 ++++++++++++++++++++
+ 5 files changed, 89 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
+index 33a3739..728797a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/SnapshotManager.java
+@@ -67,6 +67,7 @@ import org.apache.hadoop.hbase.snapshot.SnapshotCreationException;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDoesNotExistException;
+ import org.apache.hadoop.hbase.snapshot.SnapshotExistsException;
++import org.apache.hadoop.hbase.snapshot.SnapshotReferenceUtil;
+ import org.apache.hadoop.hbase.snapshot.TablePartiallyOpenException;
+ import org.apache.hadoop.hbase.snapshot.UnknownSnapshotException;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+@@ -708,6 +709,9 @@ public class SnapshotManager implements Stoppable {
+     // stop tracking "abandoned" handlers
+     cleanupSentinels();
+ 
++    // Verify snapshot validity
++    SnapshotReferenceUtil.verifySnapshot(master.getConfiguration(), fs, snapshotDir, fsSnapshot);
++
+     // Execute the restore/clone operation
+     if (MetaReader.tableExists(master.getCatalogTracker(), tableName)) {
+       if (master.getAssignmentManager().getZKTable().isEnabledTable(
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
+index 2e9a08c..8fcefd3 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
+@@ -322,7 +322,7 @@ public class StoreFileInfo {
+     // after data loss in hdfs for whatever reason (upgrade, etc.): HBASE-646
+     // NOTE: that the HFileLink is just a name, so it's an empty file.
+     if (!HFileLink.isHFileLink(p) && fileStatus.getLen() <= 0) {
+-      LOG.warn("Skipping " + p + " beccreateStoreDirause its empty. HBASE-646 DATA LOSS?");
++      LOG.warn("Skipping " + p + " because it is empty. HBASE-646 DATA LOSS?");
+       return false;
+     }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+index cb489d8..dc977bb 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+@@ -19,6 +19,7 @@
+ package org.apache.hadoop.hbase.snapshot;
+ 
+ import java.io.IOException;
++import java.io.FileNotFoundException;
+ import java.util.HashSet;
+ import java.util.LinkedList;
+ import java.util.List;
+@@ -27,10 +28,13 @@ import java.util.Set;
+ import java.util.TreeMap;
+ 
+ import org.apache.hadoop.classification.InterfaceAudience;
++import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.io.HFileLink;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.regionserver.wal.HLogUtil;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.FSVisitor;
+@@ -150,6 +154,32 @@ public final class SnapshotReferenceUtil {
+   }
+ 
+   /**
++   * Verify the validity of the snapshot
++   *
++   * @param conf The current {@link Configuration} instance.
++   * @param fs {@link FileSystem}
++   * @param snapshotDir {@link Path} to the Snapshot directory of the snapshot to verify
++   * @param snapshotDesc the {@link SnapshotDescription} of the snapshot to verify
++   * @throws CorruptedSnapshotException if the snapshot is corrupted
++   * @throws IOException if an error occurred while scanning the directory
++   */
++  public static void verifySnapshot(final Configuration conf, final FileSystem fs,
++      final Path snapshotDir, final SnapshotDescription snapshotDesc) throws IOException {
++    final TableName table = TableName.valueOf(snapshotDesc.getTable());
++    visitTableStoreFiles(fs, snapshotDir, new FSVisitor.StoreFileVisitor() {
++      public void storeFile (final String region, final String family, final String hfile)
++          throws IOException {
++        HFileLink link = HFileLink.create(conf, table, region, family, hfile);
++        try {
++          link.getFileStatus(fs);
++        } catch (FileNotFoundException e) {
++          throw new CorruptedSnapshotException("Corrupted snapshot '" + snapshotDesc + "'", e);
++        }
++      }
++    });
++  }
++
++  /**
+    * Returns the set of region names available in the snapshot.
+    *
+    * @param fs {@link FileSystem}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
+index 6b118e2..966a594 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestRestoreSnapshotFromClient.java
+@@ -18,6 +18,7 @@
+ package org.apache.hadoop.hbase.client;
+ 
+ import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+@@ -36,6 +37,7 @@ import org.apache.hadoop.hbase.LargeTests;
+ import org.apache.hadoop.hbase.master.MasterFileSystem;
+ import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
+ import org.apache.hadoop.hbase.regionserver.NoSuchColumnFamilyException;
++import org.apache.hadoop.hbase.snapshot.CorruptedSnapshotException;
+ import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.FSUtils;
+@@ -254,6 +256,22 @@ public class TestRestoreSnapshotFromClient {
+     SnapshotTestingUtils.verifyRowCount(TEST_UTIL, tableName, snapshot0Rows);
+   }
+ 
++  @Test
++  public void testCorruptedSnapshot() throws IOException, InterruptedException {
++    SnapshotTestingUtils.corruptSnapshot(TEST_UTIL, Bytes.toString(snapshotName0));
++    TableName cloneName = TableName.valueOf("corruptedClone-" + System.currentTimeMillis());
++    try {
++      admin.cloneSnapshot(snapshotName0, cloneName);
++      fail("Expected CorruptedSnapshotException, got succeeded cloneSnapshot()");
++    } catch (CorruptedSnapshotException e) {
++      // Got the expected corruption exception.
++      // check for no references of the cloned table.
++      assertFalse(admin.tableExists(cloneName));
++    } catch (Exception e) {
++      fail("Expected CorruptedSnapshotException got: " + e);
++    }
++  }
++
+   // ==========================================================================
+   //  Helpers
+   // ==========================================================================
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+index 6c112d3..810d9d8 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+@@ -47,6 +47,7 @@ import org.apache.hadoop.hbase.client.Durability;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
++import org.apache.hadoop.hbase.io.HFileLink;
+ import org.apache.hadoop.hbase.master.HMaster;
+ import org.apache.hadoop.hbase.master.MasterFileSystem;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+@@ -56,6 +57,7 @@ import org.apache.hadoop.hbase.protobuf.generated.MasterProtos.IsSnapshotDoneRes
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.HRegionFileSystem;
+ import org.apache.hadoop.hbase.regionserver.HRegionServer;
++import org.apache.hadoop.hbase.snapshot.SnapshotReferenceUtil;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.FSTableDescriptors;
+ import org.apache.hadoop.hbase.util.FSUtils;
+@@ -377,6 +379,40 @@ public class SnapshotTestingUtils {
+       new Path(rootDir, HConstants.HREGION_LOGDIR_NAME), null);
+   }
+ 
++  /**
++   * Corrupt the specified snapshot by deleting some files.
++   *
++   * @param util {@link HBaseTestingUtility}
++   * @param snapshotName name of the snapshot to corrupt
++   * @return array of the corrupted HFiles
++   * @throws IOException on unexecpted error reading the FS
++   */
++  public static ArrayList corruptSnapshot(final HBaseTestingUtility util, final String snapshotName)
++      throws IOException {
++    final MasterFileSystem mfs = util.getHBaseCluster().getMaster().getMasterFileSystem();
++    final FileSystem fs = mfs.getFileSystem();
++
++    Path snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(snapshotName,
++                                                                        mfs.getRootDir());
++    SnapshotDescription snapshotDesc = SnapshotDescriptionUtils.readSnapshotInfo(fs, snapshotDir);
++    final TableName table = TableName.valueOf(snapshotDesc.getTable());
++
++    final ArrayList corruptedFiles = new ArrayList();
++    SnapshotReferenceUtil.visitTableStoreFiles(fs, snapshotDir, new FSVisitor.StoreFileVisitor() {
++      public void storeFile (final String region, final String family, final String hfile)
++          throws IOException {
++        HFileLink link = HFileLink.create(util.getConfiguration(), table, region, family, hfile);
++        if (corruptedFiles.size() % 2 == 0) {
++          fs.delete(link.getAvailablePath(fs));
++          corruptedFiles.add(hfile);
++        }
++      }
++    });
++
++    assertTrue(corruptedFiles.size() > 0);
++    return corruptedFiles;
++  }
++
+   // ==========================================================================
+   //  Table Helpers
+   // ==========================================================================
+-- 
+1.7.0.4
+

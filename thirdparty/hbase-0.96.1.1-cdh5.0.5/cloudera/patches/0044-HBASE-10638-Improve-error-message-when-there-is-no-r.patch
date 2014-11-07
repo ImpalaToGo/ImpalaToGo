@@ -1,0 +1,28 @@
+From b7c1a88497034c5e5bfbabf5dd96bd70f92b0f7a Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Fri, 28 Feb 2014 17:30:23 +0000
+Subject: [PATCH 44/86] HBASE-10638 Improve error message when there is no region server available for move
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1573010 13f79535-47bb-0310-9956-ffa450edef68
+---
+ bin/region_mover.rb |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/bin/region_mover.rb b/bin/region_mover.rb
+index 2d65073..80df661 100644
+--- a/bin/region_mover.rb
++++ b/bin/region_mover.rb
+@@ -340,6 +340,10 @@ def unloadRegions(options, hostname)
+   # Remove the servers in our exclude list from list of servers.
+   servers = stripExcludes(servers, options[:excludesFile])
+   puts "Valid region move targets: ", servers
++  if servers.length == 0
++    puts "No regions were moved - there was no server available"
++    exit 4
++  end
+   movedRegions = java.util.ArrayList.new()
+   while true
+     rs = getRegions(config, servername)
+-- 
+1.7.0.4
+

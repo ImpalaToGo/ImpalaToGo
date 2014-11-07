@@ -1,0 +1,30 @@
+From fe9f3dc8944cf4c227668842405e44cee7c3ff7f Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Fri, 21 Feb 2014 22:52:33 +0000
+Subject: [PATCH 38/86] HBASE-10586 hadoop2-compat IPC metric registred twice
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-17454
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1570742 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/ipc/MetricsHBaseServerSourceImpl.java    |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/ipc/MetricsHBaseServerSourceImpl.java b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/ipc/MetricsHBaseServerSourceImpl.java
+index d0cdaf9..565a570 100644
+--- a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/ipc/MetricsHBaseServerSourceImpl.java
++++ b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/ipc/MetricsHBaseServerSourceImpl.java
+@@ -110,8 +110,6 @@ public class MetricsHBaseServerSourceImpl extends BaseSourceImpl
+ 
+   @Override
+   public void getMetrics(MetricsCollector metricsCollector, boolean all) {
+-    metricsRegistry.snapshot(metricsCollector.addRecord(metricsRegistry.info()), all);
+-
+     MetricsRecordBuilder mrb = metricsCollector.addRecord(metricsName)
+         .setContext(metricsContext);
+ 
+-- 
+1.7.0.4
+

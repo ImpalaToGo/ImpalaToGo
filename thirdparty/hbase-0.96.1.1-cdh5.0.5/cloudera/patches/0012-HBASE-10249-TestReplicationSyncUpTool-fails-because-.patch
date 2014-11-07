@@ -1,0 +1,71 @@
+From 15d56cf95f974ab091f7d483ad9b64ba2e6b9686 Mon Sep 17 00:00:00 2001
+From: Jean-Daniel Cryans <jdcryans@apache.org>
+Date: Tue, 21 Jan 2014 21:30:32 +0000
+Subject: [PATCH 12/86] HBASE-10249 TestReplicationSyncUpTool fails because failover takes too long
+
+Reason: Bug
+Author: Jean-Daniel Cryans
+Ref: CDH-16783
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1560199 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hbase/replication/ReplicationQueues.java       |    7 +++++++
+ .../hbase/replication/ReplicationQueuesZKImpl.java |    9 +++++----
+ .../regionserver/ReplicationSourceManager.java     |    3 +++
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueues.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueues.java
+index 80d1adf..a3b2ac1 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueues.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueues.java
+@@ -106,4 +106,11 @@ public interface ReplicationQueues {
+    * @return a list of server names
+    */
+   List<String> getListOfReplicators();
++
++  /**
++   * Checks if the provided znode is the same as this region server's
++   * @param znode to check
++   * @return if this is this rs's znode
++   */
++  boolean isThisOurZnode(String znode);
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueuesZKImpl.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueuesZKImpl.java
+index 469a871..9563744 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueuesZKImpl.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/replication/ReplicationQueuesZKImpl.java
+@@ -154,12 +154,13 @@ public class ReplicationQueuesZKImpl extends ReplicationStateZKBase implements R
+   }
+ 
+   @Override
++  public boolean isThisOurZnode(String znode) {
++    return ZKUtil.joinZNode(this.queuesZNode, znode).equals(this.myQueuesZnode);
++  }
++
++  @Override
+   public SortedMap<String, SortedSet<String>> claimQueues(String regionserverZnode) {
+     SortedMap<String, SortedSet<String>> newQueues = new TreeMap<String, SortedSet<String>>();
+-    if (ZKUtil.joinZNode(this.queuesZNode, regionserverZnode).equals(this.myQueuesZnode)) {
+-      LOG.warn("An attempt was made to claim our own queues on region server " + regionserverZnode);
+-      return newQueues;
+-    }
+     // check whether there is multi support. If yes, use it.
+     if (conf.getBoolean(HConstants.ZOOKEEPER_USEMULTI, true)) {
+       LOG.info("Atomically moving " + regionserverZnode + "'s hlogs to my queue");
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
+index e984a7e..17d5463 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/replication/regionserver/ReplicationSourceManager.java
+@@ -467,6 +467,9 @@ public class ReplicationSourceManager implements ReplicationListener {
+ 
+     @Override
+     public void run() {
++      if (this.rq.isThisOurZnode(rsZnode)) {
++        return;
++      }
+       // Wait a bit before transferring the queues, we may be shutting down.
+       // This sleep may not be enough in some cases.
+       try {
+-- 
+1.7.0.4
+

@@ -1,0 +1,917 @@
+commit 95bd23e4fe04ba455d246bd8219513ede209d276
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Wed Nov 5 15:42:02 2014 -0800
+
+    Preparing for CDH5.0.5 release
+
+commit 127487ddbe958245cfc37ed0c1a96d5619faf225
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Tue Oct 28 20:25:35 2014 +0000
+
+    Update Jetty to disable SSLv3
+    
+    Reason: CVE-2014-3566
+    Author: Matteo Bertozzi
+    Ref: CDH-22630
+
+commit e1178d775bd7a1be15cb9cc468f2a8f2183f9982
+Author: stack <stack@apache.org>
+Date:   Wed Oct 29 14:43:59 2014 -0700
+
+    HBASE-12376 HBaseAdmin leaks ZK connections if failure starting watchers (ConnectionLossException)
+    Author: Stack massaging Chris Leroy original fix
+    Reviewer: Sean Busbey
+    Ref: CDH-22700 HBaseAdmin ZooKeeper connection leak
+    
+    Conflicts:
+    	hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+    
+    Conflicts:
+    	hbase-client/src/main/java/org/apache/hadoop/hbase/catalog/CatalogTracker.java
+    	hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+
+commit f8440695d01c8a4d8bf3e4ce794a3b57f6eb86ab
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Tue Oct 21 09:32:16 2014 -0700
+
+    Preparing for CDH5.0.5 development
+
+commit e8269a062f9afd83ed48e32055fef7b32f495863
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Mon Aug 25 08:24:14 2014 -0700
+
+    Prepare for CDH5.0.4 release
+
+commit 61e4c90b002ff27e372d11d46298cc4cc3a7c1c0
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Jul 31 19:54:15 2014 +0100
+
+    HBASE-11609 LoadIncrementalHFiles fails if the namespace is specified (addendum)
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-20550
+
+commit bc93a5f59ff6c01540073cf7554af6ed6163912d
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Wed Jul 30 08:41:58 2014 +0100
+
+    HBASE-11609 LoadIncrementalHFiles fails if the namespace is specified
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-20550
+
+commit 81583c51185f31d747a7b8f93be64c8394aa77f7
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Mon Jul 14 13:41:41 2014 -0700
+
+    Preparing for CDH5.0.4 development
+
+commit f6edef67ff8fdaec8123cd18f63b409e0debf43e
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Sun Jul 6 15:48:39 2014 -0700
+
+    Preparing for CDH5.0.3 release
+
+commit 21cf8592264e377f91c915a136838788fc2d2ce7
+Author: Ted Yu <tedyu@apache.org>
+Date:   Wed Jun 18 01:03:03 2014 +0000
+
+    HBASE-11052 Sending random data crashes thrift service (Adrian Muraru)
+    
+    Ref: CDH-18784
+    Reason: Bug
+    Author: Adrian Muraru
+    
+    (cherry picked from commit 1c4cdefe21b5bf45aac223a359e807845670bed3)
+
+commit 37e64b6a3ea99fe5583e25ac264a5520e9f14338
+Author: Jimmy Xiang <jxiang@cloudera.com>
+Date:   Fri Jun 13 08:52:09 2014 -0700
+
+    HBASE-10871 Indefinite OPEN/CLOSE wait on busy RegionServers (Esteban)
+    
+    Ref: CDH-19815
+    Reason: Bug
+    Author: Esteban Gutierrez
+    
+    (cherry picked from commit 7ffc454ccc64f095d8992f03edeb3aacd83de92e)
+
+commit 6d2ef7ec615f850d41680e6d982f2f299283de98
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Wed Jun 11 11:34:50 2014 -0700
+
+    Preparing for CDH5.0.3 development
+
+commit 6f98cdcbe65d627bb306bb79e2b6076fba521256
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Fri Jun 6 09:43:02 2014 -0700
+
+    Preparing for CDH5.0.2 release
+
+commit 262d3e98fdfb6f8eb576cf7c88e40b3f195532b1
+Author: larsh <larsh@unknown>
+Date:   Mon Jan 27 19:50:50 2014 +0000
+
+    HBASE-10371 Compaction creates empty hfile, then selects this file for compaction and creates empty hfile and over again. (binlijin)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1561811 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 846f47da022c69cbba8c17a7cce7f9f792f970d5)
+
+commit 3c738ea138d50a8fe200721f1d7846e2967725da
+Author: Jean-Daniel Cryans <jdcryans@apache.org>
+Date:   Tue Apr 15 22:50:27 2014 +0000
+
+    HBASE-10312 Flooding the cluster with administrative actions leads to collapse
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1587744 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 2f95417962ef525a5e19321d02d0159a1d297496)
+
+commit ac8598ab88da1edd2028b89a23377c9efa38e55f
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat May 17 01:32:24 2014 +0000
+
+    HBASE-6990 ADDENDUM
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1595410 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit c46205395614edfa6a4e15b8763d17941d68bd4d)
+
+commit 849bc0eee6d152b87eb3298c09dc23f7a90020ba
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat May 17 00:32:24 2014 +0000
+
+    HBASE-6990 pretty print TTL (Esteban Gutierrez)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1595395 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 83ba83b22a3fa8346bf3ea7e07a38c2593e89dbb)
+
+commit 60c5448ede4060776cc056ee48a1cd9fc270f260
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Tue May 13 16:17:26 2014 -0700
+
+    Preparing for CDH5.0.2 development
+
+commit cff51a859c2d19028411e5c8108253f527328b1a
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Thu May 1 17:10:10 2014 -0700
+
+    Preparing for CDH5.0.1 release
+
+commit 75bdbab8d2a1de25592b31c27b0cd792064b2ca0
+Author: Jean-Daniel Cryans <jdcryans@apache.org>
+Date:   Fri Apr 25 21:03:15 2014 +0000
+
+    HBASE-10958 [dataloss] Bulk loading with seqids can prevent some log entries from being replayed
+    
+    Reason: Bug
+    Author: Jean-Daniel Cryans
+    Ref: CDH-18360
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1590146 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 5524c4b8e276e632e89a1d84ed182310193692d7
+Author: Jean-Daniel Cryans <jdcryans@apache.org>
+Date:   Fri Apr 25 20:00:29 2014 +0000
+
+    HBASE-11008 Align bulk load, flush, and compact to require Action.CREATE
+    
+    Reason: Bug
+    Author: Jean-Daniel Cryans
+    Ref: CDH-18360
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1590126 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 0a341a6a6f33348b8d78d5c339820513b3d4ee08
+Author: Michael Stack <stack@apache.org>
+Date:   Fri Mar 14 19:17:04 2014 +0000
+
+    HBASE-10751 TestHRegion testWritesWhileScanning occasional fail since HBASE-10514 went in
+    
+    Reason: Bug
+    Author: Michael Stack
+    Ref: CDH-18827
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1577667 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 969cdbe786d887ebdd6046e9de4a493fcc73babc
+Author: Michael Stack <stack@apache.org>
+Date:   Thu Mar 13 23:43:35 2014 +0000
+
+    HBASE-10514 Forward port HBASE-10466, possible data loss when failed flushes
+    
+    Reason: Bug
+    Author: Michael Stack
+    Ref: CDH-18827
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1577386 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Conflicts:
+    	hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+
+commit dea7685250d9d9a850a823646f81e5e2412dcc0b
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Thu Apr 3 22:56:28 2014 +0000
+
+    HBASE-10890 ExportSnapshot needs to add acquired token to job
+    
+    Reason: Bug
+    Author: Jerry He
+    Ref: CDH-18237
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1584448 13f79535-47bb-0310-9956-ffa450edef68
+
+commit e5341a44b3a14041f4aa1c9740b8a64350624848
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Wed Mar 26 16:23:25 2014 +0000
+
+    HBASE-10825 Add copy-from option to ExportSnapshot
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-18060
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1581910 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 5f43a941e4499c3d4a121b81f7931bd27b080d58
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Thu Apr 10 13:20:14 2014 -0700
+
+    Preparing for CDH5.0.1 development
+
+commit 5a9dbf56cad522c8374be2d760a1e89dc9b8f3a9
+Author: Jenkins slave <kitchen-build@cloudera.com>
+Date:   Thu Mar 20 11:21:42 2014 -0700
+
+    Preparing for CDH5.0.0 release
+
+commit fa8ad00cc0f2a2aa9f1c20b6493b0228b0d2ccc8
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Mon Mar 17 21:41:21 2014 +0000
+
+    HBASE-10770 Don't exit from the Canary daemon mode if no regions are present
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-18024
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1578608 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 12acc28ec06edf92b490d7ab884a26b1f5419cfa
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Mon Mar 17 16:15:58 2014 +0000
+
+    HBASE-10766 SnapshotCleaner allows to delete referenced files
+    
+    Reason: Bug
+    Author: Bharath Vissapragada
+    Ref: CDH-18057
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1578452 13f79535-47bb-0310-9956-ffa450edef68
+
+commit c80fda1dee462e5924ef683b8f5668f9b59a7358
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Sat Mar 15 23:43:55 2014 +0000
+
+    HBASE-10762 clone_snapshot doesn't check for missing namespace
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-18030
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1577956 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2c0089ea124454278bac707fdaae492e2e52da8e
+Author: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date:   Fri Mar 14 13:50:17 2014 -0700
+
+    HBSE-10716 Adding hbase.regionserver.region.split.policy to hbase-default.xml
+    
+    Reason: Bug
+    Author: Srikanth Srungarapu
+    Ref: CDH-17742
+
+commit f8275e0338d7992d152e78f8104306cf3b6aae08
+Author: Esteban Gutierrez <esteban@cloudera.com>
+Date:   Thu Mar 13 20:32:30 2014 -0700
+
+    Addendum to CDH-16482: HBase isn't handling wildcard addresses correctly
+    
+    Reason: Bug
+    Author: Esteban Gutierrez
+    Ref: CDH-17613
+
+commit a56a0f14121076aa2aed70ae547dc4085804a75d
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Thu Mar 13 20:27:19 2014 +0000
+
+    HBASE-10737 HConnectionImplementation should stop RpcClient on close
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-18005
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1577307 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b3de5427efc3351e050e3d5cb462600ffef1221e
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Wed Mar 12 15:25:37 2014 +0000
+
+    HBASE-10718 TestHLogSplit fails when it sets a KV size to be negative (Esteban Gutierrez)
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1576783 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 72dc301677b3c3dc816ae9d61dfaf8461b6dd991)
+
+commit 28362b2e3fd3748d6e0ebfdafae15cb64a515ce1
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Thu Mar 6 01:39:41 2014 +0000
+
+    HBASE-10649 TestMasterMetrics fails occasionally
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-17745
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1574741 13f79535-47bb-0310-9956-ffa450edef68
+
+commit bf78846ee9dae91ccfd5e1316f25dbbf7a882790
+Author: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date:   Thu Mar 6 16:17:54 2014 -0800
+
+    HBASE-10682 region_mover.rb throws "can't convert nil into String" for regions moved
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-16884
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1574826 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Conflicts:
+    	bin/region_mover.rb
+
+commit 7820986978d33eee68aff86a033138b577267137
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Tue Mar 4 11:19:42 2014 +0000
+
+    HBASE-10622 Improve log and Exceptions in Export Snapshot
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-17590
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1574033 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 10fe2eee452bd160ab44ed0ec1aea7cf329526b8
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Tue Mar 4 09:06:33 2014 +0000
+
+    HBASE-9708 Improve Snapshot Name Error Message (Esteban Gutierrez)
+    
+    Reason: Improvement
+    Author: Esteban Gutierrez
+    Ref: CDH-14719
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1573950 13f79535-47bb-0310-9956-ffa450edef68
+
+commit bf0349af9821f972c6e4565264c9c062445af903
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Tue Mar 4 15:56:07 2014 -0700
+
+    HBASE-10456 Balancer should not run if it's just turned off.
+    
+    Author: Jimmy Xiang
+    Reason: Test fix
+    Ref: CDH-17835
+
+commit 2f35ba76d19e4ab0344ca6db12c221a0adcf76ef
+Author: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date:   Tue Mar 4 14:19:45 2014 -0800
+
+    HBASE-10639 Unload script displays wrong counts (off by one) when unloading regions
+    
+    Reason: Usability bug
+    Author: Srikanth Srungarapu
+    Ref: CDH-10370
+
+commit 6a8dd5a41d3a5327045314d5b9763abd24e94181
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Wed Feb 26 01:08:19 2014 +0000
+
+    HBASE-10608 Acquire the FS Delegation Token for Secure ExportSnapshot
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-17674
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1571893 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2ca6d8cea9170760054c7d97529d761ecb367df9
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Fri Feb 28 09:16:52 2014 +0000
+
+    HBASE-10631 Avoid extra seek on FileLink open
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-17706
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1572891 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b7c1a88497034c5e5bfbabf5dd96bd70f92b0f7a
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Fri Feb 28 17:30:23 2014 +0000
+
+    HBASE-10638 Improve error message when there is no region server available for move
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1573010 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 64a07efb3b75e5094d62532064b201613934b47a
+Author: Michael Stack <stack@apache.org>
+Date:   Wed Feb 26 23:06:43 2014 +0000
+
+    HBASE-8803 region_mover.rb should move multiple regions at a time
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1572329 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 3df1ee202d85a4e19c4665a8aeb5b17f22eaba65)
+
+commit a1967bc8d26da5e04b7af6e245087a31c8c0aee3
+Author: Esteban Gutierrez <esteban@cloudera.com>
+Date:   Thu Feb 20 18:01:49 2014 -0800
+
+    CLOUDERA-BUILD Update jets3 version to 0.9.0 to match with CDH5 bundled jets3 jar
+    
+    Ref: CDH-17401
+    Reason: Product Requirement (Compatibility)
+    Author: Esteban Gutierrez
+    (cherry picked from commit c3b3c2f80aec7ec6b960f78c72f8cc8a33a3690d)
+
+commit fcfacdb1b8874bd690e70bb01f0f93e155413f30
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Wed Feb 26 01:02:05 2014 +0000
+
+    HBASE-10436 restore regionserver lists removed from hbase 0.96.0 jmx
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1571888 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Regression
+    Author: Jonathan Hsieh
+    Ref: CDH-16858
+
+commit 7518f080bbf32e7fddf3f72635bf9e9f58defb97
+Author: Jeffrey Zhong <jeffreyz@apache.org>
+Date:   Tue Feb 25 02:04:23 2014 +0000
+
+    HBASE-10582: 0.94->0.96 Upgrade: ACL can't be repopulated when ACL table contains row for table '-ROOT' or '.META.'
+    HBASE-10581: ACL znode are left without PBed during upgrading hbase0.94* to hbase0.96+
+    
+    Reference: CDH-17623
+    Author: Jeffrey Zhong
+
+commit 450d9307fceeafc14e0da0bcb989722b5ccb17b2
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Mon Feb 24 17:16:03 2014 +0000
+
+    HBASE-10587 Master metrics clusterRequests is wrong
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-17455
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1571358 13f79535-47bb-0310-9956-ffa450edef68
+
+commit fe9f3dc8944cf4c227668842405e44cee7c3ff7f
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Fri Feb 21 22:52:33 2014 +0000
+
+    HBASE-10586 hadoop2-compat IPC metric registred twice
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-17454
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1570742 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 8876bc6380c43991b635e1ae5192ade23a42d90a
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Fri Jan 10 22:47:39 2014 +0000
+
+    HBASE-10310. ZNodeCleaner session expired for /hbase/master (Samir Ahmic)
+    
+    Reason: Bug
+    Author: Samir Ahmic
+    Ref: CDH-17550
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1557275 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 40f6074ab0d41f6b8f9c82f9016f7bc30e68fda6
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Fri Feb 21 21:29:12 2014 +0000
+
+    HBASE-10526 Using Cell instead of KeyValue in HFileOutputFormat
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-17396
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1570714 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 869e2aedbabdfda55f251d15ec392bdb67a9d8f5
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Fri Feb 21 10:01:59 2014 +0000
+
+    HBASE-10567 Add overwrite manifest option to ExportSnapshot
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-16074
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1570506 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b7292ca97931398a32d2fa38b4f5fc63bd454fc7
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Thu Feb 20 10:08:54 2014 +0000
+
+    HBASE-6642 enable_all,disable_all,drop_all can call 'list' command with regex directly
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-13457
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1570128 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 1b172f54b62d74dc57dd5711270a00cad6429859
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Wed Feb 19 11:12:59 2014 +0000
+
+    HBASE-10537 Let the ExportSnapshot mapper fail and retry on error
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1569686 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-16074
+
+commit eaae2d07c90160d1f5508b4836ebbf8d5f5f63c8
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Tue Feb 18 19:28:42 2014 +0000
+
+    HBASE-10543 Two rare test failures with TestLogsCleaner and TestSplitLogWorker
+    
+    Reason: Test
+    Author: Jimmy Xiang
+    Ref: CDH-17394, CDH-17385
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1569498 13f79535-47bb-0310-9956-ffa450edef68
+
+commit da1d095d839a899fe15b8ff043e4aaa6b2f9a6d2
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Wed Feb 12 19:55:53 2014 +0000
+
+    HBASE-7849 Provide administrative limits around bulkloads of files into a single region
+    
+    Reason: Improvement
+    Author: Jimmy Xiang
+    Ref: CDH-10479
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1567745 13f79535-47bb-0310-9956-ffa450edef68
+
+commit c4c98b16d723c9853190877ae59565a3b55213e9
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Fri Feb 7 17:58:44 2014 +0000
+
+    HBASE-5356 region_mover.rb can hang if table region it belongs to is deleted
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-10679
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1565744 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 7242ac59b23357e34749610f6fd371c1f1550cf5
+Author: Michael Stack <stack@apache.org>
+Date:   Wed Feb 5 21:12:52 2014 +0000
+
+    HBASE-10473 Add utility for adorning http Context
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1564930 13f79535-47bb-0310-9956-ffa450edef68
+    (cherry picked from commit 6164a77d1069bb7da5c017d946230da9635e92b7)
+
+commit 10f0e1d1922281f09cdce775614c68150fd559e0
+Author: Sean Mackrory <sean@cloudera.com>
+Date:   Wed Feb 5 13:03:50 2014 -0800
+
+    CLOUDERA-BUILD. Harmonize slf4j version
+
+commit 84524a7fb4d887dd9b243c47c82239ae737bb767
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Tue Feb 4 19:18:44 2014 +0000
+
+    HBASE-10457 Print corrupted file information in SnapshotInfo tool without -file option (Bharath Vissapragada)
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-16074
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1564425 13f79535-47bb-0310-9956-ffa450edef68
+
+commit ba4f4360a36fca355d9873aa38087a8519104c39
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Tue Dec 10 11:44:31 2013 +0000
+
+    HBASE-10111 Verify that a snapshot is not corrupted before restoring it
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-16074
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1549819 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 1118129a74a1911ad4990bb9c66bd327587e9754
+Author: Nicolas Liochon <nkeywal@apache.org>
+Date:   Wed Jan 29 20:42:44 2014 +0000
+
+    HBASE-10431 Rename com.google.protobuf.ZeroCopyLiteralByteString
+    
+    Reason: Compatibility
+    Author: Nicolas Liochon
+    Ref: CDH-17196
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1562586 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 99f9bbfb70e735755ce7a8cf855a635d8c3b69bf
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Tue Feb 4 10:14:05 2014 +0000
+
+    HBASE-10319 HLog should roll periodically to allow DN decommission to eventually complete
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-16706
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1564242 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 9b5d376a415adae20d4411127404c2c0879476c9
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Mon Feb 3 21:46:50 2014 +0000
+
+    HBASE-7963 HBase VerifyReplication not working when security enabled
+    
+    Reason: Bug
+    Author: Matteo Bertozzi
+    Ref: CDH-17051
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1564079 13f79535-47bb-0310-9956-ffa450edef68
+
+commit a338bd66507c661bed58618825ede2647744ba4a
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Thu Jan 30 21:37:00 2014 +0000
+
+    HBASE-10446 Backup master gives Error 500 for debug dump
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-15372
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1562986 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 644ae50def3d30b9673512bcd3ae287861852450
+Author: Matteo Bertozzi <mbertozzi@apache.org>
+Date:   Wed Jan 29 10:08:24 2014 +0000
+
+    HBASE-10435 Lower the log level of Canary region server match
+    
+    Reason: Usability
+    Author: Matteo Bertozzi
+    Ref: CDH-17053
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1562393 13f79535-47bb-0310-9956-ffa450edef68
+
+commit d9683a544dbd03055f963c9fa7987bf48131f113
+Author: Zhihong Yu <tedyu@apache.org>
+Date:   Mon Jan 27 22:58:46 2014 +0000
+
+    HBASE-10426 user_permission in security.rb calls non-existent UserPermission#getTable method
+    
+    Reason: Bug
+    Author: Ted Yu
+    Ref: CDH-17031
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1561901 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 2fb6334fce79f95cd8c0a9e8150f57edf474f355
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Wed Jan 22 20:17:59 2014 +0000
+
+    Amend HBASE-10338 Fix NPE if the server is terminated before the RegionServerCoprocessorHost is initialized (Vandana Ayyalasomayajula)
+    
+    Reason: Bug
+    Author: Andrew Purtell
+    Ref: CDH-16936
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1560496 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 028ac49d53a3205946891e688709697d8068ab91
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Wed Jan 15 01:24:38 2014 +0000
+
+    HBASE-10338. Region server fails to start with AccessController coprocessor if installed into RegionServerCoprocessorHost (Vandana Ayyalasomayajula)
+    
+    Reason: Bug
+    Author: Andrew Purtell
+    Ref: CDH-16936
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1558262 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 89bfc139f5368ac4f88793bc6ea9d753d12f4430
+Author: Andrew Kyle Purtell <apurtell@apache.org>
+Date:   Sat Dec 21 21:30:17 2013 +0000
+
+    HBASE-10220. Put all test service principals into the superusers list
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1552949 13f79535-47bb-0310-9956-ffa450edef68
+
+commit a5416aa7c3695a76e5cb52341a2a0c2cd59f7de5
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Thu Jan 2 23:27:45 2014 +0000
+
+    HBASE-10249 Intermittent TestReplicationSyncUpTool failure (Demai Ni)
+    
+    Reason: Bug
+    Author: Demai Ni
+    Ref: CDH-16915
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1554964 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 37be71bd369cb374da777b8a7abfbcd6a4fdaaac
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Wed Dec 18 00:56:45 2013 +0000
+
+    HBASE-10189 Intermittent TestReplicationSyncUpTool failure (LarsH and Demai Ni)
+    
+    Reason: Bug
+    Author: Demai Ni
+    Ref: CDH-16915
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1551792 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 58f8b4fddc6cfa9aaddfd80c588673a8f319c943
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Tue Dec 17 05:42:51 2013 +0000
+
+    HBASE-9047 - addendum, include new files
+    
+    Reason: New Feature
+    Author: Demai Ni
+    Ref: CDH-16915
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1551463 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 477089f32b56a83e29570d601de5a6e965347490
+Author: Lars Hofhansl <larsh@apache.org>
+Date:   Tue Dec 17 05:42:05 2013 +0000
+
+    HBASE-9047 Tool to handle finishing replication when the cluster is offline (Demai Ni)
+    
+    Reason: New Feature
+    Author: Demai Ni
+    Ref: CDH-16915
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1551462 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 15d56cf95f974ab091f7d483ad9b64ba2e6b9686
+Author: Jean-Daniel Cryans <jdcryans@apache.org>
+Date:   Tue Jan 21 21:30:32 2014 +0000
+
+    HBASE-10249 TestReplicationSyncUpTool fails because failover takes too long
+    
+    Reason: Bug
+    Author: Jean-Daniel Cryans
+    Ref: CDH-16783
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1560199 13f79535-47bb-0310-9956-ffa450edef68
+
+commit fe1246ff54c1ad7ae9a4a7205745d9dfb006c63d
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Mon Jan 13 21:51:24 2014 +0000
+
+    HBASE-10315 Canary shouldn't exit with 3 if there is no master running.
+    
+    Reason: Bug
+    Author: Elliott Clark
+    Ref: CDH-16598
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1557866 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 1f142f371011f07ae5a9a3d096a7924d741bc369
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Tue Jan 21 00:09:06 2014 +0000
+
+    HBASE-10384 Failed to increment serveral columns in one Increment
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-16813
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1559857 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 538b1afe2da5d914c4503b237bfea818deaeaa66
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Sat Jan 18 03:30:45 2014 +0000
+
+    HBASE-10349 Table became unusable when master balanced its region after table was dropped
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-16797
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1559313 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 952eb1307a85e4d1f3bd7abc88e942afa853c115
+Author: Jimmy Xiang <jxiang@apache.org>
+Date:   Fri Jan 17 00:18:23 2014 +0000
+
+    HBASE-10333 Assignments are not retained on a cluster start
+    
+    Reason: Bug
+    Author: Jimmy Xiang
+    Ref: CDH-16792
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1558965 13f79535-47bb-0310-9956-ffa450edef68
+
+commit e329ead7af9b243f14192699f783fbbee90d5d8f
+Author: Nick Dimiduk <ndimiduk@apache.org>
+Date:   Fri Jan 3 18:13:31 2014 +0000
+
+    HBASE-10264 CompactionTool in mapred mode is missing classes in its classpath (Himanshu Vashishtha)
+    
+    Reason: Bug
+    Author: Himanshu Vashishtha
+    Ref: CDH-16461
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1555182 13f79535-47bb-0310-9956-ffa450edef68
+
+commit fff11795f4fa685c77f9e5d9bdb13bd660c47c1f
+Author: Jean-Daniel Cryans <jdcryans@cloudera.com>
+Date:   Fri Jan 3 14:07:15 2014 -0800
+
+    CDH-16482 HBase isn't handling wildcard addresses correctly
+    This commit reverts HBASE-9593
+    
+    Reason: Bug
+    Author: Jean-Daniel Cryans
+
+commit fbf35dddf1cb7ec09108f774f0c70dfd12136155
+Author: Elliott Neil Clark <eclark@apache.org>
+Date:   Tue Dec 31 21:35:40 2013 +0000
+
+    HBASE-10260 Canary Doesn't pick up Configuration properly.
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1554572 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Reason: Bug
+    Author: Elliott Clark
+    Ref: CDH-16481
+
+commit b5360d2028a98b17c8e31946e01d5367b0d6995d
+Author: Enis Soztutar <enis@apache.org>
+Date:   Mon Nov 18 22:17:39 2013 +0000
+
+    HBASE-8369 MapReduce over snapshot files
+    
+    git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1543195 13f79535-47bb-0310-9956-ffa450edef68
+    
+    Conflicts:
+    
+    	hbase-common/src/main/java/org/apache/hadoop/hbase/CellUtil.java
+    	hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+    
+    Reason: Performance
+    Author: Enis Soztutar
+    Ref: CDH-15350
+
+commit e6f5102028e32324151bee0d86243f0206e6c354
+Author: Himanshu <himanshu@cloudera.com>
+Date:   Thu Dec 26 17:12:51 2013 -0700
+
+    CLOUDERA-BUILD Add a new profile for CDH5 to built against MR1. This is also the default profile.
+    
+    Ref: CDH-16257
+    Reason: Product Requirement (Compatibility)
+    Author: Himanshu Vashishtha, Jimmy Xiang, Elliott Clarke
+
+commit 525c51997a36cdae4e024dc12be18814d7e4f87f
+Author: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date:   Thu Sep 26 15:21:02 2013 +0100
+
+    CLOUDERA-BUILD add safety check to build to ensure JDK7 is being used
+    
+    The default target is Java 6 but you must use JDK7 to compile
+
+commit 72d32c0c12ac014af2fa2275c0aab9eb6eeb81d5
+Author: Jonathan M Hsieh <jon@cloudera.com>
+Date:   Tue Sep 24 16:47:55 2013 -0700
+
+    CLOUDERA-BUILD Change build to point to Cloudera versions and repositories.
+    - hard code hbase poms to choose hbase-hadoop2-compat module
+    - added version string and hardcoded hadoop2 profile for new hbase-thrift module.
+    - Change version to 0.96.1.1-cdh5.0.0-SNAPSHOT

@@ -1,0 +1,62 @@
+From c80fda1dee462e5924ef683b8f5668f9b59a7358 Mon Sep 17 00:00:00 2001
+From: Andrew Kyle Purtell <apurtell@apache.org>
+Date: Sat, 15 Mar 2014 23:43:55 +0000
+Subject: [PATCH 57/86] HBASE-10762 clone_snapshot doesn't check for missing namespace
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-18030
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1577956 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    8 ++++++++
+ .../hbase/client/TestCloneSnapshotFromClient.java  |    7 +++++++
+ 2 files changed, 15 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index 9be1041..1ffae65 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -2920,6 +2920,14 @@ MasterServices, Server {
+       throw new ServiceException(e);
+     }
+ 
++    // ensure namespace exists
++    try {
++      TableName dstTable = TableName.valueOf(request.getSnapshot().getTable());
++      getNamespaceDescriptor(dstTable.getNamespaceAsString());
++    } catch (IOException ioe) {
++      throw new ServiceException(ioe);
++    }
++
+     try {
+       SnapshotDescription reqSnapshot = request.getSnapshot();
+       snapshotManager.restoreSnapshot(reqSnapshot);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestCloneSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestCloneSnapshotFromClient.java
+index e5cbf35..ccf4c7e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestCloneSnapshotFromClient.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestCloneSnapshotFromClient.java
+@@ -30,6 +30,7 @@ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.LargeTests;
+ import org.apache.hadoop.hbase.NamespaceDescriptor;
++import org.apache.hadoop.hbase.NamespaceNotFoundException;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.master.MasterFileSystem;
+ import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
+@@ -147,6 +148,12 @@ public class TestCloneSnapshotFromClient {
+     admin.cloneSnapshot(snapshotName, tableName);
+   }
+ 
++  @Test(expected = NamespaceNotFoundException.class)
++  public void testCloneOnMissingNamespace() throws IOException, InterruptedException {
++    TableName clonedTableName = TableName.valueOf("unknownNS:clonetb");
++    admin.cloneSnapshot(snapshotName1, clonedTableName);
++  }
++
+   @Test
+   public void testCloneSnapshot() throws IOException, InterruptedException {
+     TableName clonedTableName = TableName.valueOf("clonedtb-" + System.currentTimeMillis());
+-- 
+1.7.0.4
+

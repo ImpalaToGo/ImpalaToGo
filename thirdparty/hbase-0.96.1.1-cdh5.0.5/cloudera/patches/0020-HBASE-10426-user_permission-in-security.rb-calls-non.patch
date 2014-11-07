@@ -1,0 +1,30 @@
+From d9683a544dbd03055f963c9fa7987bf48131f113 Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Mon, 27 Jan 2014 22:58:46 +0000
+Subject: [PATCH 20/86] HBASE-10426 user_permission in security.rb calls non-existent UserPermission#getTable method
+
+Reason: Bug
+Author: Ted Yu
+Ref: CDH-17031
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1561901 13f79535-47bb-0310-9956-ffa450edef68
+---
+ hbase-shell/src/main/ruby/hbase/security.rb |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-shell/src/main/ruby/hbase/security.rb b/hbase-shell/src/main/ruby/hbase/security.rb
+index e370ca9..6dfe570 100644
+--- a/hbase-shell/src/main/ruby/hbase/security.rb
++++ b/hbase-shell/src/main/ruby/hbase/security.rb
+@@ -187,7 +187,7 @@ module Hbase
+       count  = 0
+       perms.each do |value|
+         user_name = String.from_java_bytes(value.getUser)
+-        table = (value.getTable != nil) ? value.getTable.toString() : ''
++        table = (value.getTableName != nil) ? value.getTableName.getNameAsString() : ''
+         family = (value.getFamily != nil) ? org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getFamily) : ''
+         qualifier = (value.getQualifier != nil) ? org.apache.hadoop.hbase.util.Bytes::toStringBinary(value.getQualifier) : ''
+ 
+-- 
+1.7.0.4
+

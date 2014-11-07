@@ -1,0 +1,36 @@
+From fa8ad00cc0f2a2aa9f1c20b6493b0228b0d2ccc8 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Mon, 17 Mar 2014 21:41:21 +0000
+Subject: [PATCH 59/86] HBASE-10770 Don't exit from the Canary daemon mode if no regions are present
+
+Reason: Usability
+Author: Matteo Bertozzi
+Ref: CDH-18024
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1578608 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/tool/Canary.java  |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
+index 151cacc..de6d533 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/tool/Canary.java
+@@ -730,14 +730,12 @@ public final class Canary implements Tool {
+             }
+             if (!regExpFound) {
+               LOG.info("No RegionServerInfo found, regionServerPattern:" + rsName);
+-              this.errorCode = INIT_ERROR_EXIT_CODE;
+             }
+           } else {
+             if (fullRsAndRMap.containsKey(rsName)) {
+               filteredRsAndRMap.put(rsName, fullRsAndRMap.get(rsName));
+             } else {
+               LOG.info("No RegionServerInfo found, regionServerName:" + rsName);
+-              this.errorCode = INIT_ERROR_EXIT_CODE;
+             }
+           }
+         }
+-- 
+1.7.0.4
+

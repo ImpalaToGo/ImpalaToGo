@@ -1,0 +1,34 @@
+From e329ead7af9b243f14192699f783fbbee90d5d8f Mon Sep 17 00:00:00 2001
+From: Nick Dimiduk <ndimiduk@apache.org>
+Date: Fri, 3 Jan 2014 18:13:31 +0000
+Subject: [PATCH 07/86] HBASE-10264 CompactionTool in mapred mode is missing classes in its classpath (Himanshu Vashishtha)
+
+Reason: Bug
+Author: Himanshu Vashishtha
+Ref: CDH-16461
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.98@1555182 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/regionserver/CompactionTool.java  |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/CompactionTool.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/CompactionTool.java
+index f5f67c5..72ea06c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/CompactionTool.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/CompactionTool.java
+@@ -354,6 +354,12 @@ public class CompactionTool extends Configured implements Tool {
+     job.setMapSpeculativeExecution(false);
+     job.setNumReduceTasks(0);
+ 
++    // add dependencies (including HBase ones)
++    TableMapReduceUtil.addDependencyJars(job);
++    // This job instantiates HRegions, which requires the Counter class from the high_scale library
++    TableMapReduceUtil.addDependencyJars(job.getConfiguration(),
++      org.cliffc.high_scale_lib.Counter.class);
++
+     Path stagingDir = JobUtil.getStagingDir(conf);
+     try {
+       // Create input file with the store dirs
+-- 
+1.7.0.4
+

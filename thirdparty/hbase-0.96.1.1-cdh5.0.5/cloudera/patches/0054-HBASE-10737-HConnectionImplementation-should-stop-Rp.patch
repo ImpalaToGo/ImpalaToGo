@@ -1,0 +1,155 @@
+From a56a0f14121076aa2aed70ae547dc4085804a75d Mon Sep 17 00:00:00 2001
+From: Jimmy Xiang <jxiang@apache.org>
+Date: Thu, 13 Mar 2014 20:27:19 +0000
+Subject: [PATCH 54/86] HBASE-10737 HConnectionImplementation should stop RpcClient on close
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-18005
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1577307 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/client/HConnectionManager.java    |    3 ++
+ .../org/apache/hadoop/hbase/client/TestAdmin.java  |    3 --
+ .../hadoop/hbase/client/TestClientTimeouts.java    |   31 ++++++++++++++------
+ .../org/apache/hadoop/hbase/client/TestHCM.java    |    5 ++-
+ 4 files changed, 29 insertions(+), 13 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+index 5a2bf83..f97f3be 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+@@ -2471,6 +2471,9 @@ public class HConnectionManager {
+       if (clusterStatusListener != null) {
+         clusterStatusListener.close();
+       }
++      if (rpcClient != null) {
++        rpcClient.stop();
++      }
+     }
+ 
+     @Override
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestAdmin.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestAdmin.java
+index 76d24e0..0acc6ce 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestAdmin.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestAdmin.java
+@@ -26,8 +26,6 @@ import static org.junit.Assert.fail;
+ 
+ import java.io.IOException;
+ import java.util.ArrayList;
+-import java.util.Collections;
+-import java.util.Comparator;
+ import java.util.HashMap;
+ import java.util.Iterator;
+ import java.util.List;
+@@ -58,7 +56,6 @@ import org.apache.hadoop.hbase.TableNotEnabledException;
+ import org.apache.hadoop.hbase.TableNotFoundException;
+ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
+ import org.apache.hadoop.hbase.catalog.CatalogTracker;
+-import org.apache.hadoop.hbase.catalog.MetaReader;
+ import org.apache.hadoop.hbase.constraint.ConstraintException;
+ import org.apache.hadoop.hbase.executor.EventHandler;
+ import org.apache.hadoop.hbase.master.AssignmentManager;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestClientTimeouts.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestClientTimeouts.java
+index de4aa4d..594a5c0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestClientTimeouts.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestClientTimeouts.java
+@@ -81,14 +81,7 @@ public class TestClientTimeouts {
+     HConnection lastConnection = null;
+     boolean lastFailed = false;
+     int initialInvocations = RandomTimeoutBlockingRpcChannel.invokations.get();
+-    RpcClient rpcClient = new RpcClient(TEST_UTIL.getConfiguration(), TEST_UTIL.getClusterKey()) {
+-      // Return my own instance, one that does random timeouts
+-      @Override
+-      public BlockingRpcChannel createBlockingRpcChannel(ServerName sn,
+-          User ticket, int rpcTimeout) {
+-        return new RandomTimeoutBlockingRpcChannel(this, sn, ticket, rpcTimeout);
+-      }
+-    };
++    RpcClient rpcClient = newRandomTimeoutRpcClient();
+     try {
+       for (int i = 0; i < 5 || (lastFailed && i < 100); ++i) {
+         lastFailed = false;
+@@ -102,7 +95,12 @@ public class TestClientTimeouts {
+           assertFalse(connection == lastConnection);
+           lastConnection = connection;
+           // Override the connection's rpc client for timeout testing
+-          ((HConnectionManager.HConnectionImplementation)connection).setRpcClient(rpcClient);
++          RpcClient oldRpcClient =
++            ((HConnectionManager.HConnectionImplementation)connection).setRpcClient(
++              rpcClient);
++          if (oldRpcClient != null) {
++            oldRpcClient.stop();
++          }
+           // run some admin commands
+           HBaseAdmin.checkHBaseAvailable(conf);
+           admin.setBalancerRunning(false, false);
+@@ -112,6 +110,9 @@ public class TestClientTimeouts {
+           lastFailed = true;
+         } finally {
+           admin.close();
++          if (admin.getConnection().isClosed()) {
++            rpcClient = newRandomTimeoutRpcClient();
++          }
+         }
+       }
+       // Ensure the RandomTimeoutRpcEngine is actually being used.
+@@ -122,6 +123,18 @@ public class TestClientTimeouts {
+     }
+   }
+ 
++  private static RpcClient newRandomTimeoutRpcClient() {
++    return new RpcClient(
++        TEST_UTIL.getConfiguration(), TEST_UTIL.getClusterKey()) {
++      // Return my own instance, one that does random timeouts
++      @Override
++      public BlockingRpcChannel createBlockingRpcChannel(ServerName sn,
++          User ticket, int rpcTimeout) {
++        return new RandomTimeoutBlockingRpcChannel(this, sn, ticket, rpcTimeout);
++      }
++    };
++  }
++
+   /**
+    * Blocking rpc channel that goes via hbase rpc.
+    */
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+index 37a59db..3f28acb 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+@@ -225,6 +225,7 @@ public class TestHCM {
+       }
+     });
+ 
++    t.close();
+     hci.getClient(sn);  // will throw an exception: RegionServerStoppedException
+   }
+ 
+@@ -524,7 +525,7 @@ public class TestHCM {
+    */
+   @Test
+   public void testConnectionManagement() throws Exception{
+-    TEST_UTIL.createTable(TABLE_NAME1, FAM_NAM);
++    HTable table0 = TEST_UTIL.createTable(TABLE_NAME1, FAM_NAM);
+     HConnection conn = HConnectionManager.createConnection(TEST_UTIL.getConfiguration());
+     HTableInterface table = conn.getTable(TABLE_NAME1.getName());
+     table.close();
+@@ -535,6 +536,7 @@ public class TestHCM {
+     assertFalse(((HTable)table).getPool().isShutdown());
+     conn.close();
+     assertTrue(((HTable)table).getPool().isShutdown());
++    table0.close();
+   }
+ 
+   /**
+@@ -583,6 +585,7 @@ public class TestHCM {
+         ServerName.valueOf("127.0.0.1", nextPort, 0), location.getSeqNum() - 1);
+     location = conn.getCachedLocation(TABLE_NAME2, ROW);
+     Assert.assertEquals(nextPort - 1, location.getPort());
++    table.close();
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

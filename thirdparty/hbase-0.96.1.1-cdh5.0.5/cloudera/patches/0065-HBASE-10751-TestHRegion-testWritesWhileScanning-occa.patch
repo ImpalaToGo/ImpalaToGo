@@ -1,0 +1,37 @@
+From 0a341a6a6f33348b8d78d5c339820513b3d4ee08 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Fri, 14 Mar 2014 19:17:04 +0000
+Subject: [PATCH 65/86] HBASE-10751 TestHRegion testWritesWhileScanning occasional fail since HBASE-10514 went in
+
+Reason: Bug
+Author: Michael Stack
+Ref: CDH-18827
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1577667 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/regionserver/TestHRegion.java     |    9 ++++++++-
+ 1 files changed, 8 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+index b66f14f..f3e4900 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegion.java
+@@ -3047,7 +3047,14 @@ public class TestHRegion {
+       flushThread.join();
+       flushThread.checkNoError();
+     } finally {
+-      HRegion.closeHRegion(this.region);
++      try {
++        HRegion.closeHRegion(this.region);
++      } catch (DroppedSnapshotException dse) {
++        // We could get this on way out because we interrupt the background flusher and it could
++        // fail anywhere causing a DSE over in the background flusher... only it is not properly
++        // dealt with so could still be memory hanging out when we get to here -- memory we can't
++        // flush because the accounting is 'off' since original DSE.
++      }
+       this.region = null;
+     }
+   }
+-- 
+1.7.0.4
+

@@ -1,0 +1,25 @@
+From 10f0e1d1922281f09cdce775614c68150fd559e0 Mon Sep 17 00:00:00 2001
+From: Sean Mackrory <sean@cloudera.com>
+Date: Wed, 5 Feb 2014 13:03:50 -0800
+Subject: [PATCH 28/86] CLOUDERA-BUILD. Harmonize slf4j version
+
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 67fa8a6..79f71cc 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -976,7 +976,7 @@
+     <protobuf.version>2.5.0</protobuf.version>
+     <stax-api.version>1.0.1</stax-api.version>
+     <thrift.version>0.9.0</thrift.version>
+-    <slf4j.version>1.6.4</slf4j.version>
++    <slf4j.version>${cdh.slf4j.version}</slf4j.version>
+     <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
+     <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
+     <clover.version>2.6.3</clover.version>
+-- 
+1.7.0.4
+

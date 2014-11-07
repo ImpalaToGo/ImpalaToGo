@@ -1,0 +1,18 @@
+From f8275e0338d7992d152e78f8104306cf3b6aae08 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 13 Mar 2014 20:32:30 -0700
+Subject: [PATCH 55/86] Addendum to CDH-16482: HBase isn't handling wildcard addresses correctly
+
+Reason: Bug
+Author: Esteban Gutierrez
+Ref: CDH-17613
+---
+ 0 files changed, 0 insertions(+), 0 deletions(-)
+ delete mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSKilledWhenInitializing.java
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSKilledWhenInitializing.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRSKilledWhenInitializing.java
+deleted file mode 100644
+index e69de29..0000000
+-- 
+1.7.0.4
+

@@ -1,0 +1,30 @@
+From 2ca6d8cea9170760054c7d97529d761ecb367df9 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <mbertozzi@apache.org>
+Date: Fri, 28 Feb 2014 09:16:52 +0000
+Subject: [PATCH 45/86] HBASE-10631 Avoid extra seek on FileLink open
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-17706
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1572891 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../java/org/apache/hadoop/hbase/io/FileLink.java  |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+index 258bb18..3789148 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+@@ -287,7 +287,7 @@ public class FileLink {
+         if (path.equals(currentPath)) continue;
+         try {
+           in = fs.open(path, bufferSize);
+-          in.seek(pos);
++          if (pos != 0) in.seek(pos);
+           assert(in.getPos() == pos) : "Link unable to seek to the right position=" + pos;
+           if (LOG.isTraceEnabled()) {
+             if (currentPath != null) {
+-- 
+1.7.0.4
+

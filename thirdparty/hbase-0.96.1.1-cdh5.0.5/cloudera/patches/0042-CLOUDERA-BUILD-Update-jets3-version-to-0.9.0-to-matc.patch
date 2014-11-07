@@ -1,0 +1,62 @@
+From a1967bc8d26da5e04b7af6e245087a31c8c0aee3 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 20 Feb 2014 18:01:49 -0800
+Subject: [PATCH 42/86] CLOUDERA-BUILD Update jets3 version to 0.9.0 to match with CDH5 bundled jets3 jar
+
+Ref: CDH-17401
+Reason: Product Requirement (Compatibility)
+Author: Esteban Gutierrez
+(cherry picked from commit c3b3c2f80aec7ec6b960f78c72f8cc8a33a3690d)
+---
+ pom.xml |   14 ++++++--------
+ 1 files changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 79f71cc..53ae468 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -978,6 +978,7 @@
+     <thrift.version>0.9.0</thrift.version>
+     <slf4j.version>${cdh.slf4j.version}</slf4j.version>
+     <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
++    <jets3.version>0.9.0</jets3.version>
+     <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
+     <clover.version>2.6.3</clover.version>
+     <jamon-runtime.version>2.3.1</jamon-runtime.version>
+@@ -1427,6 +1428,11 @@
+         <artifactId>htrace-core</artifactId>
+         <version>${htrace.version}</version>
+       </dependency>
++      <dependency>
++        <groupId>net.java.dev.jets3t</groupId>
++        <artifactId>jets3t</artifactId>
++        <version>${jets3.version}</version>
++      </dependency>
+     </dependencies>
+   </dependencyManagement>
+   <!-- Dependencies needed by subprojects -->
+@@ -1593,10 +1599,6 @@
+                 <artifactId>core</artifactId>
+               </exclusion>
+               <exclusion>
+-                <groupId>net.java.dev.jets3t</groupId>
+-                <artifactId>jets3t</artifactId>
+-              </exclusion>
+-              <exclusion>
+                 <groupId>oro</groupId>
+                 <artifactId>oro</artifactId>
+               </exclusion>
+@@ -1653,10 +1655,6 @@
+                 <artifactId>core</artifactId>
+               </exclusion>
+               <exclusion>
+-                <groupId>net.java.dev.jets3t</groupId>
+-                <artifactId>jets3t</artifactId>
+-              </exclusion>
+-              <exclusion>
+                 <groupId>oro</groupId>
+                 <artifactId>oro</artifactId>
+               </exclusion>
+-- 
+1.7.0.4
+

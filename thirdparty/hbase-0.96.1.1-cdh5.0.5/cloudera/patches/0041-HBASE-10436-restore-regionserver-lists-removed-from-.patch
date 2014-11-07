@@ -1,0 +1,238 @@
+From fcfacdb1b8874bd690e70bb01f0f93e155413f30 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Wed, 26 Feb 2014 01:02:05 +0000
+Subject: [PATCH 41/86] HBASE-10436 restore regionserver lists removed from hbase 0.96.0 jmx
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1571888 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: Regression
+Author: Jonathan Hsieh
+Ref: CDH-16858
+---
+ .../hadoop/hbase/master/MetricsMasterSource.java   |    4 +++
+ .../hadoop/hbase/master/MetricsMasterWrapper.java  |   20 ++++++++++++-
+ .../hbase/master/MetricsMasterSourceImpl.java      |   17 +++++------
+ .../hbase/master/MetricsMasterSourceImpl.java      |    8 ++++-
+ .../hbase/master/MetricsMasterWrapperImpl.java     |   28 +++++++++++++++++---
+ .../hbase/master/TestMasterMetricsWrapper.java     |    8 +++---
+ 6 files changed, 64 insertions(+), 21 deletions(-)
+
+diff --git a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSource.java b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSource.java
+index 64df570..8d54190 100644
+--- a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSource.java
++++ b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSource.java
+@@ -49,6 +49,8 @@ public interface MetricsMasterSource extends BaseSource {
+   String MASTER_ACTIVE_TIME_NAME = "masterActiveTime";
+   String MASTER_START_TIME_NAME = "masterStartTime";
+   String AVERAGE_LOAD_NAME = "averageLoad";
++  String LIVE_REGION_SERVERS_NAME = "liveRegionServers";
++  String DEAD_REGION_SERVERS_NAME = "deadRegionServers";
+   String NUM_REGION_SERVERS_NAME = "numRegionServers";
+   String NUM_DEAD_REGION_SERVERS_NAME = "numDeadRegionServers";
+   String ZOOKEEPER_QUORUM_NAME = "zookeeperQuorum";
+@@ -61,7 +63,9 @@ public interface MetricsMasterSource extends BaseSource {
+   String MASTER_ACTIVE_TIME_DESC = "Master Active Time";
+   String MASTER_START_TIME_DESC = "Master Start Time";
+   String AVERAGE_LOAD_DESC = "AverageLoad";
++  String LIVE_REGION_SERVERS_DESC = "Names of live RegionServers";
+   String NUMBER_OF_REGION_SERVERS_DESC = "Number of RegionServers";
++  String DEAD_REGION_SERVERS_DESC = "Names of dead RegionServers";
+   String NUMBER_OF_DEAD_REGION_SERVERS_DESC = "Number of dead RegionServers";
+   String ZOOKEEPER_QUORUM_DESC = "Zookeeper Quorum";
+   String SERVER_NAME_DESC = "Server Name";
+diff --git a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapper.java b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapper.java
+index 8386763..644522a 100644
+--- a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapper.java
++++ b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapper.java
+@@ -83,12 +83,28 @@ public interface MetricsMasterWrapper {
+    *
+    * @return Live region servers
+    */
+-  int getRegionServers();
++  String getRegionServers();
++
++  /**
++   * Get the number of live region servers
++   *
++   * @return number of Live region servers
++   */
++
++  int getNumRegionServers();
+ 
+   /**
+    * Get the dead region servers
+    *
+    * @return Dead region Servers
+    */
+-  int getDeadRegionServers();
++  String getDeadRegionServers();
++
++  /**
++   * Get the number of dead region servers
++   *
++   * @return number of Dead region Servers
++   */
++  int getNumDeadRegionServers();
++
+ }
+diff --git a/hbase-hadoop1-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java b/hbase-hadoop1-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
+index 373644a..d9997e5 100644
+--- a/hbase-hadoop1-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
++++ b/hbase-hadoop1-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
+@@ -18,26 +18,21 @@
+ 
+ package org.apache.hadoop.hbase.master;
+ 
+-import org.apache.commons.logging.Log;
+-import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.hbase.metrics.BaseSourceImpl;
+ import org.apache.hadoop.metrics2.MetricsBuilder;
+ import org.apache.hadoop.metrics2.MetricsRecordBuilder;
+ import org.apache.hadoop.metrics2.lib.MetricMutableCounterLong;
+-import org.apache.hadoop.metrics2.lib.MetricMutableGaugeLong;
+-import org.apache.hadoop.metrics2.lib.MetricMutableHistogram;
+-import org.apache.hadoop.metrics2.lib.MetricMutableStat;
+ 
+ /**
+  * Hadoop1 implementation of MetricsMasterSource.
+  *
+  * Implements BaseSource through BaseSourceImpl, following the pattern
+  */
++@InterfaceAudience.Private
+ public class MetricsMasterSourceImpl
+     extends BaseSourceImpl implements MetricsMasterSource {
+ 
+-  private static final Log LOG = LogFactory.getLog(MetricsMasterSourceImpl.class.getName());
+-
+   private final MetricsMasterWrapper masterWrapper;
+   private MetricMutableCounterLong clusterRequestsCounter;
+ 
+@@ -85,11 +80,15 @@ public class MetricsMasterSourceImpl
+           .addGauge(MASTER_START_TIME_NAME,
+               MASTER_START_TIME_DESC, masterWrapper.getStartTime())
+           .addGauge(AVERAGE_LOAD_NAME, AVERAGE_LOAD_DESC, masterWrapper.getAverageLoad())
++          .tag(LIVE_REGION_SERVERS_NAME, LIVE_REGION_SERVERS_DESC,
++                masterWrapper.getRegionServers())
+           .addGauge(NUM_REGION_SERVERS_NAME,
+-              NUMBER_OF_REGION_SERVERS_DESC, masterWrapper.getRegionServers())
++              NUMBER_OF_REGION_SERVERS_DESC, masterWrapper.getNumRegionServers())
++          .tag(DEAD_REGION_SERVERS_NAME, DEAD_REGION_SERVERS_DESC,
++                masterWrapper.getDeadRegionServers())
+           .addGauge(NUM_DEAD_REGION_SERVERS_NAME,
+               NUMBER_OF_DEAD_REGION_SERVERS_DESC,
+-              masterWrapper.getDeadRegionServers())
++              masterWrapper.getNumDeadRegionServers())
+           .tag(ZOOKEEPER_QUORUM_NAME, ZOOKEEPER_QUORUM_DESC, masterWrapper.getZookeeperQuorum())
+           .tag(SERVER_NAME_NAME, SERVER_NAME_DESC, masterWrapper.getServerName())
+           .tag(CLUSTER_ID_NAME, CLUSTER_ID_DESC, masterWrapper.getClusterId())
+diff --git a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
+index aee907f..2c6feeb 100644
+--- a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
++++ b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterSourceImpl.java
+@@ -80,11 +80,15 @@ public class MetricsMasterSourceImpl
+               MASTER_START_TIME_DESC), masterWrapper.getStartTime())
+           .addGauge(Interns.info(AVERAGE_LOAD_NAME, AVERAGE_LOAD_DESC),
+               masterWrapper.getAverageLoad())
++          .tag(Interns.info(LIVE_REGION_SERVERS_NAME, LIVE_REGION_SERVERS_DESC),
++                masterWrapper.getRegionServers())
+           .addGauge(Interns.info(NUM_REGION_SERVERS_NAME,
+-              NUMBER_OF_REGION_SERVERS_DESC), masterWrapper.getRegionServers())
++              NUMBER_OF_REGION_SERVERS_DESC), masterWrapper.getNumRegionServers())
++          .tag(Interns.info(DEAD_REGION_SERVERS_NAME, DEAD_REGION_SERVERS_DESC),
++                masterWrapper.getDeadRegionServers())
+           .addGauge(Interns.info(NUM_DEAD_REGION_SERVERS_NAME,
+               NUMBER_OF_DEAD_REGION_SERVERS_DESC),
+-              masterWrapper.getDeadRegionServers())
++              masterWrapper.getNumDeadRegionServers())
+           .tag(Interns.info(ZOOKEEPER_QUORUM_NAME, ZOOKEEPER_QUORUM_DESC),
+               masterWrapper.getZookeeperQuorum())
+           .tag(Interns.info(SERVER_NAME_NAME, SERVER_NAME_DESC), masterWrapper.getServerName())
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapperImpl.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapperImpl.java
+index dec2dd0..e19940b 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapperImpl.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MetricsMasterWrapperImpl.java
+@@ -17,14 +17,15 @@
+  */
+ package org.apache.hadoop.hbase.master;
+ 
++import org.apache.commons.lang.StringUtils;
++import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.hbase.ServerName;
+-import org.apache.hadoop.hbase.master.HMaster;
+-import org.apache.hadoop.hbase.master.MetricsMasterWrapper;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+ 
+ /**
+  * Impl for exposing HMaster Information through JMX
+  */
++@InterfaceAudience.Private
+ public class MetricsMasterWrapperImpl implements MetricsMasterWrapper {
+ 
+   private final HMaster master;
+@@ -68,7 +69,16 @@ public class MetricsMasterWrapperImpl implements MetricsMasterWrapper {
+   }
+ 
+   @Override
+-  public int getRegionServers() {
++  public String getRegionServers() {
++    ServerManager serverManager = this.master.getServerManager();
++    if (serverManager == null) {
++      return "";
++    }
++    return StringUtils.join(serverManager.getOnlineServers().keySet(), ";");
++  }
++  
++  @Override
++  public int getNumRegionServers() {
+     ServerManager serverManager = this.master.getServerManager();
+     if (serverManager == null) {
+       return 0;
+@@ -77,7 +87,17 @@ public class MetricsMasterWrapperImpl implements MetricsMasterWrapper {
+   }
+ 
+   @Override
+-  public int getDeadRegionServers() {
++  public String getDeadRegionServers() {
++    ServerManager serverManager = this.master.getServerManager();
++    if (serverManager == null) {
++      return "";
++    }
++    return StringUtils.join(serverManager.getDeadServers().copyServerNames(), ";");
++  }
++
++  
++  @Override
++  public int getNumDeadRegionServers() {
+     ServerManager serverManager = this.master.getServerManager();
+     if (serverManager == null) {
+       return 0;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterMetricsWrapper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterMetricsWrapper.java
+index 76a089d..6d319f4 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterMetricsWrapper.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/TestMasterMetricsWrapper.java
+@@ -56,8 +56,8 @@ public class TestMasterMetricsWrapper {
+     assertEquals(master.getMasterActiveTime(), info.getActiveTime());
+     assertEquals(master.getMasterStartTime(), info.getStartTime());
+     assertEquals(master.getCoprocessors().length, info.getCoprocessors().length);
+-    assertEquals(master.getServerManager().getOnlineServersList().size(), info.getRegionServers());
+-    assertTrue(info.getRegionServers() == 4);
++    assertEquals(master.getServerManager().getOnlineServersList().size(), info.getNumRegionServers());
++    assertTrue(info.getNumRegionServers() == 4);
+ 
+     String zkServers = info.getZookeeperQuorum();
+     assertEquals(zkServers.split(",").length, TEST_UTIL.getZkCluster().getZooKeeperServerNum());
+@@ -72,7 +72,7 @@ public class TestMasterMetricsWrapper {
+         index) {
+       Threads.sleep(10);
+     }
+-    assertTrue(info.getRegionServers() == 3);
+-    assertTrue(info.getDeadRegionServers() == 1);
++    assertTrue(info.getNumRegionServers() == 3);
++    assertTrue(info.getNumDeadRegionServers() == 1);
+   }
+ }
+\ No newline at end of file
+-- 
+1.7.0.4
+

@@ -1,0 +1,134 @@
+From 7242ac59b23357e34749610f6fd371c1f1550cf5 Mon Sep 17 00:00:00 2001
+From: Michael Stack <stack@apache.org>
+Date: Wed, 5 Feb 2014 21:12:52 +0000
+Subject: [PATCH 29/86] HBASE-10473 Add utility for adorning http Context
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/branches/0.96@1564930 13f79535-47bb-0310-9956-ffa450edef68
+(cherry picked from commit 6164a77d1069bb7da5c017d946230da9635e92b7)
+---
+ .../org/apache/hadoop/hbase/rest/RESTServer.java   |    4 +-
+ .../apache/hadoop/hbase/util/HttpServerUtil.java   |   52 ++++++++++++++++++++
+ .../org/apache/hadoop/hbase/util/InfoServer.java   |    1 +
+ .../hadoop/hbase/rest/HBaseRESTTestingUtility.java |    3 +-
+ 4 files changed, 57 insertions(+), 3 deletions(-)
+ create mode 100644 hbase-server/src/main/java/org/apache/hadoop/hbase/util/HttpServerUtil.java
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServer.java
+index 8039e10..d2c4e9d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServer.java
+@@ -35,9 +35,8 @@ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.rest.filter.AuthFilter;
+-import org.apache.hadoop.hbase.rest.filter.GzipFilter;
+-import org.apache.hadoop.hbase.security.User;
+ import org.apache.hadoop.hbase.security.UserProvider;
++import org.apache.hadoop.hbase.util.HttpServerUtil;
+ import org.apache.hadoop.hbase.util.InfoServer;
+ import org.apache.hadoop.hbase.util.Strings;
+ import org.apache.hadoop.hbase.util.VersionInfo;
+@@ -235,6 +234,7 @@ public class RESTServer implements Constants {
+       filter = filter.trim();
+       context.addFilter(Class.forName(filter), "/*", 0);
+     }
++    HttpServerUtil.constrainHttpMethods(context);
+ 
+     // Put up info server.
+     int port = conf.getInt("hbase.rest.info.port", 8085);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HttpServerUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HttpServerUtil.java
+new file mode 100644
+index 0000000..742d1a4
+--- /dev/null
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HttpServerUtil.java
+@@ -0,0 +1,52 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.util;
++
++import org.mortbay.jetty.security.Constraint;
++import org.mortbay.jetty.security.ConstraintMapping;
++import org.mortbay.jetty.security.SecurityHandler;
++import org.mortbay.jetty.servlet.Context;
++
++/**
++ * HttpServer utility.
++ */
++public class HttpServerUtil {
++  /**
++   * Add constraints to a Jetty Context to disallow undesirable Http methods.
++   * @param context The context to modify
++   */
++  public static void constrainHttpMethods(Context context) {
++    Constraint c = new Constraint();
++    c.setAuthenticate(true);
++
++    ConstraintMapping cmt = new ConstraintMapping();
++    cmt.setConstraint(c);
++    cmt.setMethod("TRACE");
++    cmt.setPathSpec("/*");
++
++    ConstraintMapping cmo = new ConstraintMapping();
++    cmo.setConstraint(c);
++    cmo.setMethod("OPTIONS");
++    cmo.setPathSpec("/*");
++
++    SecurityHandler sh = new SecurityHandler();
++    sh.setConstraintMappings(new ConstraintMapping[]{ cmt, cmo });
++
++    context.addHandler(sh);
++  }
++}
+\ No newline at end of file
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/InfoServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/InfoServer.java
+index edbb0ca..8c558ac 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/InfoServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/InfoServer.java
+@@ -89,6 +89,7 @@ public class InfoServer extends HttpServer {
+           logsContextPath);
+       logContext.setResourceBase(logDir);
+       logContext.addServlet(DefaultServlet.class, "/");
++      HttpServerUtil.constrainHttpMethods(logContext);
+       defaultContexts.put(logContext, true);
+     }
+   }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/HBaseRESTTestingUtility.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/HBaseRESTTestingUtility.java
+index 8c316dd..1353090 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/HBaseRESTTestingUtility.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/HBaseRESTTestingUtility.java
+@@ -22,8 +22,8 @@ import org.apache.commons.lang.ArrayUtils;
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+-import org.apache.hadoop.hbase.rest.filter.GzipFilter;
+ import org.apache.hadoop.hbase.security.User;
++import org.apache.hadoop.hbase.util.HttpServerUtil;
+ import org.apache.hadoop.util.StringUtils;
+ import org.mortbay.jetty.Server;
+ import org.mortbay.jetty.servlet.Context;
+@@ -75,6 +75,7 @@ public class HBaseRESTTestingUtility {
+       filter = filter.trim();
+       context.addFilter(Class.forName(filter), "/*", 0);
+     }
++    HttpServerUtil.constrainHttpMethods(context);
+     LOG.info("Loaded filter classes :" + filterClasses);
+       // start the server
+     server.start();
+-- 
+1.7.0.4
+

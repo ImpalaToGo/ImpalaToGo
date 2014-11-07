@@ -1,0 +1,1 @@
+/home/cdh5/Impala/thirdparty/hbase-0.96.1.1-cdh5.0.5/bin/hbase-daemon.sh: line 197: 17660 Killed                  nice -n $HBASE_NICENESS "$HBASE_HOME"/bin/hbase --config "${HBASE_CONF_DIR}" $command "$@" start >> "$logout" 2>&1
