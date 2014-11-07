@@ -37,6 +37,16 @@ private:
 	FileSystemManager(FileSystemManager const& l);            // disable copy constructor
 	FileSystemManager& operator=(FileSystemManager const& l); // disable assignment operator
 
+	/** reply the mode basing on specified flags
+	 * @param mode (<fcntl>)
+	 *
+	 * @return mode or empty string if no mode supported
+	 */
+	std::string getMode(int flags);
+
+	/** platform-specific separator */
+	static std::string fileSeparator;
+
 public:
     static FileSystemManager* instance() { return FileSystemManager::instance_.get(); }
 

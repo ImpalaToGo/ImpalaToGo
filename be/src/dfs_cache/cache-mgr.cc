@@ -531,10 +531,6 @@ status::StatusInternal CacheManager::cacheCheckPrepareStatus(const requestIdenti
 	return status::StatusInternal::REQUEST_IS_NOT_FOUND;
 }
 
-bool CacheManager::getFile(const FileSystemDescriptor & fsDescriptor, const char* path, ManagedFile::File*& file){
-	return m_registry->getFileByPath(path, file);
-}
-
 } /** namespace impala */
 
 

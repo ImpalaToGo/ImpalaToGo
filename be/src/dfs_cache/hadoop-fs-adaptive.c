@@ -2233,12 +2233,12 @@ dfsFile _dfsOpenFile(fsBridge fs, const char* path, int flags,
         if (readDirect(fs, file, &buf, 0) == 0) {
             // Success - 0-byte read should return 0
             file->flags |= DFS_FILE_SUPPORTS_DIRECT_READ;
-        } else if (errno != ENOTSUP) {
+        } /*else if (errno != ENOTSUP) {
             // Unexpected error. Clear it, don't set the direct flag.
             fprintf(stderr,
                   "_dfsOpenFile(%s): WARN: Unexpected error %d when testing "
                   "for direct read compatibility\n", path, errno);
-        }
+        }*/
     }
     ret = 0;
 

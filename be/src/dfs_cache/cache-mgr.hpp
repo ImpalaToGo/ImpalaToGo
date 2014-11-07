@@ -265,17 +265,6 @@ public:
        status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestIdentity,
     		   std::list<boost::shared_ptr<FileProgress> >& progress, request_performance& performance );
 
-       /**
-        * Get the file.
-        *
-        * @param[in]     fsDescriptor - file system conn the file belongs to
-        * @param[in]     path         - file path
-        * @param[in/out] file         - managed file metadata
-        *
-        * @return true if the file exists.
-        */
-        bool getFile(const FileSystemDescriptor & fsDescriptor, const char* path, ManagedFile::File*& file);
-
 };
 } /** namespace impala */
 

@@ -12,6 +12,8 @@
 #include <dirent.h>
 #include <fstream>
 
+#include <boost/filesystem.hpp>
+
 #include "dfs_cache/filesystem-mgr.hpp"
 #include "dfs_cache/uri-util.hpp"
 
@@ -26,14 +28,52 @@ namespace impala{
 namespace filemgmt{
 
 boost::scoped_ptr<FileSystemManager> FileSystemManager::instance_;
+std::string FileSystemManager::fileSeparator;
 
 void FileSystemManager::init() {
   if(FileSystemManager::instance_.get() == NULL)
 	  FileSystemManager::instance_.reset(new FileSystemManager());
+
+  // configure platform-specific file separator:
+  boost::filesystem::path slash("/");
+  boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
+  fileSeparator = preferredSlash;
+}
+
+std::string FileSystemManager::getMode(int flags) {
+	std::string mode;
+	// get the mode to open the file in:
+	switch (flags) {
+	case O_RDONLY:
+		mode = "r";
+		break;
+	case O_WRONLY:
+		mode = "w";
+		break;
+	case O_RDWR:
+		mode = "rw";
+		break;
+	case O_CREAT:
+		mode = "w+b";
+		break;
+	default:
+		break;
+	}
+
+	return mode;
 }
 
 std::string FileSystemManager::constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path){
     std::string localPath(CacheLayerRegistry::instance()->localstorage());
+
+    std::ostringstream stream;
+    stream << fsDescriptor.dfs_type;
+
+    // add FileSystem type on top of hierarchy:
+    localPath += stream.str();
+
+    if(!fsDescriptor.host.empty())
+    	localPath += fileSeparator;
     localPath += fsDescriptor.host;
     localPath += path;
     return localPath;
@@ -43,6 +83,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
 	Uri uri = Uri::Parse(path);
+
 	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
 
 	// calculate fully qualified local path from requested
@@ -50,25 +91,8 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
     const char* localPathAnsi = localPath.c_str();
 
     // check we are able to process requested file mode.
-	// if no,  take no actions.
-	std::string mode;
-	// get the mode to open the file in:
-	switch(flags){
-		case O_RDONLY:
-			mode = "r";
-			break;
-		case O_WRONLY:
-			mode = "w";
-			break;
-	    case O_RDWR:
-	    	mode = "rw";
-	    	break;
-	    case O_CREAT:
-	    	mode = "w+b";
-	    	break;
-	    default:
-	    	break;
-	}
+	// if no, take no actions.
+	std::string mode = getMode(flags);
 	if(mode.empty()){
 		available = false;
 		return NULL;
@@ -76,6 +100,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 
 	// create file scenario. It is only for internal layer usage:
 	if(flags == O_CREAT){
+
 		FILE *lofile;
 		// first check if the file exists:
 		lofile = fopen(localPathAnsi, "rw");
@@ -86,6 +111,29 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 			fclose(lofile);
 		}
 		if(!available){
+			// need to create the file. First check whether the directory exists
+			bool dirExists = true;
+			uri = Uri::Parse(localPathAnsi);
+
+			// format the directory hierarchy string to build the directory tree:
+			std::string directoriesHierarchy = uri.Hierarchy;
+
+			// and create if no directory exists:
+			if(!boost::filesystem::exists(directoriesHierarchy.c_str())){                         // (1)
+				dirExists = boost::filesystem::create_directories(directoriesHierarchy.c_str());                 // (2)
+				// It may be eventually that the same directory hierarchy is created by some parallel worker between the
+				// (1) and (2). In this case re-creation of same hierarchy will give "false".
+				// Thus just to be sure that requested directory exists on the file system instead of locking anything,
+				// check that once again..
+				if(!dirExists)
+					dirExists = boost::filesystem::exists(directoriesHierarchy.c_str());
+			}
+			if(!dirExists){
+				LOG (ERROR) << "Enclosing directory for file \"" << localPathAnsi << "\" was not created" ;
+				return NULL;
+			}
+
+			// ready to create the file:
 			lofile = fopen(localPathAnsi, mode.c_str());
 			if(lofile != NULL){
 				available = true;
@@ -95,6 +143,14 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 				// there was a problem to create the file..
 				return NULL;
 			}
+		}
+		// reset the flags and get the corresponding fdopen() mode:
+		flags = O_RDWR;
+		mode = getMode(flags);
+
+		if(mode.empty()){
+			available = false;
+			return NULL;
 		}
 	}
 	// If this file is not available locally, reply with error.
@@ -122,7 +178,8 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 		return NULL;
 	}
 	// Got file opened, reply it
-	file = new dfsFile_internal{fp, dfsStreamType::INPUT};
+	file->file = fp;
+	file->type = dfsStreamType::INPUT;
 	available = true;
 	return file;
 }

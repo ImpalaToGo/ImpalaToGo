@@ -17,7 +17,10 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
 #define INSERT_ELEMENT(p) strings[p] = #p
 		INSERT_ELEMENT(HDFS);
 		INSERT_ELEMENT(S3);
+		INSERT_ELEMENT(LOCAL);
+		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);
 		INSERT_ELEMENT(OTHER);
+		INSERT_ELEMENT(NON_SPECIFIED);
 #undef INSERT_ELEMENT
 	}
 	return out << strings[value];
