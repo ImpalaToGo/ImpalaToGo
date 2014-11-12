@@ -36,11 +36,12 @@ app.directive('tilesGrid', function ($compile,utilities,logger,tilesGridCacheSer
                     if(angular.isString(scope.gridOptions.data)){
                         scope.$parent.$watchCollection(scope.gridOptions.data,function(val){
                             init(val);
+
                         });
                     }
                     else{
-                        iElement.html("Data source is not string!");
-                        logger.logWarning("Data source is not string!",data,logName,true);
+                        iElement.html("Data source is not a string!");
+                        logger.logWarning("Data source is not a string!",data,logName,true);
                         //  return;
                     }
 
@@ -60,7 +61,6 @@ app.directive('tilesGrid', function ($compile,utilities,logger,tilesGridCacheSer
                                 firstTimeBuildColumns=false;
                             }
                         }
-
                         //build rows
                         var gridRow="<tr ng-repeat='item in dataArray track by $index' tile-row='item' tile-columns='gridOptions.columns' controls-template='gridOptions.controlsTemplate'></tr>";
 
@@ -73,7 +73,7 @@ app.directive('tilesGrid', function ($compile,utilities,logger,tilesGridCacheSer
                         iElement.html(compiledHtml);
 
 
-                       // Dispatches an event name upwards through the scope hierarchy notifying the listeners
+                        // Dispatches an event name upwards through the scope hierarchy notifying the listeners
                         scope.$emit('tileGridUpdated', data);
                     }
                     function buildColumns(data){
@@ -96,9 +96,6 @@ app.directive('tilesGrid', function ($compile,utilities,logger,tilesGridCacheSer
                             gridColumn+="<th >"+value+"</th>";
                         });
                     }
-                },
-                controller: function(scope){
-                    this.gridOptions=scope.gridOptions;
                 }
 
             }
@@ -121,7 +118,7 @@ app.directive('tileRow',function(utilities,$compile,tilesGridCacheService){
             scope.tileRow = scope.$eval(attrs.tileRow) || {};
             scope.tileColumns = scope.$eval(attrs.tileColumns) || {};
             scope.controlsTemplate = scope.$eval(attrs.controlsTemplate) || {};
-            var gridOptions=tilesGridCacheService.get("gridOptions");
+            scope.gridOptions=tilesGridCacheService.get("gridOptions");
             renderRow();
 
             function renderRow(){
@@ -133,7 +130,7 @@ app.directive('tileRow',function(utilities,$compile,tilesGridCacheService){
                         if(scope.controlsTemplate && angular.isString(scope.controlsTemplate)){
                             template= "<div class='tile-caption'>" +scope.controlsTemplate+"</div>"
                         }
-                        var gridDataHtml="<td color-state='tileData'><div class='tileContainer' ng-class='{\"tile-mask\":controlsTemplate}'><div class='tile-text' tile-data='tileData'></div>"+template+"</div></td>";
+                        var gridDataHtml="<td  color-state='tileData'><div class='tileContainer' ng-class='{\"tile-mask\":controlsTemplate,\"text-left\":gridOptions.tileContainer.textAlign==\"left\",\"text-right\":gridOptions.tileContainer.textAlign==\"right\"}'><div class='tile-text' tile-row='tileRow'  tile-data='tileData'></div>"+template+"</div></td>";
                         gridData=$compile(gridDataHtml)(scope);
                         elementList.push(gridData);
 
@@ -162,15 +159,15 @@ app.directive('tileData',function(utilities,$compile,tilesGridCacheService,$filt
             };
             var tileData,dataList=[];
             scope.tileData = scope.$eval(attrs.tileData) || {};
+            scope.tileRow = scope.$eval(attrs.tileRow) || {};
             tileData=scope.tileData;
             if(utilities.isObject(tileData)){
-                scope.gridOptions=tilesGridCacheService.get("gridOptions");
                 scope.valueSort=scope.gridOptions.valueSort;
                 if(utilities.isObject(scope.valueSort)){
-
+                    scope.gridOptions=tilesGridCacheService.get("gridOptions");
                     var sign=scope.valueSort.ascending?"+":"-";
                     var predicate = scope.valueSort.predicate;
-                 //   order(utilities.toArray(tileData),predicate,true);
+                    //   order(utilities.toArray(tileData),predicate,true);
                 }
                 scope.ignoreProperties=scope.gridOptions.ignoreProperties||[];
                 angular.forEach(scope.gridOptions.ignoreProperties,function(prop){
@@ -183,7 +180,19 @@ app.directive('tileData',function(utilities,$compile,tilesGridCacheService,$filt
                 element.html(dataList);
             }
             else if(angular.isString(tileData)){
-                element.html("<span class='tile-item'>"+tileData+"</span>");
+                if(!scope.gridOptions.tileContainer || !angular.isArray(scope.gridOptions.tileContainer.dataTemplate)){
+                    element.html("<span class='tile-item'>"+tileData+"</span>");
+                }
+                else if(utilities.isObject(scope.tileRow) && scope.gridOptions.tileContainer && angular.isArray(scope.gridOptions.tileContainer.dataTemplate)){
+                    var elm="",replacedData="";
+                    angular.forEach(scope.gridOptions.tileContainer.dataTemplate,function(item){
+                        var value=scope.tileRow[item.name];
+                        replacedData = item.template.replace("$item$", value);
+                        elm+=replacedData
+                    });
+                    element.html($compile(elm)(scope));
+                }
+
             }
 
         }

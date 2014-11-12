@@ -1,6 +1,6 @@
 'use strict';
 
-describe('Controller: RedimCtrl', function () {
+describe('Controller: Resizetrl', function () {
 
   // load the controller's module
   beforeEach(module('impala2GoApp'));
@@ -13,7 +13,7 @@ describe('Controller: RedimCtrl', function () {
   beforeEach(inject(function ($controller, $rootScope,_logger_) {
       scope = $rootScope.$new();
       loggerService=_logger_;
-    RedimCtrl = $controller('RedimCtrl', {
+    RedimCtrl = $controller('Resizetrl', {
         $scope: scope,
         logger:loggerService
     });

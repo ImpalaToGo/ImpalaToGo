@@ -1,38 +1,74 @@
+
 <div id="cluster-container">
-    <div class="panel-heading">
-        <div class="row">
-            <div class="col-md-3 heading-icon">
-                <i class="glyphicon glyphicon-th-large"></i>
-                <h2 class="cluster-heading-font" >Cluster Grid</h2>
-            </div>
-            <div class="col-md-3">
-                <div class="checkbox">
-                    <label class="cluster-heading-font col-lg-5 col-md-10 col-sm-3 col-xs-3" for="proc">All Processes</label>
-                    <input type="checkbox" ng-change="getAll(allProcess)" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="allProcess" id="proc">
+    <div class="jarviswidget jarviswidget-color-blueLight" id="wid-id-10" data-widget-colorbutton="false" data-widget-editbutton="false" data-widget-togglebutton="false" data-widget-deletebutton="false" data-widget-fullscreenbutton="false" data-widget-custombutton="false" data-widget-sortable="false">
+        <!-- widget options:
+        usage: <div class="jarviswidget" id="wid-id-0" data-widget-editbutton="false">
+
+        data-widget-colorbutton="false"
+        data-widget-editbutton="false"
+        data-widget-togglebutton="false"
+        data-widget-deletebutton="false"
+        data-widget-fullscreenbutton="false"
+        data-widget-custombutton="false"
+        data-widget-collapsed="true"
+        data-widget-sortable="false"
+
+        -->
+        <header>
+            <span class="widget-icon"> <i class="fa fa-list-alt"></i> </span>
+            <h2>Cluster Grid </h2>
+
+
+
+            <div class="widget-toolbar hidden-phone">
+                <div class="smart-form">
+                    <label class="checkbox">
+                        <input type="checkbox" name="checkbox">
+                        <i></i>Warm Up</label>
                 </div>
 
             </div>
-            <div class="col-md-3">
-                <div class="checkbox">
-                    <label class="cluster-heading-font col-lg-3 col-md-6 col-sm-3 col-xs-3" for="sum">Sum</label>
-                    <input  type="checkbox" ng-change="getSum(sum)" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="sum" id="sum">
+            <div class="widget-toolbar hidden-phone">
+                <div class="smart-form">
+                    <label class="checkbox">
+                        <input type="checkbox" name="checkbox">
+                        <i></i>Sum</label>
                 </div>
 
             </div>
-            <div class="col-md-3">
-                <div class="checkbox">
-                    <label class="cluster-heading-font col-lg-4 col-md-10 col-sm-3 col-xs-3" for="warm">Warm Up</label>
-                    <input type="checkbox" class="cluster-heading-checkbox col-md-3 col-sm-3 col-xs-3" icheck ng-model="warmUp" id="warm">
+            <div class="widget-toolbar hidden-phone">
+                <div class="smart-form">
+                    <label class="checkbox">
+                        <input type="checkbox" name="checkbox">
+                        <i></i>All Processes</label>
                 </div>
 
+            </div>
+        </header>
+
+        <!-- widget div-->
+        <div>
+
+            <!-- widget edit box -->
+            <div class="jarviswidget-editbox">
+                <!-- This area used as dropdown edit box -->
 
             </div>
+            <!-- end widget edit box -->
+
+            <!-- widget content -->
+            <div class="widget-body no-padding">
+
+                <div tiles-grid="gridOptions"></div>
+
+            </div>
+            <!-- end widget content -->
 
         </div>
+        <!-- end widget div -->
 
     </div>
 
-    <div tiles-grid="gridOptions"></div>
-</div>
 
+</div>
 

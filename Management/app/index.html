@@ -12,17 +12,21 @@
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.css" />
     <link rel="stylesheet" href="bower_components/toastr/toastr.css" />
     <link rel="stylesheet" href="bower_components/iCheck/skins/all.css" />
+    <link rel="stylesheet" href="bower_components/fontawesome/css/font-awesome.css" />
     <!-- endbower -->
 
- 
+    <link rel="stylesheet" href="styles/smartadmin-production.min.css" />
+    <link rel="stylesheet" href="styles/jquery.dpNumberPicker-1.0.1-min.css" />
     <!-- endbuild -->
 
     <!-- build:css(.tmp) styles/main.css -->
 
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/cluster.css">
+    <link rel="stylesheet" href="styles/resize.css">
     <link rel="stylesheet" href="styles/tilesGrid.css">
-    <!--<link rel="stylesheet" href="styles/tilesHover.css" />-->
+
+
 
 
     <!-- endbuild -->
@@ -41,7 +45,7 @@
         </div>
 
         <div class="navbar-collapse collapse">
-            <div data-ng-include="'/views/navigation.html'"></div>
+            <div data-ng-include="'/views/partials/navigation.html'"></div>
             <form class="navbar-form navbar-right" style="margin-right: 20px">
                 <input class="form-control" placeholder="Search..." type="text">
             </form>
@@ -83,7 +87,8 @@
 <!-- endbuild -->
 
 <!-- build:js({.tmp,app}) scripts/scripts.js -->
-<!--<script src="local_components/jTile/jQuery.jTile.min.js"></script>-->
+<script src="local_components/smart-admin/jarvis.widget.min.js"></script>
+<script src="local_components/numeric/jquery.dpNumberPicker-1.0.1-min.js"></script>
 <script src="scripts/app.js"></script>
 <script src="scripts/modules.js"></script>
 <!-- config -->
@@ -103,7 +108,7 @@
 <script src="scripts/controllers/navigation.js"></script>
 <script src="scripts/controllers/settings.js"></script>
 <script src="scripts/controllers/query.js"></script>
-<script src="scripts/controllers/redim.js"></script>
+<script src="scripts/controllers/resize.js"></script>
 <!-- directives -->
 <script src="scripts/directives/directives.js"></script>
 

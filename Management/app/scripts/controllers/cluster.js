@@ -14,11 +14,11 @@ angular.module('impala2GoApp')
         log("cluster controller","",true);
 
         //fetch data from server
-        dataContext.getAllClusters().then(function(data){
+        dataContext.getAllCluster().then(function(data){
             $scope.dataList= data;
         });
 
-        $scope.getSum=function(state){
+        $scope.getSumClusters=function(state){
             if(state){
                 if($scope.warmUp){
                     $scope.allProcess=true;
@@ -34,7 +34,7 @@ angular.module('impala2GoApp')
                 $scope.allProcess=false;
             }
         }
-        $scope.getAll=function(state){
+        $scope.getAllClusters=function(state){
             if(state){
                 $scope.sum=true;
                 $scope.warmUp=true;
@@ -49,12 +49,12 @@ angular.module('impala2GoApp')
             data:"dataList",
             valueSign:{sign:"%",name:"value"},
             valueSort:{predicate:"value",reverse:true},
-            controlsTemplate:"<button type='button' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-cog'></i></button>" +
-                "<button type='button' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-wrench'></i></button>" +
-                "<button type='button' class='btn btn-info btn-sm'><i class='glyphicon glyphicon-th'></i></button>",
+            controlsTemplate:"<button type='button' ng-click='configuration()' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-cog'></i></button>" +
+                "<button type='button' ng-click='configuration()' class='btn btn-info btn-sm margin-right-4'><i class='glyphicon glyphicon-wrench'></i></button>" +
+                "<button type='button' ng-click='configuration()'    class='btn btn-info btn-sm'><i class='glyphicon glyphicon-th'></i></button>",
 
             //  ignoreProperties:["severity"],
-            colorState:[{name:"value",min:0,max:25,background:"#57889c",color:"#fff"},{name:"value",min:26,max:50,background:"#71843f",color:"#fff"},{name:"value",min:51,max:75,background:"#c79121",color:"#fff"},{name:"value",min:76,max:100,background:"#a90329",color:"#fff"}],
+            colorState:[{name:"value",min:0,max:25,background:"#9cb4c5",color:"#305d8c"},{name:"value",min:26,max:50,background:"#8ac38b",color:"#356635"},{name:"value",min:51,max:75,background:"#dfb56c",color:"#826430"},{name:"value",min:76,max:100,background:"#953b39",color:"#fff"}],
             columns:
                 [   {name:"name" ,displayName:"Nodes" },
                     {name:"ram" ,displayName:"Ram"},
@@ -64,7 +64,9 @@ angular.module('impala2GoApp')
                     {name:"localDiskIO" ,displayName:"Local Disk IO"}
                 ]
         }
-
+        $scope.configuration=function(){
+            logger.logWarning("Button clicked","","",true);
+        }
         //test live data change
         $interval(function(){
             $scope.dataList[0].ram.value++;

@@ -1,0 +1,104 @@
+<div id="resizeContainer">
+    <div class="jarviswidget jarviswidget-color-blueLight" id="wid-id-9" data-widget-colorbutton="false" data-widget-editbutton="false" data-widget-togglebutton="false" data-widget-deletebutton="false" data-widget-fullscreenbutton="false" data-widget-custombutton="false" data-widget-sortable="false">
+
+        <header>
+            <span class="widget-icon"> <i class="fa fa-th"></i> </span>
+            <h2>Resizing</h2>
+            <div class="text-align-center">
+                <span class="resize-header-cost">
+                    <span class="bold">Current Cost:&nbsp;</span><span class="badge">{{data.sign}}{{data.costInfo.current}}</span>&nbsp;<span class="bold">/hour</span>
+            </span>
+                <span class="resize-header-cost">
+                    <span class="bold">Provisioned Cost:&nbsp;</span><span class="badge">{{data.sign}}{{data.costInfo.provisioned}}</span>&nbsp;<span class="bold">/hour</span>
+                </span>
+                <span class="resize-header-cost">
+                    <span class="bold">Expected Speedup:&nbsp;</span><span class="badge bg-color-greenLight">{{data.costInfo.speedup}}</span>&nbsp;<span class="bold">%</span>
+                </span>
+            </div>
+
+        </header>
+
+        <!-- widget div-->
+        <div>
+
+
+            <!-- widget content -->
+            <div class="widget-body no-padding">
+
+
+                <div class="jarviswidget jarviswidget-color-blueLight col-sm-3 col-md-3 col-lg-2 padding-15" id="wid-id-10" data-widget-colorbutton="false" data-widget-editbutton="false" data-widget-togglebutton="false" data-widget-deletebutton="false" data-widget-fullscreenbutton="false" data-widget-custombutton="false" data-widget-sortable="false">
+
+                    <header>
+                        <span class="widget-icon"> <i class="fa fa-list-alt"></i> </span>
+                        <h2>Current Cluster </h2>
+                    </header>
+
+                    <!-- widget div-->
+                    <div>
+
+                        <!-- widget content -->
+                        <div class="widget-body no-padding">
+
+                            <div tiles-grid="gridOptions"></div>
+
+                        </div>
+                        <!-- end widget content -->
+
+                    </div>
+                    <!-- end widget div -->
+
+                </div>
+
+
+                <div class="jarviswidget jarviswidget-color-blueLight col-sm-9 col-md-9 col-lg-10 padding-15" id="pricingTypes" data-widget-colorbutton="false" data-widget-editbutton="false" data-widget-togglebutton="false" data-widget-deletebutton="false" data-widget-fullscreenbutton="false" data-widget-custombutton="false" data-widget-sortable="false">
+
+                    <header>
+                        <span class="widget-icon"> <i class="fa fa-th-large"></i> </span>
+                        <h2>Available server types</h2>
+                        <div class="widget-toolbar">
+
+                            <div class="progress progress-striped active" rel="tooltip" data-original-title="55%" data-placement="bottom">
+                                <div class="progress-bar bg-color-blue" role="progressbar" style="width: 55%">55 %</div>
+                            </div>
+
+                        </div>
+                    </header>
+
+                    <!-- widget div-->
+                    <div class="no-padding">
+                        <div class="price-container">
+                            <div data-ng-include="'/views/partials/pricing.html'"></div>
+                        </div>
+
+                        <div class="widget-footer">
+                            <div class="pull-left resize-price-footer-text">
+                                <span>Current workload bottlenecks:</span>
+                                <span ng-repeat="bottleneck in data.bottleneckList">
+                                    <span class="label label-danger">{{bottleneck}}</span>
+                                </span>
+
+                            </div>
+
+                            <button class="btn btn-sm btn-primary" type="button">
+                                Resize
+                            </button>
+
+                        </div>
+                    </div>
+                    <!-- end widget div -->
+
+                </div>
+
+            </div>
+            <!-- end widget content -->
+
+        </div>
+        <!-- end widget div -->
+
+    </div>
+
+</div>
+
+
+
+

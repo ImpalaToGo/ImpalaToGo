@@ -1,11 +1,3 @@
-#cluster-container {
-  border: 1px solid #c2c2c2 !important; }
-
-#cluster-container .panel-heading {
-  background-color: powderblue;
-  padding-bottom: 0;
-  padding-top: 0; }
-
 #cluster-container label {
   margin-bottom: 0px; }
 

@@ -7,12 +7,15 @@
   transition: all $time ease-out;
 }
 .tiles-grid-container {
-
+  overflow: auto;
+  max-height: 800px;
 }
+
 .extra-tile-data{
   border: 1px solid rgb(194, 194, 194) !important;
   text-align: center;
-  background-color: #fcf8e3;
+  background-color: rgba(220,220,220,.17);
+  font-size: 14px;
 //  font-size: 18px;
 }
 .tiles-grid-container table {
@@ -20,8 +23,12 @@
   border-collapse: separate;
 
 }
-
-
+.tiles-grid-form-group{
+  margin-top: 10px;
+}
+.tiles-grid-label{
+  font-weight: bold !important;
+}
 .tiles-grid-container .margin-right-4{
   margin-right: 4px;
 }

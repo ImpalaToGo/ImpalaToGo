@@ -39,11 +39,11 @@ function getRoutes() {
                 title: 'Cluster'
             }
         },
-        {   url: '/redim',
+        {   url: '/resize',
             config: {
-                templateUrl: '../../views/redim.html',
-                controller: 'RedimCtrl',
-                title: 'Redim'
+                templateUrl: '../../views/resize.html',
+                controller: 'ResizeCtrl',
+                title: 'Resize'
             }
         },
         {   url: '/query',
