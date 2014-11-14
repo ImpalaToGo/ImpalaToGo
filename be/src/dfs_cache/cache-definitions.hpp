@@ -32,6 +32,8 @@
 #include <boost/interprocess/smart_ptr/unique_ptr.hpp>
 #include <boost/tuple/tuple.hpp>
 
+#include <list>
+
 #include "common/logging.h"
 #include "dfs_cache/task.hpp"
 #include "dfs_cache/managed-file.hpp"
@@ -47,7 +49,7 @@
 namespace impala {
 
 /** Type for Registry of managed files */
-typedef boost::intrusive::set<managed_file::File> FileRegistry;
+typedef std::list<managed_file::File> FileRegistry;
 
 /** Represent MonitorRequest, the Client Request to be tracked by client for progress */
 typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;

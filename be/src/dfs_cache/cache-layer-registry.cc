@@ -41,25 +41,14 @@ const boost::shared_ptr<FileSystemDescriptorBound>* CacheLayerRegistry::getFileS
           return nullptr;
 	}
 
-bool CacheLayerRegistry::getFileByPath(const char* key, ManagedFile::File*& file)
+bool CacheLayerRegistry::getFileByPath(const char* key, managed_file::File*& file)
 	{
-		file = nullptr;
-		boost::mutex::scoped_lock lock(m_cachemux);
-		FileRegistry::iterator it = m_cache.find(key, StrExpComp());
-		if( it == m_cache.end() )
-	    	return false;
-		file = &*it;
 	    return true;
 	}
 
-bool CacheLayerRegistry::addFileByPath(ManagedFile::File file)
+bool CacheLayerRegistry::addFileByPath(managed_file::File file)
 {
-	boost::mutex::scoped_lock lock(m_cachemux);
-    boost::intrusive::set<ManagedFile::File>::insert_commit_data insert_data;
-
-    bool success = m_cache.insert_check(file.fqp(), StrExpComp(), insert_data).second;
-    if(success) m_cache.insert_commit(file, insert_data);
-	   return success;
+	return true;
 }
 }
 

@@ -15,7 +15,6 @@
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 
-#include <boost/intrusive/set.hpp>
 #include <boost/shared_ptr.hpp>
 
 #include "dfs_cache/cache-definitions.hpp"
@@ -103,7 +102,7 @@ public:
 	 * @param [in]  key  - file fqp
 	 * @param [out] file - managed file instance (if any)
 	 */
-	bool getFileByPath(const char* key, ManagedFile::File*& file);
+	bool getFileByPath(const char* key, managed_file::File*& file);
 
 	/**
 	 * Insert the managed file into the set.
@@ -112,16 +111,16 @@ public:
 	 * @param key  - file fqp
 	 * @param file - managed file instance
 	 */
-	bool addFileByPath( ManagedFile::File file);
+	bool addFileByPath( managed_file::File file);
 
 	struct StrExpComp
 	{
-	   bool operator()(const std::string & str, const ManagedFile::File& file) const
+	   bool operator()(const std::string & str, const managed_file::File& file) const
 	   {
 		   return str.compare(file.fqp()) == 0;
 	   }
 
-	   bool operator()(const ManagedFile::File& file, const std::string & str) const
+	   bool operator()(const managed_file::File& file, const std::string & str) const
 	   {
 		   return file.fqp().compare(str) == 0;
 	   }

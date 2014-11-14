@@ -89,7 +89,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 	Uri uri = Uri::Parse(path);
 	// Check in the registry, whether the file is available. if not, report an error.
 	// Otherwise, create the file descriptor, add it to the registry and share with the caller.
-	ManagedFile::File* file;
+	managed_file::File* file;
 
 	// file is not available
 
@@ -111,7 +111,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 	 file->m_owners++;
 	 return file->m_handle;
 	 */
-	file = new ManagedFile::File(path, path);
+	file = new managed_file::File(path, path);
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, uri.FilePath.c_str(), flags,
 			bufferSize, replication, blocksize, available);
 	file->open(handle);
