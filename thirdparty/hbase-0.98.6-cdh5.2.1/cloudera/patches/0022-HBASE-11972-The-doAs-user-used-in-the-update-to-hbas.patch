@@ -1,0 +1,85 @@
+From 4477034d1cefe5a9ad69407175dca51c44a624f8 Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Sun, 14 Sep 2014 20:29:21 -0700
+Subject: [PATCH 22/63] HBASE-11972 The doAs user used in the update to hbase:acl table RPC is incorrect (Devaraj Das)
+
+---
+ .../org/apache/hadoop/hbase/security/User.java     |   19 +++++++++++++++++++
+ .../hbase/security/access/AccessController.java    |   17 +++++++++++++----
+ 2 files changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/security/User.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/security/User.java
+index 5abff9d..fd12e47 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/security/User.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/security/User.java
+@@ -165,6 +165,25 @@ public abstract class User {
+   }
+ 
+   /**
++   * Executes the given action as the login user
++   * @param action
++   * @return
++   * @throws IOException
++   * @throws InterruptedException
++   */
++  @SuppressWarnings({ "rawtypes", "unchecked" })
++  public static <T> T runAsLoginUser(PrivilegedExceptionAction<T> action) throws IOException {
++    try {
++      Class c = Class.forName("org.apache.hadoop.security.SecurityUtil");
++      Class [] types = new Class[]{PrivilegedExceptionAction.class};
++      Object[] args = new Object[]{action};
++      return (T) Methods.call(c, null, "doAsLoginUser", types, args);
++    } catch (Throwable e) {
++      throw new IOException(e);
++    }
++  }
++
++  /**
+    * Wraps an underlying {@code UserGroupInformation} instance.
+    * @param ugi The base Hadoop user
+    * @return User
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index f2d588b..e8ed950 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -16,6 +16,7 @@ package org.apache.hadoop.hbase.security.access;
+ 
+ import java.io.IOException;
+ import java.net.InetAddress;
++import java.security.PrivilegedExceptionAction;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.HashMap;
+@@ -880,7 +881,7 @@ public class AccessController extends BaseMasterAndRegionObserver
+   }
+ 
+   @Override
+-  public void postCreateTableHandler(ObserverContext<MasterCoprocessorEnvironment> c,
++  public void postCreateTableHandler(final ObserverContext<MasterCoprocessorEnvironment> c,
+       HTableDescriptor desc, HRegionInfo[] regions) throws IOException {
+     // When AC is used, it should be configured as the 1st CP.
+     // In Master, the table operations like create, are handled by a Thread pool but the max size
+@@ -909,9 +910,17 @@ public class AccessController extends BaseMasterAndRegionObserver
+         // default the table owner to current user, if not specified.
+         if (owner == null)
+           owner = getActiveUser().getShortName();
+-        UserPermission userperm = new UserPermission(Bytes.toBytes(owner), desc.getTableName(),
+-            null, Action.values());
+-        AccessControlLists.addUserPermission(c.getEnvironment().getConfiguration(), userperm);
++        final UserPermission userperm = new UserPermission(Bytes.toBytes(owner),
++            desc.getTableName(), null, Action.values());
++        // switch to the real hbase master user for doing the RPC on the ACL table
++        User.runAsLoginUser(new PrivilegedExceptionAction<Void>() {
++          @Override
++          public Void run() throws Exception {
++            AccessControlLists.addUserPermission(c.getEnvironment().getConfiguration(),
++                userperm);
++            return null;
++          }
++        });
+       }
+     }
+   }
+-- 
+1.7.0.4
+

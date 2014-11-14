@@ -1,0 +1,60 @@
+From 44200218398f3830fc9465e858090a52a9b2f6ce Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Wed, 13 Aug 2014 10:56:16 -0700
+Subject: [PATCH 03/63] CLOUDERA-BUILD Add top level Cloudera directory to assembly
+
+---
+ hbase-assembly/pom.xml                          |    1 +
+ hbase-assembly/src/main/assembly/components.xml |    6 ++++++
+ hbase-assembly/src/main/assembly/src.xml        |    7 +++++++
+ 3 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-assembly/pom.xml b/hbase-assembly/pom.xml
+index f82e223..a2fc533 100644
+--- a/hbase-assembly/pom.xml
++++ b/hbase-assembly/pom.xml
+@@ -48,6 +48,7 @@
+           <tarLongFileMode>gnu</tarLongFileMode>
+           <descriptors>
+             <descriptor>${assembly.file}</descriptor>
++	    <descriptor>src/main/assembly/src.xml</descriptor>
+           </descriptors>
+         </configuration>
+       </plugin>
+diff --git a/hbase-assembly/src/main/assembly/components.xml b/hbase-assembly/src/main/assembly/components.xml
+index ec85bc1..8e44a11 100644
+--- a/hbase-assembly/src/main/assembly/components.xml
++++ b/hbase-assembly/src/main/assembly/components.xml
+@@ -40,6 +40,12 @@
+       </includes>
+       <fileMode>0644</fileMode>
+     </fileSet>
++    <!-- Include top level cloudera directory -->
++    <fileSet>
++      <directory>cloudera</directory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
+     <!-- Include the top level conf directory -->
+     <fileSet>
+       <directory>${project.basedir}/../conf</directory>
+diff --git a/hbase-assembly/src/main/assembly/src.xml b/hbase-assembly/src/main/assembly/src.xml
+index b7a21a4..149122f 100644
+--- a/hbase-assembly/src/main/assembly/src.xml
++++ b/hbase-assembly/src/main/assembly/src.xml
+@@ -104,5 +104,12 @@
+       </includes>
+       <fileMode>0644</fileMode>
+     </fileSet>
++    <!-- Include the cloudera directory -->
++    <fileSet>
++      <directory>${project.basedir}/../cloudera</directory>
++      <outputDirectory>cloudera</outputDirectory>
++      <fileMode>0644</fileMode>
++      <directoryMode>0755</directoryMode>
++    </fileSet>
+ </fileSets>
+ </assembly>
+-- 
+1.7.0.4
+

@@ -1,0 +1,75 @@
+From 75ed9540f0839a89b319434ec06d070f4c0bbf9f Mon Sep 17 00:00:00 2001
+From: jxiang <jxiang@unknown>
+Date: Thu, 30 Jan 2014 21:37:00 +0000
+Subject: [PATCH 10/63] HBASE-10446 Backup master gives Error 500 for debug dump
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-15372
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1562986 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../hadoop/hbase/master/MasterDumpServlet.java     |   17 ++++++++++++++---
+ .../hadoop/hbase/monitoring/StateDumpServlet.java  |    7 ++++++-
+ 2 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MasterDumpServlet.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MasterDumpServlet.java
+index 9c66502..78078d8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MasterDumpServlet.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/MasterDumpServlet.java
+@@ -100,8 +100,14 @@ public class MasterDumpServlet extends StateDumpServlet {
+   
+ 
+   private void dumpRIT(HMaster master, PrintWriter out) {
++    AssignmentManager am = master.getAssignmentManager();
++    if (am == null) {
++      out.println("AssignmentManager is not initialized");
++      return;
++    }
++
+     Map<String, RegionState> regionsInTransition =
+-      master.getAssignmentManager().getRegionStates().getRegionsInTransition();
++      am.getRegionStates().getRegionsInTransition();
+     for (Map.Entry<String, RegionState> e : regionsInTransition.entrySet()) {
+       String rid = e.getKey();
+       RegionState rs = e.getValue();
+@@ -110,8 +116,13 @@ public class MasterDumpServlet extends StateDumpServlet {
+   }
+ 
+   private void dumpServers(HMaster master, PrintWriter out) {
+-    Map<ServerName, ServerLoad> servers =
+-      master.getServerManager().getOnlineServers();
++    ServerManager sm = master.getServerManager();
++    if (sm == null) {
++      out.println("ServerManager is not initialized");
++      return;
++    }
++
++    Map<ServerName, ServerLoad> servers = sm.getOnlineServers();
+     for (Map.Entry<ServerName, ServerLoad> e : servers.entrySet()) {
+       out.println(e.getKey() + ": " + e.getValue());
+     }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/monitoring/StateDumpServlet.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/monitoring/StateDumpServlet.java
+index 6e869e7..a254b33 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/monitoring/StateDumpServlet.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/monitoring/StateDumpServlet.java
+@@ -55,9 +55,14 @@ public abstract class StateDumpServlet extends HttpServlet {
+ 
+   protected void dumpExecutors(ExecutorService service, PrintWriter out)
+       throws IOException {
++    if (service == null) {
++      out.println("ExecutorService is not initialized");
++      return;
++    }
++
+     Map<String, ExecutorStatus> statuses = service.getAllExecutorStatuses();
+     for (ExecutorStatus status : statuses.values()) {
+       status.dumpTo(out, "  ");
+     }
+   }
+-}
+\ No newline at end of file
++}
+-- 
+1.7.0.4
+

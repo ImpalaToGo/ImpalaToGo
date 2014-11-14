@@ -1,0 +1,42 @@
+From e525f23a8a41a0a6f0adc7d6bd8e1a83b9193fb4 Mon Sep 17 00:00:00 2001
+From: Ted Yu <tedyu@apache.org>
+Date: Sat, 6 Sep 2014 13:21:46 +0000
+Subject: [PATCH 20/63] HBASE-11896 LoadIncrementalHFiles fails in secure mode if the namespace is specified (Ashish Singhi and Ted Yu)
+
+---
+ .../security/access/SecureBulkLoadEndpoint.java    |    7 +++----
+ 1 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+index d41ec0c..fcb9270 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+@@ -174,7 +174,6 @@ public class SecureBulkLoadEndpoint extends SecureBulkLoadService
+       getAccessController().preCleanupBulkLoad(env);
+       fs.delete(createStagingDir(baseStagingDir,
+           getActiveUser(),
+-          env.getRegion().getTableDesc().getTableName(),
+           new Path(request.getBulkToken()).getName()),
+           true);
+       done.run(CleanupBulkLoadResponse.newBuilder().build());
+@@ -291,14 +290,14 @@ public class SecureBulkLoadEndpoint extends SecureBulkLoadService
+   private Path createStagingDir(Path baseDir,
+                                 User user,
+                                 TableName tableName) throws IOException {
+-    String randomDir = user.getShortName()+"__"+ tableName +"__"+
++    String tblName = tableName.getNameAsString().replace(":", "_");
++    String randomDir = user.getShortName()+"__"+ tblName +"__"+
+         (new BigInteger(RANDOM_WIDTH, random).toString(RANDOM_RADIX));
+-    return createStagingDir(baseDir, user, tableName, randomDir);
++    return createStagingDir(baseDir, user, randomDir);
+   }
+ 
+   private Path createStagingDir(Path baseDir,
+                                 User user,
+-                                TableName tableName,
+                                 String randomDir) throws IOException {
+     Path p = new Path(baseDir, randomDir);
+     fs.mkdirs(p, PERM_ALL_ACCESS);
+-- 
+1.7.0.4
+

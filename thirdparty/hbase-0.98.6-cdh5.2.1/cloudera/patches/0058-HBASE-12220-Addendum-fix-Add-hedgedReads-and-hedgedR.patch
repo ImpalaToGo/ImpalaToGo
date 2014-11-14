@@ -1,0 +1,24 @@
+From 7e249e18b6139633852c9ccc64c55d019124c0cb Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Thu, 9 Oct 2014 23:58:13 -0700
+Subject: [PATCH 58/63] HBASE-12220 Addendum fix Add hedgedReads and hedgedReadWins count metrics
+
+---
+ .../hadoop/hbase/master/SplitLogManager.java       |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+index b480cf4..192cd9e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/SplitLogManager.java
+@@ -47,7 +47,6 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.fs.PathFilter;
+ import org.apache.hadoop.hbase.Chore;
+ import org.apache.hadoop.hbase.HConstants;
+-import org.apache.hadoop.hbase.CoordinatedStateManager;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.SplitLogCounters;
+-- 
+1.7.0.4
+

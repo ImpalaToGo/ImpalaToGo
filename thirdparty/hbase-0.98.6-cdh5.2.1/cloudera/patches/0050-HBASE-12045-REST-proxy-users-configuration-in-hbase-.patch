@@ -1,0 +1,68 @@
+From 0829ebc4ff738e0baa71820e94e7a018e236795e Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Mon, 22 Sep 2014 17:37:16 -0700
+Subject: [PATCH 50/63] HBASE-12045 REST proxy users configuration in hbase-site.xml is ignored (Aditya Kishore)
+
+Reason: Bug
+Author: Aditya Kishore
+Ref: CDH-22069
+---
+ .../org/apache/hadoop/hbase/rest/RESTServlet.java  |    9 +++++++++
+ .../hadoop/hbase/rest/RESTServletContainer.java    |    2 +-
+ 2 files changed, 10 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
+index 4ec5b57..1c877d6 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServlet.java
+@@ -27,6 +27,7 @@ import org.apache.hadoop.hbase.client.HTableInterface;
+ import org.apache.hadoop.hbase.security.UserProvider;
+ import org.apache.hadoop.hbase.util.ConnectionCache;
+ import org.apache.hadoop.security.UserGroupInformation;
++import org.apache.hadoop.security.authorize.ProxyUsers;
+ 
+ /**
+  * Singleton class encapsulating global REST servlet state and functions.
+@@ -41,6 +42,7 @@ public class RESTServlet implements Constants {
+ 
+   static final String CLEANUP_INTERVAL = "hbase.rest.connection.cleanup-interval";
+   static final String MAX_IDLETIME = "hbase.rest.connection.max-idletime";
++  static final String HBASE_REST_SUPPORT_PROXYUSER = "hbase.rest.support.proxyuser";
+ 
+   UserGroupInformation getRealUser() {
+     return realUser;
+@@ -87,6 +89,9 @@ public class RESTServlet implements Constants {
+     int maxIdleTime = conf.getInt(MAX_IDLETIME, 10 * 60 * 1000);
+     connectionCache = new ConnectionCache(
+       conf, userProvider, cleanInterval, maxIdleTime);
++    if (supportsProxyuser()) {
++      ProxyUsers.refreshSuperUserGroupsConfiguration(conf);
++    }
+   }
+ 
+   HBaseAdmin getAdmin() throws IOException {
+@@ -120,4 +125,8 @@ public class RESTServlet implements Constants {
+   void setEffectiveUser(String effectiveUser) {
+     connectionCache.setEffectiveUser(effectiveUser);
+   }
++
++  boolean supportsProxyuser() {
++    return conf.getBoolean(HBASE_REST_SUPPORT_PROXYUSER, false);
++  }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServletContainer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServletContainer.java
+index c2f4e59..2c859bd 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServletContainer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/RESTServletContainer.java
+@@ -53,7 +53,7 @@ public class RESTServletContainer extends ServletContainer {
+     RESTServlet servlet = RESTServlet.getInstance();
+     if (doAsUserFromQuery != null) {
+       Configuration conf = servlet.getConfiguration();
+-      if (!conf.getBoolean("hbase.rest.support.proxyuser", false)) {
++      if (!servlet.supportsProxyuser()) {
+         throw new ServletException("Support for proxyuser is not configured");
+       }
+       UserGroupInformation ugi = servlet.getRealUser();
+-- 
+1.7.0.4
+

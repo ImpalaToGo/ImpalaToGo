@@ -1,0 +1,53 @@
+From a6e314a75b77c26f755787aa930bbd76d722dcc5 Mon Sep 17 00:00:00 2001
+From: Misty Stanley-Jones <mstanleyjones@cloudera.com>
+Date: Wed, 17 Sep 2014 12:46:10 +1000
+Subject: [PATCH 39/63] HBASE-12000 isMob and mobThreshold do not adhere to naming conventions
+
+Reason: MOB feature
+Author: Misty Stanley-Jones
+Ref: CDH-19420
+---
+ .../org/apache/hadoop/hbase/mob/MobConstants.java  |    4 ++--
+ .../hadoop/hbase/regionserver/HMobStore.java       |    4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
+index 639b98c..4e3e7c8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
+@@ -32,8 +32,8 @@ import org.apache.hadoop.hbase.util.Bytes;
+ @InterfaceStability.Evolving
+ public class MobConstants {
+ 
+-  public static final byte[] IS_MOB = Bytes.toBytes("isMob");
+-  public static final byte[] MOB_THRESHOLD = Bytes.toBytes("mobThreshold");
++  public static final byte[] IS_MOB = Bytes.toBytes("IS_MOB");
++  public static final byte[] MOB_THRESHOLD = Bytes.toBytes("MOB_THRESHOLD");
+   public static final long DEFAULT_MOB_THRESHOLD = 100 * 1024; // 100k
+ 
+   public static final String MOB_SCAN_RAW = "hbase.mob.scan.raw";
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+index dbcd708..fb12c8b 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+@@ -58,7 +58,7 @@ import org.apache.zookeeper.KeeperException;
+ 
+ /**
+  * The store implementation to save MOBs (medium objects), it extends the HStore.
+- * When a descriptor of a column family has the value "is_mob", it means this column family
++ * When a descriptor of a column family has the value "IS_MOB", it means this column family
+  * is a mob one. When a HRegion instantiate a store for this column family, the HMobStore is
+  * created.
+  * HMobStore is almost the same with the HStore except using different types of scanners.
+@@ -66,7 +66,7 @@ import org.apache.zookeeper.KeeperException;
+  * In these scanners, a additional seeks in the mob files should be performed after the seek
+  * to HBase is done.
+  * The store implements how we save MOBs by extending HStore. When a descriptor
+- * of a column family has the value "isMob", it means this column family is a mob one. When a
++ * of a column family has the value "IS_MOB", it means this column family is a mob one. When a
+  * HRegion instantiate a store for this column family, the HMobStore is created. HMobStore is
+  * almost the same with the HStore except using different types of scanners. In the method of
+  * getScanner, the MobStoreScanner and MobReversedStoreScanner are returned. In these scanners, a
+-- 
+1.7.0.4
+

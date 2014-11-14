@@ -1,0 +1,29 @@
+From 4e12197d5d0acd61128abc752bab21dc3479f59c Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 26 Sep 2014 18:13:29 +0530
+Subject: [PATCH 41/63] HBASE-12093 Support the mob attributes in hbase shell when create/alter
+ table
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-19420
+---
+ hbase-shell/src/main/ruby/hbase/admin.rb |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-shell/src/main/ruby/hbase/admin.rb b/hbase-shell/src/main/ruby/hbase/admin.rb
+index 809b8b0..6273dd0 100644
+--- a/hbase-shell/src/main/ruby/hbase/admin.rb
++++ b/hbase-shell/src/main/ruby/hbase/admin.rb
+@@ -623,6 +623,8 @@ module Hbase
+       family.setCompressTags(JBoolean.valueOf(arg.delete(org.apache.hadoop.hbase.HColumnDescriptor::COMPRESS_TAGS))) if arg.include?(org.apache.hadoop.hbase.HColumnDescriptor::COMPRESS_TAGS)
+       family.setPrefetchBlocksOnOpen(JBoolean.valueOf(arg.delete(org.apache.hadoop.hbase.HColumnDescriptor::PREFETCH_BLOCKS_ON_OPEN))) if arg.include?(org.apache.hadoop.hbase.HColumnDescriptor::PREFETCH_BLOCKS_ON_OPEN)
+       family.setValue(COMPRESSION_COMPACT, arg.delete(COMPRESSION_COMPACT)) if arg.include?(COMPRESSION_COMPACT)
++      family.setMobEnabled(JBoolean.valueOf(arg.delete(org.apache.hadoop.hbase.HColumnDescriptor::IS_MOB))) if arg.include?(org.apache.hadoop.hbase.HColumnDescriptor::IS_MOB)
++      family.setMobThreshold(JLong.valueOf(arg.delete(org.apache.hadoop.hbase.HColumnDescriptor::MOB_THRESHOLD))) if arg.include?(org.apache.hadoop.hbase.HColumnDescriptor::MOB_THRESHOLD)
+       if arg.include?(org.apache.hadoop.hbase.HColumnDescriptor::BLOOMFILTER)
+         bloomtype = arg.delete(org.apache.hadoop.hbase.HColumnDescriptor::BLOOMFILTER).upcase
+         unless org.apache.hadoop.hbase.regionserver.BloomType.constants.include?(bloomtype)
+-- 
+1.7.0.4
+

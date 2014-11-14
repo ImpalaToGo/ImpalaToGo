@@ -1,0 +1,278 @@
+From fe3077aad33e49fdf119a736a18223bcff7a0fe9 Mon Sep 17 00:00:00 2001
+From: anoopsjohn <anoopsamjohn@gmail.com>
+Date: Sat, 6 Sep 2014 10:06:37 +0530
+Subject: [PATCH 32/63] HBASE-11647 MOB integration testing. (Jingcheng Du)
+ HBASE-11647 MOB integration testing. - addendum(Jingcheng Du)
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-19420
+---
+ .../hadoop/hbase/IntegrationTestIngestWithMOB.java |  147 ++++++++++++++++++++
+ .../hbase/util/LoadTestDataGeneratorWithMOB.java   |   73 ++++++++++
+ .../org/apache/hadoop/hbase/util/LoadTestTool.java |    8 +-
+ 3 files changed, 224 insertions(+), 4 deletions(-)
+ create mode 100644 hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestDataGeneratorWithMOB.java
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+new file mode 100644
+index 0000000..e7caade
+--- /dev/null
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+@@ -0,0 +1,147 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase;
++
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++
++import org.apache.commons.cli.CommandLine;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.client.HBaseAdmin;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.LoadTestDataGeneratorWithMOB;
++import org.apache.hadoop.hbase.util.LoadTestTool;
++import org.apache.hadoop.util.ToolRunner;
++import org.junit.Assert;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Integration Test for MOB ingest.
++ */
++@Category(IntegrationTests.class)
++public class IntegrationTestIngestWithMOB extends IntegrationTestIngest {
++  private static final char COLON = ':';
++
++  private byte[] mobColumnFamily = LoadTestTool.COLUMN_FAMILY;
++  public static final String THRESHOLD = "threshold";
++  public static final String MIN_MOB_DATA_SIZE = "minMobDataSize";
++  public static final String MAX_MOB_DATA_SIZE = "maxMobDataSize";
++  private int threshold = 100 * 1024; //100KB
++  private int minMobDataSize = threshold * 4 / 5; //80KB
++  private int maxMobDataSize = threshold * 50; // 5MB
++
++  //similar to LOAD_TEST_TOOL_INIT_ARGS except OPT_IN_MEMORY is removed
++  protected String[] LOAD_TEST_TOOL_MOB_INIT_ARGS = {
++      LoadTestTool.OPT_COMPRESSION,
++      LoadTestTool.OPT_DATA_BLOCK_ENCODING,
++      LoadTestTool.OPT_ENCRYPTION,
++  };
++
++  protected String[] getArgsForLoadTestToolInitTable() {
++    List<String> args = new ArrayList<String>();
++    args.add("-tn");
++    args.add(getTablename());
++    // pass all remaining args from conf with keys <test class name>.<load test tool arg>
++    String clazz = this.getClass().getSimpleName();
++    for (String arg : LOAD_TEST_TOOL_MOB_INIT_ARGS) {
++      String val = getConf().get(String.format("%s.%s", clazz, arg));
++      if (val != null) {
++        args.add("-" + arg);
++        args.add(val);
++      }
++    }
++    args.add("-init_only");
++    return args.toArray(new String[args.size()]);
++  }
++
++  @Override
++  protected void addOptions() {
++    super.addOptions();
++    super.addOptWithArg(THRESHOLD, "The threshold to classify cells to mob data");
++    super.addOptWithArg(MIN_MOB_DATA_SIZE, "Minimum value size for mob data");
++    super.addOptWithArg(MAX_MOB_DATA_SIZE, "Maximum value size for mob data");
++  }
++
++  @Override
++  protected void processOptions(CommandLine cmd) {
++    super.processOptions(cmd);
++    if (cmd.hasOption(THRESHOLD)) {
++      threshold = Integer.parseInt(cmd.getOptionValue(THRESHOLD));
++    }
++    if (cmd.hasOption(MIN_MOB_DATA_SIZE)) {
++      minMobDataSize = Integer.parseInt(cmd.getOptionValue(MIN_MOB_DATA_SIZE));
++    }
++    if (cmd.hasOption(MAX_MOB_DATA_SIZE)) {
++      maxMobDataSize = Integer.parseInt(cmd.getOptionValue(MAX_MOB_DATA_SIZE));
++    }
++    if (minMobDataSize > maxMobDataSize) {
++      throw new IllegalArgumentException(
++          "The minMobDataSize should not be larger than minMobDataSize");
++    }
++  }
++
++  @Override
++  protected void initTable() throws IOException {
++    int ret = loadTool.run(getArgsForLoadTestToolInitTable());
++    Assert.assertEquals("Failed to initialize LoadTestTool", 0, ret);
++
++    byte[] tableName = getTablename().getBytes();
++    HBaseAdmin admin = new HBaseAdmin(conf);
++    HTableDescriptor tableDesc = admin.getTableDescriptor(tableName);
++    LOG.info("Disabling table " + getTablename());
++    admin.disableTable(tableName);
++    for (HColumnDescriptor columnDescriptor : tableDesc.getFamilies()) {
++      if(Arrays.equals(columnDescriptor.getName(), mobColumnFamily)) {
++        columnDescriptor.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
++        columnDescriptor.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes((long) threshold));
++        admin.modifyColumn(tableName, columnDescriptor);
++      }
++    }
++    LOG.info("Enabling table " + getTablename());
++    admin.enableTable(tableName);
++    admin.close();
++  }
++
++  @Override
++  protected String[] getArgsForLoadTestTool(String mode, String modeSpecificArg, long startKey,
++      long numKeys) {
++    String[] args = super.getArgsForLoadTestTool(mode, modeSpecificArg, startKey, numKeys);
++    List<String> tmp = new ArrayList<String>(Arrays.asList(args));
++    // LoadTestDataGeneratorMOB:mobColumnFamily:minMobDataSize:maxMobDataSize
++    tmp.add(HIPHEN + LoadTestTool.OPT_GENERATOR);
++    StringBuilder sb = new StringBuilder(LoadTestDataGeneratorWithMOB.class.getName());
++    sb.append(COLON);
++    sb.append(Bytes.toString(mobColumnFamily));
++    sb.append(COLON);
++    sb.append(minMobDataSize);
++    sb.append(COLON);
++    sb.append(maxMobDataSize);
++    tmp.add(sb.toString());
++    return tmp.toArray(new String[tmp.size()]);
++  }
++
++  public static void main(String[] args) throws Exception {
++    Configuration conf = HBaseConfiguration.create();
++    IntegrationTestingUtility.setUseDistributedCluster(conf);
++    int ret = ToolRunner.run(conf, new IntegrationTestIngestWithMOB(), args);
++    System.exit(ret);
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestDataGeneratorWithMOB.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestDataGeneratorWithMOB.java
+new file mode 100644
+index 0000000..6ce4252
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestDataGeneratorWithMOB.java
+@@ -0,0 +1,73 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.util;
++
++import java.util.Arrays;
++
++import org.apache.hadoop.hbase.util.test.LoadTestKVGenerator;
++
++/**
++ * A load test data generator for MOB
++ */
++public class LoadTestDataGeneratorWithMOB
++    extends MultiThreadedAction.DefaultDataGenerator {
++
++  private byte[] mobColumnFamily;
++  private LoadTestKVGenerator mobKvGenerator;
++
++  public LoadTestDataGeneratorWithMOB(int minValueSize, int maxValueSize,
++      int minColumnsPerKey, int maxColumnsPerKey, byte[]... columnFamilies) {
++    super(minValueSize, maxValueSize, minColumnsPerKey, maxColumnsPerKey,
++        columnFamilies);
++  }
++
++  public LoadTestDataGeneratorWithMOB(byte[]... columnFamilies) {
++    super(columnFamilies);
++  }
++
++  @Override
++  public void initialize(String[] args) {
++    super.initialize(args);
++    if (args.length != 3) {
++      throw new IllegalArgumentException(
++          "LoadTestDataGeneratorWithMOB can have 3 arguments."
++              + "1st arguement is a column family, the 2nd argument "
++              + "is the minimum mob data size and the 3rd argument "
++              + "is the maximum mob data size.");
++    }
++    String mobColumnFamily = args[0];
++    int minMobDataSize = Integer.parseInt(args[1]);
++    int maxMobDataSize = Integer.parseInt(args[2]);
++    configureMob(Bytes.toBytes(mobColumnFamily), minMobDataSize, maxMobDataSize);
++  }
++
++  private void configureMob(byte[] mobColumnFamily, int minMobDataSize,
++      int maxMobDataSize) {
++    this.mobColumnFamily = mobColumnFamily;
++    mobKvGenerator = new LoadTestKVGenerator(minMobDataSize, maxMobDataSize);
++  }
++
++  @Override
++  public byte[] generateValue(byte[] rowKey, byte[] cf,
++      byte[] column) {
++    if(Arrays.equals(cf, mobColumnFamily))
++      return mobKvGenerator.generateRandomSizeValue(rowKey, cf, column);
++
++    return super.generateValue(rowKey, cf, column);
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestTool.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestTool.java
+index c0050ef..f27e231 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestTool.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/LoadTestTool.java
+@@ -110,9 +110,9 @@ public class LoadTestTool extends AbstractHBaseTool {
+         + "compression) to use for data blocks in the test column family, "
+         + "one of " + Arrays.toString(DataBlockEncoding.values()) + ".";
+ 
+-  private static final String OPT_BLOOM = "bloom";
+-  private static final String OPT_COMPRESSION = "compression";
+-  private static final String OPT_DEFERRED_LOG_FLUSH = "deferredlogflush";
++  public static final String OPT_BLOOM = "bloom";
++  public static final String OPT_COMPRESSION = "compression";
++  public static final String OPT_DEFERRED_LOG_FLUSH = "deferredlogflush";
+   public static final String OPT_DEFERRED_LOG_FLUSH_USAGE = "Enable deferred log flush.";
+   public static final String OPT_DATA_BLOCK_ENCODING =
+       HColumnDescriptor.DATA_BLOCK_ENCODING.toLowerCase();
+@@ -142,7 +142,7 @@ public class LoadTestTool extends AbstractHBaseTool {
+   protected static final String OPT_BATCHUPDATE = "batchupdate";
+   protected static final String OPT_UPDATE = "update";
+ 
+-  protected static final String OPT_ENCRYPTION = "encryption";
++  public static final String OPT_ENCRYPTION = "encryption";
+   protected static final String OPT_ENCRYPTION_USAGE =
+     "Enables transparent encryption on the test table, one of " +
+     Arrays.toString(Encryption.getSupportedCiphers());
+-- 
+1.7.0.4
+

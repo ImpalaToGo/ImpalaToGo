@@ -1,0 +1,39 @@
+From 226fd2be92e1739ffc036777e6220da78864a5e6 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 25 Sep 2014 14:49:32 -0700
+Subject: [PATCH 45/63] CLOUDERA-BUILD Harmonize jackson version to cdh.jackson.version
+
+---
+ .../hadoop/hbase/rest/model/TestScannerModel.java  |    2 +-
+ pom.xml                                            |    2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
+index 3102bfd..8751984 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
+@@ -50,7 +50,7 @@ public class TestScannerModel extends TestModelBase<ScannerModel> {
+     AS_JSON = "{\"batch\":100,\"caching\":1000,\"cacheBlocks\":false,\"endRow\":\"enp5eng=\","
+         + "\"endTime\":1245393318192,\"maxVersions\":2147483647,\"startRow\":\"YWJyYWNhZGFicmE=\","
+         + "\"startTime\":1245219839331,\"column\":[\"Y29sdW1uMQ==\",\"Y29sdW1uMjpmb28=\"],"
+-        +"\"labels\":[\"private\",\"public\"]"
++        +"\"label\":[\"private\",\"public\"]"
+         +"}";
+ 
+     AS_PB = "CgthYnJhY2FkYWJyYRIFenp5engaB2NvbHVtbjEaC2NvbHVtbjI6Zm9vIGQo47qL554kMLDi57mf"
+diff --git a/pom.xml b/pom.xml
+index 6116ba1..2e7142a 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1004,7 +1004,7 @@
+     <httpclient.version>3.1</httpclient.version>
+     <metrics-core.version>2.2.0</metrics-core.version>
+     <guava.version>12.0.1</guava.version>
+-    <jackson.version>1.8.8</jackson.version>
++    <jackson.version>${cdh.jackson.version}</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+     <jaxb-api.version>2.1</jaxb-api.version>
+     <jetty.version>6.1.26.cloudera.2</jetty.version>
+-- 
+1.7.0.4
+

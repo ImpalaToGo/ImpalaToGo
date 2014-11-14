@@ -1,0 +1,778 @@
+From f5bd0bf4e357e230c5d1e2a56864e596062af6d3 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 24 Sep 2014 19:42:13 +0100
+Subject: [PATCH 38/63] HBASE-12054 bad state after NamespaceUpgrade with reserved table names
+
+Reason: Bug
+Author: Matteo Bertozzi
+Ref: CDH-21758
+---
+ .../java/org/apache/hadoop/hbase/HConstants.java   |    7 +-
+ .../hadoop/hbase/migration/NamespaceUpgrade.java   |    1 +
+ .../apache/hadoop/hbase/util/FSRegionScanner.java  |    8 +-
+ .../java/org/apache/hadoop/hbase/util/FSUtils.java |  132 +++++---------------
+ .../src/test/data/TestNamespaceUpgrade.tgz         |  Bin 10449 -> 13572 bytes
+ .../hbase/migration/TestNamespaceUpgrade.java      |    2 +-
+ .../hadoop/hbase/util/TestFSTableDescriptors.java  |    5 +-
+ 7 files changed, 42 insertions(+), 113 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
+index 3c86202..0ea6ffd 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
+@@ -908,10 +908,9 @@ public final class HConstants {
+   public static final long DEFAULT_REGIONSERVER_METRICS_PERIOD = 5000;
+   /** Directories that are not HBase table directories */
+   public static final List<String> HBASE_NON_TABLE_DIRS =
+-    Collections.unmodifiableList(Arrays.asList(new String[] { HREGION_LOGDIR_NAME,
+-      HREGION_OLDLOGDIR_NAME, CORRUPT_DIR_NAME, SPLIT_LOGDIR_NAME,
+-      HBCK_SIDELINEDIR_NAME, HFILE_ARCHIVE_DIRECTORY, SNAPSHOT_DIR_NAME, HBASE_TEMP_DIRECTORY,
+-      OLD_SNAPSHOT_DIR_NAME, BASE_NAMESPACE_DIR, MIGRATION_NAME, LIB_DIR}));
++    Collections.unmodifiableList(Arrays.asList(new String[] {
++      HBCK_SIDELINEDIR_NAME, HBASE_TEMP_DIRECTORY, MIGRATION_NAME
++    }));
+ 
+   /** Directories that are not HBase user table directories */
+   public static final List<String> HBASE_NON_USER_TABLE_DIRS =
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
+index daef083..748f1a8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/migration/NamespaceUpgrade.java
+@@ -251,6 +251,7 @@ public class NamespaceUpgrade implements Tool {
+         // Make the new directory under the ns to which we will move the table.
+         Path nsDir = new Path(this.defNsDir,
+           TableName.valueOf(oldTableDir.getName()).getQualifierAsString());
++        LOG.info("Moving " + oldTableDir + " to " + nsDir);
+         if (!fs.exists(nsDir.getParent())) {
+           if (!fs.mkdirs(nsDir.getParent())) {
+             throw new IOException("Failed to create namespace dir "+nsDir.getParent());
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSRegionScanner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSRegionScanner.java
+index 7506bec..01d432c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSRegionScanner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSRegionScanner.java
+@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.util.FSUtils;
+ 
+ /**
+  * Thread that walks over the filesystem, and computes the mappings
+@@ -79,7 +80,7 @@ class FSRegionScanner implements Runnable {
+       int totalBlkCount = 0;
+ 
+       // ignore null
+-      FileStatus[] cfList = fs.listStatus(regionPath);
++      FileStatus[] cfList = fs.listStatus(regionPath, new FSUtils.FamilyDirFilter(fs));
+       if (null == cfList) {
+         return;
+       }
+@@ -90,10 +91,7 @@ class FSRegionScanner implements Runnable {
+           // skip because this is not a CF directory
+           continue;
+         }
+-        if (cfStatus.getPath().getName().startsWith(".") ||
+-            HConstants.HBASE_NON_USER_TABLE_DIRS.contains(cfStatus.getPath().getName())) {
+-          continue;
+-        }
++
+         FileStatus[] storeFileLists = fs.listStatus(cfStatus.getPath());
+         if (null == storeFileLists) {
+           continue;
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+index 7181759..c039bec 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+@@ -990,15 +990,14 @@ public abstract class FSUtils {
+       final Path hbaseRootDir)
+   throws IOException {
+     List<Path> tableDirs = getTableDirs(fs, hbaseRootDir);
++    PathFilter regionFilter = new RegionDirFilter(fs);
++    PathFilter familyFilter = new FamilyDirFilter(fs);
+     for (Path d : tableDirs) {
+-      FileStatus[] regionDirs = fs.listStatus(d, new DirFilter(fs));
++      FileStatus[] regionDirs = fs.listStatus(d, regionFilter);
+       for (FileStatus regionDir : regionDirs) {
+         Path dd = regionDir.getPath();
+-        if (dd.getName().equals(HConstants.HREGION_COMPACTIONDIR_NAME)) {
+-          continue;
+-        }
+         // Else its a region name.  Now look in region for families.
+-        FileStatus[] familyDirs = fs.listStatus(dd, new DirFilter(fs));
++        FileStatus[] familyDirs = fs.listStatus(dd, familyFilter);
+         for (FileStatus familyDir : familyDirs) {
+           Path family = familyDir.getPath();
+           // Now in family make sure only one file.
+@@ -1064,19 +1063,17 @@ public abstract class FSUtils {
+     Map<String, Integer> frags = new HashMap<String, Integer>();
+     int cfCountTotal = 0;
+     int cfFragTotal = 0;
+-    DirFilter df = new DirFilter(fs);
++    PathFilter regionFilter = new RegionDirFilter(fs);
++    PathFilter familyFilter = new FamilyDirFilter(fs);
+     List<Path> tableDirs = getTableDirs(fs, hbaseRootDir);
+     for (Path d : tableDirs) {
+       int cfCount = 0;
+       int cfFrag = 0;
+-      FileStatus[] regionDirs = fs.listStatus(d, df);
++      FileStatus[] regionDirs = fs.listStatus(d, regionFilter);
+       for (FileStatus regionDir : regionDirs) {
+         Path dd = regionDir.getPath();
+-        if (dd.getName().equals(HConstants.HREGION_COMPACTIONDIR_NAME)) {
+-          continue;
+-        }
+         // else its a region name, now look in region for families
+-        FileStatus[] familyDirs = fs.listStatus(dd, df);
++        FileStatus[] familyDirs = fs.listStatus(dd, familyFilter);
+         for (FileStatus familyDir : familyDirs) {
+           cfCount++;
+           cfCountTotal++;
+@@ -1099,86 +1096,6 @@ public abstract class FSUtils {
+   }
+ 
+   /**
+-   * Expects to find -ROOT- directory.
+-   * @param fs filesystem
+-   * @param hbaseRootDir hbase root directory
+-   * @return True if this a pre020 layout.
+-   * @throws IOException e
+-   */
+-  public static boolean isPre020FileLayout(final FileSystem fs,
+-    final Path hbaseRootDir)
+-  throws IOException {
+-    Path mapfiles = new Path(new Path(new Path(new Path(hbaseRootDir, "-ROOT-"),
+-      "70236052"), "info"), "mapfiles");
+-    return fs.exists(mapfiles);
+-  }
+-
+-  /**
+-   * Runs through the hbase rootdir and checks all stores have only
+-   * one file in them -- that is, they've been major compacted.  Looks
+-   * at root and meta tables too.  This version differs from
+-   * {@link #isMajorCompacted(FileSystem, Path)} in that it expects a
+-   * pre-0.20.0 hbase layout on the filesystem.  Used migrating.
+-   * @param fs filesystem
+-   * @param hbaseRootDir hbase root directory
+-   * @return True if this hbase install is major compacted.
+-   * @throws IOException e
+-   */
+-  public static boolean isMajorCompactedPre020(final FileSystem fs,
+-      final Path hbaseRootDir)
+-  throws IOException {
+-    // Presumes any directory under hbase.rootdir is a table.
+-    List<Path> tableDirs = getTableDirs(fs, hbaseRootDir);
+-    for (Path d: tableDirs) {
+-      // Inside a table, there are compaction.dir directories to skip.
+-      // Otherwise, all else should be regions.  Then in each region, should
+-      // only be family directories.  Under each of these, should be a mapfile
+-      // and info directory and in these only one file.
+-      if (d.getName().equals(HConstants.HREGION_LOGDIR_NAME)) {
+-        continue;
+-      }
+-      FileStatus[] regionDirs = fs.listStatus(d, new DirFilter(fs));
+-      for (FileStatus regionDir : regionDirs) {
+-        Path dd = regionDir.getPath();
+-        if (dd.getName().equals(HConstants.HREGION_COMPACTIONDIR_NAME)) {
+-          continue;
+-        }
+-        // Else its a region name.  Now look in region for families.
+-        FileStatus[] familyDirs = fs.listStatus(dd, new DirFilter(fs));
+-        for (FileStatus familyDir : familyDirs) {
+-          Path family = familyDir.getPath();
+-          FileStatus[] infoAndMapfile = fs.listStatus(family);
+-          // Assert that only info and mapfile in family dir.
+-          if (infoAndMapfile.length != 0 && infoAndMapfile.length != 2) {
+-            LOG.debug(family.toString() +
+-                " has more than just info and mapfile: " + infoAndMapfile.length);
+-            return false;
+-          }
+-          // Make sure directory named info or mapfile.
+-          for (int ll = 0; ll < 2; ll++) {
+-            if (infoAndMapfile[ll].getPath().getName().equals("info") ||
+-                infoAndMapfile[ll].getPath().getName().equals("mapfiles"))
+-              continue;
+-            LOG.debug("Unexpected directory name: " +
+-                infoAndMapfile[ll].getPath());
+-            return false;
+-          }
+-          // Now in family, there are 'mapfile' and 'info' subdirs.  Just
+-          // look in the 'mapfile' subdir.
+-          FileStatus[] familyStatus =
+-              fs.listStatus(new Path(family, "mapfiles"));
+-          if (familyStatus.length > 1) {
+-            LOG.debug(family.toString() + " has " + familyStatus.length +
+-                " files.");
+-            return false;
+-          }
+-        }
+-      }
+-    }
+-    return true;
+-  }
+-
+-  /**
+    * Returns the {@link org.apache.hadoop.fs.Path} object representing the table directory under
+    * path rootdir
+    *
+@@ -1262,10 +1179,10 @@ public abstract class FSUtils {
+     public boolean accept(Path p) {
+       boolean isValid = false;
+       try {
+-        if (blacklist.contains(p.getName().toString())) {
+-          isValid = false;
+-        } else {
++        if (isValidName(p.getName())) {
+           isValid = fs.getFileStatus(p).isDir();
++        } else {
++          isValid = false;
+         }
+       } catch (IOException e) {
+         LOG.warn("An error occurred while verifying if [" + p.toString()
+@@ -1273,6 +1190,10 @@ public abstract class FSUtils {
+       }
+       return isValid;
+     }
++
++    protected boolean isValidName(final String name) {
++      return !blacklist.contains(name);
++    }
+   }
+ 
+   /**
+@@ -1290,10 +1211,22 @@ public abstract class FSUtils {
+    * {@link BlackListDirFilter} with a <tt>null</tt> blacklist
+    */
+   public static class UserTableDirFilter extends BlackListDirFilter {
+-
+     public UserTableDirFilter(FileSystem fs) {
+       super(fs, HConstants.HBASE_NON_TABLE_DIRS);
+     }
++
++    protected boolean isValidName(final String name) {
++      if (!super.isValidName(name))
++        return false;
++
++      try {
++        TableName.isLegalTableQualifierName(Bytes.toBytes(name));
++      } catch (IllegalArgumentException e) {
++        LOG.info("INVALID NAME " + name);
++        return false;
++      }
++      return true;
++    }
+   }
+ 
+   /**
+@@ -1554,15 +1487,12 @@ public abstract class FSUtils {
+     Path tableDir = FSUtils.getTableDir(hbaseRootDir, tableName);
+     // Inside a table, there are compaction.dir directories to skip.  Otherwise, all else
+     // should be regions.
+-    PathFilter df = new BlackListDirFilter(fs, HConstants.HBASE_NON_TABLE_DIRS);
+-    FileStatus[] regionDirs = fs.listStatus(tableDir);
++    PathFilter familyFilter = new FamilyDirFilter(fs);
++    FileStatus[] regionDirs = fs.listStatus(tableDir, new RegionDirFilter(fs));
+     for (FileStatus regionDir : regionDirs) {
+       Path dd = regionDir.getPath();
+-      if (dd.getName().equals(HConstants.HREGION_COMPACTIONDIR_NAME)) {
+-        continue;
+-      }
+       // else its a region name, now look in region for families
+-      FileStatus[] familyDirs = fs.listStatus(dd, df);
++      FileStatus[] familyDirs = fs.listStatus(dd, familyFilter);
+       for (FileStatus familyDir : familyDirs) {
+         Path family = familyDir.getPath();
+         // now in family, iterate over the StoreFiles and
+diff --git a/hbase-server/src/test/data/TestNamespaceUpgrade.tgz b/hbase-server/src/test/data/TestNamespaceUpgrade.tgz
+index db6e9c35441e1efbbc0ac589683a8de57a952ae3..bd91ba2fc98584f185fa3c037e809345c023cfab 100644
+GIT binary patch
+literal 13572
+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
+Xn&+eW|G&u2hjcd+i|lBA(9!%KfKL$_
+
+literal 10449
+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
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestNamespaceUpgrade.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestNamespaceUpgrade.java
+index 0744361..4dcd3ab 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestNamespaceUpgrade.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestNamespaceUpgrade.java
+@@ -93,7 +93,7 @@ public class TestNamespaceUpgrade {
+       {"1","2","3","4","5","6","7","8","9"};
+   private final static String currentKeys[] =
+       {"1","2","3","4","5","6","7","8","9","A"};
+-  private final static String tables[] = {"foo", "ns1.foo","ns.two.foo"};
++  private final static String tables[] = {"data", "foo", "ns1.foo","ns.two.foo"};
+ 
+   @BeforeClass
+   public static void setUpBeforeClass() throws Exception {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestFSTableDescriptors.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestFSTableDescriptors.java
+index aa16177..cbe8016 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestFSTableDescriptors.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestFSTableDescriptors.java
+@@ -260,11 +260,12 @@ public class TestFSTableDescriptors {
+   }
+ 
+   @Test
+-  public void testReadingArchiveDirectoryFromFS() throws IOException {
++  public void testReadingInvalidDirectoryFromFS() throws IOException {
+     FileSystem fs = FileSystem.get(UTIL.getConfiguration());
+     try {
++      // .tmp dir is an invalid table name
+       new FSTableDescriptors(fs, FSUtils.getRootDir(UTIL.getConfiguration()))
+-          .get(TableName.valueOf(HConstants.HFILE_ARCHIVE_DIRECTORY));
++          .get(TableName.valueOf(HConstants.HBASE_TEMP_DIRECTORY));
+       fail("Shouldn't be able to read a table descriptor for the archive directory.");
+     } catch (Exception e) {
+       LOG.debug("Correctly got error when reading a table descriptor from the archive directory: "
+-- 
+1.7.0.4
+

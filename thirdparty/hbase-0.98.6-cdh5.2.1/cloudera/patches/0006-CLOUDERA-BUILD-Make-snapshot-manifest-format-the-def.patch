@@ -1,0 +1,28 @@
+From 5195855c637cee9ff36244e1b7dd0be86c35c90e Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 21 Aug 2014 11:17:59 -0700
+Subject: [PATCH 06/63] CLOUDERA-BUILD Make snapshot manifest format the default for CDH
+
+Ref: CDH-20081
+Reason: Product Requirement (Compatibility)
+Author: Esteban Gutierrez
+---
+ hbase-common/src/main/resources/hbase-default.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-common/src/main/resources/hbase-default.xml b/hbase-common/src/main/resources/hbase-default.xml
+index f285cf7..7e6a2ec 100644
+--- a/hbase-common/src/main/resources/hbase-default.xml
++++ b/hbase-common/src/main/resources/hbase-default.xml
+@@ -1019,7 +1019,7 @@ possible configurations would overwhelm and obscure the important.
+   </property>
+   <property>
+       <name>hbase.snapshot.format.version</name>
+-      <value>1</value>
++      <value>2</value>
+       <description>The Snapshot format version to use for new snapshots.
+         1 is the old format used by 0.94, 0.96 and 0.98 as default.
+         2 is the new format, which should be used if all the clients that are
+-- 
+1.7.0.4
+

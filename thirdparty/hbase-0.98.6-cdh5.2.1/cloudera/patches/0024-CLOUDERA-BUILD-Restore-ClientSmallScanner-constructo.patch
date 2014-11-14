@@ -1,0 +1,36 @@
+From 002ca35330d19fe00f76a53be3112be1814d2bdb Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Tue, 16 Sep 2014 14:14:28 -0700
+Subject: [PATCH 24/63] CLOUDERA-BUILD Restore ClientSmallScanner constructor as deprecated
+
+Ref: CDH-21027
+Reason: Backward compatibility
+Author: Esteban Gutierrez
+---
+ .../hadoop/hbase/client/ClientSmallScanner.java    |   10 ++++++++++
+ 1 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClientSmallScanner.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClientSmallScanner.java
+index 24229b5..1a29b7d 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClientSmallScanner.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClientSmallScanner.java
+@@ -88,6 +88,16 @@ public class ClientSmallScanner extends ClientScanner {
+   }
+ 
+   /**
++   * @deprecated Restructure your code to use {@link Scan#setSmall(boolean)} instead
++   **/
++  @Deprecated
++  public ClientSmallScanner(final Configuration conf, final Scan scan,
++      final TableName tableName, HConnection connection,
++      RpcRetryingCallerFactory rpcFactory) throws IOException {
++    super(conf, scan, tableName, connection, rpcFactory, RpcControllerFactory.instantiate(conf));
++  }
++
++  /**
+    * Create a new ShortClientScanner for the specified table Note that the
+    * passed {@link Scan}'s start row maybe changed changed.
+    * 
+-- 
+1.7.0.4
+

@@ -1,0 +1,30 @@
+From 22b684181a44d0efba575b9c16b82581ca0e667e Mon Sep 17 00:00:00 2001
+From: Zhihong Yu <tedyu@apache.org>
+Date: Tue, 15 Apr 2014 15:34:08 +0000
+Subject: [PATCH 29/63] HBASE-10845 Memstore snapshot size isn't updated in DefaultMemStore#rollback()
+
+git-svn-id: https://svn.apache.org/repos/asf/hbase/trunk@1587614 13f79535-47bb-0310-9956-ffa450edef68
+
+Reason: MOB Feature
+Author: Zhihong Yu
+Ref: CDH-19420
+---
+ .../hadoop/hbase/regionserver/DefaultMemStore.java |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/DefaultMemStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/DefaultMemStore.java
+index eb530ae..821900f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/DefaultMemStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/DefaultMemStore.java
+@@ -290,6 +290,8 @@ public class DefaultMemStore implements MemStore {
+     KeyValue found = this.snapshot.get(kv);
+     if (found != null && found.getMvccVersion() == kv.getMvccVersion()) {
+       this.snapshot.remove(kv);
++      long sz = heapSizeChange(kv, true);
++      this.snapshotSize -= sz;
+     }
+     // If the key is in the memstore, delete it. Update this.size.
+     found = this.kvset.get(kv);
+-- 
+1.7.0.4
+
