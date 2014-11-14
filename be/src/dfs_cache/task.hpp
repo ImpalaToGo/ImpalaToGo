@@ -1,7 +1,7 @@
 /**
- * tasks-definitions.h
+ * @file tasks-definitions.h
  *
- *  @brief Workers pool for Cache needs
+ *  @brief Basic architecture for Cache layer tasks
  *
  *  @date   Sep 30, 2014
  *  @author elenav

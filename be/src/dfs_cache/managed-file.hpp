@@ -19,13 +19,8 @@
 /** @namespace impala */
 namespace impala{
 
-/**
- * Base hook for boost intrusive set
- */
-typedef boost::intrusive::set_base_hook<> SetBaseHook;
-
 /** @namespace ManagedFile */
-namespace ManagedFile {
+namespace managed_file {
    /**
     * Defines the state of concrete physical file system file just now
     */
@@ -65,10 +60,7 @@ namespace ManagedFile {
     *   on the file handle when complete with a file.
     * - keeps unique name (hash key)
     */
-   class File
-   // Base hook with default tag, raw pointers and safe_link mode
-   :  public SetBaseHook
-   {
+   class File {
    private:
 	   State       m_state;                   /**< current file state */
 	   std::string m_fqp;                     /**< fully qualified path (local) */
@@ -76,7 +68,7 @@ namespace ManagedFile {
 	   std::size_t m_size;                    /**< file size. For internal and user statistics and memory planning. */
 	   std::size_t m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
 
-	   boost::posix_time::ptime m_lastaccess; /**< last file access. For cleanup planning. */
+	   boost::posix_time::ptime m_lastaccess; /**< last file access. For LRU planning. */
 
 	   std::list<dfsFile> m_handles;          /**< list of opened handles to this file. */
 
@@ -216,7 +208,7 @@ namespace ManagedFile {
         }
       /* *******************************************************************************************************/
    };
-}  /** namespace ManagedFile */
+}  /** namespace managed_file */
 }  /** namespace impala */
 
 

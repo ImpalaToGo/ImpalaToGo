@@ -47,7 +47,7 @@
 namespace impala {
 
 /** Type for Registry of managed files */
-typedef boost::intrusive::set<ManagedFile::File> FileRegistry;
+typedef boost::intrusive::set<managed_file::File> FileRegistry;
 
 /** Represent MonitorRequest, the Client Request to be tracked by client for progress */
 typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;

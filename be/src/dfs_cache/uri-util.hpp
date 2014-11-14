@@ -1,9 +1,9 @@
 /*
  * @file uri-util.hpp
- * @brief define utility
+ * @brief define utility to parse uri as we face them in Impala
  *
- *  Created on: Oct 3, 2014
- *      Author: elenav
+ * @date   Oct 3, 2014
+ * @author elenav
  */
 
 #ifndef URI_UTIL_HPP_

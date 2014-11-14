@@ -1,8 +1,8 @@
 /*
- * test-hadoop-fs-adaptive.cc
+ * @file test-hadoop-fs-adaptive.cc
  *
- *  Created on: Nov 5, 2014
- *      Author: elenav
+ * @date   Nov 5, 2014
+ * @author elenav
  */
 
 #include <fcntl.h>

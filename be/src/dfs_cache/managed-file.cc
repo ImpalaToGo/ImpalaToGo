@@ -10,7 +10,7 @@
 
 namespace impala {
 
-namespace ManagedFile {
+namespace managed_file {
 
 status::StatusInternal File::open(const dfsFile & handle) {
 	boost::mutex::scoped_lock lock(m_mux);

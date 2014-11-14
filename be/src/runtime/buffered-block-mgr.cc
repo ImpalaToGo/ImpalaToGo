@@ -151,7 +151,7 @@ string BufferedBlockMgr::Block::DebugString() const {
 
 Status BufferedBlockMgr::Create(RuntimeState* state, MemTracker* parent,
     RuntimeProfile* profile, int64_t mem_limit, int64_t block_size,
-    shared_ptr<BufferedBlockMgr>* block_mgr) {
+    boost::shared_ptr<BufferedBlockMgr>* block_mgr) {
 
   lock_guard<mutex> lock(static_block_mgrs_lock_);
   BlockMgrsMap::iterator it = query_to_block_mgrs_.find(state->query_id());
