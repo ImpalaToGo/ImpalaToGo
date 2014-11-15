@@ -507,9 +507,7 @@ private:
                     this->value(nullptr);
 
                 	long long weight = m_mgr->m_owner->tellWeight(this->value());
-                	if ( std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_release) == 1 ) {
-                		std::atomic_thread_fence(std::memory_order_acquire);
-                	}
+                	std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_release);
                 }
             }
 		};
@@ -663,7 +661,7 @@ private:
          */
         void cleanUp(boost::posix_time::ptime now)
         {
-        	// cleanup will be called only if cache capacity overflows
+        	// cleanup will be called only if cache capacity overflows.
         	int weightToRemove = m_owner->m_currentCapacity - m_owner->m_capacityLimit;
 
         	boost::mutex::scoped_lock lock(*lifespan_mux());
@@ -700,10 +698,8 @@ private:
         					long long toRelease = m_owner->tellWeight(node->value());
         					weightToRemove -= toRelease;
 
-        					if ( std::atomic_fetch_sub_explicit (&m_owner->m_currentCapacity, toRelease, std::memory_order_release) == 0 ) {
-        						std::atomic_thread_fence(std::memory_order_acquire);
-        						break;
-        					}
+        					std::atomic_fetch_sub_explicit (&m_owner->m_currentCapacity, toRelease, std::memory_order_release);
+
                 			// remove the node
                 		    node->remove();
                 		    // cut off it from registry

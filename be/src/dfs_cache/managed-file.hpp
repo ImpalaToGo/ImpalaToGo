@@ -189,6 +189,13 @@ namespace managed_file {
        */
       status::StatusInternal close(const dfsFile & handle);
 
+      /** Drop the file from file system
+       *
+       * TODO: implement this!
+       */
+      void drop(){
+
+      }
 	   /* ***********************   Methods group to fit the intrusive concept   ******************************/
 
 	   friend bool operator <  (const File &a, const File &b)
