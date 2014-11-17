@@ -37,6 +37,14 @@
 #define JAVA_STRING     "java/lang/String"
 #define READ_OPTION     "org/apache/hadoop/fs/ReadOption"
 
+/** URI scheme max length */
+#define URI_SCHEME_LENGTH 10;
+
+/** Scheme definitions */
+#define SCHEME_HDFS  "hdfs"
+#define SCHEME_S3N   "s3n"
+#define SCHEME_LOCAL "file"
+
 #define JAVA_VOID       "V"
 
 /* Macros for constructing method signatures */
@@ -50,6 +58,16 @@
 
 // Bit fields for dfsFile_internal flags
 #define DFS_FILE_SUPPORTS_DIRECT_READ (1<<0)
+
+DFS_TYPE fsTypeFromScheme(const char* scheme){
+	if(strcmp(scheme, SCHEME_HDFS) == 0)
+		return HDFS;
+    if(strcmp(scheme, SCHEME_S3N) == 0)
+    	return S3;
+    if(strcmp(scheme, SCHEME_LOCAL) == 0)
+    	return LOCAL;
+	return NON_SPECIFIED;
+}
 
 /**
  * dfsJniEnv: A wrapper struct to be used as 'value'
@@ -578,24 +596,6 @@ done:
 
 /***************************** Connection builder **************************************/
 
-/** iterator for FileSystem Builder configuration options */
-struct fsBuilderConfOpt {
-    struct fsBuilderConfOpt*  next;  /**< next option */
-    const char*                key;  /**< option key */
-    const char*                val;  /**< option value */
-};
-
-/** Util struct to represent FileSystem settings */
-struct fsBuilder {
-    int         forceNewInstance;      /**< flag, indicates whether new instance is required */
-    const char* host;                  /**< host */
-    tPort       port;                  /**< port */
-    const char* kerbTicketCachePath;   /**< authentication cache path */
-    const char* userName;              /**< user name */
-    struct fsBuilderConfOpt* opts;     /**< configuration options set */
-    DFS_TYPE                 fs_type;  /**< file system type, from enumerator */
-};
-
 struct fsBuilder* _dfsNewBuilder(void)
 {
     struct fsBuilder* bld = calloc(1, sizeof(struct fsBuilder));
@@ -699,7 +699,7 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
     	explicitScheme = "hdfs://";
     	break;
     case S3:
-    	explicitScheme = "s3n";
+    	explicitScheme = "s3n://";
     	break;
     case LOCAL:
     	explicitScheme = "file://";
@@ -793,6 +793,156 @@ int _dfsDisableDomainSocketSecurity(void)
 
 
 /****************************  Initialize and shutdown  ********************************/
+
+int _dfsGetDefaultFsHostPortType(char* host, size_t len, struct fsBuilder *bld, int* port, DFS_TYPE* dfs_type){
+    JNIEnv *env = 0;
+    jvalue  jVal;
+    jobject jConfiguration = NULL, jURI = NULL;
+
+    char buffer[512], scheme[10];
+    struct fsBuilderConfOpt *opt;
+
+    jthrowable jthr     = NULL;
+    jstring jHostString = NULL;
+    jstring jSchemeString = NULL;
+    jint jPortInt;
+
+    int ret;
+
+    const char *jHostChars = NULL;
+    const char *jSchemeChars = NULL;
+
+    //Get the JNIEnv* corresponding to current thread
+    env = getJNIEnv();
+    if (env == NULL) {
+        ret = EINTERNAL;
+        goto done;
+    }
+
+    //  jConfiguration = new Configuration();
+    jthr = constructNewObjectOfClass(env, &jConfiguration, HADOOP_CONF, "()V");
+    if (jthr) {
+    	ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+    	            "_getDefaultFsHostPort(%s)", fsBuilderToStr(bld, buffer, sizeof(buffer)));
+        goto done;
+    }
+
+    // set configuration values
+    for (opt = bld->opts; opt; opt = opt->next) {
+        jthr = hadoopConfSetStr(env, jConfiguration, opt->key, opt->val);
+        if (jthr) {
+            ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+                "_getDefaultFsHostPort(%s): error setting conf '%s' to '%s'",
+                fsBuilderToStr(bld, buffer, sizeof(buffer)), opt->key, opt->val);
+            goto done;
+        }
+    }
+
+	// jURI = FileSystem.getDefaultUri(conf)
+    jthr = invokeMethod(env, &jVal, STATIC, NULL, HADOOP_FS,
+    		"getDefaultUri",
+    		"(Lorg/apache/hadoop/conf/Configuration;)Ljava/net/URI;",
+    		jConfiguration);
+    if (jthr) {
+    	ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+	                    "_getDefaultFsUri(%s)", fsBuilderToStr(bld, buffer, sizeof(buffer)));
+    	goto done;
+    }
+    jURI = jVal.l;
+
+    // 1. With URI, get the host:
+    jthr = invokeMethod(env, &jVal, INSTANCE, jURI, JAVA_NET_URI,
+                     "getHost", "()Ljava/lang/String;");
+    if (jthr) {
+            ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+                "_getDefaultFsUri: URI#getHost");
+            goto done;
+        }
+
+    jHostString = jVal.l;
+
+    jHostChars = (*env)->GetStringUTFChars(env, jHostString, NULL);
+    if (!jHostChars) {
+        ret = printPendingExceptionAndFree(env, PRINT_EXC_ALL,
+            "_getDefaultFsUri: GetStringUTFChars");
+        goto done;
+    }
+    // copy host to the buffer provided:
+    ret = snprintf(host, len, "%s", jHostChars);
+
+    if (ret >= len) {
+        ret = ENAMETOOLONG;
+        goto done;
+    }
+
+    // reset the ret
+    ret = 0;
+
+    // 2. With URI, get the port:
+    jthr = invokeMethod(env, &jVal, INSTANCE, jURI, JAVA_NET_URI,
+                         "getPort", "()I");
+    if (jthr) {
+    	ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+    			"_getDefaultFsUri: URI#getPort");
+    	goto done;
+    }
+    jPortInt = jVal.i;
+
+    // got the port:
+    *port = jPortInt;
+
+    // 3. With URI, get the scheme:
+    jthr = invokeMethod(env, &jVal, INSTANCE, jURI, JAVA_NET_URI,
+                     "getScheme", "()Ljava/lang/String;");
+    if (jthr) {
+            ret = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
+                "_getDefaultFsUri: URI#getScheme");
+            goto done;
+        }
+
+    jSchemeString = jVal.l;
+
+    jSchemeChars = (*env)->GetStringUTFChars(env, jSchemeString, NULL);
+    if (!jSchemeChars) {
+        ret = printPendingExceptionAndFree(env, PRINT_EXC_ALL,
+            "_getDefaultFsUri: GetStringUTFChars");
+        goto done;
+    }
+    // copy host to the buffer provided:
+    ret = snprintf(scheme, sizeof(scheme), "%s", jSchemeChars);
+
+    if (ret >= sizeof(scheme)) {
+        ret = ENAMETOOLONG;
+        goto done;
+    }
+
+    // reset the ret
+    ret = 0;
+
+    // resolve dfs type from received scheme:
+    *dfs_type = fsTypeFromScheme(scheme);
+
+    done:
+    // Release unnecessary local references
+    destroyLocalReference(env, jConfiguration);
+    _dfsFreeBuilder(bld);
+
+    if (jHostChars) {
+    	(*env)->ReleaseStringUTFChars(env, jHostString, jHostChars);
+    }
+    if (jSchemeChars) {
+    	(*env)->ReleaseStringUTFChars(env, jSchemeString, jSchemeChars);
+    }
+    destroyLocalReference(env, jURI);
+    destroyLocalReference(env, jHostString);
+    destroyLocalReference(env, jSchemeString);
+
+    if (ret) {
+    	errno = ret;
+    	return ret;
+    }
+	return 0;
+}
 
 fsBridge _dfsBuilderConnect(struct fsBuilder *bld)
 {
@@ -1099,7 +1249,7 @@ int _dfsPathExists(fsBridge fs, const char *path)
     jthr = constructNewObjectOfPath(env, path, &jPath);
     if (jthr) {
         errno = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-            "hdfsExists: constructNewObjectOfPath");
+            "_dfsPathExists: constructNewObjectOfPath");
         return -1;
     }
     jthr = invokeMethod(env, &jVal, INSTANCE, jFS, HADOOP_FS,
@@ -1107,7 +1257,7 @@ int _dfsPathExists(fsBridge fs, const char *path)
     destroyLocalReference(env, jPath);
     if (jthr) {
         errno = printExceptionAndFree(env, jthr, PRINT_EXC_ALL,
-            "hdfsExists: invokeMethod(%s)",
+            "_dfsPathExists: invokeMethod(%s)",
             JMETHOD1(JPARAM(HADOOP_PATH), "Z"));
         return -1;
     }
@@ -1392,7 +1542,7 @@ char* _dfsGetWorkingDirectory(fsBridge fs, char* buffer, size_t bufferSize)
     }
     jPath = jVal.l;
     if (!jPath) {
-        fprintf(stderr, "hdfsGetWorkingDirectory: "
+        fprintf(stderr, "_dfsGetWorkingDirectory: "
             "FileSystem#getWorkingDirectory returned NULL");
         ret = -EIO;
         goto done;

@@ -28,9 +28,15 @@ namespace impala {
 
 FileSystemDescriptor CacheLayerTest::m_namenode1;
 FileSystemDescriptor CacheLayerTest::m_namenodeHdfs;
+FileSystemDescriptor CacheLayerTest::m_namenodeDefault;
+FileSystemDescriptor CacheLayerTest::m_namenodelocalFilesystem;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;
+SessionContext CacheLayerTest::m_ctx3 = nullptr;
+SessionContext CacheLayerTest::m_ctx4 = nullptr;
+SessionContext CacheLayerTest::m_ctx5 = nullptr;
+SessionContext CacheLayerTest::m_ctx6 = nullptr;
 
 TEST_F(CacheLayerTest, OpenFileCheckOpened) {
     const char* path = "/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/hello.txt";

@@ -58,7 +58,7 @@ status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath);
  *
  * @return operation status
  */
-status::StatusInternal cacheConfigureFileSystem(const FileSystemDescriptor & fs);
+status::StatusInternal cacheConfigureFileSystem(FileSystemDescriptor & fs);
 
 /**
  * @fn Status cacheShutdown(bool force = true)

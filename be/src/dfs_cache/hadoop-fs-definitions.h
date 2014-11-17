@@ -27,6 +27,13 @@ enum _DFS_TYPE {
 
 typedef enum _DFS_TYPE DFS_TYPE;
 
+/** resolve fs type from given scheme
+ *
+ * @param scheme - string scheme
+ * @return resolved file system type
+ * */
+extern DFS_TYPE fsTypeFromScheme(const char* scheme);
+
 /** Here defined java-managed types that are passed via c++ through without need of their details */
 
 /** bridge to abstract FileSystem */

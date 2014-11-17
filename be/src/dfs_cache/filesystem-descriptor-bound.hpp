@@ -57,6 +57,15 @@ public:
 		m_fsDescriptor = fsDescriptor;
 	}
 
+	/** Resolve the address of file system using Hadoop File System class.
+	 * Should be used when default file system is requested
+	 *
+	 * @param fsDescriptor - file system descriptor to resolve address for
+	 *
+	 * @return operation status, only 0 is ok
+	 */
+	static int resolveFsAddress(FileSystemDescriptor& fsDescriptor);
+
 	inline const FileSystemDescriptor& descriptor() { return m_fsDescriptor; }
 	/**
 	 * get free FileSystem connection

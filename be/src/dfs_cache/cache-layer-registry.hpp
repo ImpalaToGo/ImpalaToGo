@@ -53,7 +53,8 @@ private:
 	boost::mutex m_connmux;            /**< mutex for connections collection */
 	boost::mutex m_adaptorsmux;        /**< mutex for adapters collection */
 
-	CacheLayerRegistry() { };
+	CacheLayerRegistry() { m_localstorageRoot = constants::DEFAULT_CACHE_ROOT; }
+
 	CacheLayerRegistry(CacheLayerRegistry const& l);            // disable copy constructor
 	CacheLayerRegistry& operator=(CacheLayerRegistry const& l); // disable assignment operator
 
@@ -76,11 +77,11 @@ public:
 	/**
 	 * Setup namenode
 	 *
-	 * @param fsDescriptor - file system connection details
+	 * @param[In/Out] fsDescriptor - file system connection details
 	 *
 	 * @return Operation status
 	 */
-	status::StatusInternal setupFileSystem(const FileSystemDescriptor & fsDescriptor);
+	status::StatusInternal setupFileSystem(FileSystemDescriptor & fsDescriptor);
 
 
 	/** ***************************  DFS related registry API  ***********************************************************/

@@ -67,7 +67,11 @@ dfsFS HdfsFsCache::GetConnection(const string& host, int port) {
 		conn.port = port;
 		conn.valid = true;
 
+		// run connection resolver and registration:
+	    cacheConfigureFileSystem(conn);
+	    // now that connection is resolved, insert it:
 	    fs_map_.insert(make_pair(make_pair(host, port), conn));
+
 	    return conn;
 	  } else {
 	    return i->second;

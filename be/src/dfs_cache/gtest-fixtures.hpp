@@ -27,8 +27,10 @@ namespace impala{
 /** Fixture for Cache Manager tests */
 class CacheLayerTest : public ::testing::Test {
  protected:
-	static FileSystemDescriptor m_namenode1;      /**< file system host 1 */
-	static FileSystemDescriptor m_namenodeHdfs;   /**< file system hdfs */
+	static FileSystemDescriptor m_namenode1;               /**< file system 1 */
+	static FileSystemDescriptor m_namenodeHdfs;            /**< file system hdfs */
+	static FileSystemDescriptor m_namenodeDefault;         /**< default file system as from core-site.xml */
+	static FileSystemDescriptor m_namenodelocalFilesystem; /**< local file system */
 
 	static SessionContext m_ctx1;  /**< session context 1 (shell/web client 1) */
 	static SessionContext m_ctx2;  /**< session context 2 (shell/web client 2) */
@@ -49,8 +51,13 @@ class CacheLayerTest : public ::testing::Test {
 
 	  cacheInit();
 	  cacheConfigureLocalStorage("/home/elenav/src/ImpalaToGo/datastorage/local_root/");
+
 	  m_namenode1    = {DFS_TYPE::OTHER, "", 0, "", "", true};
 	  m_namenodeHdfs = {DFS_TYPE::HDFS, "104.236.39.60", 8020, "", "", true};
+
+	  m_namenodeDefault         = {DFS_TYPE::NON_SPECIFIED, "default", 0, "", "", true};
+	  m_namenodelocalFilesystem = {DFS_TYPE::LOCAL, "", 0, "", "", true};
+
 	  // reset session contexts
 	  m_ctx1 = nullptr;
 	  m_ctx2 = nullptr;
@@ -59,7 +66,10 @@ class CacheLayerTest : public ::testing::Test {
 	  cacheConfigureFileSystem(m_namenode1);
 
 	  // configure Digital Ocean hdfs:
-	  cacheConfigureFileSystem(m_namenodeHdfs);
+	  // cacheConfigureFileSystem(m_namenodeHdfs);
+
+	  // configure default file system (as from core-site.xml found on CLASSPATH by Hadoop FS class)
+	  cacheConfigureFileSystem(m_namenodeDefault);
   }
 
   // virtual void TearDown() {}

@@ -21,6 +21,24 @@
 extern "C" {
 #endif
 
+/** iterator for FileSystem Builder configuration options */
+struct fsBuilderConfOpt {
+    struct fsBuilderConfOpt*  next;  /**< next option */
+    const char*                key;  /**< option key */
+    const char*                val;  /**< option value */
+};
+
+/** Util struct to represent FileSystem settings */
+struct fsBuilder {
+    int         forceNewInstance;      /**< flag, indicates whether new instance is required */
+    const char* host;                  /**< host */
+    tPort       port;                  /**< port */
+    const char* kerbTicketCachePath;   /**< authentication cache path */
+    const char* userName;              /**< user name */
+    struct fsBuilderConfOpt* opts;     /**< configuration options set */
+    DFS_TYPE                 fs_type;  /**< file system type, from enumerator */
+};
+
 /**************************** hadoop configuration utilties ****************************/
 /**
  * Get a configuration string.
@@ -177,6 +195,18 @@ int _dfsFileIsOpenForRead(dfsFile file);
 int _dfsFileIsOpenForWrite(dfsFile file);
 
 /****************************  Initialize and shutdown  ********************************/
+
+/**
+ * Get the default FileSystem port and host from configuration defined by filesystem builder
+ *
+ * @param [In/Out] host      - buffer to hold the hostname (should be preallocated)
+ * @param [In]     host_len  - host buffer length (should be HOST_NAME_MAX)
+ * @param [In]     bld       - file system builder
+ * @param [Out]    port      - file system port as from config
+ * @param [Out]    dfs_type  - file system type as resolved from default URI
+ * @return operation status, only 0 is ok
+ */
+int _dfsGetDefaultFsHostPortType(char* host, size_t host_len, struct fsBuilder *bld, int* port, DFS_TYPE* dfs_type);
 
 /**
  * Connect to FS using the parameters defined by the builder.

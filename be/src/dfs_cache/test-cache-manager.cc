@@ -40,6 +40,8 @@ namespace impala {
 
 FileSystemDescriptor CacheLayerTest::m_namenode1;
 FileSystemDescriptor CacheLayerTest::m_namenodeHdfs;
+FileSystemDescriptor CacheLayerTest::m_namenodeDefault;
+FileSystemDescriptor CacheLayerTest::m_namenodelocalFilesystem;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;
@@ -481,6 +483,10 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 			delete static_cast<std::string*>(clients[i]);
 		}
 		lock.unlock();
+}
+
+TEST_F(CacheLayerTest, RemoteFileOpenReadAutoloadTest){
+	m_namenodeHdfs = {DFS_TYPE::HDFS, "104.236.39.60", 8020, "", "", true};
 }
 }
 

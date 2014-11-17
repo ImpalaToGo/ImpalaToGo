@@ -32,6 +32,22 @@
 
 namespace impala {
 
+namespace constants
+{
+    /** default location for cache */
+    extern const std::string DEFAULT_CACHE_ROOT;
+
+    /** default filesystem configuration is requested.
+     * See core-site.xml
+     *
+     * <property>
+ 	 *	  <name>fs.defaultFS</name>
+ 	 *	  <value>file:///</value>
+	 * </property>
+    */
+    extern const std::string DEFAULT_FS;
+}
+
 /**
  * Represents context of File-related operation session.
  * Context should provide at least the callback and the underlying session entity.

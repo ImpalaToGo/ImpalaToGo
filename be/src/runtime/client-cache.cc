@@ -40,11 +40,11 @@ namespace impala {
 
 Status ClientCacheHelper::GetClient(const TNetworkAddress& address,
     ClientFactory factory_method, ClientKey* client_key) {
-  shared_ptr<PerHostCache> host_cache;
+  boost::shared_ptr<PerHostCache> host_cache;
   {
     lock_guard<mutex> lock(cache_lock_);
     VLOG_RPC << "GetClient(" << address << ")";
-    shared_ptr<PerHostCache>* ptr = &per_host_caches_[address];
+    boost::shared_ptr<PerHostCache>* ptr = &per_host_caches_[address];
     if (ptr->get() == NULL) ptr->reset(new PerHostCache());
     host_cache = *ptr;
   }
@@ -70,7 +70,7 @@ Status ClientCacheHelper::ReopenClient(ClientFactory factory_method,
     ClientKey* client_key) {
   // Clients are not ordinarily removed from the cache completely (in the future, they may
   // be); this is the only method where a client may be deleted and replaced with another.
-  shared_ptr<ThriftClientImpl> client_impl;
+  boost::shared_ptr<ThriftClientImpl> client_impl;
   ClientMap::iterator client;
   {
     lock_guard<mutex> lock(client_map_lock_);
@@ -103,7 +103,7 @@ Status ClientCacheHelper::ReopenClient(ClientFactory factory_method,
 
 Status ClientCacheHelper::CreateClient(const TNetworkAddress& address,
     ClientFactory factory_method, ClientKey* client_key) {
-  shared_ptr<ThriftClientImpl> client_impl(factory_method(address, client_key));
+  boost::shared_ptr<ThriftClientImpl> client_impl(factory_method(address, client_key));
   VLOG_CONNECTION << "CreateClient(): creating new client for " << client_impl->address();
   Status status = client_impl->OpenWithRetry(num_tries_, wait_ms_);
   if (!status.ok()) {
@@ -126,7 +126,7 @@ Status ClientCacheHelper::CreateClient(const TNetworkAddress& address,
 
 void ClientCacheHelper::ReleaseClient(ClientKey* client_key) {
   DCHECK(*client_key != NULL) << "Trying to release NULL client";
-  shared_ptr<ThriftClientImpl> client_impl;
+  boost::shared_ptr<ThriftClientImpl> client_impl;
   {
     lock_guard<mutex> lock(client_map_lock_);
     ClientMap::iterator client = client_map_.find(*client_key);

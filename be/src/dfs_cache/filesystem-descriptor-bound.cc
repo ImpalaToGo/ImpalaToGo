@@ -46,6 +46,31 @@ FileSystemDescriptorBound::~FileSystemDescriptorBound(){
 	}
 }
 
+int FileSystemDescriptorBound::resolveFsAddress(FileSystemDescriptor& fsDescriptor){
+	int status = -1;
+	// create the builder from descriptor
+	fsBuilder* fs_builder = _dfsNewBuilder();
+	// is there's host specified, set it:
+
+	if (!fsDescriptor.host.empty())
+		_dfsBuilderSetHost(fs_builder, fsDescriptor.host.c_str());
+	else
+		// Connect to local filesystem
+		_dfsBuilderSetHost(fs_builder, NULL);
+
+	// set the port:
+	_dfsBuilderSetPort(fs_builder, fsDescriptor.port);
+
+	// now get effective host, port and filesystem type from Hadoop FileSystem resolver:
+	char host[HOST_NAME_MAX];
+    status = _dfsGetDefaultFsHostPortType(host, sizeof(host), fs_builder, &fsDescriptor.port, &fsDescriptor.dfs_type);
+
+    if(!status)
+    	fsDescriptor.host = std::string(host);
+
+	return status;
+}
+
 raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
 	freeConnectionPredicate predicateFreeConnection;
 
