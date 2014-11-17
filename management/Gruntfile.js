@@ -127,6 +127,17 @@ module.exports = function (grunt) {
                     open: true,
                     base: '<%= yeoman.dist %>'
                 }
+            },
+            docs: {
+                options: {
+                    port: 9002,
+                    open: true,
+                    middleware: function (connect) {
+                        return [
+                            connect.static("./docs")
+                        ];
+                    }
+                }
             }
         },
 
@@ -337,24 +348,22 @@ module.exports = function (grunt) {
                     dest: '<%= yeoman.dist %>/images',
                     src: ['generated/*']
                 },
+                    //for bootstrap fonts
                     {
                         expand: true,
                         cwd: 'bower_components/bootstrap/dist',
                         src: 'fonts/*',
                         dest: '<%= yeoman.dist %>'
-                    },
-                    {
+                    }, {
+
+                    //for font-awesome
                         expand: true,
-                        cwd: 'bower_components/iCheck/skins',
-                        src: 'square/*.png',
-                        dest: '<%= yeoman.dist %>/styles'
+                        dot: true,
+                        cwd: 'bower_components/fontawesome/fonts/',
+                        src: ['*.*'],
+                        dest: '<%= yeoman.dist %>/fonts'
                     },
-//                    {
-//                        expand: true,
-//                        cwd: '%= yeoman.app %>/local_components/jTile/',
-//                        src: '*.css',
-//                        dest: '<%= yeoman.dist %>/styles'
-//                    }
+
                 ]
             },
             styles: {
@@ -422,7 +431,6 @@ module.exports = function (grunt) {
 
     grunt.registerTask('build', [
         'clean:dist',
-
         'wiredep',
         'sass',
         'useminPrepare',
@@ -436,13 +444,17 @@ module.exports = function (grunt) {
         'uglify',
         'filerev',
         'usemin',
-        'htmlmin'
+        'htmlmin',
+    ]);
+    grunt.registerTask('docs', [
+        'clean:docs',
+        'ngdocs',
+        'connect:docs:keepalive'
     ]);
 
     grunt.registerTask('default', [
         'newer:jshint',
         'test',
-        'ngdocs',
         'build'
     ]);
 };
