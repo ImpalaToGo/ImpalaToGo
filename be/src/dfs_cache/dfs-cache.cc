@@ -36,7 +36,7 @@ namespace impala {
 namespace constants
 {
     /** default location for cache */
-     const std::string DEFAULT_CACHE_ROOT = " /var/cache/impalatogo";
+     const std::string DEFAULT_CACHE_ROOT = "/var/cache/impalatogo/";
 
      /** default filesystem configuration is requested.
       * See core-site.xml
