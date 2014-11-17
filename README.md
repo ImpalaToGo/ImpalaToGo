@@ -118,6 +118,13 @@ Development environment prerequisites (Ubuntu)
   	(__GLIBC_MINOR__ >= 17)))))
 	```
         
+ 	- Fix for boost::shared_ptr (copy constructor is missed). See   https://svn.boost.org/trac/boost/changeset/73202.
+        Fast fix: in shared_ptr.hpp ( /usr/local/include/boost/smart_ptr/shared_ptr.hpp) add default copy constructor (c++11 only)
+
+       ```c 
+       shared_ptr(const shared_ptr&) = default;
+       ```
+        
     2. **Fast reference to build the boost.**
     Newest boost builds do not contain packages with -mt prefixes as stated by boost.
     
