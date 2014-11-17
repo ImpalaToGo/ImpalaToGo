@@ -42,13 +42,6 @@ Development environment prerequisites (Ubuntu)
     ```
     
   - **configure boost.** Default recent dev boost package is not compatible with impala. Download boost 1.46.1 and build packages required by impala (always can be found in ${IMPALA_HOME}/CMakeLists.txt):
-  you can download boost source this way:
-  ```sh
-  wget -c 'http://sourceforge.net/projects/boost/files/boost/1.46.1/boost_1_46_1.tar.bz2/download'
-  tar xf download
-
-  ```
-  
     ####thread regex-mt system-mt filesystem-mt date_time
 
     1. **First fix some bugs in boost sources.**
@@ -69,7 +62,7 @@ Development environment prerequisites (Ubuntu)
 	Thus need to patch the file "your boost folder"/boost/config/stdlib/libstdcpp3.hpp
 	Required change is described here: 					
 	https://svn.boost.org/trac/boost/attachment/ticket/6165/libstdcpp3.hpp.patch
-	In short, in file following should be changed (be careful not to introduce whitespace after backslashes - it will not compile):
+	In short, in file following should be changed:
 
 	```c
 	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
@@ -124,6 +117,13 @@ Development environment prerequisites (Ubuntu)
       	|| (defined(__GLIBC__) && ((__GLIBC__ > 2) || ((__GLIBC__ == 2) && 
   	(__GLIBC_MINOR__ >= 17)))))
 	```
+        
+ 	- Fix for boost::shared_ptr (copy constructor is missed). See   https://svn.boost.org/trac/boost/changeset/73202.
+        Fast fix: in shared_ptr.hpp ( /usr/local/include/boost/smart_ptr/shared_ptr.hpp) add default copy constructor (c++11 only)
+
+       ```c 
+       shared_ptr(const shared_ptr&) = default;
+       ```
         
     2. **Fast reference to build the boost.**
     Newest boost builds do not contain packages with -mt prefixes as stated by boost.
