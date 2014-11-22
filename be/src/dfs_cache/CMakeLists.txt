@@ -33,6 +33,8 @@ add_library(dfs_cache
   filesystem-descriptor-bound.cc
   hadoop-fs-adaptive.c
   test-utilities.cc
+  utilities.cc
+  filesystem-lru-cache.cc
 )
 
 ADD_BE_TEST(test-filesystem-mgr)

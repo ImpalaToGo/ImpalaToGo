@@ -10,10 +10,16 @@
 #define MANAGED_FILE_HPP_
 
 #include <list>
+#include <atomic>
+
 #include <boost/intrusive/set.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/time_formatters.hpp>
 
+#include "util/hash-util.h"
 #include "dfs_cache/common-include.hpp"
 
 /** @namespace impala */
@@ -21,6 +27,12 @@ namespace impala{
 
 /** @namespace ManagedFile */
 namespace managed_file {
+
+/**
+ * convert boost::posix_time::ptime to time_t
+ */
+time_t posix_time_to_time_t(boost::posix_time::ptime t);
+
    /**
     * Defines the state of concrete physical file system file just now
     */
@@ -51,6 +63,7 @@ namespace managed_file {
       FILE_IS_IDLE,                      /**< File is idle. No client sessions exist for this file. It is not handled by nobody.
       	  	  	  	  	  	  	  	  	 * This is the only state when file may be deleted from the cache.
       	  	  	  	  	  	  	  	  	 */
+      FILE_IS_FORBIDDEN                 /**< File is forbidden, do not use it */
    };
 
    /**
@@ -62,17 +75,22 @@ namespace managed_file {
     */
    class File {
    private:
-	   State       m_state;                   /**< current file state */
-	   std::string m_fqp;                     /**< fully qualified path (local) */
-	   std::string m_fqnp;                    /**< fully qualified path (network) */
-	   std::size_t m_size;                    /**< file size. For internal and user statistics and memory planning. */
-	   std::size_t m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
+	   volatile State   m_state;                   /**< current file state */
+	   std::string      m_fqp;                     /**< fully qualified path (local) */
+	   std::string      m_fqnp;                    /**< fully qualified path (network) */
+	   boost::uintmax_t m_size;                    /**< file size. For internal and user statistics and memory planning. */
+	   std::size_t      m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
 
-	   boost::posix_time::ptime m_lastaccess; /**< last file access. For LRU planning. */
+       std::string        m_originhost;       /**< origin host */
+       std::string        m_originport;       /**< origin port */
+       DFS_TYPE           m_schema;           /**< origin schema */
 
-	   std::list<dfsFile> m_handles;          /**< list of opened handles to this file. */
+       volatile std::atomic<unsigned> m_users;        /**< number of users so far */
 
-	   boost::mutex m_mux;   /**< locking mechanism for collection of opened file handles */
+	   static std::string              fileSeparator;  /**< platform-specific file separator */
+	   static std::vector<std::string> m_supportedFs;  /**< list of supported file systems, string representation */
+
+       static void initialize();
 
    public:
 
@@ -90,25 +108,67 @@ namespace managed_file {
 		   	   }
 	   };
 
-	   /** When created, file is "not approved". Sync module should run through all directories / files under configured root,
-	    * populate the registry with all files metadata and then approve each file in the registry
+	   /** When created, file is "not approved".
+        * it became approved once all its metadata is validated
+        *
+        * @param path       - full file local path
 	    */
-	   File(const char *local_path, const char* network_path)
-         :  m_state(State::FILE_IS_AMORPHOUS), m_fqp(local_path), m_fqnp(network_path), m_size(0), m_estimatedsize(0) {}
+	   File(const char* path)
+         :  m_state(State::FILE_IS_AMORPHOUS), m_fqp(path), m_size(0), m_estimatedsize(0),
+            m_schema(DFS_TYPE::NON_SPECIFIED){
+
+		   FileSystemDescriptor descriptor = restoreNetworkPathFromLocal(std::string(path), m_fqnp);
+           if(!descriptor.valid){
+        	   m_state = State::FILE_IS_FORBIDDEN;
+        	   return;
+           }
+
+           m_schema = descriptor.dfs_type;
+
+           m_originhost = descriptor.host;
+           m_originport = descriptor.port;
+
+           m_users.store(0);
+	   }
 
 	   ~File(){
-		   boost::mutex::scoped_lock lock(m_mux);
-		   m_handles.clear();
 	   }
+
+	   /** restore File options representing the network identification of supplied file.
+	    *  @param [in]     local  - fqp of file.
+	    *  @param [in/out] fqnp   - resolved fqnp string, in case of failure - empty string
+	    *
+	    *  @return fqdn if it was restored or empty string otherwise
+	    */
+	   static FileSystemDescriptor restoreNetworkPathFromLocal(const std::string& local, std::string& fqnp);
+
+	   static std::string constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path);
+
 	   /** ********************* File object getters and setters **********************************************/
 	   /** getter for File state */
 	   inline State state() { return m_state; }
 
+	   /** flag, idicates that the file is in valid state and can be used */
+	   inline bool valid() {
+		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
+	   }
+
 	   /** setter for file state
 	    * @param state - file state to mark the file with
 	    */
-	   inline void state(State state) { m_state = state; }
+	   inline void state(State state) {
+		   m_state = state;
+	   }
 
+
+	   /** reply origin file system host */
+	   inline std::string host() { return m_originhost; }
+
+	   /** reply origin file system port */
+	   inline std::string port() { return m_originport; }
+
+	   /** reply origin file system type */
+	   inline DFS_TYPE origin() { return m_schema; }
 
 	   /** getter for File fully qualified path */
 	   inline const std::string fqp() const  { return m_fqp; }
@@ -116,13 +176,16 @@ namespace managed_file {
 	   /** setter for file fully qualified path
 	    * @param fqp - file fully qualified path
 	    */
-	   inline void fqp(std::string fqp) { m_fqp = fqp; }
+	   inline void fqp(std::string fqp) {
+		   m_fqp = fqp;
+		   // TODO : reconstruct origin host and port
+	   }
 
 	   /** getter for File network path. When the file is reconstructed from existing local cache,
 	    * this pat his assigned in the following way:
 	    * dfs_type:/dfs_namenamenode_address/file_path_within_that_dfs
 	    * */
-	   inline const std::string fqpn() const { return m_fqnp; }
+	   inline const std::string fqnp() const { return m_fqnp; }
 
 	   /** setter for file network path.
 	    * @param fqnp - file network path (constructed to have an ability to locate this file on remote dfs)
@@ -131,13 +194,14 @@ namespace managed_file {
 
 
 	   /** getter for File size (available locally) */
-	   inline std::size_t size() { return m_size; }
-
-	   /** setter for file size (available locally)
-	    * @param size - file size
-	    */
-	   inline void size(std::size_t size) { m_size = size; }
-
+	   inline boost::uintmax_t size() {
+		   boost::system::error_code ec;
+		   boost::uintmax_t size = boost::filesystem::file_size(m_fqp, ec);
+		   // check ec, should be 0 in case of success:
+		   if(!ec)
+			   return size;
+		   return 0;
+	   }
 
 	   /** getter for File estimated size (for file which is not yet locally).
 	    *  This size is only meaningful for files that are in progress of loading from remote dfs into cache.
@@ -153,65 +217,69 @@ namespace managed_file {
 
 
 	   /** getter for File last access (local)
-	    *  This size is only meaningful for files that are in progress of loading from remote dfs into cache.
-	    */
-	   inline boost::posix_time::ptime last_access() { return m_lastaccess; }
-
-	   /** setter for file last access (local)
-	    * The scenario which  performs cache cleanup should take this field into account
-	    * when select the candidate for deletion.
 	    *
-	    * @param last_access - last local file access timestamp
+	    * @return If there was an error during last access retrieval, the default time will be returned.
+	    *         Otherwise, last access time will be returned
 	    */
-	   inline void last_access(boost::posix_time::ptime last_access) { m_lastaccess = last_access; }
+	   inline boost::posix_time::ptime last_access() {
+		   boost::system::error_code ec;
+		   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
+		   // check ec, should be 0 in case of success:
+		   if(!ec)
+			   return boost::posix_time::from_time_t(last_access_time);
+		   return boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+	   }
 
-       /* Force delete file. Force deletion is possible only in case if not opened handles to the file
-        * exists. This may happen if Sync module detects that the file is deleted from the cache abnormally
-        * (in non-managed way, for example, manually)
+	   /** update file last_write time.
+	    * @param time - timstamp to assign to be a last access time for file
+	    *
+	    * @return 0          - if operation succeeded
+	    *         error code - in case of failure
+	    */
+	   inline int last_access(const boost::posix_time::ptime& time){
+		   boost::system::error_code ec;
+		   boost::filesystem::last_write_time(m_fqp, posix_time_to_time_t(time), ec);
+		   return ec.value();
+	    }
+
+       /* Force delete file ignoring its usage statistic
         */
-      status::StatusInternal forceDelete(){ return status::NOT_IMPLEMENTED; }
+      status::StatusInternal forceDelete();
 
       /**
        * Add new opened handle to the list of handles.
        *
-       * @param handle - opened file handle
-       *
        * @return Operation status
        */
-      status::StatusInternal open(const dfsFile & handle);
+      status::StatusInternal open();
 
       /**
        * Explicitly remove the reference to a handle from the list of handles
        *
-       * @param handle - handle to file, one of opened
-       *
        * @return Operation status
        */
-      status::StatusInternal close(const dfsFile & handle);
+      status::StatusInternal close();
 
-      /** Drop the file from file system
-       *
-       * TODO: implement this!
+      /**
+       * Drop the file from file system
        */
-      void drop(){
+      void drop();
 
-      }
-	   /* ***********************   Methods group to fit the intrusive concept   ******************************/
+	   /* ***********************   Methods group to fit the intrusive concept (LRU Cache)   ******************************/
 
 	   friend bool operator <  (const File &a, const File &b)
 	   	   	   {  return a.fqp() < b.fqp();  }
+
 
 	   friend bool operator == (const File &a, const File &b)
 			   {  return a.fqp() == b.fqp();  }
 
 	   friend std::size_t hash_value(const File &object) {
 		   uint32_t expected_hash = 0;
-		   /*
-		        	  return expected_hash = HashUtil::Hash(object.get_path().c_str(),
-   			  	  	  	  	  	  	  	     strlen(object.get_path().c_str()),
-   			  	  	  	  	  	  	  	     expected_hash);
-   			  	  	  	  	  	  	  	     */
-   	  return expected_hash;
+		   return expected_hash = HashUtil::Hash(object.fqp().c_str(),
+				   strlen(object.fqp().c_str()),
+				   expected_hash);
+		   return expected_hash;
         }
       /* *******************************************************************************************************/
    };

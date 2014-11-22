@@ -1,6 +1,6 @@
 /*
- * @file uri-util.hpp
- * @brief define utility to parse uri as we face them in Impala
+ * @file utilities.hpp
+ * @brief define some misc utilities used by cache layer
  *
  * @date   Oct 3, 2014
  * @author elenav
@@ -86,5 +86,40 @@ public:
 	}   // Parse
 };
 // uri
+
+namespace impala
+{
+namespace utilities{
+
+/** split the given string basing on given delimiter
+ *
+ * @param [in]     original  - original string
+ * @param [in]     delimiter - char delimiter
+ * @param [in/out] elements  - original string parts split by delimiter
+ *
+ * @return split elements vector
+ */
+std::vector<std::string> &split(const std::string &original, char delimiter, std::vector<std::string> &elements);
+
+/** split the given string basing on given delimiter
+ * @param [in]     original  - original string
+ * @param [in]     delimiter - char delimiter
+ *
+ * @return split elements vector
+ */
+std::vector<std::string> split(const std::string &original, char delimiter);
+
+/**
+ * check whether the @a original string ends with @a trailing string
+ *
+ * @param original - original string
+ * @param ending   - string that need to be checked the original is ending with
+ *
+ * @return true if @a original ends with @a ending
+ */
+bool endsWith (const std::string& fullString, const std::string& ending);
+
+}
+}
 
 #endif /* URI_UTIL_HPP_ */

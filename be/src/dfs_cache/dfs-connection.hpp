@@ -1,8 +1,9 @@
 /*
- * dfs-connection.hpp
+ * @file  dfs-connection.hpp
+ * @brief define raii dfs connection
  *
- *  Created on: Oct 27, 2014
- *      Author: elenav
+ * @date   Oct 27, 2014
+ * @author elenav
  */
 
 #ifndef DFS_CONNECTION_HPP_

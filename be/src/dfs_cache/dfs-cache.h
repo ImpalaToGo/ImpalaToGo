@@ -37,18 +37,10 @@ namespace impala {
  * @fn StatusInternal cacheInit()
  * @brief Initialize the module and underlying mechanisms.
  *
+ * @param root - local cache root - absoulte filesystem path.
  * @return Operation status.
  */
-status::StatusInternal cacheInit();
-
-/**
- * @fn StatusInternal cacheConfigureLocalStorage(const std::string& localpath)
- * @brief Configure local storage root path (cache location on the file system)
- *
- * @param [In] localpath - local filesystem path to the storage root
- * @return Operation status.
- */
-status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath);
+status::StatusInternal cacheInit(const std::string& root = "");
 
 /**
  * @fn StatusInternal cacheConfigureNameNode(const FileSystemDescriptor & adaptor)

@@ -37,6 +37,9 @@ namespace constants
     /** default location for cache */
     extern const std::string DEFAULT_CACHE_ROOT;
 
+    /** default cache capacity */
+    extern const long long DEFAULT_CACHE_CAPACITY;
+
     /** default filesystem configuration is requested.
      * See core-site.xml
      *
@@ -46,6 +49,16 @@ namespace constants
 	 * </property>
     */
     extern const std::string DEFAULT_FS;
+
+    /** HDFS scheme name */
+    extern const std::string HDFS_SCHEME;
+
+    /** S3N scheme name */
+    extern const std::string S3N_SCHEME;
+
+    /** separator we use to divide the source host and the port in the file path */
+    extern const char HOST_PORT_SEPARATOR;
+
 }
 
 /**
@@ -82,6 +95,8 @@ typedef enum {
 	DFS_NAMENODE_IS_NOT_REACHABLE,  /**< requested namenode is not reachable */
 
 	FILE_OBJECT_OPERATION_FAILURE,
+
+	CACHE_OBJECT_NOT_FOUND,         /**< reports the problem wit ha cache, when the object is missed when expected */
 
 	NOT_IMPLEMENTED,                 /**< for developer purposes */
 } StatusInternal;
@@ -121,6 +136,8 @@ struct FileSystemDescriptor{
 	bool          valid;      /** this flag is introduced in order to overcome the non-nullable struct nature.
 	                           *  an object with "valid" = false should be treated as non-usable (nullptr, NULL)
 	                           */
+
+	/** reply the null-equal object of FileSystemDescriptor */
 	static FileSystemDescriptor getNull() {
 		FileSystemDescriptor descriptor;
 		descriptor.valid = false;

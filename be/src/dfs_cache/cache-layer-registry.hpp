@@ -20,6 +20,7 @@
 #include "dfs_cache/cache-definitions.hpp"
 #include "dfs_cache/common-include.hpp"
 #include "dfs_cache/filesystem-descriptor-bound.hpp"
+#include "dfs_cache/utilities.hpp"
 
 /**
  * @namespace impala
@@ -41,11 +42,13 @@ typedef std::map<DFS_TYPE, std::map<std::string, boost::shared_ptr<FileSystemDes
  */
 class CacheLayerRegistry{
 private:
-	/** Singleton instance. Instantiated in Init(). */
+	/** Singleton instance. Instantiated in init(). */
 	static boost::scoped_ptr<CacheLayerRegistry> instance_;
 
-	FileRegistry        m_cache;            					   /**< Registry of cache-managed files */
-	DFSConnections      m_filesystems; 			        		   /**< Registry of file systems adaptors registered as a target for impala as a client */
+	static std::string fileSeparator;  /**< platform-specific file separator */
+
+	FileRegistry*       m_cache;       /**< Registry of cache-managed files */
+	DFSConnections      m_filesystems; /**< Registry of file systems adaptors registered as a target for impala as a client */
 
 	std::string m_localstorageRoot;   /**< path to local file system storage root */
 
@@ -53,23 +56,51 @@ private:
 	boost::mutex m_connmux;            /**< mutex for connections collection */
 	boost::mutex m_adaptorsmux;        /**< mutex for adapters collection */
 
-	CacheLayerRegistry() { m_localstorageRoot = constants::DEFAULT_CACHE_ROOT; }
+	volatile bool m_valid;             /**< flag, indicates that registry is in the valid state */
+
+	CacheLayerRegistry(const std::string& root = "") {
+		m_valid = false;
+		if(root.empty())
+			localstorage(constants::DEFAULT_CACHE_ROOT);
+		else
+			localstorage(root);
+
+		// create the autoload LRU cache, default is 50 Gb
+		m_cache = new FileSystemLRUCache(constants::DEFAULT_CACHE_CAPACITY, m_localstorageRoot, true);
+
+		// reload the cache:
+		if(m_cache->reload())
+			m_valid = true;
+	}
 
 	CacheLayerRegistry(CacheLayerRegistry const& l);            // disable copy constructor
 	CacheLayerRegistry& operator=(CacheLayerRegistry const& l); // disable assignment operator
 
+    /** Setter for Local storage root file system path */
+    inline void localstorage(const std::string& localpath) {
+    	m_localstorageRoot = localpath;
+
+        // add file separator if no specified:
+    	bool trailing = impala::utilities::endsWith(m_localstorageRoot, fileSeparator);
+    	if(!trailing){
+    		m_localstorageRoot += fileSeparator;
+    	}
+    }
 public:
 
-	~CacheLayerRegistry() { LOG (INFO) << "cache layer registry destructor" << "\n"; }
+	~CacheLayerRegistry() {
+		delete m_cache;
+		LOG (INFO) << "cache layer registry destructor" << "\n";
+	}
     static CacheLayerRegistry* instance() { return CacheLayerRegistry::instance_.get(); }
 
 	/** *************************** External configuration  ************************************************************/
 
-    /** Initialize registry. Call this before any Registry usage */
-    static void init();
-
-    /** Setter for Local storage root file system path */
-    inline void localstorage(const std::string& localpath) {m_localstorageRoot = localpath;}
+    /** Initialize registry. Call this before any Registry usage
+     * @param root - local cache root - file system absolute path
+     *
+     */
+    static void init(const std::string& root = "");
 
     /** Getter for Local storage root file system path */
     inline std::string localstorage() {return m_localstorageRoot;}
@@ -100,19 +131,23 @@ public:
 	/**
 	 * Get the File object by its path
 	 *
-	 * @param [in]  key  - file fqp
-	 * @param [out] file - managed file instance (if any)
+	 * @param [in]  path       - file fqp
+	 * @param [in]  descriptor - file system descriptor
+	 * @param [out] file       - managed file instance (if any)
 	 */
-	bool getFileByPath(const char* key, managed_file::File*& file);
+	bool findFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
 
 	/**
 	 * Insert the managed file into the set.
 	 * The key is file fully qualified local path
 	 *
-	 * @param key  - file fqp
-	 * @param file - managed file instance
+	 * @param [in]     path       - file fqp
+	 * @param [in]     descriptor - file system descriptor
+	 * @param [in/out] file       - managed file
+	 *
+	 * @return true is the file was inserted to the cache, false otherwise
 	 */
-	bool addFileByPath( managed_file::File file);
+	bool addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
 
 	struct StrExpComp
 	{

@@ -14,10 +14,16 @@
 namespace impala{
 
 boost::scoped_ptr<CacheLayerRegistry> CacheLayerRegistry::instance_;
+std::string CacheLayerRegistry::fileSeparator;
 
-void CacheLayerRegistry::init() {
+void CacheLayerRegistry::init(const std::string& root) {
   if(CacheLayerRegistry::instance_.get() == NULL)
-	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry());
+	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(root));
+
+  // configure platform-specific file separator:
+  boost::filesystem::path slash("/");
+  boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
+  fileSeparator = preferredSlash;
 }
 
 status::StatusInternal CacheLayerRegistry::setupFileSystem(FileSystemDescriptor & fsDescriptor){
@@ -67,14 +73,21 @@ const boost::shared_ptr<FileSystemDescriptorBound>* CacheLayerRegistry::getFileS
           return nullptr;
 	}
 
-bool CacheLayerRegistry::getFileByPath(const char* key, managed_file::File*& file)
-	{
-	    return true;
-	}
+bool CacheLayerRegistry::findFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file){
+	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
+	if(fqp.empty())
+		return false;
+	file = m_cache->find(fqp);
+	return file != nullptr;
+}
 
-bool CacheLayerRegistry::addFileByPath(managed_file::File file)
+bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file)
 {
-	return true;
+	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
+	if(fqp.empty())
+		return false;
+
+	return m_cache->add(fqp, file);
 }
 }
 

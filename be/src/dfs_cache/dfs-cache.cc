@@ -29,7 +29,7 @@
 #include "dfs_cache/cache-layer-registry.hpp"
 #include "dfs_cache/cache-mgr.hpp"
 #include "dfs_cache/filesystem-mgr.hpp"
-#include "dfs_cache/uri-util.hpp"
+#include "dfs_cache/utilities.hpp"
 
 namespace impala {
 
@@ -37,6 +37,9 @@ namespace constants
 {
     /** default location for cache */
      const std::string DEFAULT_CACHE_ROOT = "/var/cache/impalatogo/";
+
+     /** default cache capacity  */
+     const long long DEFAULT_CACHE_CAPACITY = 50000000000;       // 50 Gb in bytes
 
      /** default filesystem configuration is requested.
       * See core-site.xml
@@ -47,6 +50,15 @@ namespace constants
 	  * </property>
       */
      const std::string DEFAULT_FS = "default";
+
+     /** HDFS scheme name */
+     const std::string HDFS_SCHEME = "hdfs";
+
+     /** S3N scheme name */
+     const std::string S3N_SCHEME = "s3n";
+
+     /** separator we use to divide the source host and the port in the file path */
+     const char HOST_PORT_SEPARATOR = '_';
 }
 
 namespace ph = std::placeholders;
@@ -56,19 +68,14 @@ namespace ph = std::placeholders;
  * **********************************************************************************************
  */
 
-status::StatusInternal cacheInit() {
+status::StatusInternal cacheInit(const std::string& root) {
 	// Initialize singletons.
-	CacheLayerRegistry::init();
+	CacheLayerRegistry::init(root);
     CacheManager::init();
     filemgmt::FileSystemManager::init();
 
 	CacheManager::instance()->configure();
 	filemgmt::FileSystemManager::instance()->configure();
-	return status::StatusInternal::OK;
-}
-
-status::StatusInternal cacheConfigureLocalStorage(const std::string& localpath){
-	CacheLayerRegistry::instance()->localstorage(localpath);
 	return status::StatusInternal::OK;
 }
 
@@ -109,111 +116,46 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  */
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
-	// TODO:Check in the registry, whether the file is available. if not, report an error.
-	// Otherwise, create the file descriptor, add it to the registry and share with the caller.
-    //managed_file::File* file;
 
-	// try open it locally first (from cache):
+    managed_file::File* managed_file;
+	// first check whether the file is already in the registry.
+	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist in the registry
+	if(!CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file) || managed_file == nullptr){
+		return NULL;
+	}
+
+	// so as the file is in the registry, just open it:
+	if(managed_file->valid())
+		managed_file->open(); // mark the file with the one more usage
 
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, path, flags,
 				bufferSize, replication, blocksize, available);
     if(handle != nullptr && available){
-    	//file->open(handle);
     	// file is available locally, just reply it back:
     	return handle;
     }
-
-    // file is not available in the cache, run the auto-load scenario:
-
-    DataSet data;
-    data.push_back(path);
-
-    bool condition = false;
-    boost::condition_variable condition_var;
-    boost::mutex completion_mux;
-
-    status::StatusInternal cbStatus;
-
-	PrepareCompletedCallback cb = [&] (SessionContext context,
-			const std::list<boost::shared_ptr<FileProgress> > & progress,
-			request_performance const & performance, bool overall,
-			bool canceled, taskOverallStatus status) -> void {
-
-		boost::lock_guard<boost::mutex> lock(completion_mux);
-		cbStatus = (status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED);
-		if(status != taskOverallStatus::COMPLETED_OK)
-			LOG (ERROR) << "Failed to load file \"" << path << "\"" << ". Status : "
-					<< status << ".\n";
-
-		if(context == NULL)
-			LOG (ERROR) << "NULL context received while loading the file \"" << path << "\"" << ".Status : "
-								<< status << ".\n";
-
-		if(progress.size() != data.size())
-			LOG (ERROR) << "Expected amount of progress is not equal to received for file \"" << path << "\"" << ".Status : "
-								<< status << ".\n";
-
-		if(!overall)
-			LOG (ERROR) << "Expected amount of progress is not equal to received for file \"" << path << "\"" << ".Status : "
-											<< status << ".\n";
-		condition = true;
-		condition_var.notify_all();
-		};
-
-	time_t time_ = 0;
-	requestIdentity identity;
-	// execute request in async way:
-
-	using namespace std::placeholders;
-
-	auto f1 = std::bind(cachePrepareData, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5);
-
-	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-
-	std::string local_client = boost::lexical_cast<std::string>(uuid);
-	SessionContext ctx = static_cast<void*>(&local_client);
-
-	status::StatusInternal status;
-
-	// run the prepare routine
-	status = f1(ctx, std::cref(fsDescriptor), std::cref(data), cb, std::ref(identity));
-
-	// check operation scheduling status:
-	if(status != status::StatusInternal::OPERATION_ASYNC_SCHEDULED){
-		LOG (ERROR) << "Prepare request - failed to schedule - for \"" << path << "\"" << ". Status : "
-													<< status << ".\n";
-		// no need to wait for callback to fire, operation was not scheduled
-		return nullptr;
-	}
-
-	// wait when completion callback will be fired by Prepare scenario:
-	boost::unique_lock<boost::mutex> lock(completion_mux);
-	condition_var.wait(lock, [&] { return condition;});
-
-	lock.unlock();
-
-	// check callback status:
-	if(cbStatus != status::StatusInternal::OK){
-		LOG (ERROR) << "Prepare request failed for \"" << path << "\"" << ". Status : "
-															<< status << ".\n";
-		return nullptr;
-	}
-
-    // Now need just recall this back
-	handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, path, flags,
-					bufferSize, replication, blocksize, available);
-	    if(handle != nullptr && available){
-	    	//file->open(handle);
-	    	// file is available locally already:
-	    	return handle;
-	    }
-	LOG (ERROR) << "File \"" << path << "\" is not available" << "\n";
-
-	return handle;
+    LOG (ERROR) << "File \"" << path << "\" is not available" << "\n";
+    return handle;
 }
 
 status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
-	return filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
+	status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
+
+	std::string path = filemgmt::FileSystemManager::filePathByDescriptor(file);
+    if(path.empty()){
+    	status = status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
+    	LOG (WARNING) << "File descriptor does not exists within the system!" << "\n";
+    }
+    // anyway try close the file
+    status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
+
+	managed_file::File* managed_file;
+	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), fsDescriptor, managed_file) || managed_file == nullptr){
+		status = status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
+	}
+	managed_file->close();
+
+	return status;
 }
 
 status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path) {

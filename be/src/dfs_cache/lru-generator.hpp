@@ -58,6 +58,35 @@ $generator(lru_gen)
 
 	$stop; // stop. End of coroutine body.
 };
+
+/** External source item loader with yield and continuation support */
+template<typename KeyType_, typename ItemType_, typename PredicateConstructObject_, typename PredicateContinuation_>
+$generator(item_loader)
+{
+	KeyType_             m_key;
+	ItemType_*           m_item;
+
+	PredicateConstructObject_ m_constructor;
+	PredicateContinuation_    m_continuation;
+
+	item_loader(KeyType_ key, PredicateConstructObject_ constructor, PredicateContinuation_ continuation) :
+    	m_key(key), m_item(nullptr), m_constructor(constructor), m_continuation(continuation){}
+
+	$emit(ItemType_*) // emit item of type ItemType_*
+
+	do{
+		m_item = m_constructor(m_key);
+
+		// yield it to be caught from outside and preserve it locally:
+		$yield(m_item);
+
+		// run continuation:
+		m_continuation(m_item);
+		break;
+	} while(true);
+
+	$stop; // stop. End of coroutine body.
+};
 }
 
 #endif /* LRU_GENERATOR_HPP_ */

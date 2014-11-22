@@ -11,11 +11,14 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <fstream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 #include <boost/filesystem.hpp>
 
 #include "dfs_cache/filesystem-mgr.hpp"
-#include "dfs_cache/uri-util.hpp"
+#include "dfs_cache/utilities.hpp"
 
 /**
  * @namespace impala
@@ -38,6 +41,42 @@ void FileSystemManager::init() {
   boost::filesystem::path slash("/");
   boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
   fileSeparator = preferredSlash;
+}
+
+std::string FileSystemManager::filePathByDescriptor(dfsFile file){
+	 struct stat sb;
+	 char *linkname;
+	 ssize_t r;
+
+	 int fd = fileno((FILE *)file->file);
+
+	 std::string f = "/proc/self/fd/";
+	 f += std::to_string(fd);
+
+	 if (lstat(f.c_str(), &sb) == -1) {
+		 perror("lstat");
+		 return std::string();
+	 }
+
+	 linkname = (char*)malloc(sb.st_size + 1);
+	 if (linkname == NULL) {
+		 fprintf(stderr, "insufficient memory\n");
+		 return std::string();
+	 }
+
+	 r = readlink(f.c_str(), linkname, sb.st_size + 1);
+
+	 if (r < 0) {
+		 perror("lstat");
+		 return std::string();
+	 }
+
+	 if (r > sb.st_size) {
+		 fprintf(stderr, "symlink increased in size between lstat() and readlink()\n");
+		 return std::string();
+	 }
+	 linkname[sb.st_size] = '\0';
+     return std::string(linkname);
 }
 
 std::string FileSystemManager::getMode(int flags) {
@@ -63,31 +102,14 @@ std::string FileSystemManager::getMode(int flags) {
 	return mode;
 }
 
-std::string FileSystemManager::constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path){
-    std::string localPath(CacheLayerRegistry::instance()->localstorage());
-
-    std::ostringstream stream;
-    stream << fsDescriptor.dfs_type;
-
-    // add FileSystem type on top of hierarchy:
-    localPath += stream.str();
-
-    if(!fsDescriptor.host.empty())
-    	localPath += fileSeparator;
-    localPath += fsDescriptor.host;
-    localPath += path;
-    return localPath;
-}
-
 dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
 	Uri uri = Uri::Parse(path);
-
 	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
 
 	// calculate fully qualified local path from requested
-	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, uri.FilePath.c_str());
     const char* localPathAnsi = localPath.c_str();
 
     // check we are able to process requested file mode.
@@ -119,7 +141,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 			std::string directoriesHierarchy = uri.Hierarchy;
 
 			// and create if no directory exists:
-			if(!boost::filesystem::exists(directoriesHierarchy.c_str())){                         // (1)
+			if(!boost::filesystem::exists(directoriesHierarchy.c_str())){                                        // (1)
 				dirExists = boost::filesystem::create_directories(directoriesHierarchy.c_str());                 // (2)
 				// It may be eventually that the same directory hierarchy is created by some parallel worker between the
 				// (1) and (2). In this case re-creation of same hierarchy will give "false".
@@ -181,6 +203,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 	file->file = fp;
 	file->type = dfsStreamType::INPUT;
 	available = true;
+
 	return file;
 }
 
@@ -188,16 +211,26 @@ status::StatusInternal FileSystemManager::dfsCloseFile(const FileSystemDescripto
 	if(file->file == nullptr)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	int fd = fileno((FILE *)file->file);
+	if(!fd){
+		LOG (WARNING) << "Failed to get the file descriptor from file handle. Status : " << strerror(errno) << ".\n";
+	}
 	// close file stream:
-    fclose((FILE*)file->file);
+    int code = fclose((FILE*)file->file);
+    if(!code){
+    	LOG (WARNING) << "Failed to close stream file handle" << ".\n";
+    }
     // close file descriptor:
-    close(fd);
+    code = close(fd);
+    if(code == -1){
+    	LOG (WARNING) << "Failed to close c-file descriptor with status : " << strerror(errno) << ".\n";
+    }
+
 	return status::StatusInternal::OK;
 }
 
 status::StatusInternal FileSystemManager::dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path){
 	Uri uri = Uri::Parse(path);
-	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, uri.FilePath.c_str());
 
 	 std::ifstream infile(localPath.c_str());
 	    return infile.good() ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
@@ -281,7 +314,7 @@ status::StatusInternal FileSystemManager::dfsMove(const FileSystemDescriptor & f
 status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive){
 	// construct the fqlp:
 	Uri uri = Uri::Parse(path);
-	std::string localPath = constructLocalPath(fsDescriptor,  uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor,  uri.FilePath.c_str());
 
 	if(std::remove(localPath.c_str()) == 0)
 		return status::StatusInternal::OK;
@@ -326,7 +359,7 @@ dfsFileInfo * FileSystemManager::dfsListDirectory(const FileSystemDescriptor & f
 	std::vector<dirent> entries;
 
 	Uri uri = Uri::Parse(path);
-	std::string localPath = constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, uri.FilePath.c_str());
 
 	dfsFileInfo* reply;
 

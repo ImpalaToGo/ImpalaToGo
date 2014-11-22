@@ -53,6 +53,8 @@ public:
     /** Initialize File System Manager. Call this before any File System Manager usage */
     static void init();
 
+    static std::string filePathByDescriptor(dfsFile file);
+
 	/**
 	 * Subscribe to cache registry as one of owners.
 	 */
@@ -61,16 +63,6 @@ public:
 		m_registry = CacheLayerRegistry::instance();
 		return status::StatusInternal::OK;
 	}
-
-	/**
-	 * Construct local fully qualified path basing on file with @path and its @fsDescriptor owner
-	 *
-	 * @param fsDescriptor - file system descriptor
-	 * @param path         - file path
-	 *
-	 * @return fully qualified local path
-	 */
-	std::string constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path);
 
 	/**
 	 * @fn  dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,

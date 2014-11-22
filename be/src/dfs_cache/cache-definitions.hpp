@@ -37,6 +37,7 @@
 #include "common/logging.h"
 #include "dfs_cache/task.hpp"
 #include "dfs_cache/managed-file.hpp"
+#include "dfs_cache/filesystem-lru-cache.hpp"
 
 #if !defined(NDEBUG)
 #define BOOST_MULTI_INDEX_ENABLE_INVARIANT_CHECKING
@@ -49,7 +50,7 @@
 namespace impala {
 
 /** Type for Registry of managed files */
-typedef std::list<managed_file::File> FileRegistry;
+typedef FileSystemLRUCache FileRegistry;
 
 /** Represent MonitorRequest, the Client Request to be tracked by client for progress */
 typedef request::SessionBoundTask<std::list<boost::shared_ptr<FileProgress> > > MonitorRequest;

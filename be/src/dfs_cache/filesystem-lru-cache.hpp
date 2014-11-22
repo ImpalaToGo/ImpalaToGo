@@ -20,6 +20,8 @@
 
 namespace impala{
 
+namespace ph = std::placeholders;
+
 /** Describe the storage for cached files metadata, the LRU cache.
  * Responsibilities:
  * - describe all cached metadata;
@@ -34,12 +36,15 @@ class FileSystemLRUCache : LRUCache<managed_file::File>{
 private:
 	IIndex<std::string>* m_idxFileLocalPath = nullptr; /**< the only index is for file local path  */
     std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
+    std::string          m_root;                       /**< root directory to manage */
 
-	/** tell item is idle now (no usage so far). Is needed in the cleanup cache scenario
+	/** tell item has no clients
 	 *  @param file - file to query for status
+	 *
+	 *  @return true if file can be removed, false otherwise
 	 */
     inline bool isItemIdle(managed_file::File* file){
-    	return file->state() == managed_file::State::FILE_IS_IDLE;
+    	return file->state() != managed_file::State::FILE_HAS_CLIENTS;
     }
 
     /** get the current file timestamp
@@ -49,35 +54,16 @@ private:
     	return file->last_access();
     }
 
-    /** delete file object, delete file from file system   */
-    inline bool deleteFile(managed_file::File* file){
-    	if(!isItemIdle(file))
-    		return false;
-
-    	// no usage so far, mark the file for deletion:
-    	file->state(managed_file::State::FILE_IS_MARKED_FOR_DELETION);
-
-    	// delete the file from file system
-    	file->drop();
-
-    	// get rid of file metadata object:
-    	delete file;
-    	return true;
-    }
-
-    /**
-     * For autoload requested item scenario.
-     * If file requested from the cache was not located there, we run the CacheManager "prepare request" scenario here
-     * in order to load requested file.
-     *
-     * @param path - local path fully describe the file to get
-     *
-     * @return loaded file is succeeded to load it, nullptr otherwise
+    /** Set the current file timestamp
+     * @param file      - file to update with current timestamp (last access)
+     * @param timestamp - updated timstamp
      */
-    inline managed_file::File* loadFromFullLocalPath( std::string path )
-    {
-    	return nullptr;
+    inline void updateTimestamp(managed_file::File* file, const boost::posix_time::ptime& timestamp){
+    	file->last_access(timestamp);
     }
+
+    /** delete file object, delete file from file system   */
+    bool deleteFile(managed_file::File* file);
 
     /** reply with configured capacity measurement units
      *  In place as there's the reason to assume that capacity may change during
@@ -99,37 +85,76 @@ private:
     	return file->size();
     }
 
+    /*
+     * construct new object of File basing on its path
+     *
+     * @param path - file path
+     *
+     * @return constructed file object
+     */
+    managed_file::File* constructNew(std::string path){
+    	return new managed_file::File(path.c_str());
+    }
+
+    /**
+     * run continuation scenario, here:
+     * -> run prepare scenario on Cache Manager
+     *
+     * @param file - file which intended to be prepared
+     *
+     */
+    void continuationFor(managed_file::File* file);
+
 public:
+
     /**
      * construct the File System LRU cache
      *
      * @param capacity - initial cache capacity limit
+     * @param root     - defines root folder for local cache storage
+     * @param autoload - flag, indicates whether auto-load should be performed once the file is requested from cache by its name.
+     * Currently is true by default.
      */
-    FileSystemLRUCache(std::size_t capacity) : LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity){
-    	//m_isValid = boost::bind(boost::mem_fn(&FileSystemLRUCache::IsDataValid), this);
+    FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true)
+										: LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity){
+
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
     	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isItemIdle), this, _1);
 
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
+    	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);
+
     	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1);
 
-    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->int { return file->fqp(); };
-    	LRUCache<managed_file::File>::LoadItemFunc<std::string> lif = boost::bind(boost::mem_fn(&FileSystemLRUCache::loadFromFullLocalPath), this, _1);
-    	m_idxFileLocalPath = addIndex<std::string>( "fqp", gkf, 0);
+    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string { return file->fqp(); };
+    	LRUCache<managed_file::File>::LoadItemFunc<std::string>      lif = 0;
+    	LRUCache<managed_file::File>::ConstructItemFunc<std::string> cif = 0;
+
+    	// initialize autoload-related predicates only in auto-load configuration:
+    	if(autoload){
+    		lif = boost::bind(boost::mem_fn(&FileSystemLRUCache::continuationFor), this, _1);
+    		cif = boost::bind(boost::mem_fn(&FileSystemLRUCache::constructNew), this, _1);
+    	}
+
+    	// finally define index "by file fully qualified local path"
+    	m_idxFileLocalPath = addIndex<std::string>( "fqp", gkf, lif, cif);
     }
 
+    /** reload the cache.
+     *  @return true if cache was reloaded, false otherwise
+     */
+    bool reload();
 
     /**
      * Get the file by its local path
      *
      * @param path -file local path
      *
-     * @return file is one found, exception is thrown is nothing found
+     * @return file if one found, nullptr otherwise
      */
-    inline managed_file::File findByFileLocalPath( std::string path ) {
-    	managed_file::File file =  m_idxFileLocalPath->operator [](path);
-    	return file;
+    inline managed_file::File* find(std::string path) {
+    	return  m_idxFileLocalPath->operator [](path);
     }
 
     /** reset the cache */
@@ -137,15 +162,31 @@ public:
  	   this->clear();
     }
 
-    /** add the file into the cache */
-    inline void add(managed_file::File* file){
- 	   LRUCache<managed_file::File>::add(file);
+    /** add the file into the cache
+     * @param path - fqp
+     *
+     * @return indication of fact that file is in the registry
+     */
+    inline bool add(std::string path, managed_file::File*& file){
+    	bool duplicate = false;
+    	bool success   = false;
+
+    	// we create and destruct File objects only here, in LRU cache layer
+    	file = new managed_file::File(path.c_str());
+    	file->estimated_size(boost::filesystem::file_size(path));
+
+    	success = LRUCache<managed_file::File>::add(file, duplicate);
+    	if(duplicate)
+    		// no need for this file, get the rid of
+    		delete file;
+
+    	return success;
     }
 
-    /** remove the file by its local path
+    /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
      *  */
-    inline void removeByFileLocalPath(std::string path){
+    inline void remove(std::string path){
  	   m_idxFileLocalPath->remove(path);
     }
 };

@@ -109,6 +109,17 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
      }
 
+     // Start work with cached file:
+     managed_file::File* managed_file;
+     CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file);
+     if(managed_file == nullptr){
+    	 LOG (ERROR) << "Failed to locate managed file \"" << path << "\" in cache registry for \"" << fsDescriptor.dfs_type << ":" <<
+    	 				 fsDescriptor.host << "\"" << "\n";
+    	 fp->error    = true;
+    	 fp->errdescr = "Cache-managed registry file could not be located";
+    	 return status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
+     }
+
 	 // read from the remote file
 	 tSize last_read = BUFFER_SIZE;
 	 for (; last_read == BUFFER_SIZE;) {
@@ -119,6 +130,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 			 conditionvar->notify_all();
 			 break;
 		 }
+		 managed_file->estimated_size(managed_file->estimated_size() + last_read);
+
 		 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, last_read);
 		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, last_read);
 		 fp->localBytes += last_read;
