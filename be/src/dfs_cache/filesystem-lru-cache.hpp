@@ -90,10 +90,15 @@ private:
      *
      * @param path - file path
      *
-     * @return constructed file object
+     * @return constructed file object if its has correct configuration and nullptr otherwise
      */
     managed_file::File* constructNew(std::string path){
-    	return new managed_file::File(path.c_str());
+    	managed_file::File* file = new managed_file::File(path.c_str());
+     	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
+    		delete file;
+    		file = nullptr;
+    	}
+    	return file;
     }
 
     /**
@@ -115,8 +120,8 @@ public:
      * @param autoload - flag, indicates whether auto-load should be performed once the file is requested from cache by its name.
      * Currently is true by default.
      */
-    FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true)
-										: LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity){
+    FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true) :
+    		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity), m_root(root){
 
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
@@ -142,9 +147,12 @@ public:
     }
 
     /** reload the cache.
+     *
+     *  @param root - the actual root path to reload from
+     *
      *  @return true if cache was reloaded, false otherwise
      */
-    bool reload();
+    bool reload(const std::string& root);
 
     /**
      * Get the file by its local path
@@ -154,7 +162,7 @@ public:
      * @return file if one found, nullptr otherwise
      */
     inline managed_file::File* find(std::string path) {
-    	return  m_idxFileLocalPath->operator [](path);
+    	return m_idxFileLocalPath->operator [](path);
     }
 
     /** reset the cache */

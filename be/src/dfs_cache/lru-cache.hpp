@@ -250,6 +250,9 @@ private:
         		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
         			loader(key, m_constructItemPredicate, m_loadItem);
         		while(loader(item)){
+        			// if object construction was non-successful, reply nullptr
+        			if(item == nullptr)
+        				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
         		}
         		if(!node)
@@ -283,6 +286,9 @@ private:
         		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
         			loader(key, m_constructItemPredicate, m_loadItem);
         		while(loader(item)){
+        			// if object construction was non-successful, reply nullptr
+        			if(item == nullptr)
+        				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
         		}
         		if(!node)
@@ -829,15 +835,17 @@ private:
         		}
         		delete (*it).second;
         	}
+         	// clean buckets collection:
+         	m_buckets->clear();
+
+         	// clear keys collection:
+         	m_bucketsKeys->clear();
+
         	lock.unlock();
         	// reset item counters
             std::atomic_exchange_explicit(&m_owner->m_currentCapacity, 0ll, std::memory_order_relaxed);
             std::atomic_exchange_explicit(&m_owner->m_numberOfHardItems, 0u, std::memory_order_relaxed);
             std::atomic_exchange_explicit(&m_owner->m_numberOfSoftItems, 0u, std::memory_order_relaxed);
-
-        	// reset age buckets
-            boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-        	openBucket(now);
         }
 
         /** get ready a new AgeBucket for usage. Close the previous one
@@ -1000,7 +1008,7 @@ private:
          }
 
          // duplicate is prevented from being added into the cache
-         duplicate = (node && (*node->value()) == (*item));
+         duplicate = (node && (*node->value() == (*item)));
          if( duplicate ){
         	 delete item;
         	 item = node->value();

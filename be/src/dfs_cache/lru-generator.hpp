@@ -80,8 +80,10 @@ $generator(item_loader)
 		// yield it to be caught from outside and preserve it locally:
 		$yield(m_item);
 
-		// run continuation:
-		m_continuation(m_item);
+		if(m_item != nullptr){
+			// run continuation only for alive targets:
+			m_continuation(m_item);
+		}
 		break;
 	} while(true);
 

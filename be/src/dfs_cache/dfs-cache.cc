@@ -121,12 +121,16 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 	// first check whether the file is already in the registry.
 	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist in the registry
 	if(!CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file) || managed_file == nullptr){
-		return NULL;
+		return NULL; // return plain NULL to support past-c++0x
 	}
 
 	// so as the file is in the registry, just open it:
 	if(managed_file->valid())
 		managed_file->open(); // mark the file with the one more usage
+	else{
+		LOG (ERROR) << "File \"" << path << "\" is not available in LRU." << "\n";
+		return NULL;
+	}
 
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, path, flags,
 				bufferSize, replication, blocksize, available);

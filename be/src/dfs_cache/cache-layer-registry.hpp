@@ -67,10 +67,6 @@ private:
 
 		// create the autoload LRU cache, default is 50 Gb
 		m_cache = new FileSystemLRUCache(constants::DEFAULT_CACHE_CAPACITY, m_localstorageRoot, true);
-
-		// reload the cache:
-		if(m_cache->reload())
-			m_valid = true;
 	}
 
 	CacheLayerRegistry(CacheLayerRegistry const& l);            // disable copy constructor
@@ -86,6 +82,14 @@ private:
     		m_localstorageRoot += fileSeparator;
     	}
     }
+
+    /** reload the cache */
+    inline void reload(){
+    	// reload the cache:
+    	if(m_cache->reload(m_localstorageRoot))
+    		m_valid = true;
+    }
+
 public:
 
 	~CacheLayerRegistry() {

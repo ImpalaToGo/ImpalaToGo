@@ -36,6 +36,15 @@ bool endsWith (const std::string& original, const std::string& ending)
         return false;
     }
 }
+
+time_t posix_time_to_time_t(boost::posix_time::ptime time)
+{
+    using namespace boost::posix_time;
+    ptime epoch(boost::gregorian::date(1970, 1, 1));
+    time_duration::sec_type time_duartion_in_sec = (time - epoch).total_seconds();
+    return time_t(time_duartion_in_sec);
+}
+
 }
 }
 

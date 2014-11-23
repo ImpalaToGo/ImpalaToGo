@@ -17,14 +17,6 @@ namespace managed_file {
 std::string File::fileSeparator;
 std::vector<std::string> File::m_supportedFs;
 
-time_t posix_time_to_time_t(boost::posix_time::ptime t)
-{
-    using namespace boost::posix_time;
-    ptime epoch(boost::gregorian::date(1970, 1, 1));
-    time_duration::sec_type x = (t - epoch).total_seconds();
-    return time_t(x);
-}
-
 void File::initialize(){
 	  // configure platform-specific file separator:
 	  boost::filesystem::path slash("/");
@@ -48,6 +40,8 @@ std::string File::constructLocalPath(const FileSystemDescriptor& fsDescriptor, c
     if(!fsDescriptor.host.empty())
     	localPath += fileSeparator;
     localPath += fsDescriptor.host;
+    localPath += constants::HOST_PORT_SEPARATOR;
+    localPath += std::to_string(fsDescriptor.port);
     localPath += path;
     return localPath;
 }
@@ -74,13 +68,13 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 
 	// 1. this should be one of schema we support:
 	std::string schema = (*it++).string();
-	if(std::find(m_supportedFs.begin(), m_supportedFs.end(), schema) == m_supportedFs.end())
+	if(std::find_if(m_supportedFs.begin(), m_supportedFs.end(), utilities::insensitive_compare(schema)) == m_supportedFs.end())
 		// nothing found for parsed schema
 		return descriptor;
 
-	if(schema == constants::HDFS_SCHEME)
+	if(boost::iequals(schema, constants::HDFS_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::HDFS;
-	if(schema == constants::S3N_SCHEME)
+	if(boost::iequals(schema, constants::S3N_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::S3;
 
 	if(it == fqdn_to_resolve.end())
@@ -96,7 +90,7 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	// check that we have host_port separator in the host_port
 	std::vector<std::string> host_port_pair = utilities::split(host_port, constants::HOST_PORT_SEPARATOR);
 
-	if(host_port.size() != 2)
+	if(host_port_pair.size() != 2)
 		return descriptor;
 
 	// 2.1 remote origin fs host
@@ -133,7 +127,6 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	fqnp += ":";
 	fqnp += std::to_string(descriptor.port);
 	fqnp += catalog;
-	fqnp += "/";
 	fqnp += filename;
 
 	// validate descriptor:

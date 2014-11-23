@@ -34,106 +34,106 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file){
 }
 
 void FileSystemLRUCache::continuationFor(managed_file::File* file){
-    	if(file == nullptr)
-    		return;
+	// if file is not valid, break the handler
+	if (file == nullptr || !file->exist())
+		return;
 
-        // mark it "in progress":
-    	file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
+	// mark file as "in progress":
+	file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
 
-    	// and wait for prepare operation will be finished:
-    	DataSet data;
-    	data.push_back(file->fqp().c_str());
+	// and wait for prepare operation will be finished:
+	DataSet data;
+	data.push_back(file->fqp().c_str());
 
-    	bool condition = false;
-    	boost::condition_variable condition_var;
-    	boost::mutex completion_mux;
+	bool condition = false;
+	boost::condition_variable condition_var;
+	boost::mutex completion_mux;
 
-    	status::StatusInternal cbStatus;
+	status::StatusInternal cbStatus;
 
-    	PrepareCompletedCallback cb =
-    			[&] (SessionContext context,
-    					const std::list<boost::shared_ptr<FileProgress> > & progress,
-    					request_performance const & performance, bool overall,
-    					bool canceled, taskOverallStatus status) -> void {
+	PrepareCompletedCallback cb =
+			[&] (SessionContext context,
+					const std::list<boost::shared_ptr<FileProgress> > & progress,
+					request_performance const & performance, bool overall,
+					bool canceled, taskOverallStatus status) -> void {
 
-    					boost::lock_guard<boost::mutex> lock(completion_mux);
-    					cbStatus = (status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED);
-    					if(status != taskOverallStatus::COMPLETED_OK){
-    						LOG (ERROR) << "Failed to load file \"" << file->fqp() << "\"" << ". Status : "
-    							<< status << ".\n";
-    						file->state(managed_file::State::FILE_IS_FORBIDDEN);
-    					}
-    					if(context == NULL)
-    						LOG (ERROR) << "NULL context received while loading the file \"" << file->fqp()
-    							<< "\"" << ".Status : " << status << ".\n";
+				boost::lock_guard<boost::mutex> lock(completion_mux);
+				cbStatus = (status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED);
+				if(status != taskOverallStatus::COMPLETED_OK) {
+					LOG (ERROR) << "Failed to load file \"" << file->fqp() << "\"" << ". Status : "
+					<< status << ".\n";
+					file->state(managed_file::State::FILE_IS_FORBIDDEN);
+				}
+				if(context == NULL)
+				LOG (ERROR) << "NULL context received while loading the file \"" << file->fqp()
+				<< "\"" << ".Status : " << status << ".\n";
 
-    					if(progress.size() != data.size())
-    						LOG (ERROR) << "Expected amount of progress is not equal to received for file \""
-    							<< file->fqp() << "\"" << ".Status : "	<< status << ".\n";
+				if(progress.size() != data.size())
+				LOG (ERROR) << "Expected amount of progress is not equal to received for file \""
+				<< file->fqp() << "\"" << ".Status : " << status << ".\n";
 
-    					if(!overall)
-    						LOG (ERROR) << "Expected amount of progress is not equal to received for file \""
-    							<< file->fqp() << "\"" << ".Status : " << status << ".\n";
+				if(!overall)
+				LOG (ERROR) << "Expected amount of progress is not equal to received for file \""
+				<< file->fqp() << "\"" << ".Status : " << status << ".\n";
 
-    					condition = true;
-    					condition_var.notify_all();
-    				};
+				condition = true;
+				condition_var.notify_all();
+			};
 
-    		time_t time_ = 0;
-    		requestIdentity identity;
+	requestIdentity identity;
 
-    		auto f1 = std::bind(&CacheManager::cachePrepareData, CacheManager::instance(), ph::_1, ph::_2, ph::_3, ph::_4,
-    				ph::_5);
+	auto f1 = std::bind(&CacheManager::cachePrepareData,
+			CacheManager::instance(), ph::_1, ph::_2, ph::_3, ph::_4, ph::_5);
 
-    		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
 
-    		std::string local_client = boost::lexical_cast<std::string>(uuid);
-    		SessionContext ctx = static_cast<void*>(&local_client);
+	std::string local_client = boost::lexical_cast<std::string>(uuid);
+	SessionContext ctx = static_cast<void*>(&local_client);
 
-    		status::StatusInternal status;
+	status::StatusInternal status;
 
-    		FileSystemDescriptor fsDescriptor;
-    		fsDescriptor.dfs_type = file->origin();
-    		fsDescriptor.host = file->host();
-    		try{
-    			fsDescriptor.port = std::stoi(file->port());
-    		}
-    		catch(...){
-    			return;
-    		}
-    		// execute request in async way to utilize requests pool:
-    		status = f1(ctx, std::cref(fsDescriptor), std::cref(data), cb,
-    				std::ref(identity));
+	FileSystemDescriptor fsDescriptor;
+	fsDescriptor.dfs_type = file->origin();
+	fsDescriptor.host = file->host();
+	try {
+		fsDescriptor.port = std::stoi(file->port());
+	} catch (...) {
+		return;
+	}
+	// execute request in async way to utilize requests pool:
+	status = f1(ctx, std::cref(fsDescriptor), std::cref(data), cb,
+			std::ref(identity));
 
-    		// check operation scheduling status:
-    		if (status != status::StatusInternal::OPERATION_ASYNC_SCHEDULED) {
-    			LOG (ERROR)<< "Prepare request - failed to schedule - for \"" << file->fqp() << "\"" << ". Status : "
-    					<< status << ".\n";
-    			// no need to wait for callback to fire, operation was not scheduled
-    			return;
-    		}
+	// check operation scheduling status:
+	if (status != status::StatusInternal::OPERATION_ASYNC_SCHEDULED) {
+		LOG (ERROR)<< "Prepare request - failed to schedule - for \"" << file->fqp() << "\"" << ". Status : "
+		<< status << ".\n";
+		// no need to wait for callback to fire, operation was not scheduled
+		return;
+	}
 
-    		// wait when completion callback will be fired by Prepare scenario:
-    		boost::unique_lock<boost::mutex> lock(completion_mux);
-    		condition_var.wait(lock, [&] {return condition;});
+	// wait when completion callback will be fired by Prepare scenario:
+	boost::unique_lock<boost::mutex> lock(completion_mux);
+	condition_var.wait(lock, [&] {return condition;});
 
-    		lock.unlock();
+	lock.unlock();
 
-    		// check callback status:
-    		if(cbStatus != status::StatusInternal::OK) {
-    			LOG (ERROR) << "Prepare request failed for \"" << file->fqp() << "\"" << ". Status : "
-    					<< status << ".\n";
-    			file->state(managed_file::State::FILE_IS_FORBIDDEN);
-    			return;
-    		}
-    		else
-    			// file is present and is ready to use
-    			file->state(managed_file::State::FILE_IS_IDLE);
-    }
+	// check callback status:
+	if (cbStatus != status::StatusInternal::OK) {
+		LOG (ERROR)<< "Prepare request failed for \"" << file->fqp() << "\"" << ". Status : "
+		<< status << ".\n";
+		file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		return;
+	}
+	else
+	// file is present and is ready to use
+	file->state(managed_file::State::FILE_IS_IDLE);
+}
 
-bool FileSystemLRUCache::reload(){
-	if(m_root.empty())
+bool FileSystemLRUCache::reload(const std::string& root){
+	if(root.empty())
 		return false;
+	m_root = root;
 
 	boost::filesystem::recursive_directory_iterator end_iter;
 
@@ -171,6 +171,8 @@ bool FileSystemLRUCache::reload(){
         managed_file::File* file;
     	// and add it into the cache
     	add(lp, file);
+    	// and mark the file as "idle":
+    	file->state(managed_file::State::FILE_IS_IDLE);
     }
     return true;
 }

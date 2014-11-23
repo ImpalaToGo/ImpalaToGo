@@ -21,17 +21,13 @@
 
 #include "util/hash-util.h"
 #include "dfs_cache/common-include.hpp"
+#include "dfs_cache/utilities.hpp"
 
 /** @namespace impala */
 namespace impala{
 
 /** @namespace ManagedFile */
 namespace managed_file {
-
-/**
- * convert boost::posix_time::ptime to time_t
- */
-time_t posix_time_to_time_t(boost::posix_time::ptime t);
 
    /**
     * Defines the state of concrete physical file system file just now
@@ -88,11 +84,12 @@ time_t posix_time_to_time_t(boost::posix_time::ptime t);
        volatile std::atomic<unsigned> m_users;        /**< number of users so far */
 
 	   static std::string              fileSeparator;  /**< platform-specific file separator */
+
 	   static std::vector<std::string> m_supportedFs;  /**< list of supported file systems, string representation */
 
-       static void initialize();
-
    public:
+
+       static void initialize();
 
 	   /** Search predicate to find the handle by its shared pointer */
 	   struct FileHandleEqPredicate
@@ -126,7 +123,7 @@ time_t posix_time_to_time_t(boost::posix_time::ptime t);
            m_schema = descriptor.dfs_type;
 
            m_originhost = descriptor.host;
-           m_originport = descriptor.port;
+           m_originport = std::to_string(descriptor.port);
 
            m_users.store(0);
 	   }
@@ -151,6 +148,11 @@ time_t posix_time_to_time_t(boost::posix_time::ptime t);
 	   /** flag, idicates that the file is in valid state and can be used */
 	   inline bool valid() {
 		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
+	   }
+
+	   /** flag, indicates whether the file was resolved by registry */
+	   inline bool exist() {
+		   return !(m_state == State::FILE_IS_AMORPHOUS || m_state == State::FILE_IS_FORBIDDEN || m_state == State::FILE_IS_MARKED_FOR_DELETION);
 	   }
 
 	   /** setter for file state
@@ -238,7 +240,7 @@ time_t posix_time_to_time_t(boost::posix_time::ptime t);
 	    */
 	   inline int last_access(const boost::posix_time::ptime& time){
 		   boost::system::error_code ec;
-		   boost::filesystem::last_write_time(m_fqp, posix_time_to_time_t(time), ec);
+		   boost::filesystem::last_write_time(m_fqp, utilities::posix_time_to_time_t(time), ec);
 		   return ec.value();
 	    }
 

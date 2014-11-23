@@ -12,6 +12,10 @@
 #include <string>
 #include <algorithm>    // find
 
+#include <boost/algorithm/string.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/time_formatters.hpp>
+
 struct Uri {
 public:
 	std::string QueryString, Path, Protocol, Host, Port, FilePath, Hierarchy;
@@ -118,6 +122,22 @@ std::vector<std::string> split(const std::string &original, char delimiter);
  * @return true if @a original ends with @a ending
  */
 bool endsWith (const std::string& fullString, const std::string& ending);
+
+/**
+ * converts posix time to time_t
+ * @param time - boost posix time time
+ */
+time_t posix_time_to_time_t(boost::posix_time::ptime time);
+
+/** Case-insensitive comparator for strings */
+struct insensitive_compare : public std::unary_function<std::string, bool>{
+	explicit insensitive_compare(const std::string &baseline) : baseline(baseline) {}
+
+	  bool operator() (const std::string &arg){
+		  return boost::iequals(arg, baseline);
+	  }
+	  std::string baseline;
+};
 
 }
 }

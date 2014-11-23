@@ -20,6 +20,12 @@ void CacheLayerRegistry::init(const std::string& root) {
   if(CacheLayerRegistry::instance_.get() == NULL)
 	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(root));
 
+  // Initialize File class
+  managed_file::File::initialize();
+
+	// reload the cache:
+  CacheLayerRegistry::instance()->reload();
+
   // configure platform-specific file separator:
   boost::filesystem::path slash("/");
   boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
