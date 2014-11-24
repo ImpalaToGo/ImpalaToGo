@@ -39,7 +39,7 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 
 void FileSystemLRUCache::continuationFor(managed_file::File* file){
 	// if file is not valid, break the handler
-	if (file == nullptr || !file->exist())
+	if (file == nullptr || !file->valid())
 		return;
 
 	// mark file as "in progress":

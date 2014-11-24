@@ -146,13 +146,13 @@ namespace managed_file {
 	   inline State state() { return m_state; }
 
 	   /** flag, idicates that the file is in valid state and can be used */
-	   inline bool valid() {
+	   inline bool exists() {
 		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
 	   }
 
 	   /** flag, indicates whether the file was resolved by registry */
-	   inline bool exist() {
-		   return !(m_state == State::FILE_IS_AMORPHOUS || m_state == State::FILE_IS_FORBIDDEN || m_state == State::FILE_IS_MARKED_FOR_DELETION);
+	   inline bool valid() {
+		   return !(m_state == State::FILE_IS_FORBIDDEN || m_state == State::FILE_IS_MARKED_FOR_DELETION);
 	   }
 
 	   /** setter for file state

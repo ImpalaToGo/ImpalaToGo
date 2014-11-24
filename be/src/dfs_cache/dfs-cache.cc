@@ -125,7 +125,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 	}
 
 	// so as the file is in the registry, just open it:
-	if(managed_file->valid())
+	if(managed_file->exists())
 		managed_file->open(); // mark the file with the one more usage
 	else{
 		LOG (ERROR) << "File \"" << path << "\" is not available in LRU." << "\n";
