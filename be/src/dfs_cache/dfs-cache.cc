@@ -121,6 +121,8 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 	// first check whether the file is already in the registry.
 	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist in the registry
 	if(!CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file) || managed_file == nullptr){
+		LOG (ERROR) << "File \"/" << fsDescriptor.host << ":" << std::to_string(fsDescriptor.port) <<
+				"/" << path << "\" is not available." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
 

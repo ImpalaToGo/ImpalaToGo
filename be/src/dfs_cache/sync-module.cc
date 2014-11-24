@@ -89,10 +89,10 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     }
 
 	// open remote file:
-	dfsFile hfile = fsAdaptor->fileOpen(connection, path, O_RDONLY, 0, 0, 0);
+	dfsFile hfile = fsAdaptor->fileOpen(connection, managed_file->relative_name().c_str(), O_RDONLY, 0, 0, 0);
 
 	if(hfile == NULL){
-		LOG (ERROR) << "Requested file \"" << path << "\" is not available on \"" << fsDescriptor.dfs_type << ":" <<
+		LOG (ERROR) << "Requested file \"" << path << "\" is not available on \"" << fsDescriptor.dfs_type << "//:" <<
 				fsDescriptor.host << "\"" << "\n";
 		fp->error    = true;
 		fp->errdescr = "Unable to open requested remote file";

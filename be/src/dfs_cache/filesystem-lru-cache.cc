@@ -47,7 +47,7 @@ void FileSystemLRUCache::continuationFor(managed_file::File* file){
 
 	// and wait for prepare operation will be finished:
 	DataSet data;
-	data.push_back(file->fqp().c_str());
+	data.push_back(file->relative_name().c_str());
 
 	bool condition = false;
 	boost::condition_variable condition_var;
@@ -110,7 +110,7 @@ void FileSystemLRUCache::continuationFor(managed_file::File* file){
 
 	// check operation scheduling status:
 	if (status != status::StatusInternal::OPERATION_ASYNC_SCHEDULED) {
-		LOG (ERROR)<< "Prepare request - failed to schedule - for \"" << file->fqp() << "\"" << ". Status : "
+		LOG (ERROR)<< "Prepare request - failed to schedule - for \"" << file->fqnp() << "\"" << ". Status : "
 		<< status << ".\n";
 		// no need to wait for callback to fire, operation was not scheduled
 		return;
@@ -124,7 +124,7 @@ void FileSystemLRUCache::continuationFor(managed_file::File* file){
 
 	// check callback status:
 	if (cbStatus != status::StatusInternal::OK) {
-		LOG (ERROR)<< "Prepare request failed for \"" << file->fqp() << "\"" << ". Status : "
+		LOG (ERROR)<< "Prepare request failed for \"" << file->fqnp() << "\"" << ". Status : "
 		<< status << ".\n";
 		file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		return;
@@ -168,7 +168,8 @@ bool FileSystemLRUCache::reload(const std::string& root){
     	// create the managed file instance if there's network path can be successfully restored from its name
     	// so that the file can be managed by Imapla-To-Go:
     	std::string fqnp;
-        FileSystemDescriptor desciptor = managed_file::File::restoreNetworkPathFromLocal(lp, fqnp);
+    	std::string relative;
+        FileSystemDescriptor desciptor = managed_file::File::restoreNetworkPathFromLocal(lp, fqnp, relative);
         if(!desciptor.valid)
         	continue; // do not register this file
 

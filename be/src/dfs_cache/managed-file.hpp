@@ -77,6 +77,7 @@ namespace managed_file {
 	   boost::uintmax_t m_size;                    /**< file size. For internal and user statistics and memory planning. */
 	   std::size_t      m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
 
+	   std::string        m_filename;         /**< relative file name. Within the scope where it is accessed now (remotely, locally) */
        std::string        m_originhost;       /**< origin host */
        std::string        m_originport;       /**< origin port */
        DFS_TYPE           m_schema;           /**< origin schema */
@@ -114,7 +115,7 @@ namespace managed_file {
          :  m_state(State::FILE_IS_AMORPHOUS), m_fqp(path), m_size(0), m_estimatedsize(0),
             m_schema(DFS_TYPE::NON_SPECIFIED){
 
-		   FileSystemDescriptor descriptor = restoreNetworkPathFromLocal(std::string(path), m_fqnp);
+		   FileSystemDescriptor descriptor = restoreNetworkPathFromLocal(std::string(path), m_fqnp, m_filename);
            if(!descriptor.valid){
         	   m_state = State::FILE_IS_FORBIDDEN;
         	   return;
@@ -132,12 +133,15 @@ namespace managed_file {
 	   }
 
 	   /** restore File options representing the network identification of supplied file.
-	    *  @param [in]     local  - fqp of file.
-	    *  @param [in/out] fqnp   - resolved fqnp string, in case of failure - empty string
+	    *  @param [in]     local    - fqp of file.
+	    *  @param [in/out] fqnp     - resolved fqnp string, in case of failure - empty string
+	    *  @param [in/out] relative - relative filename, within any origin
 	    *
-	    *  @return fqdn if it was restored or empty string otherwise
+	    *  @return fqdn if it was restored or empty string otherwise;
+	    *  filename if it was restored or empty otherwise
 	    */
-	   static FileSystemDescriptor restoreNetworkPathFromLocal(const std::string& local, std::string& fqnp);
+	   static FileSystemDescriptor restoreNetworkPathFromLocal(const std::string& local,
+			   std::string& fqnp, std::string& relative);
 
 	   static std::string constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path);
 
@@ -161,7 +165,6 @@ namespace managed_file {
 	   inline void state(State state) {
 		   m_state = state;
 	   }
-
 
 	   /** reply origin file system host */
 	   inline std::string host() { return m_originhost; }
@@ -194,6 +197,11 @@ namespace managed_file {
 	    */
 	   inline void fqnp(std::string fqnp) { m_fqnp = fqnp; }
 
+	   /**
+	    * getter for relative file name within origin (remote, local)
+	    * @return relative file name if assigned, empty string means the file is invalid
+	    */
+	   inline std::string relative_name() { return m_filename; }
 
 	   /** getter for File size (available locally) */
 	   inline boost::uintmax_t size() {

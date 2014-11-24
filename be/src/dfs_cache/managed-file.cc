@@ -46,7 +46,7 @@ std::string File::constructLocalPath(const FileSystemDescriptor& fsDescriptor, c
     return localPath;
 }
 
-FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local, std::string& fqnp){
+FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local, std::string& fqnp, std::string& relative){
 	std::string root(CacheLayerRegistry::instance()->localstorage());
 
 	fqnp = "";
@@ -119,6 +119,9 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	std::string filename = catalog_filename.filename().string();
 	if(catalog.empty() || filename.empty())
 		return descriptor;
+
+	// 4. save relative file name:
+	relative = catalog_filename.string();
 
 	// now having all we need to construct remote origin file system path which we call fqdn, go and construct:
 	fqnp = schema;
