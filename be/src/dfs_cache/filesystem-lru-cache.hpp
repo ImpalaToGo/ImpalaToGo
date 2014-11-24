@@ -62,8 +62,13 @@ private:
     	file->last_access(timestamp);
     }
 
-    /** delete file object, delete file from file system   */
-    bool deleteFile(managed_file::File* file);
+    /** delete file object, delete file from file system
+     * @param file       - file to remove
+     * @param physically - flag, indicates whether physical removal is required
+     *
+     * @return operation status, true if the requested scenario succeeded
+     */
+    bool deleteFile(managed_file::File* file, bool physically = true);
 
     /** reply with configured capacity measurement units
      *  In place as there's the reason to assume that capacity may change during
@@ -130,7 +135,7 @@ public:
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
     	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);
 
-    	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1);
+    	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1, _2);
 
     	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string { return file->fqp(); };
     	LRUCache<managed_file::File>::LoadItemFunc<std::string>      lif = 0;
@@ -194,8 +199,8 @@ public:
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
      *  */
-    inline void remove(std::string path){
- 	   m_idxFileLocalPath->remove(path);
+    inline bool remove(std::string path){
+ 	   return m_idxFileLocalPath->remove(path, true);
     }
 };
 

@@ -133,13 +133,24 @@ public:
 	/** *************************** Local file system registry API *****************************************************/
 
 	/**
-	 * Get the File object by its path
+	 * Get the File object by its relative path within the @a descriptor of related file system.
+	 * To be called when file path should be resolved from @a path and @a descriptor (when query arrives)
 	 *
 	 * @param [in]  path       - file fqp
 	 * @param [in]  descriptor - file system descriptor
 	 * @param [out] file       - managed file instance (if any)
 	 */
 	bool findFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
+
+	/**
+	 * Get the file object by its fully qualified path. Should be called for internal cache usage on
+	 * existing local files
+	 *
+	 * @param [in]  path       - file fqp
+	 * @param [out] file       - managed file instance (if any)
+	 *
+	 */
+	bool findFile(const char* path, managed_file::File*& file);
 
 	/**
 	 * Insert the managed file into the set.
@@ -152,6 +163,16 @@ public:
 	 * @return true is the file was inserted to the cache, false otherwise
 	 */
 	bool addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
+
+	/**
+	 * Delete file from cache and from file system
+	 * @param descriptor - file system descriptor
+	 * @param path 		 - relative path to a file to remove
+	 *
+	 * @return status of operation, true means that file was removed according scenario.
+	 * false - operation was not success due to reasons
+	 */
+	bool deleteFile(const FileSystemDescriptor &descriptor, const char* path);
 
 	struct StrExpComp
 	{

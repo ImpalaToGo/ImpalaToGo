@@ -44,39 +44,46 @@ void FileSystemManager::init() {
 }
 
 std::string FileSystemManager::filePathByDescriptor(dfsFile file){
-	 struct stat sb;
-	 char *linkname;
-	 ssize_t r;
+	const int growthRate = 255;
 
-	 int fd = fileno((FILE *)file->file);
+	struct stat sb;
+	char *linkname = NULL;
 
-	 std::string f = "/proc/self/fd/";
-	 f += std::to_string(fd);
+	ssize_t readSize = INT_MAX;
+	int linkSize = 0;
 
-	 if (lstat(f.c_str(), &sb) == -1) {
-		 perror("lstat");
-		 return std::string();
-	 }
+	int fd = fileno((FILE *) file->file);
 
-	 linkname = (char*)malloc(sb.st_size + 1);
-	 if (linkname == NULL) {
-		 fprintf(stderr, "insufficient memory\n");
-		 return std::string();
-	 }
+	std::string f = "/proc/self/fd/";
+	f += std::to_string(fd);
 
-	 r = readlink(f.c_str(), linkname, sb.st_size + 1);
+	if (lstat(f.c_str(), &sb) == -1) {
+		perror("lstat");
+		return std::string();
+	}
 
-	 if (r < 0) {
-		 perror("lstat");
-		 return std::string();
-	 }
+	// read the link target into a string
+	linkSize = sb.st_size + 1 - growthRate;
+	while (readSize >= linkSize) { // i.e. symlink increased in size since lstat() or non-POSIX compliant filesystem
+		// allocate sufficient memory to hold the link
+		linkSize += growthRate;
+		free(linkname);
+		linkname = (char*) malloc(linkSize * sizeof(char));
+		if (linkname == NULL) {           // insufficient memory
+			fprintf(stderr, "setProcessName(): insufficient memory\n");
+			return std::string();
+		}
 
-	 if (r > sb.st_size) {
-		 fprintf(stderr, "symlink increased in size between lstat() and readlink()\n");
-		 return std::string();
-	 }
-	 linkname[sb.st_size] = '\0';
-     return std::string(linkname);
+		// read the link target into variable linkTarget
+		readSize = readlink(f.c_str(), linkname, linkSize);
+		if (readSize < 0) {        // readlink failed: link was deleted?
+			perror("lstat");
+			return std::string();
+		}
+	}
+
+	linkname[readSize] = '\0';
+	return std::string(linkname);
 }
 
 std::string FileSystemManager::getMode(int flags) {
@@ -312,12 +319,11 @@ status::StatusInternal FileSystemManager::dfsMove(const FileSystemDescriptor & f
 }
 
 status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive){
-	// construct the fqlp:
-	Uri uri = Uri::Parse(path);
-	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor,  uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor,  path);
 
 	if(std::remove(localPath.c_str()) == 0)
 		return status::StatusInternal::OK;
+
 	return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 }
 

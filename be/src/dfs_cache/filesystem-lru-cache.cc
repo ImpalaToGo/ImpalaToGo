@@ -18,15 +18,19 @@
 
 namespace impala{
 
-bool FileSystemLRUCache::deleteFile(managed_file::File* file){
+bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
+	// no matter the scenario, do not pass to removal if any clients still use the file:
 	if(!isItemIdle(file))
 		return false;
 
 	// no usage so far, mark the file for deletion:
 	file->state(managed_file::State::FILE_IS_MARKED_FOR_DELETION);
 
-	// delegate further deletion scenario to the file itself:
-	file->drop();
+	// for physical removal scenario, drop the file from file system
+	if (physically) {
+		// delegate further deletion scenario to the file itself:
+		file->drop();
+	}
 
 	// get rid of file metadata object:
 	delete file;

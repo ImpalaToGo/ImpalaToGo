@@ -79,7 +79,7 @@ public:
 	using AcceptAssignedTimestamp = typename boost::function<void(ItemType_* item, const boost::posix_time::ptime& time)>;
 
 	/** "item deletion" external call predicate, its up to implementor what to do with the item when it is deleted from the cache */
-	using ItemDeletionPredicate = typename boost::function<bool(ItemType_* item)>;
+	using ItemDeletionPredicate = typename boost::function<bool(ItemType_* item, bool physically)>;
 
     /** to validate weak references to items */
     typedef boost::function<bool()> isValidPredicate;
@@ -100,7 +100,7 @@ public:
      	ItemType_*  value()  { return m_item; }
 
      	virtual void touch()   						   = 0;  /** method that marks the item as "accessed" */
-        virtual void remove(bool cleanup = true)       = 0;  /** remove the node. Default usage scenario is cleanup (with physical removal) */
+        virtual bool remove(bool cleanup = true)       = 0;  /** remove the node. Default usage scenario is cleanup (with physical removal) */
         virtual size_t weight() 					   = 0;  /** tell weight of underlying item*/
 
      };
@@ -155,9 +155,10 @@ public:
     	/**
     	 * Delete object that matches key from cache
     	 *
-    	 * @param key - key to remove from cache
+    	 * @param key  - key to remove from cache
+    	 * @physically - flag, indicates whether physical removal is required
     	 */
-    	virtual void remove(KeyType_ key) = 0;
+    	virtual bool remove(KeyType_ key, bool physically = true) = 0;
     };
 
 private:
@@ -304,14 +305,19 @@ private:
 
         /**
          * Delete object that matches key from cache
-         * @param key - key to remove
+         * @param key        - key to remove
+         * @param physically - flag, indicates whether physical removal is requried
          */
-        void remove(KeyType_ key)
+        bool remove(KeyType_ key, bool physically = true)
         {
+        	bool result = false;
             boost::shared_ptr<INode> node = getNode(key);
             if(node)
-                node->remove(false);
+                result = node->remove(physically);
             m_owner->m_lifeSpan->checkValid();
+
+            // the main goal of result to be sure the file is removed according to requested scenario
+            return result;
         }
 
         /**
@@ -549,19 +555,19 @@ private:
              * During cleanup, externally defined removal scenario is run.
              * During reload, no externally defined scenario involved, just cleaning local structures
              */
-            void remove(bool cleanup)
+            bool remove(bool cleanup)
             {
+            	bool result = false;
                 if( m_ageBucket != nullptr && this->value() != nullptr ){
                 	long long weight = m_mgr->m_owner->tellWeight(this->value());
 
-                	// run external deletion scenario (cleanup scenario). otherwise this is reload
-                	if(cleanup)
-                		// run external deletion on node destruction
-                		try{
-                			m_mgr->m_owner->deleteItemExt(this->value());
-                		}catch(...){
-                			// external operations are nothrow locally
-                		}
+                	// below will run external deletion in either cleanup or reload mode, basing on the flag arrived:
+                	try{
+                		result = m_mgr->m_owner->deleteItemExt(this->value(), cleanup);
+                	}
+                	catch(...){
+                		// external operations are nothrow locally
+                	}
 
                 	// say no external value is managed more by this node
                     this->value(nullptr);
@@ -571,6 +577,9 @@ private:
                 	// decrease number of hard items
                     std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
                 }
+                else
+                	LOG (WARNING) << "LRU Node : Node content removal was not done as expected by scenario due to leak of metadata" << "\n";
+                return result;
             }
 		};
 
@@ -787,7 +796,9 @@ private:
         					weightToRemove -= toRelease;
 
                 			// remove the node
-                		    node->remove(true);
+                		    bool result = node->remove(true);
+                		    if(!result)
+                		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
                 		    // cut off it from registry
                 			node.reset();
         				}
@@ -975,10 +986,14 @@ private:
     	return true;
     }
 
-    /** run externally defined scenario "on item deleted" */
-    void deleteItemExt(ItemType_* item){
+    /** run externally defined scenario "on item deleted"
+     * @param item       - item to remove from cache
+     * @param physically - flag, indicates whether the item should be removed physically from source
+     */
+    bool deleteItemExt(ItemType_* item, bool physically = true){
     	if(m_itemDeletionPredicate)
-    		m_itemDeletionPredicate(item);
+    		return m_itemDeletionPredicate(item, physically);
+    	return false;
     }
 
     void updateItemTimestamp(ItemType_* item, const boost::posix_time::ptime& timestamp){

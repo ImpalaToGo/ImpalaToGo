@@ -143,18 +143,22 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 }
 
 status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
-	status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
 
+	status::StatusInternal status;
 	std::string path = filemgmt::FileSystemManager::filePathByDescriptor(file);
     if(path.empty()){
     	status = status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
-    	LOG (WARNING) << "File descriptor does not exists within the system!" << "\n";
+    	LOG (WARNING) << "File descriptor is not resolved within the system!" << "\n";
     }
     // anyway try close the file
     status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
 
 	managed_file::File* managed_file;
-	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), fsDescriptor, managed_file) || managed_file == nullptr){
+	// if no file path resolved from the file descriptor, no chance to find it in the cache.
+	if(path.empty())
+		return status;
+
+	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), managed_file) || managed_file == nullptr){
 		status = status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
 	}
 	managed_file->close();
@@ -204,7 +208,14 @@ status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const 
 }
 
 status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive = 1) {
-	return filemgmt::FileSystemManager::instance()->dfsDelete(fsDescriptor, path, recursive);
+	status::StatusInternal status;
+	// Remove the file from registry if it is there:
+	bool result = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
+	status = result ? status::StatusInternal::OK : status::FILE_OBJECT_OPERATION_FAILURE;
+
+	// delete the file from the file system:
+	//status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsDelete(fsDescriptor, path, recursive);
+	return status;
 }
 
 status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath,

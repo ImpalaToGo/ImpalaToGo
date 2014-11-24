@@ -87,6 +87,14 @@ bool CacheLayerRegistry::findFile(const char* path, const FileSystemDescriptor& 
 	return file != nullptr;
 }
 
+bool CacheLayerRegistry::findFile(const char* path, managed_file::File*& file){
+	std::string fqp = std::string(path);
+	if(fqp.empty())
+		return false;
+	file = m_cache->find(fqp);
+	return file != nullptr;
+}
+
 bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file)
 {
 	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
@@ -94,6 +102,17 @@ bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& d
 		return false;
 
 	return m_cache->add(fqp, file);
+}
+
+bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, const char* path){
+	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
+	if(fqp.empty()){
+		LOG (WARNING) << "Cache Layer Registry : file was not deleted. Unable construct fqp from \"" << path << "\"\n";
+		return false;
+	}
+	// Below instruction will drop the file form file system - in case if there's no usage of that file so far.
+	// If any pending users, the file won't be removed
+	return m_cache->remove(std::string(fqp));
 }
 }
 
