@@ -122,7 +122,6 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 
 	// 4. save relative file name:
 	relative = catalog_filename.string();
-
 	// now having all we need to construct remote origin file system path which we call fqdn, go and construct:
 	fqnp = schema;
 	fqnp += "://";

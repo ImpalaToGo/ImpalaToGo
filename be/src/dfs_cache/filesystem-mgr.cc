@@ -112,11 +112,11 @@ std::string FileSystemManager::getMode(int flags) {
 dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
-	Uri uri = Uri::Parse(path);
+
 	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
 
 	// calculate fully qualified local path from requested
-	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, uri.FilePath.c_str());
+	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, path);
     const char* localPathAnsi = localPath.c_str();
 
     // check we are able to process requested file mode.
@@ -142,7 +142,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 		if(!available){
 			// need to create the file. First check whether the directory exists
 			bool dirExists = true;
-			uri = Uri::Parse(localPathAnsi);
+			Uri uri = Uri::Parse(localPathAnsi);
 
 			// format the directory hierarchy string to build the directory tree:
 			std::string directoriesHierarchy = uri.Hierarchy;

@@ -111,7 +111,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
 	 bool available;
 	 // open or create local file:
-	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), path, O_CREAT, 0, 0, 0, available);
+	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), O_CREAT, 0, 0, 0, available);
      if(file == NULL || !available){
     	 LOG (ERROR) << "Unable to create local file \"" << path << "\", being cached from \"" << fsDescriptor.dfs_type << ":" <<
     	 				 fsDescriptor.host << "\"" << "\n";
@@ -146,7 +146,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 if(task->condition()){ // cancellation was requested:
 		 LOG (WARNING) << "Cancellation was requested during file read \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
 		 				 fsDescriptor.host << "\"" << ". This file was not cached. \n";
-		 filemgmt::FileSystemManager::instance()->dfsDelete(fsAdaptor->descriptor(), path, true);
+		 filemgmt::FileSystemManager::instance()->dfsDelete(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), true);
 	 }
 
 	return status::StatusInternal::OK;

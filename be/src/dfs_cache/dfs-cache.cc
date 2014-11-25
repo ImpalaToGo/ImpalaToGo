@@ -117,12 +117,13 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
 
+	Uri uri = Uri::Parse(path);
     managed_file::File* managed_file;
 	// first check whether the file is already in the registry.
 	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist in the registry
-	if(!CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file) || managed_file == nullptr){
+	if(!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(), fsDescriptor, managed_file) || managed_file == nullptr){
 		LOG (ERROR) << "File \"/" << fsDescriptor.host << ":" << std::to_string(fsDescriptor.port) <<
-				"/" << path << "\" is not available." << "\n";
+				"/" << path << "\" is not available either on target or locally." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
 
@@ -134,7 +135,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 		return NULL;
 	}
 
-	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, path, flags,
+	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, uri.FilePath.c_str(), flags,
 				bufferSize, replication, blocksize, available);
     if(handle != nullptr && available){
     	// file is available locally, just reply it back:
