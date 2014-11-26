@@ -14,9 +14,12 @@
 #include "util/generator-coroutine.h"
 #include "dfs_cache/lru-cache.hpp"
 
+/**
+ * @namespace impala
+ */
 namespace impala{
 
-/** generator - continuation for Lifepsan Manager */
+/** generator - continuation for Lifespan Manager */
 template<typename Source_, typename ItemType_, typename PredicateStart_, typename PredicateGetNext_, typename PredicateGetGuard_>
 $generator(lru_gen)
 {

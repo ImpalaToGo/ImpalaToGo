@@ -1,5 +1,5 @@
 /** @file tasks-impl.cc
- *  @brief Implementation of cache-managed entities
+ *  @brief Implementation of cache layer tasks
  *
  *  @date   Oct 01, 2014
  *  @author elenav
@@ -74,7 +74,10 @@ void FileEstimateTask::run_internal(){
 	status::StatusInternal runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
 
 	LOG (INFO) << "File Estimate Task was executed with the worker status : \"" << runstatus << "\". \n";
-	m_status = taskOverallStatus::COMPLETED_OK;
+    if(runstatus == status::StatusInternal::OK)
+    	m_status = taskOverallStatus::COMPLETED_OK;
+    else
+    	m_status = taskOverallStatus::FAILURE;
 }
 
 void FileEstimateTask::callback(){
@@ -124,7 +127,10 @@ void FileDownloadTask::run_internal(){
 	// run the functor and share itself allowing the worker to access the cancellation context if needed
 	status::StatusInternal runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
 	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\". \n";
-	m_status = taskOverallStatus::COMPLETED_OK;
+    if(runstatus == status::StatusInternal::OK)
+    	m_status = taskOverallStatus::COMPLETED_OK;
+    else
+    	m_status = taskOverallStatus::FAILURE;
 }
 
 void FileDownloadTask::callback(){

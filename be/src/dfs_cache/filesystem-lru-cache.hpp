@@ -175,39 +175,7 @@ public:
      *
      * @return file if one found, nullptr otherwise
      */
-    inline managed_file::File* find(std::string path) {
-    	// first find the file within the registry
-    	managed_file::File* file = m_idxFileLocalPath->operator [](path);
-
-    	if(file == nullptr)
-    		return file;
-
-    	// if file is "near to be deleted" or "is forbidden but the time between sync attempts elapsed", it should be resync.
-    	//
-    	// prevent outer world from usage of invalid or near-to-delete references:
-    	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
-    	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
-    		// resync the file if the time between sync attempts elapsed:
-    		if(file->shouldtryresync()){
-    			sync(file);
-    		}
-    	}
-        if(file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION){
-
-        	// wait while the item will be deleted and reach the deletions list
-        	boost::unique_lock<boost::mutex> lock(m_deletionsmux);
-        	std::list<std::string>::iterator it;
-        	m_deletionHappensCondition.wait(lock, [&] {
-        				 it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
-        				 return it != m_deletionList.end();}
-        	);
-        	// now drop the file from deletions list:
-        	m_deletionList.erase(it);
-        	// and reclaim it:
-        	file = m_idxFileLocalPath->operator [](path);
-        }
-    	return file;
-    }
+    managed_file::File* find(std::string path);
 
     /** reset the cache */
     inline void reset() {
@@ -219,21 +187,7 @@ public:
      *
      * @return indication of fact that file is in the registry
      */
-    inline bool add(std::string path, managed_file::File*& file){
-    	bool duplicate = false;
-    	bool success   = false;
-
-    	// we create and destruct File objects only here, in LRU cache layer
-    	file = new managed_file::File(path.c_str());
-    	file->estimated_size(boost::filesystem::file_size(path));
-
-    	success = LRUCache<managed_file::File>::add(file, duplicate);
-    	if(duplicate)
-    		// no need for this file, get the rid of
-    		delete file;
-
-    	return success;
-    }
+    bool add(std::string path, managed_file::File*& file);
 
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
