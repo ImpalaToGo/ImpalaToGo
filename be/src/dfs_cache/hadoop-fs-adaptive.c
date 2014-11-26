@@ -63,7 +63,7 @@ DFS_TYPE fsTypeFromScheme(const char* scheme){
 	if(strcmp(scheme, SCHEME_HDFS) == 0)
 		return HDFS;
     if(strcmp(scheme, SCHEME_S3N) == 0)
-    	return S3;
+    	return S3N;
     if(strcmp(scheme, SCHEME_LOCAL) == 0)
     	return LOCAL;
 	return NON_SPECIFIED;
@@ -603,6 +603,7 @@ struct fsBuilder* _dfsNewBuilder(void)
         errno = ENOMEM;
         return NULL;
     }
+    bld->fs_type = NON_SPECIFIED;
     return bld;
 }
 
@@ -698,7 +699,7 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
     case HDFS:
     	explicitScheme = "hdfs://";
     	break;
-    case S3:
+    case S3N:
     	explicitScheme = "s3n://";
     	break;
     case LOCAL:

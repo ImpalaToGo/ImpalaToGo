@@ -484,8 +484,11 @@ private:
 			 */
 			void touch() {
 				if( this->value() != nullptr ) {
-					// Have a new timestamp! So that should switch the bucket where located:
+					// ask the item about its timestamp:
 					boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
+					// the following operation allows the item to control the self-promotion as an item to
+					// be of a relevance, so the item itself decides how relevant should it be basing on internal conditions
+					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
 					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
                     AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp);

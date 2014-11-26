@@ -19,8 +19,8 @@
 namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
-	// no matter the scenario, do not pass to removal if any clients still use the file:
-	if(!isItemIdle(file))
+	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
+	if(!isSafeToDeleteItem(file))
 		return false;
 
 	// no usage so far, mark the file for deletion:
@@ -34,16 +34,21 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 
 	// get rid of file metadata object:
 	delete file;
+	{
+		boost::mutex::scoped_lock lock(m_deletionsmux);
+		// add the item into deletions list
+		m_deletionList.push_back(file->fqp());
+
+		// notify deletion happens
+		m_deletionHappensCondition.notify_all();
+	}
 	return true;
 }
 
-void FileSystemLRUCache::continuationFor(managed_file::File* file){
+void FileSystemLRUCache::sync(managed_file::File* file){
 	// if file is not valid, break the handler
 	if (file == nullptr || !file->valid())
 		return;
-
-	// mark file as "in progress":
-	file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
 
 	// and wait for prepare operation will be finished:
 	DataSet data;
@@ -61,7 +66,6 @@ void FileSystemLRUCache::continuationFor(managed_file::File* file){
 					request_performance const & performance, bool overall,
 					bool canceled, taskOverallStatus status) -> void {
 
-				boost::lock_guard<boost::mutex> lock(completion_mux);
 				cbStatus = (status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED);
 				if(status != taskOverallStatus::COMPLETED_OK) {
 					LOG (ERROR) << "Failed to load file \"" << file->fqp() << "\"" << ". Status : "
@@ -80,8 +84,9 @@ void FileSystemLRUCache::continuationFor(managed_file::File* file){
 				LOG (ERROR) << "Expected amount of progress is not equal to received for file \""
 				<< file->fqp() << "\"" << ".Status : " << status << ".\n";
 
+				boost::lock_guard<boost::mutex> lock(completion_mux);
 				condition = true;
-				condition_var.notify_all();
+				condition_var.notify_one();
 			};
 
 	requestIdentity identity;

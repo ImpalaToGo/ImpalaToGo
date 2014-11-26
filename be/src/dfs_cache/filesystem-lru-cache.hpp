@@ -15,6 +15,8 @@
 #ifndef FILESYSTEM_LRU_CACHE_HPP_
 #define FILESYSTEM_LRU_CACHE_HPP_
 
+#include <list>
+
 #include "dfs_cache/managed-file.hpp"
 #include "dfs_cache/lru-cache.hpp"
 
@@ -38,13 +40,17 @@ private:
     std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
     std::string          m_root;                       /**< root directory to manage */
 
-	/** tell item has no clients
+    boost::condition_variable m_deletionHappensCondition; /**< deletion conditio variable */
+    boost::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+    std::list<std::string> m_deletionList;                /**< list of pending deletion */
+
+	/** tell item has no outer references
 	 *  @param file - file to query for status
 	 *
 	 *  @return true if file can be removed, false otherwise
 	 */
-    inline bool isItemIdle(managed_file::File* file){
-    	return file->state() != managed_file::State::FILE_HAS_CLIENTS;
+    inline bool isSafeToDeleteItem(managed_file::File* file){
+    	return file->nonreferenced();
     }
 
     /** get the current file timestamp
@@ -103,6 +109,9 @@ private:
     		delete file;
     		file = nullptr;
     	}
+     	else
+     		// mark file as "in progress" immediately, before to publish it to the outer world:
+     		file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
     	return file;
     }
 
@@ -113,7 +122,7 @@ private:
      * @param file - file which intended to be prepared
      *
      */
-    void continuationFor(managed_file::File* file);
+    void sync(managed_file::File* file);
 
 public:
 
@@ -130,7 +139,7 @@ public:
 
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
-    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isItemIdle), this, _1);
+    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isSafeToDeleteItem), this, _1);
 
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
     	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);
@@ -143,7 +152,7 @@ public:
 
     	// initialize autoload-related predicates only in auto-load configuration:
     	if(autoload){
-    		lif = boost::bind(boost::mem_fn(&FileSystemLRUCache::continuationFor), this, _1);
+    		lif = boost::bind(boost::mem_fn(&FileSystemLRUCache::sync), this, _1);
     		cif = boost::bind(boost::mem_fn(&FileSystemLRUCache::constructNew), this, _1);
     	}
 
@@ -167,7 +176,37 @@ public:
      * @return file if one found, nullptr otherwise
      */
     inline managed_file::File* find(std::string path) {
-    	return m_idxFileLocalPath->operator [](path);
+    	// first find the file within the registry
+    	managed_file::File* file = m_idxFileLocalPath->operator [](path);
+
+    	if(file == nullptr)
+    		return file;
+
+    	// if file is "near to be deleted" or "is forbidden but the time between sync attempts elapsed", it should be resync.
+    	//
+    	// prevent outer world from usage of invalid or near-to-delete references:
+    	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
+    	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
+    		// resync the file if the time between sync attempts elapsed:
+    		if(file->shouldtryresync()){
+    			sync(file);
+    		}
+    	}
+        if(file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION){
+
+        	// wait while the item will be deleted and reach the deletions list
+        	boost::unique_lock<boost::mutex> lock(m_deletionsmux);
+        	std::list<std::string>::iterator it;
+        	m_deletionHappensCondition.wait(lock, [&] {
+        				 it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
+        				 return it != m_deletionList.end();}
+        	);
+        	// now drop the file from deletions list:
+        	m_deletionList.erase(it);
+        	// and reclaim it:
+        	file = m_idxFileLocalPath->operator [](path);
+        }
+    	return file;
     }
 
     /** reset the cache */

@@ -24,6 +24,7 @@
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
 #include <boost/thread/condition_variable.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "dfs_cache/dfs-cache.h"
 #include "dfs_cache/cache-layer-registry.hpp"
@@ -116,24 +117,47 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  */
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
-
 	Uri uri = Uri::Parse(path);
     managed_file::File* managed_file;
 	// first check whether the file is already in the registry.
-	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist in the registry
-	if(!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(), fsDescriptor, managed_file) || managed_file == nullptr){
+	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist
+    // in the registry or it happens to be retrieved in a forbidden/near-to-be-deleted state:
+	if(!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(), fsDescriptor, managed_file) || managed_file == nullptr ||
+			!managed_file->valid() ){
 		LOG (ERROR) << "File \"/" << fsDescriptor.host << ":" << std::to_string(fsDescriptor.port) <<
 				"/" << path << "\" is not available either on target or locally." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
+    boost::condition_variable* condition;
+    boost::mutex* mux;
 
-	// so as the file is in the registry, just open it:
-	if(managed_file->exists())
-		managed_file->open(); // mark the file with the one more usage
-	else{
-		LOG (ERROR) << "File \"" << path << "\" is not available in LRU." << "\n";
-		return NULL;
+    // subscribe for file updates, all is need to have a progress on the file
+    managed_file->subscribe_for_updates(condition, mux);
+
+	// at this point, file may have the status "IN_SYNC", which means it is in progress to be delivered locally by another request.
+	// if so, wait for the file to be delivered:
+	if(managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC){
+    	// is to know that the file is not under sync more:
+		boost::unique_lock<boost::mutex> lock(*mux);
+	    (*condition).wait(lock, [&]{ return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC; });
+	    lock.unlock();
 	}
+
+	bool exists = false;
+	// so as the file is available locally, just open it:
+	if(managed_file->exists()){
+		managed_file->open(); // mark the file with the one more usage
+		exists = true;
+	}
+	else{
+		// and reply no data available otherwise
+		LOG (ERROR) << "File \"" << path << "\" is not available locally." << "\n";
+	}
+	// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
+	managed_file->unsubscribe_from_updates();
+
+	if(!exists)
+		return NULL;
 
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, uri.FilePath.c_str(), flags,
 				bufferSize, replication, blocksize, available);
@@ -142,6 +166,8 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
     	return handle;
     }
     LOG (ERROR) << "File \"" << path << "\" is not available" << "\n";
+    // no close will be performed on non-successful open
+    managed_file->close();
     return handle;
 }
 
@@ -164,7 +190,8 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), managed_file) || managed_file == nullptr){
 		status = status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
 	}
-	managed_file->close();
+	if( managed_file != nullptr)
+		managed_file->close();
 
 	return status;
 }

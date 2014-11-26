@@ -337,7 +337,7 @@ TEST_F(CacheLayerTest, DISABLED_EstimateDataseHeavyLoadUnmanagedAsync){
 		DataSet data;
 		data.push_back("/home/elenav/src/ImpalaToGo/datastorage/filename1.txt");
 		data.push_back("/home/elenav/src/ImpalaToGo/datastorage/filename2.txt");
-		data.push_back("/home/elenav/src/ImpalaToGo/datastorage/filename3.txt");
+		data.push_back("/home/elenav/src/ImpalaToGo/datastorage/filename3.txtt");
 
 		CacheEstimationCompletedCallback cb = [&] (SessionContext context,
 				const std::list<boost::shared_ptr<FileProgress> > & estimation,

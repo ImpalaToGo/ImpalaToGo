@@ -411,8 +411,8 @@ status::StatusInternal CacheManager::cacheEstimate(SessionContext session, const
 	return status == taskOverallStatus::COMPLETED_OK ? status::StatusInternal::OK : status::StatusInternal::REQUEST_FAILED;
 }
 
-status::StatusInternal CacheManager::cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor, const DataSet& files,
-     		  PrepareCompletedCallback callback, requestIdentity & requestIdentity){
+status::StatusInternal CacheManager::cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
+		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity){
 
 	if(m_shutdownFlag){
 		LOG (INFO) << "cachePrepareData : " << "request will not be handled. Finalization is in progress" << "\n";

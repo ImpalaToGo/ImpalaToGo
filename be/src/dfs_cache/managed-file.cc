@@ -17,6 +17,8 @@ namespace managed_file {
 std::string File::fileSeparator;
 std::vector<std::string> File::m_supportedFs;
 
+int File::_defaultTimeSliceInMinutes = 5;
+
 void File::initialize(){
 	  // configure platform-specific file separator:
 	  boost::filesystem::path slash("/");
@@ -75,7 +77,7 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	if(boost::iequals(schema, constants::HDFS_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::HDFS;
 	if(boost::iequals(schema, constants::S3N_SCHEME))
-		descriptor.dfs_type = DFS_TYPE::S3;
+		descriptor.dfs_type = DFS_TYPE::S3N;
 
 	if(it == fqdn_to_resolve.end())
 		return descriptor;
@@ -151,8 +153,10 @@ status::StatusInternal File::close() {
 }
 
 void File::drop(){
-	if(m_state == State::FILE_HAS_CLIENTS){
-		  LOG (WARNING) << "Rejecting an attempt to delete file \"" << fqp() << "\". Reason : in use" << "\n";
+	// if there're clients using the file in read/write or clients who is waiting for the file update,
+	// the file cannot be deleted
+	if(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS || m_subscribers.load(std::memory_order_acquire) != 0){
+		  LOG (WARNING) << "Rejecting an attempt to delete file \"" << fqp() << "\". Reason : in direct use or referenced." << "\n";
 		return;
 	}
 

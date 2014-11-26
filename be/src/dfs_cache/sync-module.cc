@@ -80,6 +80,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     // Get the reference to LRU mirror of the file to prepare:
     managed_file::File* managed_file;
     CacheLayerRegistry::instance()->findFile(path, fsDescriptor, managed_file);
+
     if(managed_file == nullptr){
    	 LOG (ERROR) << "Failed to locate managed file \"" << path << "\" in cache registry for \"" << fsDescriptor.dfs_type << ":" <<
    	 				 fsDescriptor.host << "\"" << "\n";
@@ -96,6 +97,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				fsDescriptor.host << "\"" << "\n";
 		fp->error    = true;
 		fp->errdescr = "Unable to open requested remote file";
+
+		// update file status:
+		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	}
 
@@ -106,6 +110,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				 fsDescriptor.host << "\"" << "\n";
     	 fp->error    = true;
     	 fp->errdescr = "Insufficient memory for file operation";
+
+ 		// update file status:
+ 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		 return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	 }
 
@@ -113,10 +120,13 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 // open or create local file:
 	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), O_CREAT, 0, 0, 0, available);
      if(file == NULL || !available){
-    	 LOG (ERROR) << "Unable to create local file \"" << path << "\", being cached from \"" << fsDescriptor.dfs_type << ":" <<
-    	 				 fsDescriptor.host << "\"" << "\n";
+    	 LOG (ERROR) << "Unable to create local file \"" << path << "\", being cached from \""
+    			 << fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
     	 fp->error    = true;
     	 fp->errdescr = "Cannot create local file";
+
+    	 // update file status:
+    	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
     	 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
      }
 
@@ -142,6 +152,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 fsAdaptor->fileClose(connection, hfile);
      // close local file:
 	 filemgmt::FileSystemManager::instance()->dfsCloseFile(fsAdaptor->descriptor(), file);
+
+	 // update file status as "ready to use":
+	 managed_file->state(managed_file::State::FILE_IS_IDLE);
 
 	 if(task->condition()){ // cancellation was requested:
 		 LOG (WARNING) << "Cancellation was requested during file read \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<

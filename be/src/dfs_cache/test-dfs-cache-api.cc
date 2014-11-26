@@ -27,7 +27,7 @@ SessionContext CacheLayerTest::m_ctx5 = nullptr;
 SessionContext CacheLayerTest::m_ctx6 = nullptr;
 
 TEST_F(CacheLayerTest, DISABLED_ExplicitHostFlowFileOpenAutoloadTest){
-	const char* path = "/test.txt";
+	const char* path = "hdfs://104.236.39.60:8020/test.txt";
 
 	bool available;
 	dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
@@ -36,7 +36,7 @@ TEST_F(CacheLayerTest, DISABLED_ExplicitHostFlowFileOpenAutoloadTest){
 }
 
 TEST_F(CacheLayerTest, ExplicitHostFlowFileOpenCloseAutoloadTestFileDoesNotExist){
-	const char* path = "/test.txt";
+	const char* path = "hdfs://104.236.39.60:8020/test.txt";
 
 	bool available;
 	dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
@@ -50,7 +50,7 @@ TEST_F(CacheLayerTest, ExplicitHostFlowFileOpenCloseAutoloadTestFileDoesNotExist
 }
 
 TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially){
-	const char* path = "/test.txt";
+	const char* path = "hdfs://104.236.39.60:8020/test.txt";
 	status::StatusInternal status1;
 	status::StatusInternal status2;
 

@@ -33,15 +33,16 @@ namespace managed_file {
     * Defines the state of concrete physical file system file just now
     */
    enum State {
-      FILE_IS_MARKED_FOR_DELETION,       /**< File is marked for deletion. This may be done by Sync module in case if:
+      FILE_IS_MARKED_FOR_DELETION,       /**< File is marked for deletion. This may be done by LRU cache in case if:
       	  	  	  	  	  	  	  	  	 * Disk memory is low and cleanup is required. in this case, there's no
-      	  	  	  	  	  	  	  	     * reason to rely on this file. It should be requested for reload from Sync module
+      	  	  	  	  	  	  	  	     * reason to rely on this file. It should be requested for reload from LRU cache module
+      	  	  	  	  	  	  	  	     * if this status is observed.
       	  	  	  	  	  	  	  	     */
 
       FILE_IS_IN_USE_BY_SYNC,            /**< File is currently processed by Sync module (is being read from network).
-                                         * In this case, there's the reason to rely on this file once it will be ready from
-                                         * Sync module perspective. In order to say that client relies on the file,
-      	  	  	  	  	  	  	  	     * add client entity to the file.
+                                         * In this case, there's the reason to rely on this file before it will be ready from
+                                         * Sync module perspective. In order to say that client relies on the file transition from
+                                         * this status to whatever next status, we count "file state changed" event subscribers.
       	  	  	  	  	  	  	  	     */
 
       FILE_HAS_CLIENTS,                  /**< File is being processed in client(s) context(s).
@@ -50,10 +51,8 @@ namespace managed_file {
       	  	  	  	  	  	  	  	  	 * "FILE_IS_IDLE"
       	  	  	  	  	  	  	  	  	 */
 
-      FILE_IS_AMORPHOUS,                 /**< TODO : To discuss. We may have this state for files that are scheduled for remote load
-                                         * but are not processed yet at all.
-                                         * This is also default status of file when it is created in registry (for further scheduling)
-      	  	  	  	  	  	  	  	  	 * but its status is not approved by nobody.
+      FILE_IS_AMORPHOUS,                 /**< Default status of file when it is created in registry but its status is not
+       	   	   	   	   	   	   	   	   	 * approved by nobody.
       	  	  	  	  	  	  	  	  	 */
 
       FILE_IS_IDLE,                      /**< File is idle. No client sessions exist for this file. It is not handled by nobody.
@@ -71,22 +70,36 @@ namespace managed_file {
     */
    class File {
    private:
-	   volatile State   m_state;                   /**< current file state */
-	   std::string      m_fqp;                     /**< fully qualified path (local) */
-	   std::string      m_fqnp;                    /**< fully qualified path (network) */
-	   boost::uintmax_t m_size;                    /**< file size. For internal and user statistics and memory planning. */
-	   std::size_t      m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
+	   std::atomic<State> m_state;                   /**< current file state */
+	   std::atomic<int>   m_subscribers;             /**< number of subscribers of this file (who may wait for this file to be downloaded */
+
+	   std::string        m_fqp;                     /**< fully qualified path (local) */
+	   std::string        m_fqnp;                    /**< fully qualified path (network) */
+	   boost::uintmax_t   m_size;                    /**< file size. For internal and user statistics and memory planning. */
+	   std::size_t        m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
 
 	   std::string        m_filename;         /**< relative file name. Within the scope where it is accessed now (remotely, locally) */
        std::string        m_originhost;       /**< origin host */
        std::string        m_originport;       /**< origin port */
        DFS_TYPE           m_schema;           /**< origin schema */
 
+       static int         _defaultTimeSliceInMinutes;  /**< default time slice between unsuccessful attempts to sync the file.
+                                                           * this means that attempt to sync the file may be performed once in 6 minutes
+                                                           */
+
+       boost::posix_time::time_duration m_duration_next_attempt_to_sync; /**< min duration between attempts to sync forbidden file */
+       boost::posix_time::ptime m_lastsyncattempt;    	/**< last attempt to synchronize the file locally. Is relevant for file
+        												* only if it is in FORBIDDEN state */
+
        volatile std::atomic<unsigned> m_users;        /**< number of users so far */
 
 	   static std::string              fileSeparator;  /**< platform-specific file separator */
 
 	   static std::vector<std::string> m_supportedFs;  /**< list of supported file systems, string representation */
+
+	   // synchronization section for possible file state changed event awaiters:
+	   boost::condition_variable m_state_changed_condition;   /**< condition variable for those who waits for file state changed */
+	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
    public:
 
@@ -112,8 +125,10 @@ namespace managed_file {
         * @param path       - full file local path
 	    */
 	   File(const char* path)
-         :  m_state(State::FILE_IS_AMORPHOUS), m_fqp(path), m_size(0), m_estimatedsize(0),
+         :  m_fqp(path), m_size(0), m_estimatedsize(0),
             m_schema(DFS_TYPE::NON_SPECIFIED){
+
+		   m_state.store(State::FILE_IS_AMORPHOUS, std::memory_order_release);
 
 		   FileSystemDescriptor descriptor = restoreNetworkPathFromLocal(std::string(path), m_fqnp, m_filename);
            if(!descriptor.valid){
@@ -127,6 +142,9 @@ namespace managed_file {
            m_originport = std::to_string(descriptor.port);
 
            m_users.store(0);
+           m_subscribers.store(0);
+           // specify that the attempt to resync the file from remote side can be performed once at 5 minutes
+           m_duration_next_attempt_to_sync = boost::posix_time::minutes(_defaultTimeSliceInMinutes);
 	   }
 
 	   ~File(){
@@ -147,7 +165,7 @@ namespace managed_file {
 
 	   /** ********************* File object getters and setters **********************************************/
 	   /** getter for File state */
-	   inline State state() { return m_state; }
+	   inline State state() { return m_state.load(std::memory_order_acquire); }
 
 	   /** flag, idicates that the file is in valid state and can be used */
 	   inline bool exists() {
@@ -159,12 +177,49 @@ namespace managed_file {
 		   return !(m_state == State::FILE_IS_FORBIDDEN || m_state == State::FILE_IS_MARKED_FOR_DELETION);
 	   }
 
+	   inline bool shouldtryresync(){
+		   boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+		   return ( (now - m_lastsyncattempt) > m_duration_next_attempt_to_sync );
+	   }
+
+	   /**
+	    * flag, indicates that there's no references to the file are in use.
+	    * Should be checked before to delete the file
+	    */
+	   inline bool nonreferenced(){
+		   return !(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS ||
+				   m_subscribers.load(std::memory_order_acquire) != 0 ||
+				   m_state.load(std::memory_order_acquire) == State::FILE_IS_IN_USE_BY_SYNC);
+	   }
 	   /** setter for file state
 	    * @param state - file state to mark the file with
 	    */
 	   inline void state(State state) {
-		   m_state = state;
+		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
+			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
+		   // fire the condition variable for whoever waits for file status to be changed:
+		   m_state.store(state, std::memory_order_release);
+		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+		   m_state_changed_condition.notify_all();
 	   }
+
+	   /** Provides the subscription mechanism for file state changed for outside
+	    *
+	    * @param [out] condition_var - condition variable to signal that the state is changed
+	    * @param [out] mux           - mutex to protect the condition subject (the status)
+	    */
+	   inline void subscribe_for_updates(boost::condition_variable*& condition_var, boost::mutex*& mux){
+		   condition_var = &m_state_changed_condition;
+		   mux           = &m_state_changed_mux;
+		   m_subscribers++;
+	   }
+
+	   /**
+	    * unsubscribe from file status updates, say, no usage more is needed.
+	    */
+       inline void unsubscribe_from_updates(){
+    	   m_subscribers--;
+       }
 
 	   /** reply origin file system host */
 	   inline std::string host() { return m_originhost; }
@@ -226,18 +281,24 @@ namespace managed_file {
 	   inline void estimated_size(std::size_t size) { m_estimatedsize = size; }
 
 
-	   /** getter for File last access (local)
+	   /** getter for File last access (local).
 	    *
 	    * @return If there was an error during last access retrieval, the default time will be returned.
 	    *         Otherwise, last access time will be returned
 	    */
 	   inline boost::posix_time::ptime last_access() {
-		   boost::system::error_code ec;
-		   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
-		   // check ec, should be 0 in case of success:
-		   if(!ec)
-			   return boost::posix_time::from_time_t(last_access_time);
-		   return boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+		   // if last access is requested while the item is amorphous (to-be-restored-from file-system),
+		   // reply the real timestamp from file system.
+		   if(state() == State::FILE_IS_AMORPHOUS){
+			   boost::system::error_code ec;
+			   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
+			   // check ec, should be 0 in case of success:
+			   if(!ec)
+				   return boost::posix_time::from_time_t(last_access_time);
+			   return boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+		   }
+		   // if file last access time is requested on the constructed file, reply "now" for timestamp
+		   return boost::posix_time::microsec_clock::local_time();
 	   }
 
 	   /** update file last_write time.
@@ -247,6 +308,10 @@ namespace managed_file {
 	    *         error code - in case of failure
 	    */
 	   inline int last_access(const boost::posix_time::ptime& time){
+		   // do nothing is the file is marked as forbidden:
+		   if(m_state.load(std::memory_order_acquire) == State::FILE_IS_FORBIDDEN)
+			   return -1;
+
 		   boost::system::error_code ec;
 		   boost::filesystem::last_write_time(m_fqp, utilities::posix_time_to_time_t(time), ec);
 		   return ec.value();

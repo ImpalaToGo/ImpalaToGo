@@ -16,7 +16,7 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
 	if (strings.size() == 0) {
 #define INSERT_ELEMENT(p) strings[p] = #p
 		INSERT_ELEMENT(HDFS);
-		INSERT_ELEMENT(S3);
+		INSERT_ELEMENT(S3N);
 		INSERT_ELEMENT(LOCAL);
 		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);
 		INSERT_ELEMENT(OTHER);
@@ -35,7 +35,9 @@ fsBridge FileSystemDescriptorBound::connect() {
 		// Connect to local filesystem
 		_dfsBuilderSetHost(fs_builder, NULL);
 	}
-	_dfsBuilderSetPort(fs_builder, m_fsDescriptor.port);
+	// forward the port to the unsigned builder's port only if the port is positive
+	if(m_fsDescriptor.port > 0)
+		_dfsBuilderSetPort(fs_builder, m_fsDescriptor.port);
 	return _dfsBuilderConnect(fs_builder);
 }
 
@@ -65,9 +67,11 @@ int FileSystemDescriptorBound::resolveFsAddress(FileSystemDescriptor& fsDescript
 	char host[HOST_NAME_MAX];
     status = _dfsGetDefaultFsHostPortType(host, sizeof(host), fs_builder, &fsDescriptor.port, &fsDescriptor.dfs_type);
 
-    if(!status)
+    if(!status){
     	fsDescriptor.host = std::string(host);
-
+    	// if port is not specified, set 0
+    	fsDescriptor.port = fsDescriptor.port < 0 ? 0 : fsDescriptor.port;
+    }
 	return status;
 }
 

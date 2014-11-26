@@ -43,7 +43,7 @@ status::StatusInternal CacheLayerRegistry::setupFileSystem(FileSystemDescriptor 
 
 	   2. {NULL, 0} - in this case local file system is constructed
 
-	   3. {hostname, port} - in this case we construct the FileSystem explicitly
+	   3. {hostname, [port]} - in this case we construct the FileSystem explicitly
 	 *
 	 */
 	if(fsDescriptor.host == constants::DEFAULT_FS){
