@@ -117,6 +117,7 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  */
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
+	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
 	Uri uri = Uri::Parse(path);
     managed_file::File* managed_file;
 	// first check whether the file is already in the registry.
@@ -172,13 +173,15 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 }
 
 status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
-
+	LOG (INFO) << "dfsCloseFile()" << "\n";
 	status::StatusInternal status;
 	std::string path = filemgmt::FileSystemManager::filePathByDescriptor(file);
     if(path.empty()){
     	status = status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
     	LOG (WARNING) << "File descriptor is not resolved within the system!" << "\n";
     }
+    LOG (INFO) << "dfsCloseFile() is going to close file \"" << path << "\"." << "\n";
+
     // anyway try close the file
     status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
 
