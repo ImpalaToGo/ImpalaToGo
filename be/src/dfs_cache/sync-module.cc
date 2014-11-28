@@ -10,6 +10,7 @@
  * @namespace impala
  */
 
+#include <stdio.h>
 #include <fcntl.h>
 
 #include "dfs_cache/sync-module.hpp"
@@ -47,6 +48,9 @@ status::StatusInternal Sync::estimateTimeToGetFileLocally(const FileSystemDescri
 
 status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
+
+	status::StatusInternal status = status::StatusInternal::OK;
+
 	// Get the Namenode adaptor from the registry for requested namenode:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*m_registry->getFileSystemDescriptor(fsDescriptor));
     if(fsAdaptor == nullptr){
@@ -103,7 +107,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	}
 
-	 #define BUFFER_SIZE 10
+	 #define BUFFER_SIZE 4096
 	 char* buffer = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 	 if(buffer == NULL){
 		 LOG (ERROR) << "Insufficient memory to read remote file \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
@@ -117,8 +121,11 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 }
 
 	 bool available;
-	 // open or create local file:
-	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), O_CREAT, 0, 0, 0, available);
+	 // open or create local file, temporary:
+	 std::string temp_relativename = managed_file->relative_name() + "_tmp";
+	 std::string tempname = managed_file->fqp() + "_tmp";
+
+	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), temp_relativename.c_str(), O_CREAT, 0, 0, 0, available);
      if(file == NULL || !available){
     	 LOG (ERROR) << "Unable to create local file \"" << path << "\", being cached from \""
     			 << fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
@@ -132,7 +139,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
 	 // read from the remote file
 	 tSize last_read = BUFFER_SIZE;
-	 for (; last_read == BUFFER_SIZE;) {
+	 //for (; last_read == BUFFER_SIZE;) {
+	 for (; last_read != 0;) {
 		 boost::mutex::scoped_lock lock(*mux);
 		 if(task->condition()){
 			 // stop reading, cancellation received.
@@ -146,12 +154,33 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, last_read);
 		 fp->localBytes += last_read;
 	 }
+	 LOG (INFO) << "Remote bytes read = " << std::to_string(fp->localBytes) << " for file \"" << path << "\".\n";
+
 	 // whatever happens, clean resources:
 	 free(buffer);
+
+	 int ret;
 	 // close remote file:
-	 fsAdaptor->fileClose(connection, hfile);
-     // close local file:
-	 filemgmt::FileSystemManager::instance()->dfsCloseFile(fsAdaptor->descriptor(), file);
+	 ret = fsAdaptor->fileClose(connection, hfile);
+	 if(!ret){
+		 LOG (WARNING) << "Remote file \"" << path << "\" close() failure. " << "\n";
+		 status = status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+	 }
+
+     // close local file anyway:
+	 status::StatusInternal statuslocal = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsAdaptor->descriptor(), file);
+	 if(statuslocal != status::StatusInternal::OK){
+		 LOG (WARNING) << "Local file \"" << tempname << "\" close() failure. " << "\n";
+		 status = statuslocal;
+	 }
+
+	 ret = std::rename(tempname.c_str(), managed_file->fqp().c_str());
+	 // move the temporary to target location within the cache:
+	 if(!ret){
+		 LOG (ERROR) << "Temporary file \"" << tempname << "\" was not renamed to \"" << managed_file->fqp() << "\"\n";
+		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+	 }
 
 	 // update file status as "ready to use":
 	 managed_file->state(managed_file::State::FILE_IS_IDLE);

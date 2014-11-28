@@ -57,8 +57,11 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 
 	// create the path object from local path:
 	boost::filesystem::path local_path(local);
+	LOG (INFO) << "substr to cut the local configured cache root from path. Root : \"" <<
+			root << "\"; local_path : \"" << local_path << "\" n";
+
 	// cut the local cache configured root:
-	std::string temp = local_path.string().substr(root.length(), local_path.string().length());
+	std::string temp = local_path.string().substr(root.length(), local_path.string().length() - root.length());
 
 	// remainder is what describes the source filesystem for cached file:
 	boost::filesystem::path fqdn_to_resolve(temp);
@@ -75,9 +78,9 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 		return descriptor;
 
 	if(boost::iequals(schema, constants::HDFS_SCHEME))
-		descriptor.dfs_type = DFS_TYPE::HDFS;
+		descriptor.dfs_type = DFS_TYPE::hdfs;
 	if(boost::iequals(schema, constants::S3N_SCHEME))
-		descriptor.dfs_type = DFS_TYPE::S3N;
+		descriptor.dfs_type = DFS_TYPE::s3n;
 
 	if(it == fqdn_to_resolve.end())
 		return descriptor;
@@ -110,8 +113,13 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
     if(descriptor.host.empty())
     	return descriptor;
 
+    LOG (INFO) << "substr to cut the catalog and filename : initial string \"" <<
+    			temp << "\"; schema : \"" << schema << "\"; host_port \"" << host_port << "\".\n";
+
+    int offsetcatalog = schema.length() + host_port.length() + fileSeparator.length();
+
     // 3. get catalog and the file name:
-	temp = temp.substr(schema.length() + host_port.length() + fileSeparator.length(), temp.length());
+	temp = temp.substr(offsetcatalog, (temp.length() - offsetcatalog ));
 
 	boost::filesystem::path catalog_filename(temp);
 

@@ -65,10 +65,10 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 		std::unique_lock<std::mutex> lock(mux);
 		condition.wait(lock, [&] {return go;});
 
-		dfsFile file = dfsOpenFile(m_namenodeDefault, path, O_RDONLY, 0, 0, 0, available);
+		dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
 		CHECK(file != nullptr);
 		CHECK(available);
-		status1 = dfsCloseFile(m_namenodeDefault, file);
+		status1 = dfsCloseFile(m_namenodeHdfs, file);
 		return status1;
 	});
 	auto future2 = std::async(std::launch::async,
@@ -78,10 +78,10 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 		std::unique_lock<std::mutex> lock(mux);
 		condition.wait(lock, [&] {return go;});
 
-		dfsFile file = dfsOpenFile(m_namenodeDefault, path, O_RDONLY, 0, 0, 0, available);
+		dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
 		CHECK(file != nullptr);
 		CHECK(available);
-		status2 = dfsCloseFile(m_namenodeDefault, file);
+		status2 = dfsCloseFile(m_namenodeHdfs, file);
 		return status2;
 	});
 
@@ -96,8 +96,46 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 	ASSERT_TRUE(status2 == status::StatusInternal::OK);
 
 	// cleanup:
-	dfsDelete(m_namenodeDefault, path, true);
+	dfsDelete(m_namenodeHdfs, path, true);
 }
 
+// file open-close predicate to being run for multi client
+void close_open_file(const char* path, FileSystemDescriptor& fsDescriptor){
+	bool available;
+	dfsFile file = dfsOpenFile(fsDescriptor, path, O_RDONLY, 0, 0, 0, available);
+	ASSERT_TRUE(file != nullptr);
+	ASSERT_TRUE(available);
+	status::StatusInternal status = dfsCloseFile(fsDescriptor, file);
+	ASSERT_TRUE(status == status::StatusInternal::OK);
+
+	// cleanup:
+	dfsDelete(fsDescriptor, path, true);
+}
+
+TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
+	m_flag = false;
+
+	const int CONTEXT_NUM = 100;
+
+	std::string path = "s3n://impalatogo/test2.txt";
+
+	using namespace std::placeholders;
+
+	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2);
+
+	std::vector<std::future<void>> futures;
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		futures.push_back(
+				std::move(
+						spawn_task(f1, path.c_str(), std::ref(m_namenodeDefault))));
+	}
+
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		if (futures[i].valid())
+			futures[i].get();
+	}
+
+	EXPECT_EQ(futures.size(), CONTEXT_NUM);
+}
 }
 

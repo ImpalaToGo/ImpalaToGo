@@ -17,8 +17,8 @@ extern "C" {
 
 /** supported / configured DFS types */
 enum _DFS_TYPE {
-	HDFS,
-	S3N,
+	hdfs,
+	s3n,
 	LOCAL,
 	DEFAULT_FROM_CONFIG,
 	OTHER,               // for testing purposes

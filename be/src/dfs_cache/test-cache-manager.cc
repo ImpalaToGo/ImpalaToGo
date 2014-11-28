@@ -486,7 +486,7 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 }
 
 TEST_F(CacheLayerTest, RemoteFileOpenReadAutoloadTest){
-	m_namenodeHdfs = {DFS_TYPE::HDFS, "104.236.39.60", 8020, "", "", true};
+	m_namenodeHdfs = {DFS_TYPE::hdfs, "104.236.39.60", 8020, "", "", true};
 }
 }
 

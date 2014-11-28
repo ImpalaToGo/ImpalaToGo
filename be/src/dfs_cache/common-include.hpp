@@ -50,10 +50,10 @@ namespace constants
     */
     extern const std::string DEFAULT_FS;
 
-    /** HDFS scheme name */
+    /** hdfs scheme name */
     extern const std::string HDFS_SCHEME;
 
-    /** S3N scheme name */
+    /** s3n scheme name */
     extern const std::string S3N_SCHEME;
 
     /** separator we use to divide the source host and the port in the file path */
@@ -93,6 +93,7 @@ typedef enum {
 	DFS_ADAPTOR_IS_NOT_CONFIGURED,
 	DFS_OBJECT_DOES_NOT_EXIST,
 	DFS_NAMENODE_IS_NOT_REACHABLE,  /**< requested namenode is not reachable */
+	DFS_OBJECT_OPERATION_FAILURE,   /**< error occurred during work with remote object */
 
 	FILE_OBJECT_OPERATION_FAILURE,
 

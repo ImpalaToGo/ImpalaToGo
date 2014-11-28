@@ -164,6 +164,11 @@ bool FileSystemLRUCache::reload(const std::string& root){
 	// reset the underlying LRU cache.
 	reset();
 	last_access_multi_it it = result_set.begin();
+	if(it == result_set.end()){
+		// leave start time default (now)
+		return true;
+	}
+
 	// reload most old timestamp:
 	m_startTime = boost::posix_time::from_time_t((*it).first);
 

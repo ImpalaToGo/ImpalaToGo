@@ -15,8 +15,8 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
 	static std::map<DFS_TYPE, std::string> strings;
 	if (strings.size() == 0) {
 #define INSERT_ELEMENT(p) strings[p] = #p
-		INSERT_ELEMENT(HDFS);
-		INSERT_ELEMENT(S3N);
+		INSERT_ELEMENT(hdfs);
+		INSERT_ELEMENT(s3n);
 		INSERT_ELEMENT(LOCAL);
 		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);
 		INSERT_ELEMENT(OTHER);

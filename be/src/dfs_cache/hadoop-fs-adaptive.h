@@ -143,9 +143,9 @@ void _dfsBuilderSetHostAndFilesystemType(struct fsBuilder* bld, const char* host
 void _dfsBuilderSetPort(struct fsBuilder *bld, tPort port);
 
 /**
- * Set the username to use when connecting to the HDFS cluster.
+ * Set the username to use when connecting to the DFS cluster.
  *
- * @param bld The HDFS builder
+ * @param bld The DFS builder
  * @param userName The user name.  The string will be shallow-copied.
  */
 void _dfsBuilderSetUserName(struct fsBuilder* bld, const char* userName);

@@ -466,7 +466,7 @@ status::StatusInternal dfsChmod(const FileSystemDescriptor & fsDescriptor, const
  * opened for reading.
  *
  * @param fsDescriptor - configured fs
- * @param file         - The HDFS file
+ * @param file         - The file
  * @param stats        - (out parameter) on a successful return, the read
  *                		 statistics.  Unchanged otherwise.  You must free the
  *                		 returned statistics with dfsFileFreeReadStatistics.

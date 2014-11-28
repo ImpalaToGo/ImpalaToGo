@@ -52,10 +52,10 @@ namespace constants
       */
      const std::string DEFAULT_FS = "default";
 
-     /** HDFS scheme name */
+     /** hdfs scheme name */
      const std::string HDFS_SCHEME = "hdfs";
 
-     /** S3N scheme name */
+     /** s3n scheme name */
      const std::string S3N_SCHEME = "s3n";
 
      /** separator we use to divide the source host and the port in the file path */
