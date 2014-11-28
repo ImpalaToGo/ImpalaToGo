@@ -215,29 +215,18 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 }
 
 status::StatusInternal FileSystemManager::dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file){
+
 	if(file->file == nullptr)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 
 	status::StatusInternal status;
 
-	int fd = fileno((FILE *)file->file);
-	if(fd == -1){
-		LOG (WARNING) << "Failed to get the file descriptor from file handle. Status : " << strerror(errno) << ".\n";
-		status = status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
-	}
 	// close file stream:
-    int code = fclose((FILE*)file->file);
-    if(code != 0){
+    int ret = fclose((FILE*)file->file);
+    if(ret != 0){
     	LOG (WARNING) << "Failed to close stream file handle" << ".\n";
     	status = status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
     }
-    // close file descriptor:
-    code = close(fd);
-    if(code == -1){
-    	LOG (WARNING) << "Failed to close c-file descriptor with status : " << strerror(errno) << ".\n";
-    	status = status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
-    }
-
 	return status;
 }
 
