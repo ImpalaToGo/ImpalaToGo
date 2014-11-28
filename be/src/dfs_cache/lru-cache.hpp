@@ -591,7 +591,7 @@ private:
         const int            _checkOnceInMinutes = 10;      /**< rhythm, in minutes, of validity check routine invocation (not less than) */
         const int            _defaultTimeSliceInHours = 6;  /**< default time slice */
 
-        const int m_numberOfBucketsLimit = 2000;            /**< supported number of buckets */
+        const int m_numberOfBucketsLimit = 5000;            /**< supported number of buckets */
         mutable std::atomic<unsigned> m_numberOfBuckets;    /**< current number of buckets */
 
         boost::posix_time::ptime         m_checkTime;       /**< next time to check the cache for validity */
@@ -720,7 +720,7 @@ private:
         			currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
         			if((now > m_checkTime) || (currentCapacity >= m_owner->m_capacityLimit)){
         				// if cache is no longer valid throw contents away and start over, else cleanup old items
-        				if( m_numberOfBuckets > m_numberOfBucketsLimit || (m_owner->m_isValid != nullptr && !m_owner->m_isValid()) ){
+        				if( m_numberOfBuckets > m_numberOfBucketsLimit || (m_owner->m_isValid && !m_owner->m_isValid()) ){
         					// unlock lifespan manager so far and let it run cleanup
         					lock.unlock();
         					m_owner->clear();
