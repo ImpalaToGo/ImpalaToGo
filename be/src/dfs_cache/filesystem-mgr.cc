@@ -219,7 +219,7 @@ status::StatusInternal FileSystemManager::dfsCloseFile(const FileSystemDescripto
 	if(file->file == nullptr)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 
-	status::StatusInternal status;
+	status::StatusInternal status = status::StatusInternal::OK;
 
 	// close file stream:
     int ret = fclose((FILE*)file->file);

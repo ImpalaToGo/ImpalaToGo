@@ -125,8 +125,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
     // in the registry or it happens to be retrieved in a forbidden/near-to-be-deleted state:
 	if(!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(), fsDescriptor, managed_file) || managed_file == nullptr ||
 			!managed_file->valid() ){
-		LOG (ERROR) << "File \"/" << fsDescriptor.host << ":" << std::to_string(fsDescriptor.port) <<
-				"/" << path << "\" is not available either on target or locally." << "\n";
+		LOG (ERROR) << "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
     boost::condition_variable* condition;

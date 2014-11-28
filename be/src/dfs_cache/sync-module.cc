@@ -162,7 +162,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 int ret;
 	 // close remote file:
 	 ret = fsAdaptor->fileClose(connection, hfile);
-	 if(!ret){
+	 if(ret != 0){
 		 LOG (WARNING) << "Remote file \"" << path << "\" close() failure. " << "\n";
 		 status = status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
 	 }
@@ -176,9 +176,12 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
 	 ret = std::rename(tempname.c_str(), managed_file->fqp().c_str());
 	 // move the temporary to target location within the cache:
-	 if(!ret){
-		 LOG (ERROR) << "Temporary file \"" << tempname << "\" was not renamed to \"" << managed_file->fqp() << "\"\n";
+	 if(ret != 0){
+		 LOG (ERROR) << "Temporary file \"" << tempname << "\" was not renamed to \"" << managed_file->fqp() <<
+				 "\"; error : " << strerror(errno) << "\n";
 		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		 fp->error = true;
+		 fp->errdescr == strerror(errno);
 		 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	 }
 

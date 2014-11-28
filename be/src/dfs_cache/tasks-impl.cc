@@ -435,7 +435,7 @@ void PrepareDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared
 		LOG (WARNING) << "File \"" << progress->dfsPath << "\" is NOT estimated due to error : \"" << progress->errdescr << "\".\n";
 	}
 	else
-		LOG (INFO) << "File \"" << progress->dfsPath << "\" is estimated with a size : " << progress->estimatedBytes << "; time : " <<
+		LOG (INFO) << "File \"" << progress->dfsPath << "\" is loaded with a size : " << progress->localBytes << "; time : " <<
 		progress->estimatedTime << ".\n";
 
 	// decrement number of remained subtasks

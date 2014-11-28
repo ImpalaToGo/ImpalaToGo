@@ -130,7 +130,7 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 	// check callback status:
 	if (cbStatus != status::StatusInternal::OK) {
 		LOG (ERROR)<< "Prepare request failed for \"" << file->fqnp() << "\"" << ". Status : "
-		<< status << ".\n";
+		<< cbStatus << ".\n";
 		file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		return;
 	}
