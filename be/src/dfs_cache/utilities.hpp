@@ -139,6 +139,14 @@ struct insensitive_compare : public std::unary_function<std::string, bool>{
 	  std::string baseline;
 };
 
+/**
+ * get free space for specified path
+ * @param path - path to get the available space for
+ *
+ * @return available space for path specified
+ */
+boost::uintmax_t get_free_space_on_disk(const std::string& path);
+
 }
 }
 

@@ -37,9 +37,6 @@ namespace constants
     /** default location for cache */
     extern const std::string DEFAULT_CACHE_ROOT;
 
-    /** default cache capacity */
-    extern const long long DEFAULT_CACHE_CAPACITY;
-
     /** default filesystem configuration is requested.
      * See core-site.xml
      *

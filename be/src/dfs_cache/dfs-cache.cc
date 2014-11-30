@@ -39,9 +39,6 @@ namespace constants
     /** default location for cache */
      const std::string DEFAULT_CACHE_ROOT = "/var/cache/impalatogo/";
 
-     /** default cache capacity  */
-     const long long DEFAULT_CACHE_CAPACITY = 50000000000;       // 50 Gb in bytes
-
      /** default filesystem configuration is requested.
       * See core-site.xml
       *

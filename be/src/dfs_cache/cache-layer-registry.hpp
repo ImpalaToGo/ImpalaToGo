@@ -58,6 +58,9 @@ private:
 
 	volatile bool m_valid;             /**< flag, indicates that registry is in the valid state */
 
+	const double m_available_capacity_ratio = 0.85; /**< ratio for setting "cache capacity", percent from available
+	 	 	 	 	 	 	 	 	 	 	 	     * root storage space */
+
 	CacheLayerRegistry(const std::string& root = "") {
 		m_valid = false;
 		if(root.empty())
@@ -65,8 +68,14 @@ private:
 		else
 			localstorage(root);
 
+		// Get the 85% of available space on the path specified:
+		uintmax_t available = utilities::get_free_space_on_disk(m_localstorageRoot) * m_available_capacity_ratio;
+        if(available == 0)
+        	return;
+
 		// create the autoload LRU cache, default is 50 Gb
-		m_cache = new FileSystemLRUCache(constants::DEFAULT_CACHE_CAPACITY, m_localstorageRoot, true);
+		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, true);
+		m_valid = true;
 	}
 
 	CacheLayerRegistry(CacheLayerRegistry const& l);            // disable copy constructor
@@ -84,10 +93,14 @@ private:
     }
 
     /** reload the cache */
-    inline void reload(){
+    inline bool reload(){
+    	if(!m_valid)
+    		return false;
+
     	// reload the cache:
     	if(m_cache->reload(m_localstorageRoot))
-    		m_valid = true;
+    		return m_valid = true;
+    	return m_valid = false;
     }
 
 public:
