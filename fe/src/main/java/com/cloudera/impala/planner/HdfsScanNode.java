@@ -65,6 +65,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
+
+//DAVID CHANGE
+import com.google.common.hash.Hashing;
+
 /**
  * Scan of a single single table. Currently limited to full-table scans.
  * TODO: pass in range restrictions.
@@ -175,6 +179,10 @@ public class HdfsScanNode extends ScanNode {
             Preconditions.checkNotNull(networkAddress);
             // Translate from network address to the global (to this request) host index.
             Integer globalHostIdx = analyzer.getHostIndex().getIndex(networkAddress);
+
+            //DAVID CHANCHE
+              globalHostIdx = Hashing.consistentHash(fileDesc.getFileName().hashCode(), analyzer.getHostIndex().size());
+
             location.setHost_idx(globalHostIdx);
             location.setVolume_id(block.getDiskId(i));
             locations.add(location);

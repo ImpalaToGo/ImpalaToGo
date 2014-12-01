@@ -38,7 +38,7 @@ ENDIF (DEFINED ENV{BOOST_ROOT})
 
 set(Boost_DEBUG TRUE)
 set(Boost_USE_MULTITHREADED ON)
-find_package(Boost REQUIRED COMPONENTS thread regex-mt system-mt filesystem-mt)
+find_package(Boost REQUIRED COMPONENTS thread regex-mt system-mt filesystem-mt date_time)
 include_directories(${Boost_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${Boost_LIBRARIES})
 message(STATUS "Boost include dir: " ${Boost_INCLUDE_DIRS})
@@ -52,9 +52,9 @@ message(STATUS "JNI_INCLUDE_DIRS: ${JNI_INCLUDE_DIRS}")
 message(STATUS "JNI_LIBRARIES: ${JNI_LIBRARIES}")
 
 # find HDFS headers and libs
-find_package(HDFS REQUIRED)
-include_directories(${HDFS_INCLUDE_DIR})
-set(LIBS ${LIBS} ${HDFS_LIBS})
+# find_package(HDFS REQUIRED)
+# include_directories(${HDFS_INCLUDE_DIR})
+# set(LIBS ${LIBS} ${HDFS_LIBS})
 
 # find the Squeasel webserver library
 find_package(Squeasel REQUIRED)

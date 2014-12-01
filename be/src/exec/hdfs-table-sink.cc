@@ -33,8 +33,11 @@
 
 #include <vector>
 #include <sstream>
+#include <fcntl.h>
 #include <gutil/strings/substitute.h>
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include <boost/scoped_ptr.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <stdlib.h>
@@ -61,9 +64,9 @@ HdfsTableSink::HdfsTableSink(const RowDescriptor& row_desc,
   DCHECK(tsink.__isset.table_sink);
 }
 
-OutputPartition::OutputPartition()
-    : hdfs_connection(NULL), tmp_hdfs_file(NULL), num_rows(0), num_files(0),
-      partition_descriptor(NULL) {
+OutputPartition::OutputPartition() :
+		tmp_hdfs_file(NULL), num_rows(0), num_files(0), partition_descriptor(NULL) {
+	hdfs_connection.valid = false;
 }
 
 Status HdfsTableSink::PrepareExprs(RuntimeState* state) {
@@ -133,7 +136,7 @@ Status HdfsTableSink::Prepare(RuntimeState* state) {
   RETURN_IF_ERROR(PrepareExprs(state));
 
   hdfs_connection_ = HdfsFsCache::instance()->GetDefaultConnection();
-  if (hdfs_connection_ == NULL) {
+  if (!hdfs_connection_.valid) {
     return Status(GetHdfsErrorMsg("Failed to connect to HDFS."));
   }
 
@@ -281,16 +284,17 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   // Check if tmp_hdfs_file_name exists.
   const char* tmp_hdfs_file_name_cstr =
       output_partition->current_file_name.c_str();
-  if (hdfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr) == 0) {
+  if (dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr) == 0) {
     return Status(GetHdfsErrorMsg("Temporary HDFS file already exists: ",
         output_partition->current_file_name));
   }
   uint64_t block_size = output_partition->partition_descriptor->block_size();
   if (block_size == 0) block_size = output_partition->writer->default_block_size();
 
-  output_partition->tmp_hdfs_file = hdfsOpenFile(hdfs_connection_,
-      tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size);
-  if (output_partition->tmp_hdfs_file == NULL) {
+  bool available;
+  output_partition->tmp_hdfs_file = dfsOpenFile(hdfs_connection_,
+      tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size, available);
+  if (output_partition->tmp_hdfs_file == NULL || !available) {
     return Status(GetHdfsErrorMsg("Failed to open HDFS file for writing: ",
         output_partition->current_file_name));
   } else {
@@ -309,7 +313,7 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   Status status = output_partition->writer->InitNewFile();
   if (!status.ok()) {
     ClosePartitionFile(state, output_partition);
-    hdfsDelete(hdfs_connection_, output_partition->current_file_name.c_str(), 0);
+    dfsDelete(hdfs_connection_, output_partition->current_file_name.c_str(), 0);
   }
   return status;
 }
@@ -534,7 +538,7 @@ Status HdfsTableSink::FinalizePartitionFile(RuntimeState* state,
 
 void HdfsTableSink::ClosePartitionFile(RuntimeState* state, OutputPartition* partition) {
   if (partition->tmp_hdfs_file == NULL) return;
-  int hdfs_ret = hdfsCloseFile(hdfs_connection_, partition->tmp_hdfs_file);
+  int hdfs_ret = dfsCloseFile(hdfs_connection_, partition->tmp_hdfs_file);
   if (hdfs_ret != 0) {
     state->LogError(GetHdfsErrorMsg("Failed to close HDFS file: ",
         partition->current_file_name));
@@ -568,7 +572,7 @@ void HdfsTableSink::Close(RuntimeState* state) {
 }
 
 Status HdfsTableSink::GetFileBlockSize(OutputPartition* output_partition, int64_t* size) {
-  hdfsFileInfo* info = hdfsGetPathInfo(output_partition->hdfs_connection,
+  dfsFileInfo* info = dfsGetPathInfo(output_partition->hdfs_connection,
       output_partition->current_file_name.c_str());
 
   if (info == NULL) {
@@ -577,7 +581,7 @@ Status HdfsTableSink::GetFileBlockSize(OutputPartition* output_partition, int64_
   }
 
   *size = info->mBlockSize;
-  hdfsFreeFileInfo(info, 1);
+  dfsFreeFileInfo(output_partition->hdfs_connection, info, 1);
 
   return Status::OK;
 }

@@ -16,7 +16,9 @@
 #ifndef IMPALA_EXEC_HDFS_TEXT_TABLE_WRITER_H
 #define IMPALA_EXEC_HDFS_TEXT_TABLE_WRITER_H
 
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include <sstream>
 #include <boost/scoped_ptr.hpp>
 

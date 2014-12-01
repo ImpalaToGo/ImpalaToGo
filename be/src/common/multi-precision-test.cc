@@ -17,7 +17,7 @@
 
 #include <boost/math/constants/constants.hpp>
 #include "common/logging.h"
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 
 using namespace boost::multiprecision;
 using namespace std;

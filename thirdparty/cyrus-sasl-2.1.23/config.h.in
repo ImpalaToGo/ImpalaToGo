@@ -323,6 +323,9 @@
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
 
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
@@ -359,7 +362,7 @@
 /* Use NDBM for SASLdb */
 #undef SASL_NDBM
 
-/* The size of a `long', as computed by sizeof. */
+/* The size of `long', as computed by sizeof. */
 #undef SIZEOF_LONG
 
 /* Link ANONYMOUS Staticly */
@@ -434,9 +437,11 @@
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
 
-/* Define as `__inline' if that's what the C compiler calls it, or to nothing
-   if it is not supported. */
+/* Define to `__inline__' or `__inline' if that's what the C compiler
+   calls it, or to nothing if 'inline' is not supported under any name.  */
+#ifndef __cplusplus
 #undef inline
+#endif
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef mode_t

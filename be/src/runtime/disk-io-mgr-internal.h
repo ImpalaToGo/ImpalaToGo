@@ -138,7 +138,7 @@ class DiskIoMgr::RequestContext {
   RequestContext(DiskIoMgr* parent, int num_disks);
 
   // Resets this object.
-  void Reset(hdfsFS hdfs_connection, MemTracker* tracker);
+  void Reset(dfsFS hdfs_connection, MemTracker* tracker);
 
   // Decrements the number of active disks for this reader.  If the disk count
   // goes to 0, the disk complete condition variable is signaled.
@@ -196,7 +196,7 @@ class DiskIoMgr::RequestContext {
 
   // hdfsFS connection handle.  This is set once and never changed for the duration
   // of the reader.  NULL if this is a local reader.
-  hdfsFS hdfs_connection_;
+  dfsFS hdfs_connection_;
 
   // Memory used for this reader.  This is unowned by this object.
   MemTracker* mem_tracker_;

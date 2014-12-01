@@ -28,9 +28,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
@@ -49,7 +47,6 @@ import com.cloudera.impala.authorization.ImpalaInternalAdminUser;
 import com.cloudera.impala.authorization.User;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.Function;
-import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.InternalException;
 import com.cloudera.impala.common.JniUtil;
@@ -743,6 +740,7 @@ public class JniFrontend {
   private String checkFileSystem(Configuration conf) {
     try {
       FileSystem fs = FileSystem.get(CONF);
+      /*
       if (!(fs instanceof DistributedFileSystem)) {
         return "Unsupported file system. Impala only supports DistributedFileSystem " +
             "but the configured filesystem is: " + fs.getClass().getSimpleName() + "." +
@@ -750,17 +748,21 @@ public class JniFrontend {
             "(" + CONF.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY) + ")" +
             " might be set incorrectly";
       }
+      */
     } catch (IOException e) {
       return "couldn't retrieve FileSystem:\n" + e.getMessage();
     }
 
+    /**
+     * // Elena (15.10.2014) : replace the call to remote dfs with the call to local
     try {
-      FileSystemUtil.getTotalNumVisibleFiles(new Path("/"));
+         FileSystemUtil.getTotalNumVisibleFiles(new Path("/"));
     } catch (IOException e) {
       return "Could not read the HDFS root directory at " +
           CONF.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY) +
           ". Error was: \n" + e.getMessage();
     }
+    */
     return "";
   }
 }

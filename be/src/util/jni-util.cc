@@ -14,7 +14,7 @@
 
 #include "util/jni-util.h"
 
-#include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include <sstream>
 
 #include "common/status.h"
@@ -140,8 +140,12 @@ Status JniUtil::Init() {
 void JniUtil::InitLibhdfs() {
   // make random libhdfs calls to make sure that the context class loader isn't
   // null; see xxx for an explanation
+  // Elena : 08.10.2014 Remove hdfs dependency (1)
+  /**
   hdfsFS fs = hdfsConnect("default", 0);
   hdfsDisconnect(fs);
+  */
+  cacheInit();
 }
 
 Status JniUtil::Cleanup() {

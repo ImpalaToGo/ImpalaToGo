@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <fcntl.h>
 
 #include "runtime/disk-io-mgr.h"
 #include "runtime/disk-io-mgr-internal.h"
@@ -248,17 +249,18 @@ Status DiskIoMgr::ScanRange::Open() {
   unique_lock<mutex> hdfs_lock(hdfs_lock_);
   if (is_cancelled_) return Status::CANCELLED;
 
-  if (reader_->hdfs_connection_ != NULL) {
+  if (reader_->hdfs_connection_.valid) {
     if (hdfs_file_ != NULL) return Status::OK;
 
     // TODO: is there much overhead opening hdfs files?  Should we try to preserve
     // the handle across multiple scan ranges of a file?
-    hdfs_file_ = hdfsOpenFile(reader_->hdfs_connection_, file(), O_RDONLY, 0, 0, 0);
-    if (hdfs_file_ == NULL) {
+    bool available;
+    hdfs_file_ = dfsOpenFile(reader_->hdfs_connection_, file(), O_RDONLY, 0, 0, 0, available);
+    if (hdfs_file_ == NULL || !available) {
       return Status(GetHdfsErrorMsg("Failed to open HDFS file ", file_));
     }
 
-    if (hdfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != 0) {
+    if (dfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != status::OK) {
       string error_msg = GetHdfsErrorMsg("");
       stringstream ss;
       ss << "Error seeking to " << offset_ << " in file: " << file_ << " " << error_msg;
@@ -290,18 +292,18 @@ Status DiskIoMgr::ScanRange::Open() {
 
 void DiskIoMgr::ScanRange::Close() {
   unique_lock<mutex> hdfs_lock(hdfs_lock_);
-  if (reader_->hdfs_connection_ != NULL) {
+  if (reader_->hdfs_connection_.valid) {
     if (hdfs_file_ == NULL) return;
 
-    struct hdfsReadStatistics* read_statistics;
-    int success = hdfsFileGetReadStatistics(hdfs_file_, &read_statistics);
+    struct dfsReadStatistics* read_statistics;
+    int success = dfsFileGetReadStatistics(reader_->hdfs_connection_, hdfs_file_, &read_statistics);
     if (success == 0) {
       reader_->bytes_read_local_ += read_statistics->totalLocalBytesRead;
       reader_->bytes_read_short_circuit_ += read_statistics->totalShortCircuitBytesRead;
-      hdfsFileFreeReadStatistics(read_statistics);
+      dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
     }
 
-    hdfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
+    dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
     hdfs_file_ = NULL;
   } else {
     if (local_file_ == NULL) return;
@@ -325,11 +327,12 @@ Status DiskIoMgr::ScanRange::Read(char* buffer, int64_t* bytes_read, bool* eosr)
   int bytes_to_read =
       min(static_cast<int64_t>(io_mgr_->max_buffer_size_), len_ - bytes_read_);
 
-  if (reader_->hdfs_connection_ != NULL) {
+  /** Elena connection is not the handle more and is not nullable */
+  if (reader_->hdfs_connection_.valid) {
     DCHECK(hdfs_file_ != NULL);
     // TODO: why is this loop necessary? Can hdfs reads come up short?
     while (*bytes_read < bytes_to_read) {
-      int last_read = hdfsRead(reader_->hdfs_connection_, hdfs_file_,
+      int last_read = dfsRead(reader_->hdfs_connection_, hdfs_file_,
           buffer + *bytes_read, bytes_to_read - *bytes_read);
       if (last_read == -1) {
         return Status(GetHdfsErrorMsg("Error reading from HDFS file: ", file_));

@@ -19,7 +19,7 @@
 #include "util/benchmark.h"
 #include "util/cpu-info.h"
 
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 
 // Benchmark to measure operations on different implementation of multi (i.e. > 8)
 // byte integers.

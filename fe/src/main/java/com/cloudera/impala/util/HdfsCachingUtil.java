@@ -14,14 +14,11 @@
 
 package com.cloudera.impala.util;
 
-import java.io.IOException;
 import java.util.Map;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.Logger;
 
-import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.ImpalaRuntimeException;
 import com.google.common.base.Preconditions;
@@ -39,7 +36,9 @@ public class HdfsCachingUtil {
   // become cached before assuming no more progress is being made.
   private final static int MAX_UNCHANGED_CACHING_REFRESH_INTERVALS = 5;
 
-  private final static DistributedFileSystem dfs;
+  // Elena: remove dfs currently
+  // private final static DistributedFileSystem dfs;
+  /*private final static FileSystem dfs;
   static {
     try {
       dfs = FileSystemUtil.getDistributedFileSystem();
@@ -48,7 +47,7 @@ public class HdfsCachingUtil {
           "DistributedFileSystem: ", e);
     }
   }
-
+*/
   /**
    * Caches the location of the given Hive Metastore Table and updates the
    * table's properties with the submitted cache directive ID.

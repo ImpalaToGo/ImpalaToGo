@@ -24,6 +24,7 @@ add_library(Common
   init.cc
   logging.cc
   status.cc
+  multi-precision.cc
 )
 
 add_library(GlobalFlags
@@ -31,3 +32,4 @@ add_library(GlobalFlags
 )
 
 ADD_BE_TEST(atomic-test)
+ADD_BE_TEST(multi-precision-test)

@@ -22,6 +22,7 @@
 
 #include "common/status.h"
 #include "gen-cpp/Frontend_types.h"
+#include "util/jni-helper.h"
 
 #define THROW_IF_ERROR_WITH_LOGGING(stmt, env, adaptor) \
   do { \
@@ -135,8 +136,11 @@
     } \
   } while (false)
 
-// C linkage for helper functions in hdfsJniHelper.h
-extern  "C" { extern JNIEnv* getJNIEnv(void); }
+//extern JNIEnv* getJNIEnv(void);
+
+
+// typedef JNIEnv* (*getJNIEnvRedirect)();
+// getJNIEnvRedirect getJNIEnv = replacement_for_hdfs::getJNIEnv;
 
 namespace impala {
 

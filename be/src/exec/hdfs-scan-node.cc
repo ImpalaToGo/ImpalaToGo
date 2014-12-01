@@ -26,7 +26,9 @@
 #include <boost/foreach.hpp>
 #include <boost/filesystem.hpp>
 
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 
 #include "codegen/llvm-codegen.h"
 #include "common/logging.h"
@@ -355,7 +357,7 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   }
 
   hdfs_connection_ = HdfsFsCache::instance()->GetDefaultConnection();
-  if (hdfs_connection_ == NULL) {
+  if (!hdfs_connection_.valid ) {
     string error_msg = GetStrErrMsg();
     stringstream ss;
     ss << "Failed to connect to HDFS." << "\n" << error_msg;

@@ -284,7 +284,7 @@ Status LibCache::GetCacheEntry(const string& hdfs_lib_file, LibType type,
       // cached entry and create a new one.
       (*entry)->check_needs_refresh = false;
       time_t last_mod_time;
-      hdfsFS hdfs_conn = HdfsFsCache::instance()->GetDefaultConnection();
+      dfsFS hdfs_conn = HdfsFsCache::instance()->GetDefaultConnection();
       RETURN_IF_ERROR(
           GetLastModificationTime(hdfs_conn, hdfs_lib_file.c_str(), &last_mod_time));
       if ((*entry)->last_mod_time < last_mod_time) {
@@ -328,8 +328,8 @@ Status LibCache::GetCacheEntry(const string& hdfs_lib_file, LibType type,
   VLOG(1) << "Adding lib cache entry: " << hdfs_lib_file
           << ", local path: " << (*entry)->local_path;
 
-  hdfsFS hdfs_conn = HdfsFsCache::instance()->GetDefaultConnection();
-  hdfsFS local_conn = HdfsFsCache::instance()->GetLocalConnection();
+  dfsFS hdfs_conn = HdfsFsCache::instance()->GetDefaultConnection();
+  dfsFS local_conn = HdfsFsCache::instance()->GetLocalConnection();
 
   // Note: the file can be updated between getting last_mod_time and copying the file to
   // local_path. This can only result in the file unnecessarily being refreshed, and does

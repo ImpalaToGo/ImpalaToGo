@@ -18,7 +18,6 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 
 import com.cloudera.impala.authorization.AuthorizeableUri;
 import com.cloudera.impala.authorization.Privilege;
@@ -58,10 +57,11 @@ public class HdfsUri {
     }
     try {
       FileSystem fs = uriPath_.getFileSystem(FileSystemUtil.getConfiguration());
+      /*
       if (!(fs instanceof DistributedFileSystem)) {
         throw new AnalysisException(String.format("URI location '%s' " +
             "must point to an HDFS file system.", uriPath_));
-      }
+      } */
     } catch (IOException e) {
       throw new AnalysisException(e.getMessage(), e);
     }

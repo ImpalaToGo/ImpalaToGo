@@ -17,7 +17,9 @@
 #define IMPALA_UTIL_HDFS_UTIL_H
 
 #include <string>
-#include <hdfs.h>
+// Elena : 08.10.2014 Remove hdfs dependency (1)
+// #include <hdfs.h>
+#include "dfs_cache/dfs-cache.h"
 #include "common/status.h"
 
 namespace impala {
@@ -28,17 +30,17 @@ namespace impala {
 std::string GetHdfsErrorMsg(const std::string& prefix, const std::string& file = "");
 
 // Return the size, in bytes, of a file from the hdfs connection.
-Status GetFileSize(const hdfsFS& connection, const char* filename, int64_t* filesize);
+Status GetFileSize(const dfsFS& connection, const char* filename, int64_t* filesize);
 
 // Returns the last modification time of 'filename' in seconds.
 // This should not be called in a fast path (e.g., running a UDF).
-Status GetLastModificationTime(const hdfsFS& connection, const char* filename,
+Status GetLastModificationTime(const dfsFS& connection, const char* filename,
                                time_t* last_mod_time);
 
 bool IsHiddenFile(const std::string& filename);
 
 // Copy the file at 'src_path' from 'src_conn' to 'dst_path' in 'dst_conn'.
-Status CopyHdfsFile(const hdfsFS& src_conn, const std::string& src_path,
-                    const hdfsFS& dst_conn, const std::string& dst_path);
+Status CopyHdfsFile(const dfsFS& src_conn, const std::string& src_path,
+                    const dfsFS& dst_conn, const std::string& dst_path);
 }
 #endif // IMPALA_UTIL_HDFS_UTIL_H

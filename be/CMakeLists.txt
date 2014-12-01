@@ -106,6 +106,7 @@ if (DOXYGEN_FOUND)
     ${CMAKE_SOURCE_DIR}/be/src
     ${CMAKE_SOURCE_DIR}/be/src/catalog/
     ${CMAKE_SOURCE_DIR}/be/src/common/
+    ${CMAKE_SOURCE_DIR}/be/src/dfs_cache/
     ${CMAKE_SOURCE_DIR}/be/src/exec/
     ${CMAKE_SOURCE_DIR}/be/src/exprs/
     ${CMAKE_SOURCE_DIR}/be/src/resourcebroker/
@@ -176,6 +177,7 @@ set (IMPALA_LINK_LIBS
   Catalog
   CodeGen
   Common
+  dfs_cache
   Exec
   Exprs
   GlobalFlags
@@ -213,6 +215,7 @@ if ("${BUILD_SHARED_LIBS}" STREQUAL "ON")
     ImpalaThrift
     GlobalFlags
     Common
+    dfs_cache
     )
 endif ()
 
@@ -229,7 +232,7 @@ set (IMPALA_LINK_LIBS ${IMPALA_LINK_LIBS}
   ${LBER_LIBRARY}
   ThriftSaslTransport
   ${JAVA_JVM_LIBRARY}
-  ${HDFS_LIBS}
+  #${HDFS_LIBS}
   glogstatic
   gflagsstatic
   gutil
@@ -307,6 +310,7 @@ endfunction(COMPILE_TO_IR)
 add_subdirectory(src/catalog)
 add_subdirectory(src/codegen)
 add_subdirectory(src/common)
+add_subdirectory(src/dfs_cache)
 add_subdirectory(src/exec)
 add_subdirectory(src/resourcebroker)
 add_subdirectory(src/exprs)
@@ -333,6 +337,7 @@ add_subdirectory(generated-sources/gen-cpp)
 link_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/build/catalog
   ${CMAKE_CURRENT_SOURCE_DIR}/build/common
+  ${CMAKE_CURRENT_SOURCE_DIR}/build/dfs_cache
   ${CMAKE_CURRENT_SOURCE_DIR}/build/exec
   ${CMAKE_CURRENT_SOURCE_DIR}/build/exprs
   ${CMAKE_CURRENT_SOURCE_DIR}/build/rpc

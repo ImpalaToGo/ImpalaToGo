@@ -21,7 +21,7 @@
 #include <boost/cstdint.hpp>
 
 #include "runtime/types.h"
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 #include "util/bit-util.h"
 
 namespace impala {

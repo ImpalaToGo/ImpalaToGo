@@ -67,6 +67,8 @@ add_library(Util
   url-coding.cc
   llama-util.cc
   table-printer.cc
+  exception.c
+  jni-helper.c
 )
 
 add_library(Webserver STATIC
@@ -84,7 +86,7 @@ add_library(loggingsupport SHARED
   logging-support.cc
 )
 
-target_link_libraries(Webserver pthread dl Util ssl crypto)
+target_link_libraries(Webserver pthread dl Util ssl crypto ${IMPALA_LINK_LIBS})
 
 add_executable(network-perf-benchmark network-perf-benchmark.cc)
 add_executable(parquet-reader parquet-reader.cc)

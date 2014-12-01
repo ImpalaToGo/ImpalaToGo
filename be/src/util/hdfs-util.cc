@@ -31,20 +31,20 @@ string GetHdfsErrorMsg(const string& prefix, const string& file) {
   return ss.str();
 }
 
-Status GetFileSize(const hdfsFS& connection, const char* filename, int64_t* filesize) {
-  hdfsFileInfo* info = hdfsGetPathInfo(connection, filename);
+Status GetFileSize(const dfsFS& connection, const char* filename, int64_t* filesize) {
+  dfsFileInfo* info = dfsGetPathInfo(connection, filename);
   if (info == NULL) return Status(GetHdfsErrorMsg("Failed to get file info ", filename));
   *filesize = info->mSize;
-  hdfsFreeFileInfo(info, 1);
+  dfsFreeFileInfo(connection, info, 1);
   return Status::OK;
 }
 
-Status GetLastModificationTime(const hdfsFS& connection, const char* filename,
+Status GetLastModificationTime(const dfsFS& connection, const char* filename,
                                time_t* last_mod_time) {
-  hdfsFileInfo* info = hdfsGetPathInfo(connection, filename);
+  dfsFileInfo* info = dfsGetPathInfo(connection, filename);
   if (info == NULL) return Status(GetHdfsErrorMsg("Failed to get file info ", filename));
   *last_mod_time = info->mLastMod;
-  hdfsFreeFileInfo(info, 1);
+  dfsFreeFileInfo(connection, info, 1);
   return Status::OK;
 }
 
@@ -52,9 +52,9 @@ bool IsHiddenFile(const string& filename) {
   return !filename.empty() && (filename[0] == '.' || filename[0] == '_');
 }
 
-Status CopyHdfsFile(const hdfsFS& src_conn, const string& src_path,
-                    const hdfsFS& dst_conn, const string& dst_path) {
-  int error = hdfsCopy(src_conn, src_path.c_str(), dst_conn, dst_path.c_str());
+Status CopyHdfsFile(const dfsFS& src_conn, const string& src_path,
+                    const dfsFS& dst_conn, const string& dst_path) {
+  int error = dfsCopy(src_conn, src_path.c_str(), dst_conn, dst_path.c_str());
   if (error != 0) {
     string error_msg = GetHdfsErrorMsg("");
     stringstream ss;

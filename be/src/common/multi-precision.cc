@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "runtime/multi-precision.h"
-
+#include "common/multi-precision.h"
 #include "common/logging.h"
 
 using namespace std;

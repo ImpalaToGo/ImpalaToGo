@@ -17,7 +17,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "common/logging.h"
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 #include "testutil/test-udfs.h"
 #include "udf/udf-test-harness.h"
 

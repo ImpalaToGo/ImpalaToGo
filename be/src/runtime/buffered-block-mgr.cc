@@ -151,7 +151,7 @@ string BufferedBlockMgr::Block::DebugString() const {
 
 Status BufferedBlockMgr::Create(RuntimeState* state, MemTracker* parent,
     RuntimeProfile* profile, int64_t mem_limit, int64_t block_size,
-    shared_ptr<BufferedBlockMgr>* block_mgr) {
+    boost::shared_ptr<BufferedBlockMgr>* block_mgr) {
 
   lock_guard<mutex> lock(static_block_mgrs_lock_);
   BlockMgrsMap::iterator it = query_to_block_mgrs_.find(state->query_id());
@@ -271,7 +271,9 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, MemTracker* parent,
   // Create a new mem_tracker and allocate buffers.
   mem_tracker_.reset(new MemTracker(mem_limit, -1, "Block Manager", parent));
   buffer_pool_.reset(new MemPool(mem_tracker_.get(), block_size));
-  state->io_mgr()->RegisterContext(NULL, &io_request_context_);
+  FileSystemDescriptor nulldescriptor;
+  nulldescriptor.valid = false;
+  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
 }
 
 int64_t BufferedBlockMgr::bytes_allocated() const {

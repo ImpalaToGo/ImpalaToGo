@@ -440,7 +440,7 @@ class Coordinator {
   // path. The PermissionCache argument is also used to cache the output across repeated
   // calls, to avoid repeatedly calling hdfsGetPathInfo() on the same path.
   typedef boost::unordered_map<std::string, std::pair<bool, short> > PermissionCache;
-  void PopulatePathPermissionCache(hdfsFS fs, const std::string& path_str,
+  void PopulatePathPermissionCache(dfsFS fs, const std::string& path_str,
       PermissionCache* permissions_cache);
 };
 

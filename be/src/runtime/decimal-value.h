@@ -22,7 +22,7 @@
 #include <sstream>
 
 #include "common/logging.h"
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 #include "util/decimal-util.h"
 #include "util/hash-util.h"
 
