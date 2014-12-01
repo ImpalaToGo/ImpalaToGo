@@ -28,7 +28,7 @@ Development environment prerequisites (Ubuntu)
     
   - install other prerequsites
       ```sh
-    sudo apt-get install git build-essential cmake bison flex pkg-config libsasl2-dev autoconf automake libtool maven subversion doxygen libbz2-dev zlib1g-dev python-setuptools python-dev -y
+    sudo apt-get install git build-essential cmake bison flex pkg-config libsasl2-dev autoconf automake libtool maven subversion doxygen libbz2-dev zlib1g-dev  python-setuptools python-dev libssl-dev -y
     ```
   - install recent gcc and g++ (4.9 for now)
    ```sh
@@ -175,25 +175,33 @@ tar xvf apache-maven-3.0.5-bin.tar.gz && sudo mv apache-maven-3.0.5 /usr/local
 
 - Add the following three lines to your .bashrc:
 ```sh
-export M2_HOME=/usr/local/apache-maven-3.0.4
+export M2_HOME=/usr/local/apache-maven-3.0.5
 export M2=$M2_HOME/bin  
 export PATH=$M2:$PATH
 ```
 Confirm by running
 ```sh
+source ~/.bashrc
 mvn -version
 ```
 
 Impala build
 ----
+put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources
+```sh
+export JAVA_HOME=/usr/lib/jvm/java-7-oracle
+export IMPALA_HOME=YOUR_PATH/ImpalaToGo
+export BOOST_LIBRARYDIR=/usr/lib64
+export LD_LIBRARY_PATH=/usr/lib64
+```
+and then run
+```sh
+source ~/.bashrc
+```
 
 - cd to Impala source cloned dir, run 
 ```sh
-export JAVA_HOME=/usr/lib/jvm/java-7-oracle
-export IMPALA_HOME=/home/elenav/src/ImpalaToGo
-export BOOST_LIBRARYDIR=/usr/lib64
- . bin/impala-config.sh
-export LD_LIBRARY_PATH=/usr/lib64
+bin/impala-config.sh
 ```
 
 - build thirdparty :
@@ -204,6 +212,13 @@ export LD_LIBRARY_PATH=/usr/lib64
 - run impala build:
 ```sh
 ./buildall.sh
+```
+
+To run unit testing on backend , do the following in the ImpalaToGo bin directory
+```sh
+export IMPALA_BE_DIR=/root/ImpalaToGo/be/
+./run-backend-tests.sh
+
 ```
 
 Start work with impala
