@@ -44,8 +44,9 @@ public class OrderByElement {
 
   public Expr getExpr() { return expr_; }
   public void setExpr(Expr e) { expr_ = e; }
-  public boolean getIsAsc() { return isAsc_; }
+  public boolean isAsc() { return isAsc_; }
   public Boolean getNullsFirstParam() { return nullsFirstParam_; }
+  public boolean nullsFirst() { return nullsFirst(nullsFirstParam_, isAsc_); }
 
   public String toSql() {
     StringBuilder strBuilder = new StringBuilder();
@@ -110,7 +111,7 @@ public class OrderByElement {
       ExprSubstitutionMap smap, Analyzer analyzer) {
     List<OrderByElement> result = Lists.newArrayListWithCapacity(src.size());
     for (OrderByElement element: src) {
-      result.add(new OrderByElement(element.getExpr().substitute(smap, analyzer),
+      result.add(new OrderByElement(element.getExpr().substitute(smap, analyzer, false),
           element.isAsc_, element.nullsFirstParam_));
     }
     return result;

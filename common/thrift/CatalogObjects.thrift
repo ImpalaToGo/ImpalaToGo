@@ -355,9 +355,9 @@ enum TPrivilegeLevel {
 // corresponding to a table must also specify all the parent objects (database name
 // and server name).
 struct TPrivilege {
-  // The Sentry defined name of this privilege. Will be in the form of:
-  // [ServerName]->[DbName]->[TableName]->[Action Granted] and may contain wildcard/"*"
-  // characters. The combination of role_id + privilege_name is guaranteed to be unique.
+  // A human readable name for this privilege. The combination of role_id +
+  // privilege_name is guaranteed to be unique. Stored in a form that can be passed
+  // to Sentry: [ServerName]->[DbName]->[TableName]->[Action Granted].
   1: required string privilege_name
 
   // The level of access this privilege provides.
@@ -366,20 +366,30 @@ struct TPrivilege {
   // The scope of the privilege: SERVER, DATABASE, URI, or TABLE
   3: required TPrivilegeScope scope
 
+  // If true, GRANT OPTION was specified. For a GRANT privilege statement, everyone
+  // granted this role should be able to issue GRANT/REVOKE privilege statements even if
+  // they are not an admin. For REVOKE privilege statements, the privilege should be
+  // retainined and the existing GRANT OPTION (if it was set) on the privilege should be
+  // removed.
+  4: required bool has_grant_opt
+
   // The ID of the role this privilege belongs to.
-  4: optional i32 role_id
+  5: optional i32 role_id
 
   // Set if scope is SERVER, URI, DATABASE, or TABLE
-  5: optional string server_name
+  6: optional string server_name
 
   // Set if scope is DATABASE or TABLE
-  6: optional string db_name
+  7: optional string db_name
 
   // Unqualified table name. Set if scope is TABLE.
-  7: optional string table_name
+  8: optional string table_name
 
   // Set if scope is URI
-  8: optional string uri
+  9: optional string uri
+
+  // Time this privilege was created (in milliseconds since epoch).
+  10: optional i64 create_time_ms
 }
 
 // Thrift representation of an HdfsCachePool.

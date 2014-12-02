@@ -48,6 +48,8 @@ class AggregateFunctions {
   // Implementation of Count and Count(*)
   static void CountUpdate(FunctionContext*, const AnyVal& src, BigIntVal* dst);
   static void CountStarUpdate(FunctionContext*, BigIntVal* dst);
+  static void CountRemove(FunctionContext*, const AnyVal& src, BigIntVal* dst);
+  static void CountStarRemove(FunctionContext*, BigIntVal* dst);
   static void CountMerge(FunctionContext*, const BigIntVal& src, BigIntVal* dst);
 
   // Implementation of Avg.
@@ -55,12 +57,16 @@ class AggregateFunctions {
   static void AvgInit(FunctionContext* ctx, StringVal* dst);
   template <typename T>
   static void AvgUpdate(FunctionContext* ctx, const T& src, StringVal* dst);
+  template <typename T>
+  static void AvgRemove(FunctionContext* ctx, const T& src, StringVal* dst);
   static void AvgMerge(FunctionContext* ctx, const StringVal& src, StringVal* dst);
   static DoubleVal AvgGetValue(FunctionContext* ctx, const StringVal& val);
   static DoubleVal AvgFinalize(FunctionContext* ctx, const StringVal& val);
 
   // Avg for timestamp. Uses AvgInit() and AvgMerge().
   static void TimestampAvgUpdate(FunctionContext* ctx, const TimestampVal& src,
+      StringVal* dst);
+  static void TimestampAvgRemove(FunctionContext* ctx, const TimestampVal& src,
       StringVal* dst);
   static TimestampVal TimestampAvgGetValue(FunctionContext* ctx, const StringVal& val);
   static TimestampVal TimestampAvgFinalize(FunctionContext* ctx, const StringVal& val);
@@ -69,6 +75,10 @@ class AggregateFunctions {
   static void DecimalAvgInit(FunctionContext* ctx, StringVal* dst);
   static void DecimalAvgUpdate(FunctionContext* ctx, const DecimalVal& src,
       StringVal* dst);
+  static void DecimalAvgRemove(FunctionContext* ctx, const DecimalVal& src,
+      StringVal* dst);
+  static void DecimalAvgAddOrRemove(FunctionContext* ctx, const DecimalVal& src,
+      StringVal* dst, bool remove = false);
   static void DecimalAvgMerge(FunctionContext* ctx, const StringVal& src,
       StringVal* dst);
   static DecimalVal DecimalAvgGetValue(FunctionContext* ctx, const StringVal& val);
@@ -76,11 +86,18 @@ class AggregateFunctions {
 
   // SumUpdate, SumMerge
   template <typename SRC_VAL, typename DST_VAL>
-  static void Sum(FunctionContext*, const SRC_VAL& src, DST_VAL* dst);
+  static void SumUpdate(FunctionContext*, const SRC_VAL& src, DST_VAL* dst);
+
+  template <typename SRC_VAL, typename DST_VAL>
+  static void SumRemove(FunctionContext*, const SRC_VAL& src, DST_VAL* dst);
 
   // Sum for decimals
-  static void SumUpdate(FunctionContext*, const DecimalVal& src, DecimalVal* dst);
-  static void SumMerge(FunctionContext*, const DecimalVal& src, DecimalVal* dst);
+  static void SumDecimalUpdate(FunctionContext*, const DecimalVal& src, DecimalVal* dst);
+  static void SumDecimalRemove(FunctionContext*, const DecimalVal& src, DecimalVal* dst);
+  static void SumDecimalMerge(FunctionContext*, const DecimalVal& src, DecimalVal* dst);
+  // Adds or or subtracts src from dst. Implements Update() and Remove().
+  static void SumDecimalAddOrSubtract(FunctionContext*, const DecimalVal& src,
+      DecimalVal* dst, bool subtract = false);
 
   // MinUpdate/MinMerge
   template <typename T>
@@ -111,8 +128,8 @@ class AggregateFunctions {
   static void PcsaUpdate(FunctionContext*, const T& src, StringVal* dst);
 
   static void PcMerge(FunctionContext*, const StringVal& src, StringVal* dst);
-  static StringVal PcFinalize(FunctionContext*, const StringVal& src);
-  static StringVal PcsaFinalize(FunctionContext*, const StringVal& src);
+  static BigIntVal PcFinalize(FunctionContext*, const StringVal& src);
+  static BigIntVal PcsaFinalize(FunctionContext*, const StringVal& src);
 
   // Reservoir sampling produces a uniform random sample without knowing the total number
   // of items. ReservoirSample{Init, Update, Merge, Serialize} implement distributed
@@ -138,9 +155,8 @@ class AggregateFunctions {
   static StringVal ReservoirSampleFinalize(FunctionContext*, const StringVal& src);
 
   // Returns an approximate median using reservoir sampling.
-  // TODO: Return T when return type does not need to be the intermediate type
   template <typename T>
-  static StringVal AppxMedianFinalize(FunctionContext*, const StringVal& src);
+  static T AppxMedianFinalize(FunctionContext*, const StringVal& src);
 
   // Returns an equi-depth histogram computed from a sample of data produced via
   // reservoir sampling. The result is a comma-separated list of up to 100 histogram
@@ -159,7 +175,7 @@ class AggregateFunctions {
   template <typename T>
   static void HllUpdate(FunctionContext*, const T& src, StringVal* dst);
   static void HllMerge(FunctionContext*, const StringVal& src, StringVal* dst);
-  static StringVal HllFinalize(FunctionContext*, const StringVal& src);
+  static BigIntVal HllFinalize(FunctionContext*, const StringVal& src);
 
   // Knuth's variance algorithm, more numerically stable than canonical stddev
   // algorithms; reference implementation:
@@ -172,13 +188,13 @@ class AggregateFunctions {
   static DoubleVal KnuthVarFinalize(FunctionContext* context, const StringVal& val);
 
   // Calculates the biased variance, uses KnuthVar Init-Update-Merge functions
-  static StringVal KnuthVarPopFinalize(FunctionContext* context, const StringVal& val);
+  static DoubleVal KnuthVarPopFinalize(FunctionContext* context, const StringVal& val);
 
   // Calculates STDDEV, uses KnuthVar Init-Update-Merge functions
-  static StringVal KnuthStddevFinalize(FunctionContext* context, const StringVal& val);
+  static DoubleVal KnuthStddevFinalize(FunctionContext* context, const StringVal& val);
 
   // Calculates the biased STDDEV, uses KnuthVar Init-Update-Merge functions
-  static StringVal KnuthStddevPopFinalize(FunctionContext* context, const StringVal& val);
+  static DoubleVal KnuthStddevPopFinalize(FunctionContext* context, const StringVal& val);
 
 
   // ----------------------------- Analytic Functions ---------------------------------
@@ -211,16 +227,18 @@ class AggregateFunctions {
   // Implements LAST_VALUE.
   template <typename T>
   static void LastValUpdate(FunctionContext*, const T& src, T* dst);
+  template <typename T>
+  static void LastValRemove(FunctionContext*, const T& src, T* dst);
 
   // Implements FIRST_VALUE.
   template <typename T>
-  static void FirstValUpdate(FunctionContext*, const T& src, StringVal* dst);
-
+  static void FirstValUpdate(FunctionContext*, const T& src, T* dst);
+  // Implements FIRST_VALUE for some windows that require rewrites during planning.
+  // The BigIntVal is unused by FirstValRewriteUpdate() (it is used by the
+  // AnalyticEvalNode).
   template <typename T>
-  static T FirstValGetValue(FunctionContext*, const StringVal& src);
-
-  template <typename T>
-  static T FirstValFinalize(FunctionContext*, const StringVal& src);
+  static void FirstValRewriteUpdate(FunctionContext*, const T& src, const BigIntVal&,
+      T* dst);
 
   // OffsetFn*() implement LAG and LEAD. Init() sets the default value (the last
   // constant parameter) as dst.

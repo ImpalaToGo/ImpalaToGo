@@ -342,6 +342,7 @@ class LlvmCodeGen {
   // different 'len'.
   llvm::Function* GetHashFunction(int num_bytes = -1);
   llvm::Function* GetFnvHashFunction(int num_bytes = -1);
+  llvm::Function* GetMurmurHashFunction(int num_bytes = -1);
 
   // Allocate stack storage for local variables.  This is similar to traditional c, where
   // all the variables must be declared at the top of the function.  This helper can be
@@ -353,6 +354,8 @@ class LlvmCodeGen {
   // LLVM doesn't optimize alloca's occuring in the middle of functions very well (e.g, an
   // alloca may end up in a loop, potentially blowing the stack).
   llvm::AllocaInst* CreateEntryBlockAlloca(llvm::Function* f, const NamedVariable& var);
+  llvm::AllocaInst* CreateEntryBlockAlloca(const LlvmBuilder& builder, llvm::Type* type,
+                                           const char* name = "");
 
   // Utility to create two blocks in 'fn' for if/else codegen.  if_block and else_block
   // are return parameters.  insert_before is optional and if set, the two blocks
@@ -400,7 +403,8 @@ class LlvmCodeGen {
   llvm::Function* CodegenMinMax(const ColumnType& type, bool min);
 
   // Codegen to call llvm memcpy intrinsic at the current builder location
-  // dst & src must be pointer types.  size is the number of bytes to copy.
+  // dst & src must be pointer types. size is the number of bytes to copy.
+  // No-op if size is zero.
   void CodegenMemcpy(LlvmBuilder*, llvm::Value* dst, llvm::Value* src, int size);
 
   // Loads an LLVM module. 'file' should be the local path to the LLVM bitcode (.ll)

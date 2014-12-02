@@ -16,19 +16,50 @@
 
 
 import os
+import pexpect
 import pytest
 import shlex
+import shutil
+import socket
 import signal
 
 from impala_shell_results import get_shell_cmd_result, cancellation_helper
 from subprocess import Popen, PIPE
+from tests.common.impala_service import ImpaladService
+from tests.verifiers.metric_verifier import MetricVerifier
 from time import sleep
 
 SHELL_CMD = "%s/bin/impala-shell.sh" % os.environ['IMPALA_HOME']
+SHELL_HISTORY_FILE = os.path.expanduser("~/.impalahistory")
+TMP_HISTORY_FILE = os.path.expanduser("~/.impalahistorytmp")
 
 class TestImpalaShellInteractive(object):
   """Test the impala shell interactively"""
-  # TODO: Add cancellation tests
+
+  def _send_cmd_to_shell(self, p, cmd):
+    """Given an open shell process, write a cmd to stdin
+
+    This method takes care of adding the delimiter and EOL, callers should send the raw
+    command.
+    """
+    p.stdin.write("%s;\n" % cmd)
+    p.stdin.flush()
+
+  def _start_new_shell_process(self, args=None):
+    """Starts a shell process and returns the process handle"""
+    cmd = "%s %s" % (SHELL_CMD, args) if args else SHELL_CMD
+    return Popen(shlex.split(SHELL_CMD), shell=True, stdout=PIPE,
+                 stdin=PIPE, stderr=PIPE)
+
+  @classmethod
+  def setup_class(cls):
+    if os.path.exists(SHELL_HISTORY_FILE):
+      shutil.move(SHELL_HISTORY_FILE, TMP_HISTORY_FILE)
+
+  @classmethod
+  def teardown_class(cls):
+    if os.path.exists(TMP_HISTORY_FILE): shutil.move(TMP_HISTORY_FILE, SHELL_HISTORY_FILE)
+
   @pytest.mark.execute_serially
   def test_escaped_quotes(self):
     """Test escaping quotes"""
@@ -46,10 +77,8 @@ class TestImpalaShellInteractive(object):
   @pytest.mark.execute_serially
   def test_cancellation(self):
     command = "select sleep(10000);"
-    p = Popen(shlex.split(SHELL_CMD), shell=True,
-              stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    p.stdin.write(command + "\n")
-    p.stdin.flush()
+    p = self._start_new_shell_process()
+    self._send_cmd_to_shell(p, command)
     sleep(1)
     # iterate through all processes with psutil
     shell_pid = cancellation_helper()
@@ -84,6 +113,99 @@ class TestImpalaShellInteractive(object):
     args = "! ls;"
     result = run_impala_shell_interactive(args)
     assert "Executed in" in result.stderr
+
+  @pytest.mark.execute_serially
+  def test_reconnect(self):
+    """Regression Test for IMPALA-1235
+
+    Verifies that a connect command by the user is honoured.
+    """
+
+    def get_num_open_sessions(impala_service):
+      """Helper method to retrieve the number of open sessions"""
+      return impala_service.get_metric_value('impala-server.num-open-beeswax-sessions')
+
+    hostname = socket.getfqdn()
+    initial_impala_service = ImpaladService(hostname)
+    target_impala_service = ImpaladService(hostname, webserver_port=25001,
+        beeswax_port=21001, be_port=22001)
+    # Get the initial state for the number of sessions.
+    num_sessions_initial = get_num_open_sessions(initial_impala_service)
+    num_sessions_target = get_num_open_sessions(target_impala_service)
+    # Connect to localhost:21000 (default)
+    p = self._start_new_shell_process()
+    sleep(2)
+    # Make sure we're connected <hostname>:21000
+    assert get_num_open_sessions(initial_impala_service) == num_sessions_initial + 1, \
+        "Not connected to %s:21000" % hostname
+    self._send_cmd_to_shell(p, "connect %s:21001" % hostname)
+    # Wait for a little while
+    sleep(2)
+    # The number of sessions on the target impalad should have been incremented.
+    assert get_num_open_sessions(target_impala_service) == num_sessions_target + 1, \
+        "Not connected to %s:21001" % hostname
+    # The number of sessions on the initial impalad should have been decremented.
+    assert get_num_open_sessions(initial_impala_service) == num_sessions_initial, \
+        "Connection to %s:21000 should have been closed" % hostname
+
+  @pytest.mark.execute_serially
+  def test_ddl_queries_are_closed(self):
+    """Regression test for IMPALA-1317
+
+    The shell does not call close() for alter, use and drop queries, leaving them in
+    flight. This test issues those queries in interactive mode, and checks the debug
+    webpage to confirm that they've been closed.
+    TODO: Add every statement type.
+    """
+
+    TMP_DB = 'inflight_test_db'
+    TMP_TBL = 'tmp_tbl'
+    MSG = '%s query should be closed'
+    NUM_QUERIES = 'impala-server.num-queries'
+
+    impalad = ImpaladService(socket.getfqdn())
+    p = self._start_new_shell_process()
+    try:
+      start_num_queries = impalad.get_metric_value(NUM_QUERIES)
+      self._send_cmd_to_shell(p, 'create database if not exists %s' % TMP_DB)
+      self._send_cmd_to_shell(p, 'use %s' % TMP_DB)
+      impalad.wait_for_metric_value(NUM_QUERIES, start_num_queries + 2)
+      assert impalad.wait_for_num_in_flight_queries(0), MSG % 'use'
+      self._send_cmd_to_shell(p, 'create table %s(i int)' % TMP_TBL)
+      self._send_cmd_to_shell(p, 'alter table %s add columns (j int)' % TMP_TBL)
+      impalad.wait_for_metric_value(NUM_QUERIES, start_num_queries + 4)
+      assert impalad.wait_for_num_in_flight_queries(0), MSG % 'alter'
+      self._send_cmd_to_shell(p, 'drop table %s' % TMP_TBL)
+      impalad.wait_for_metric_value(NUM_QUERIES, start_num_queries + 5)
+      assert impalad.wait_for_num_in_flight_queries(0), MSG % 'drop'
+    finally:
+      run_impala_shell_interactive("drop table if exists %s.%s;" % (TMP_DB, TMP_TBL))
+      run_impala_shell_interactive("drop database if exists foo;")
+
+  @pytest.mark.execute_serially
+  def test_multiline_queries_in_history(self):
+    """Test to ensure that multiline queries with comments are preserved in history
+
+    Ensure that multiline queries are preserved when they're read back from history.
+    Additionally, also test that comments are preserved.
+    """
+    # regex for pexpect, a shell prompt is expected after each command..
+    prompt_regex = '.*%s:2100.*' % socket.getfqdn()
+    # readline gets its input from tty, so using stdin does not work.
+    child_proc = pexpect.spawn(SHELL_CMD)
+    queries = ["select\n1--comment;",
+        "select /*comment*/\n1;",
+        "select\n/*comm\nent*/\n1;"]
+    for query in queries:
+      child_proc.expect(prompt_regex)
+      child_proc.sendline(query)
+    child_proc.expect(prompt_regex)
+    child_proc.sendline('quit;')
+    p = self._start_new_shell_process()
+    self._send_cmd_to_shell(p, 'history')
+    result = get_shell_cmd_result(p)
+    for query in queries:
+      assert query in result.stderr, "'%s' not in '%s'" % (query, result.stderr)
 
 def run_impala_shell_interactive(command, shell_args=''):
   """Runs a command in the Impala shell interactively."""

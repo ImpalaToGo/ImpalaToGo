@@ -99,9 +99,6 @@ public class AggregationNode extends PlanNode {
   }
 
   @Override
-  public void setCompactData(boolean on) { compactData_ = on; }
-
-  @Override
   public boolean isBlockingNode() { return true; }
 
   @Override
@@ -118,13 +115,13 @@ public class AggregationNode extends PlanNode {
         groupBySlots.add(aggInfo_.getOutputTupleDesc().getSlots().get(i).getId());
       }
       ArrayList<Expr> bindingPredicates =
-          analyzer.getBoundPredicates(tupleIds_.get(0), groupBySlots);
+          analyzer.getBoundPredicates(tupleIds_.get(0), groupBySlots, true);
       conjuncts_.addAll(bindingPredicates);
 
       // also add remaining unassigned conjuncts_
       assignConjuncts(analyzer);
 
-      analyzer.enforceSlotEquivalences(tupleIds_.get(0), conjuncts_, groupBySlots);
+      analyzer.createEquivConjuncts(tupleIds_.get(0), conjuncts_, groupBySlots);
     }
     // Compute the mem layout for both tuples here for simplicity.
     aggInfo_.getOutputTupleDesc().computeMemLayout();
@@ -145,6 +142,11 @@ public class AggregationNode extends PlanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
+    if (aggInfo_.getGroupingExprs().isEmpty()) {
+      cardinality_ = 1;
+      return;
+    }
+
     // This is prone to overflow, because we keep multiplying cardinalities,
     // even if the grouping exprs are functionally dependent (example:
     // group by the primary key of a table plus a number of other columns from that

@@ -144,11 +144,12 @@ void OldHashTable::AddBitmapFilters() {
   }
 
   // Add all the bitmaps to the runtime state.
+  bool acquired_ownership = false;
   for (int i = 0; i < bitmaps.size(); ++i) {
     if (bitmaps[i].second == NULL) continue;
-    state_->AddBitmapFilter(bitmaps[i].first, bitmaps[i].second);
+    state_->AddBitmapFilter(bitmaps[i].first, bitmaps[i].second, &acquired_ownership);
     VLOG(2) << "Bitmap filter added on slot: " << bitmaps[i].first;
-    delete bitmaps[i].second;
+    if (!acquired_ownership) delete bitmaps[i].second;
   }
 }
 
@@ -236,7 +237,8 @@ Function* OldHashTable::CodegenEvalTupleRow(RuntimeState* state, bool build) {
     if (type == TYPE_TIMESTAMP || type == TYPE_DECIMAL) return NULL;
   }
 
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Get types to generate function prototype
   Type* tuple_row_type = codegen->GetType(TupleRow::LLVM_CLASS_NAME);
@@ -383,7 +385,8 @@ uint32_t OldHashTable::HashVariableLenRow() {
 // }
 // TODO: can this be cross-compiled?
 Function* OldHashTable::CodegenHashCurrentRow(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Get types to generate function prototype
   Type* this_type = codegen->GetType(OldHashTable::LLVM_CLASS_NAME);
@@ -556,7 +559,8 @@ bool OldHashTable::Equals(TupleRow* build_row) {
 //   ret i1 true
 // }
 Function* OldHashTable::CodegenEquals(RuntimeState* state) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
   // Get types to generate function prototype
   Type* tuple_row_type = codegen->GetType(TupleRow::LLVM_CLASS_NAME);
   DCHECK(tuple_row_type != NULL);

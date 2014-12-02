@@ -85,9 +85,6 @@ public class SortNode extends PlanNode {
   public void setIsAnalyticSort(boolean v) { isAnalyticSort_ = v; }
 
   @Override
-  public void setCompactData(boolean on) { compactData_ = on; }
-
-  @Override
   public boolean isBlockingNode() { return true; }
 
   @Override
@@ -109,7 +106,7 @@ public class SortNode extends PlanNode {
       outputSmap_.put(slotExprs.get(i), new SlotRef(sortTupleSlots.get(i)));
     }
     ExprSubstitutionMap childSmap = getCombinedChildSmap();
-    resolvedTupleExprs_ = Expr.substituteList(resolvedTupleExprs_, childSmap, analyzer);
+    resolvedTupleExprs_ = Expr.substituteList(resolvedTupleExprs_, childSmap, analyzer, false);
 
     // Remap the ordering exprs to the tuple materialized by this sort node. The mapping
     // is a composition of the childSmap and the outputSmap_ because the child node may
@@ -119,9 +116,9 @@ public class SortNode extends PlanNode {
     info_.substituteOrderingExprs(outputSmap_, analyzer);
     info_.checkConsistency();
 
-    LOG.info("sort id " + tupleIds_.get(0).toString() + " smap: "
+    LOG.trace("sort id " + tupleIds_.get(0).toString() + " smap: "
         + outputSmap_.debugString());
-    LOG.info("sort input exprs: " + Expr.debugString(resolvedTupleExprs_));
+    LOG.trace("sort input exprs: " + Expr.debugString(resolvedTupleExprs_));
   }
 
   @Override

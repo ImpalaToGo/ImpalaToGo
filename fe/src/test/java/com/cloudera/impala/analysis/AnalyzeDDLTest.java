@@ -826,6 +826,12 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     AnalysisError("create table foo stored as RCFILE as select 1",
         "CREATE TABLE AS SELECT does not support (RCFILE) file format. " +
          "Supported formats are: (PARQUET, TEXTFILE)");
+
+    // CTAS with a WITH clause and inline view (IMPALA-1100)
+    AnalyzesOk("create table test_with as with with_1 as (select 1 as int_col from " +
+        "functional.alltypes as t1 right join (select 1 as int_col from " +
+        "functional.alltypestiny as t1) as t2 on t2.int_col = t1.int_col) " +
+        "select * from with_1 limit 10");
   }
 
   @Test
@@ -855,11 +861,15 @@ public class AnalyzeDDLTest extends AnalyzerTest {
 
     AnalyzesOk("create table new_table(s1 varchar(1), s2 varchar(32672))");
     AnalysisError("create table new_table(s1 varchar(0))",
-        "Varchar size must be > 0. Size was set to: 0.");
-    AnalysisError("create table new_table(s1 varchar(32673))",
-        "Varchar size must be <= 32672. Size was set to: 32673.");
+        "Varchar size must be > 0. Size is too small: 0.");
+    AnalysisError("create table new_table(s1 varchar(65356))",
+        "Varchar size must be <= 65355. Size is too large: 65356.");
+    AnalysisError("create table new_table(s1 char(0))",
+        "Char size must be > 0. Size is too small: 0.");
+    AnalysisError("create table new_table(s1 Char(256))",
+        "Char size must be <= 255. Size is too large: 256.");
     AnalyzesOk("create table new_table (i int) PARTITIONED BY (s varchar(3))");
-    AnalyzesOk("create table functional.new_table (c char(1024))");
+    AnalyzesOk("create table functional.new_table (c char(250))");
     AnalyzesOk("create table new_table (i int) PARTITIONED BY (c char(3))");
 
     // Supported file formats. Exclude Avro since it is tested separately.
@@ -1312,6 +1322,22 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "Hive UDFs that use DECIMAL are not yet supported.");
     AnalysisError("create function foo(Decimal) RETURNS int LOCATION '/a.jar'",
         "Hive UDFs that use DECIMAL are not yet supported.");
+    AnalysisError("create function foo(char(5)) RETURNS int LOCATION '/a.jar'",
+        "UDFs that use CHAR are not yet supported.");
+    AnalysisError("create function foo(varchar(5)) RETURNS int LOCATION '/a.jar'",
+        "UDFs that use VARCHAR are not yet supported.");
+    AnalysisError("create function foo() RETURNS CHAR(5) LOCATION '/a.jar'",
+        "UDFs that use CHAR are not yet supported.");
+    AnalysisError("create function foo() RETURNS VARCHAR(5) LOCATION '/a.jar'",
+        "UDFs that use VARCHAR are not yet supported.");
+    AnalysisError("create function foo() RETURNS CHAR(5)" + udfSuffix,
+        "UDFs that use CHAR are not yet supported.");
+    AnalysisError("create function foo() RETURNS VARCHAR(5)" + udfSuffix,
+        "UDFs that use VARCHAR are not yet supported.");
+    AnalysisError("create function foo(CHAR(5)) RETURNS int" + udfSuffix,
+        "UDFs that use CHAR are not yet supported.");
+    AnalysisError("create function foo(VARCHAR(5)) RETURNS int" + udfSuffix,
+        "UDFs that use VARCHAR are not yet supported.");
 
     AnalyzesOk("create function foo() RETURNS decimal" + udfSuffix);
     AnalyzesOk("create function foo() RETURNS decimal(38,10)" + udfSuffix);
@@ -1524,6 +1550,20 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         + "RETURNS int" + loc,
       "UDAs with more than 8 arguments are not yet supported.");
 
+    // Check that CHAR and VARCHAR are not valid UDA argument or return types
+    String symbols =
+        " UPDATE_FN='_Z9AggUpdatePN10impala_udf15FunctionContextERKNS_6IntValEPS2_' " +
+        "INIT_FN='_Z7AggInitPN10impala_udf15FunctionContextEPNS_6IntValE' " +
+        "MERGE_FN='_Z8AggMergePN10impala_udf15FunctionContextERKNS_6IntValEPS2_'";
+    AnalysisError("create aggregate function foo(CHAR(5)) RETURNS int" + loc + symbols,
+        "UDAs with CHAR arguments are not yet supported.");
+    AnalysisError("create aggregate function foo(VARCHAR(5)) RETURNS int" + loc + symbols,
+        "UDAs with VARCHAR arguments are not yet supported.");
+    AnalysisError("create aggregate function foo(int) RETURNS CHAR(5)" + loc + symbols,
+        "UDAs with CHAR return type are not yet supported.");
+    AnalysisError("create aggregate function foo(int) RETURNS VARCHAR(5)" + loc + symbols,
+        "UDAs with VARCHAR return type are not yet supported.");
+
     // Specify the complete symbol. If the user does this, we can't guess the
     // other function names.
     // TODO: think about these error messages more. Perhaps they can be made
@@ -1577,7 +1617,7 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     // Invalid char(0) type.
     AnalysisError("create aggregate function foo(int) RETURNS int " +
         "INTERMEDIATE CHAR(0) LOCATION '/foo.so' UPDATE_FN='b'",
-        "Char size must be > 0. Size was set to: 0.");
+        "Char size must be > 0. Size is too small: 0.");
     AnalysisError("create aggregate function foo() RETURNS int" + loc,
         "UDAs must take at least one argument.");
     AnalysisError("create aggregate function foo(int) RETURNS int LOCATION " +

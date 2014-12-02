@@ -29,8 +29,6 @@ class TestTpcdsQuery(ImpalaTestSuite):
     cls.TestMatrix.add_constraint(lambda v:\
         v.get_value('exec_option')['batch_size'] == 0)
 
-  @pytest.mark.execute_serially
-  # Marked serially to make sure it runs first.
   def test_tpcds_count(self, vector):
     self.run_test_case('count', vector)
 
@@ -98,7 +96,6 @@ class TestTpcdsQuery(ImpalaTestSuite):
     self.run_test_case('tpcds-q98', vector)
 
   def test_tpcds_q47(self, vector):
-    pytest.xfail("IMPALA-1238")
     self.run_test_case('tpcds-q47', vector)
 
   def test_tpcds_q6(self, vector):
@@ -118,8 +115,8 @@ class TestTpcdsInsert(ImpalaTestSuite):
         is_supported_insert_format(v.get_value('table_format')))
     if cls.exploration_strategy() == 'core' and not pytest.config.option.table_formats:
       # Don't run on core, unless the user explicitly wants to validate a specific table
-      # format. Each test vector takes > 30s to complete and it doesn't add much additional
-      # coverage on top of what's in the functional insert test suite
+      # format. Each test vector takes > 30s to complete and it doesn't add much
+      # additional coverage on top of what's in the functional insert test suite
       cls.TestMatrix.add_constraint(lambda v: False);
 
   def test_tpcds_partitioned_insert(self, vector):

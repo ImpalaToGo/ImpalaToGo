@@ -46,6 +46,8 @@ HashJoinNode::HashJoinNode(
   // The hash join node does not support cross or anti joins
   DCHECK_NE(join_op_, TJoinOp::CROSS_JOIN);
   DCHECK_NE(join_op_, TJoinOp::LEFT_ANTI_JOIN);
+  DCHECK_NE(join_op_, TJoinOp::RIGHT_SEMI_JOIN);
+  DCHECK_NE(join_op_, TJoinOp::RIGHT_ANTI_JOIN);
 
   match_all_probe_ =
     (join_op_ == TJoinOp::LEFT_OUTER_JOIN || join_op_ == TJoinOp::FULL_OUTER_JOIN);
@@ -102,6 +104,9 @@ Status HashJoinNode::Prepare(RuntimeState* state) {
       false, state->fragment_hash_seed(), mem_tracker()));
 
   if (state->codegen_enabled()) {
+    LlvmCodeGen* codegen;
+    RETURN_IF_ERROR(state->GetCodegen(&codegen));
+
     // Codegen for hashing rows
     Function* hash_fn = hash_tbl_->CodegenHashCurrentRow(state);
     if (hash_fn == NULL) return Status::OK;
@@ -109,7 +114,7 @@ Status HashJoinNode::Prepare(RuntimeState* state) {
     // Codegen for build path
     codegen_process_build_batch_fn_ = CodegenProcessBuildBatch(state, hash_fn);
     if (codegen_process_build_batch_fn_ != NULL) {
-      state->codegen()->AddFunctionToJit(codegen_process_build_batch_fn_,
+      codegen->AddFunctionToJit(codegen_process_build_batch_fn_,
           reinterpret_cast<void**>(&process_build_batch_fn_));
       AddRuntimeExecOption("Build Side Codegen Enabled");
     }
@@ -118,7 +123,7 @@ Status HashJoinNode::Prepare(RuntimeState* state) {
     if (!match_all_build_) {
       Function* codegen_process_probe_batch_fn = CodegenProcessProbeBatch(state, hash_fn);
       if (codegen_process_probe_batch_fn != NULL) {
-        state->codegen()->AddFunctionToJit(codegen_process_probe_batch_fn,
+        codegen->AddFunctionToJit(codegen_process_probe_batch_fn,
             reinterpret_cast<void**>(&process_probe_batch_fn_));
         AddRuntimeExecOption("Probe Side Codegen Enabled");
       }
@@ -150,13 +155,13 @@ Status HashJoinNode::ConstructBuildSide(RuntimeState* state) {
   RETURN_IF_ERROR(child(1)->Open(state));
   while (true) {
     RETURN_IF_CANCELLED(state);
-    RETURN_IF_ERROR(state->CheckQueryState());
+    RETURN_IF_ERROR(QueryMaintenance(state));
     bool eos;
     RETURN_IF_ERROR(child(1)->GetNext(state, &build_batch, &eos));
     SCOPED_TIMER(build_timer_);
     // take ownership of tuple data of build_batch
     build_pool_->AcquireData(build_batch.tuple_data_pool(), false);
-    RETURN_IF_ERROR(state->CheckQueryState());
+    RETURN_IF_ERROR(QueryMaintenance(state));
 
     // Call codegen version if possible
     if (process_build_batch_fn_ == NULL) {
@@ -177,7 +182,8 @@ Status HashJoinNode::ConstructBuildSide(RuntimeState* state) {
   // We've finished constructing the build side. Set the bitmap of the build side values
   // so that the probe side can use this as an additional predicate.
   // We only do this if the build side is sufficiently small.
-  // TODO: better heuristic?
+  // TODO: Better heuristic? Currently we simply compare the size of the HT with a
+  // constant value.
   if (can_add_probe_filters_) {
     if (hash_tbl_->size() < state->slot_filter_bitmap_size()) {
       AddRuntimeExecOption("Build-Side Filter Pushed Down");
@@ -204,7 +210,7 @@ Status HashJoinNode::GetNext(RuntimeState* state, RowBatch* out_batch, bool* eos
   SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
-  RETURN_IF_ERROR(state->CheckQueryState());
+  RETURN_IF_ERROR(QueryMaintenance(state));
   if (ReachedLimit()) {
     *eos = true;
     return Status::OK;
@@ -515,7 +521,9 @@ Function* HashJoinNode::CodegenCreateOutputRow(LlvmCodeGen* codegen) {
 
 Function* HashJoinNode::CodegenProcessBuildBatch(RuntimeState* state,
     Function* hash_fn) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
+
   // Get cross compiled function
   Function* process_build_batch_fn = codegen->GetFunction(
       IRFunction::HASH_JOIN_PROCESS_BUILD_BATCH);
@@ -539,7 +547,8 @@ Function* HashJoinNode::CodegenProcessBuildBatch(RuntimeState* state,
 }
 
 Function* HashJoinNode::CodegenProcessProbeBatch(RuntimeState* state, Function* hash_fn) {
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Get cross compiled function
   Function* process_probe_batch_fn =

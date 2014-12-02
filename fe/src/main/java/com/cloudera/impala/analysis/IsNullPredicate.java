@@ -25,6 +25,7 @@ import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.Reference;
 import com.cloudera.impala.thrift.TExprNode;
 import com.cloudera.impala.thrift.TExprNodeType;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
@@ -85,6 +86,14 @@ public class IsNullPredicate extends Predicate {
   }
 
   @Override
+  public String debugString() {
+    return Objects.toStringHelper(this)
+        .add("notNull", isNotNull_)
+        .addValue(super.debugString())
+        .toString();
+  }
+
+  @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     if (isAnalyzed_) return;
     super.analyze(analyzer);
@@ -122,10 +131,11 @@ public class IsNullPredicate extends Predicate {
     // determine selectivity
     // TODO: increase this to make sure we don't end up favoring broadcast joins
     // due to underestimated cardinalities?
-    selectivity_ = 0.1;
+    selectivity_ = DEFAULT_SELECTIVITY;
     Reference<SlotRef> slotRefRef = new Reference<SlotRef>();
     if (isSingleColumnPredicate(slotRefRef, null)) {
       SlotDescriptor slotDesc = slotRefRef.getRef().getDesc();
+      if (!slotDesc.getStats().hasNulls()) return;
       Table table = slotDesc.getParent().getTable();
       if (table != null && table.getNumRows() > 0) {
         long numRows = table.getNumRows();

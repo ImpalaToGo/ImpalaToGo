@@ -162,6 +162,8 @@ FunctionContextImpl::FunctionContextImpl(FunctionContext* parent)
     debug_(false),
     version_(FunctionContext::v1_3),
     num_warnings_(0),
+    num_updates_(0),
+    num_removes_(0),
     thread_local_fn_state_(NULL),
     fragment_local_fn_state_(NULL),
     external_bytes_tracked_(0),
@@ -169,7 +171,7 @@ FunctionContextImpl::FunctionContextImpl(FunctionContext* parent)
 }
 
 void FunctionContextImpl::Close() {
-  assert(!closed_ && "FunctionContextImpl::Close() called twice");
+  if (closed_) return;
   stringstream error_ss;
   if (!allocations_.empty()) {
     int bytes = 0;
@@ -239,6 +241,7 @@ const char* FunctionContext::error_msg() const {
 }
 
 uint8_t* FunctionContext::Allocate(int byte_size) {
+  assert(!impl_->closed_);
   if (byte_size == 0) return NULL;
   uint8_t* buffer = impl_->pool_->Allocate(byte_size);
   impl_->allocations_[buffer] = byte_size;
@@ -250,6 +253,7 @@ uint8_t* FunctionContext::Allocate(int byte_size) {
 }
 
 uint8_t* FunctionContext::Reallocate(uint8_t* ptr, int byte_size) {
+  assert(!impl_->closed_);
   VLOG_ROW << "Reallocate: FunctionContext=" << this
            << " size=" << byte_size
            << " ptr=" << reinterpret_cast<void*>(ptr);
@@ -262,6 +266,7 @@ uint8_t* FunctionContext::Reallocate(uint8_t* ptr, int byte_size) {
 }
 
 void FunctionContext::Free(uint8_t* buffer) {
+  assert(!impl_->closed_);
   if (buffer == NULL) return;
   VLOG_ROW << "Free: FunctionContext=" << this << " "
            << reinterpret_cast<void*>(buffer);
@@ -283,11 +288,13 @@ void FunctionContext::Free(uint8_t* buffer) {
 }
 
 void FunctionContext::TrackAllocation(int64_t bytes) {
+  assert(!impl_->closed_);
   impl_->external_bytes_tracked_ += bytes;
   impl_->pool_->mem_tracker()->Consume(bytes);
 }
 
 void FunctionContext::Free(int64_t bytes) {
+  assert(!impl_->closed_);
   if (bytes > impl_->external_bytes_tracked_) {
     stringstream ss;
     ss << "FunctionContext::Free() called with " << bytes << " bytes, but only "
@@ -301,6 +308,7 @@ void FunctionContext::Free(int64_t bytes) {
 }
 
 void FunctionContext::SetError(const char* error_msg) {
+  assert(!impl_->closed_);
   if (impl_->error_msg_.empty()) {
     impl_->error_msg_ = error_msg;
     stringstream ss;
@@ -313,6 +321,7 @@ void FunctionContext::SetError(const char* error_msg) {
 // Plumb the ToSql() from the FE?
 // TODO: de-dup warnings
 bool FunctionContext::AddWarning(const char* warning_msg) {
+  assert(!impl_->closed_);
   if (impl_->num_warnings_++ >= MAX_WARNINGS) return false;
   stringstream ss;
   ss << "UDF WARNING: " << warning_msg;
@@ -333,6 +342,7 @@ bool FunctionContext::AddWarning(const char* warning_msg) {
 }
 
 void* FunctionContext::GetFunctionState(FunctionStateScope scope) const {
+  assert(!impl_->closed_);
   switch (scope) {
     case THREAD_LOCAL:
       return impl_->thread_local_fn_state_;
@@ -347,6 +357,7 @@ void* FunctionContext::GetFunctionState(FunctionStateScope scope) const {
 }
 
 void FunctionContext::SetFunctionState(FunctionStateScope scope, void* ptr) {
+  assert(!impl_->closed_);
   switch (scope) {
     case THREAD_LOCAL:
       impl_->thread_local_fn_state_ = ptr;
@@ -362,6 +373,7 @@ void FunctionContext::SetFunctionState(FunctionStateScope scope, void* ptr) {
 }
 
 uint8_t* FunctionContextImpl::AllocateLocal(int byte_size) {
+  assert(!closed_);
   if (byte_size == 0) return NULL;
   uint8_t* buffer = pool_->Allocate(byte_size);
   local_allocations_.push_back(buffer);
@@ -372,6 +384,7 @@ uint8_t* FunctionContextImpl::AllocateLocal(int byte_size) {
 }
 
 void FunctionContextImpl::FreeLocalAllocations() {
+  assert(!closed_);
   if (VLOG_ROW_IS_ON) {
     stringstream ss;
     ss << "Free local allocations: FunctionContext=" << context_

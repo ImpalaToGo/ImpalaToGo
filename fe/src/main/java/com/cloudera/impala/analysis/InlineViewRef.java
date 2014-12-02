@@ -158,7 +158,14 @@ public class InlineViewRef extends TableRef {
     // tuple descriptor's slots and our *unresolved* select list exprs;
     // we create these auxiliary predicates so that the analyzer can compute the value
     // transfer graph through this inline view correctly (ie, predicates can get
-    // propagated through the view)
+    // propagated through the view);
+    // if the view stmt contains analytic functions, we cannot propagate predicates
+    // into the view, because those extra filters would alter the results of the
+    // analytic functions (see IMPALA-1243)
+    // TODO: relax this a bit by allowing propagation out of the inline view (but
+    // not into it)
+    boolean createAuxPredicates = !(queryStmt_ instanceof SelectStmt)
+        || !(((SelectStmt) queryStmt_).hasAnalyticInfo());
     for (int i = 0; i < queryStmt_.getColLabels().size(); ++i) {
       String colName = queryStmt_.getColLabels().get(i);
       Expr colExpr = queryStmt_.getResultExprs().get(i);
@@ -168,7 +175,9 @@ public class InlineViewRef extends TableRef {
       smap_.put(slotRef, colExpr);
       baseTblSmap_.put(slotRef, queryStmt_.getBaseTblResultExprs().get(i));
 
-      analyzer.createAuxEquivPredicate(new SlotRef(slotDesc), colExpr.clone());
+      if (createAuxPredicates) {
+        analyzer.createAuxEquivPredicate(new SlotRef(slotDesc), colExpr.clone());
+      }
     }
     LOG.trace("inline view " + getAlias() + " smap: " + smap_.debugString());
     LOG.trace("inline view " + getAlias() + " baseTblSmap: " +
@@ -185,7 +194,8 @@ public class InlineViewRef extends TableRef {
   @Override
   public TupleDescriptor createTupleDescriptor(Analyzer analyzer)
       throws AnalysisException {
-    InlineView inlineView = (view_ != null) ? new InlineView(view_) : new InlineView(alias_);
+    InlineView inlineView =
+        (view_ != null) ? new InlineView(view_) : new InlineView(alias_);
     for (int i = 0; i < queryStmt_.getColLabels().size(); ++i) {
       // inline view select statement has been analyzed. Col label should be filled.
       Expr selectItemExpr = queryStmt_.getResultExprs().get(i);
@@ -203,7 +213,8 @@ public class InlineViewRef extends TableRef {
     }
 
     // Create the non-materialized tuple and set the fake table in it.
-    TupleDescriptor result = analyzer.getDescTbl().createTupleDescriptor();
+    TupleDescriptor result =
+        analyzer.getDescTbl().createTupleDescriptor("inl-view-" + alias_);
     result.setIsMaterialized(false);
     result.setTable(inlineView);
     return result;
@@ -270,7 +281,7 @@ public class InlineViewRef extends TableRef {
     // Replace all SlotRefs in expr with NullLiterals, and wrap the result
     // with an IS NOT NULL predicate.
     Expr isNotNullLiteralPred =
-        new IsNullPredicate(expr.substitute(nullSMap, analyzer), true);
+        new IsNullPredicate(expr.substitute(nullSMap, analyzer, false), true);
     Preconditions.checkState(isNotNullLiteralPred.isConstant());
     // analyze to insert casts, etc.
     isNotNullLiteralPred.analyze(analyzer);

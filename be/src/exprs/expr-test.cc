@@ -1574,23 +1574,61 @@ TEST_F(ExprTest, StringFunctions) {
   TestStringValue("lower(cast('HELLO' as VARCHAR(3)))", "hel");
   TestStringValue("lower(cast(123456 as VARCHAR(3)))", "123");
   TestIsNull("cast(NULL as VARCHAR(3))", TYPE_STRING);
+  TestCharValue("cast('12345' as CHAR(130))",
+      "12345                                                                  "
+      "                                                           ",
+      ColumnType::CreateCharType(130));
 
-  if (disable_codegen_) {
-    // TODO remove if guard once CHAR codegen is committed
-    TestCharValue("cast('HELLO' as CHAR(3))", "HEL",
-                  ColumnType::CreateCharType(3));
-    TestCharValue("cast('HELLO' as CHAR(7))", "HELLO  ",
-                  ColumnType::CreateCharType(7));
-    TestCharValue("cast('HELLO' as CHAR(70))",
-        "HELLO                                                                 ",
-        ColumnType::CreateCharType(70));
-    TestValue("cast('HELLO' as CHAR(7)) = 'HELLO  '", TYPE_BOOLEAN, true);
-    TestValue("cast('HELLO' as CHAR(7)) = cast('HELLO' as CHAR(5))", TYPE_BOOLEAN, true);
-    TestStringValue("lower(cast('HELLO' as CHAR(3)))", "hel");
-    TestStringValue("lower(cast(123456 as CHAR(3)))", "123");
-    TestStringValue("cast(cast(123456 as CHAR(3)) as VARCHAR(3))", "123");
-    TestIsNull("cast(NULL as CHAR(3))", ColumnType::CreateCharType(3));
+  TestCharValue("cast(cast('HELLO' as VARCHAR(3)) as CHAR(3))", "HEL",
+                ColumnType::CreateCharType(3));
+  TestStringValue("cast(cast('HELLO' as CHAR(3)) as VARCHAR(3))", "HEL");
+  TestCharValue("cast(cast('HELLO' as VARCHAR(7)) as CHAR(7))", "HELLO  ",
+                ColumnType::CreateCharType(7));
+  TestCharValue("cast(cast('HELLO' as STRING) as CHAR(7))", "HELLO  ",
+                ColumnType::CreateCharType(7));
+  TestStringValue("cast(cast('HELLO' as CHAR(7)) as VARCHAR(7))", "HELLO  ");
+  TestStringValue("cast(cast('HELLO' as CHAR(5)) as VARCHAR(3))", "HEL");
+  TestCharValue("cast(cast('HELLO' as VARCHAR(7)) as CHAR(3))", "HEL",
+                ColumnType::CreateCharType(3));
+
+  TestCharValue("cast(5 as char(5))", "5    ", ColumnType::CreateCharType(5));
+  TestCharValue("cast(5.1 as char(5))", "5.1  ", ColumnType::CreateCharType(5));
+  TestCharValue("cast(cast(1 as decimal(2,1)) as char(5))", "1.0  ",
+                ColumnType::CreateCharType(5));
+  TestCharValue("cast(cast('2014-09-30 10:35:10.632995000' as TIMESTAMP) as char(35))",
+                "2014-09-30 10:35:10.632995000      ",
+                ColumnType::CreateCharType(35));
+
+  TestCharValue("cast('HELLO' as CHAR(3))", "HEL",
+                ColumnType::CreateCharType(3));
+  TestCharValue("cast('HELLO' as CHAR(7))", "HELLO  ",
+                ColumnType::CreateCharType(7));
+  TestCharValue("cast('HELLO' as CHAR(70))",
+      "HELLO                                                                 ",
+      ColumnType::CreateCharType(70));
+  TestValue("cast('HELLO' as CHAR(7)) = 'HELLO  '", TYPE_BOOLEAN, true);
+  TestValue("cast('HELLO' as CHAR(7)) = cast('HELLO' as CHAR(5))", TYPE_BOOLEAN, true);
+  TestStringValue("lower(cast('HELLO' as CHAR(3)))", "hel");
+  TestStringValue("lower(cast(123456 as CHAR(3)))", "123");
+  TestStringValue("cast(cast(123456 as CHAR(3)) as VARCHAR(3))", "123");
+  TestStringValue("cast(cast(123456 as CHAR(3)) as VARCHAR(65355))", "123");
+  TestIsNull("cast(NULL as CHAR(3))", ColumnType::CreateCharType(3));
+
+  TestCharValue("cast('HELLO' as CHAR(255))",
+      "HELLO                                                                        "
+      "                                                                             "
+      "                                                                             "
+      "                        ", ColumnType::CreateCharType(255));
+
+  // Test maximum VARCHAR value
+  char query[ColumnType::MAX_VARCHAR_LENGTH + 1024];
+  char big_str[ColumnType::MAX_VARCHAR_LENGTH+1];
+  for (int i = 0 ; i < ColumnType::MAX_VARCHAR_LENGTH; i++) {
+    big_str[i] = 'a';
   }
+  big_str[ColumnType::MAX_VARCHAR_LENGTH] = '\0';
+  sprintf(query, "cast('%sxxx' as VARCHAR(%d))", big_str, ColumnType::MAX_VARCHAR_LENGTH);
+  TestStringValue(query, big_str);
 }
 
 TEST_F(ExprTest, StringRegexpFunctions) {
@@ -2513,6 +2551,9 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestStringValue("cast(from_utc_timestamp(cast(1333594800 as timestamp),"
       "'Europe/Moscow') as string)", "2012-04-05 07:00:00");
 
+  // Regression for IMPALA-1105
+  TestIsNull("cast(cast('NOTATIMESTAMP' as timestamp) as string)", TYPE_STRING);
+
   TestStringValue("cast(cast('2012-01-01 09:10:11.123456789' as timestamp) as string)",
       "2012-01-01 09:10:11.123456789");
   // Add/sub years.
@@ -2881,6 +2922,17 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestIsNull("unix_timestamp('1970-20-01', 'yyyy-MM-dd')", TYPE_INT);
 
 
+  // regression test for IMPALA-1105
+  TestIsNull("cast(trunc('2014-07-22 01:34:55 +0100', 'year') as STRING)", TYPE_STRING);
+  TestStringValue("cast(trunc(cast('2014-04-01' as timestamp), 'SYYYY') as string)",
+          "2014-01-01 00:00:00");
+  TestIsNull("cast(trunc('01:34:55', 'year') as STRING)", TYPE_STRING);
+  TestStringValue("cast(trunc(cast('07:02:03' as timestamp), 'MI') as string)",
+          "07:02:00");
+  // note: no time value in string defaults to 00:00:00
+  TestStringValue("cast(trunc(cast('2014-01-01' as timestamp), 'MI') as string)",
+          "2014-01-01 00:00:00");
+
   TestStringValue(
         "cast(trunc(cast('2014-04-01 01:01:01' as timestamp), 'SYYYY') as string)",
           "2014-01-01 00:00:00");
@@ -3079,8 +3131,10 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestNonOkStatus("cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'MIN') as string)");
   TestNonOkStatus("cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'XXYYZZ') as string)");
 
+  // Extract as a regular function
   TestValue("extract(cast('2006-05-12 18:27:28.12345' as timestamp), 'YEAR')",
             TYPE_INT, 2006);
+  TestValue("extract('2006-05-12 18:27:28.12345', 'YEAR')", TYPE_INT, 2006);
   TestValue("extract(cast('2006-05-12 18:27:28.12345' as timestamp), 'MoNTH')",
             TYPE_INT, 5);
   TestValue("extract(cast('2006-05-12 18:27:28.12345' as timestamp), 'DaY')",
@@ -3095,12 +3149,53 @@ TEST_F(ExprTest, TimestampFunctions) {
             TYPE_INT, 123);
   TestValue("extract(cast('2006-05-13 01:27:28.12345' as timestamp), 'EPOCH')",
             TYPE_INT, 1147483648);
-  TestValue("extract(cast('2006-05-13 01:27:28.12345' as timestamp), 'EPOCH')",
-            TYPE_INT, 1147483648);
   TestNonOkStatus("extract(cast('2006-05-13 01:27:28.12345' as timestamp), 'foo')");
   TestNonOkStatus("extract(cast('2006-05-13 01:27:28.12345' as timestamp), NULL)");
   TestIsNull("extract(NULL, 'EPOCH')", TYPE_INT);
   TestNonOkStatus("extract(NULL, NULL)");
+
+  // Extract using FROM keyword
+  TestValue("extract(YEAR from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 2006);
+  TestValue("extract(MoNTH from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 5);
+  TestValue("extract(DaY from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 12);
+  TestValue("extract(hour from cast('2006-05-12 06:27:28.12345' as timestamp))",
+            TYPE_INT, 6);
+  TestValue("extract(MINUTE from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 27);
+  TestValue("extract(SECOND from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 28);
+  TestValue("extract(MILLISECOND from cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 123);
+  TestValue("extract(EPOCH from cast('2006-05-13 01:27:28.12345' as timestamp))",
+            TYPE_INT, 1147483648);
+  TestNonOkStatus("extract(foo from cast('2006-05-13 01:27:28.12345' as timestamp))");
+  TestNonOkStatus("extract(NULL from cast('2006-05-13 01:27:28.12345' as timestamp))");
+  TestIsNull("extract(EPOCH from NULL)", TYPE_INT);
+
+  // Date_part, same as extract function but with arguments swapped
+  TestValue("date_part('YEAR', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 2006);
+  TestValue("date_part('MoNTH', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 5);
+  TestValue("date_part('DaY', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 12);
+  TestValue("date_part('hour', cast('2006-05-12 06:27:28.12345' as timestamp))",
+            TYPE_INT, 6);
+  TestValue("date_part('MINUTE', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 27);
+  TestValue("date_part('SECOND', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 28);
+  TestValue("date_part('MILLISECOND', cast('2006-05-12 18:27:28.12345' as timestamp))",
+            TYPE_INT, 123);
+  TestValue("date_part('EPOCH', cast('2006-05-13 01:27:28.12345' as timestamp))",
+            TYPE_INT, 1147483648);
+  TestNonOkStatus("date_part('foo', cast('2006-05-13 01:27:28.12345' as timestamp))");
+  TestNonOkStatus("date_part(NULL, cast('2006-05-13 01:27:28.12345' as timestamp))");
+  TestIsNull("date_part('EPOCH', NULL)", TYPE_INT);
+  TestNonOkStatus("date_part(NULL, NULL)");
 }
 
 TEST_F(ExprTest, ConditionalFunctions) {
@@ -3268,46 +3363,46 @@ TEST_F(ExprTest, ConditionalFunctions) {
     TestValue("case when false then 1 else " + s + " end", t, int_iter->second);
     TestValue("case when true then 1 else " + s + " end", t, 1);
     TestValue("case 0 when " + s + " then true else false end", TYPE_BOOLEAN, false);
-
-    // Test for zeroifnull
-    // zeroifnull(NULL) returns 0, zeroifnull(non-null) returns the argument
-    TestValue("zeroifnull(NULL)", TYPE_TINYINT, 0);
-    TestValue("zeroifnull(cast (NULL as TINYINT))", TYPE_TINYINT, 0);
-    TestValue("zeroifnull(cast (5 as TINYINT))", TYPE_TINYINT, 5);
-    TestValue("zeroifnull(cast (NULL as SMALLINT))", TYPE_SMALLINT, 0);
-    TestValue("zeroifnull(cast (5 as SMALLINT))", TYPE_SMALLINT, 5);
-    TestValue("zeroifnull(cast (NULL as INT))", TYPE_INT, 0);
-    TestValue("zeroifnull(cast (5 as INT))", TYPE_INT, 5);
-    TestValue("zeroifnull(cast (NULL as BIGINT))", TYPE_BIGINT, 0);
-    TestValue("zeroifnull(cast (5 as BIGINT))", TYPE_BIGINT, 5);
-    TestValue<float>("zeroifnull(cast (NULL as FLOAT))", TYPE_FLOAT, 0.0f);
-    TestValue<float>("zeroifnull(cast (5 as FLOAT))", TYPE_FLOAT, 5.0f);
-    TestValue<double>("zeroifnull(cast (NULL as DOUBLE))", TYPE_DOUBLE, 0.0);
-    TestValue<double>("zeroifnull(cast (5 as DOUBLE))", TYPE_DOUBLE, 5.0);
-
-    // Test for NullIfZero
-    // Test that 0 converts to NULL and NULL remains NULL
-    TestIsNull("nullifzero(cast (0 as TINYINT))", TYPE_TINYINT);
-    TestIsNull("nullifzero(cast (NULL as TINYINT))", TYPE_TINYINT);
-    TestIsNull("nullifzero(cast (0 as SMALLINT))", TYPE_SMALLINT);
-    TestIsNull("nullifzero(cast (NULL as SMALLINT))", TYPE_SMALLINT);
-    TestIsNull("nullifzero(cast (0 as INT))", TYPE_INT);
-    TestIsNull("nullifzero(cast (NULL as INT))", TYPE_INT);
-    TestIsNull("nullifzero(cast (0 as BIGINT))", TYPE_BIGINT);
-    TestIsNull("nullifzero(cast (NULL as BIGINT))", TYPE_BIGINT);
-    TestIsNull("nullifzero(cast (0 as FLOAT))", TYPE_FLOAT);
-    TestIsNull("nullifzero(cast (NULL as FLOAT))", TYPE_FLOAT);
-    TestIsNull("nullifzero(cast (0 as DOUBLE))", TYPE_DOUBLE);
-    TestIsNull("nullifzero(cast (NULL as DOUBLE))", TYPE_DOUBLE);
-
-    // test that non-zero args are returned unchanged.
-    TestValue("nullifzero(cast (5 as TINYINT))", TYPE_TINYINT, 5);
-    TestValue("nullifzero(cast (5 as SMALLINT))", TYPE_SMALLINT, 5);
-    TestValue("nullifzero(cast (5 as INT))", TYPE_INT, 5);
-    TestValue("nullifzero(cast (5 as BIGINT))", TYPE_BIGINT, 5);
-    TestValue<float>("nullifzero(cast (5 as FLOAT))", TYPE_FLOAT, 5.0f);
-    TestValue<double>("nullifzero(cast (5 as DOUBLE))", TYPE_DOUBLE, 5.0);
   }
+
+  // Test for zeroifnull
+  // zeroifnull(NULL) returns 0, zeroifnull(non-null) returns the argument
+  TestValue("zeroifnull(NULL)", TYPE_TINYINT, 0);
+  TestValue("zeroifnull(cast (NULL as TINYINT))", TYPE_TINYINT, 0);
+  TestValue("zeroifnull(cast (5 as TINYINT))", TYPE_TINYINT, 5);
+  TestValue("zeroifnull(cast (NULL as SMALLINT))", TYPE_SMALLINT, 0);
+  TestValue("zeroifnull(cast (5 as SMALLINT))", TYPE_SMALLINT, 5);
+  TestValue("zeroifnull(cast (NULL as INT))", TYPE_INT, 0);
+  TestValue("zeroifnull(cast (5 as INT))", TYPE_INT, 5);
+  TestValue("zeroifnull(cast (NULL as BIGINT))", TYPE_BIGINT, 0);
+  TestValue("zeroifnull(cast (5 as BIGINT))", TYPE_BIGINT, 5);
+  TestValue<float>("zeroifnull(cast (NULL as FLOAT))", TYPE_FLOAT, 0.0f);
+  TestValue<float>("zeroifnull(cast (5 as FLOAT))", TYPE_FLOAT, 5.0f);
+  TestValue<double>("zeroifnull(cast (NULL as DOUBLE))", TYPE_DOUBLE, 0.0);
+  TestValue<double>("zeroifnull(cast (5 as DOUBLE))", TYPE_DOUBLE, 5.0);
+
+  // Test for NullIfZero
+  // Test that 0 converts to NULL and NULL remains NULL
+  TestIsNull("nullifzero(cast (0 as TINYINT))", TYPE_TINYINT);
+  TestIsNull("nullifzero(cast (NULL as TINYINT))", TYPE_TINYINT);
+  TestIsNull("nullifzero(cast (0 as SMALLINT))", TYPE_SMALLINT);
+  TestIsNull("nullifzero(cast (NULL as SMALLINT))", TYPE_SMALLINT);
+  TestIsNull("nullifzero(cast (0 as INT))", TYPE_INT);
+  TestIsNull("nullifzero(cast (NULL as INT))", TYPE_INT);
+  TestIsNull("nullifzero(cast (0 as BIGINT))", TYPE_BIGINT);
+  TestIsNull("nullifzero(cast (NULL as BIGINT))", TYPE_BIGINT);
+  TestIsNull("nullifzero(cast (0 as FLOAT))", TYPE_FLOAT);
+  TestIsNull("nullifzero(cast (NULL as FLOAT))", TYPE_FLOAT);
+  TestIsNull("nullifzero(cast (0 as DOUBLE))", TYPE_DOUBLE);
+  TestIsNull("nullifzero(cast (NULL as DOUBLE))", TYPE_DOUBLE);
+
+  // test that non-zero args are returned unchanged.
+  TestValue("nullifzero(cast (5 as TINYINT))", TYPE_TINYINT, 5);
+  TestValue("nullifzero(cast (5 as SMALLINT))", TYPE_SMALLINT, 5);
+  TestValue("nullifzero(cast (5 as INT))", TYPE_INT, 5);
+  TestValue("nullifzero(cast (5 as BIGINT))", TYPE_BIGINT, 5);
+  TestValue<float>("nullifzero(cast (5 as FLOAT))", TYPE_FLOAT, 5.0f);
+  TestValue<double>("nullifzero(cast (5 as DOUBLE))", TYPE_DOUBLE, 5.0);
 
   // Test all float types in then and else exprs.
   // Also tests implicit casting in all exprs.
@@ -3342,6 +3437,15 @@ TEST_F(ExprTest, ConditionalFunctions) {
       default_timestamp_val_);
   TestTimestampValue("case when false then cast('1999-06-14 19:07:25' as timestamp) "
       "else " + default_timestamp_str_ + " end", default_timestamp_val_);
+
+  // Test Decode. This function is internalized as a CaseExpr so no
+  // extra testing should be needed. To be safe, a sanity test will be done.
+  TestValue("decode(1, 2, 3, 4)", TYPE_TINYINT, 4);
+  // In Decode NULLs are equal
+  TestValue("decode(NULL + 1, NULL + 2, 3)", TYPE_TINYINT, 3);
+  TestValue("decode(NULL, NULL, 2)", TYPE_TINYINT, 2);
+  TestIsNull("decode(1, NULL, 2)", TYPE_TINYINT);
+  TestIsNull("decode(NULL, 1, 2)", TYPE_TINYINT);
 }
 
 // Validates that Expr::ComputeResultsLayout() for 'exprs' is correct.
@@ -3662,6 +3766,7 @@ TEST_F(ExprTest, DecimalFunctions) {
   TestIsNull("negative(cast(NULL as decimal(32,2)))",
       ColumnType::CreateDecimalType(32,2));
 
+  // TODO: Disabled due to IMPALA-1111.
   // Least()
   TestDecimalValue("least(cast('10' as decimal(2,0)), cast('-10' as decimal(2,0)))",
       Decimal4Value(-10), ColumnType::CreateDecimalType(2, 0));
@@ -3965,7 +4070,7 @@ TEST_F(ExprTest, DecimalFunctions) {
 
   // Overflow on Round()/etc. This can only happen when the input is has enough
   // leading 9's.
-  // Rounding this value requries a precision of 39 so it overflows.
+  // Rounding this value requires a precision of 39 so it overflows.
   TestIsNull("round(99999999999999999999999999999999999999., -1)",
       ColumnType::CreateDecimalType(38, 0));
   TestIsNull("round(-99999999999999999999999999999999000000., -7)",

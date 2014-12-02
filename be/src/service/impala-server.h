@@ -127,11 +127,9 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // Pings the Impala service and gets the server version string.
   virtual void PingImpalaService(TPingImpalaServiceResp& return_val);
 
-  // TODO: Need to implement HiveServer2 version of GetRuntimeProfile
   virtual void GetRuntimeProfile(std::string& profile_output,
       const beeswax::QueryHandle& query_id);
 
-  // TODO: Need to implement HiveServer2 version of GetExecSummary
   virtual void GetExecSummary(impala::TExecSummary& result,
       const beeswax::QueryHandle& query_id);
 
@@ -198,6 +196,15 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
       const TGetExecSummaryReq& request);
   virtual void GetRuntimeProfile(TGetRuntimeProfileResp& return_val,
       const TGetRuntimeProfileReq& request);
+  virtual void GetDelegationToken(
+      apache::hive::service::cli::thrift::TGetDelegationTokenResp& return_val,
+      const apache::hive::service::cli::thrift::TGetDelegationTokenReq& req);
+  virtual void CancelDelegationToken(
+      apache::hive::service::cli::thrift::TCancelDelegationTokenResp& return_val,
+      const apache::hive::service::cli::thrift::TCancelDelegationTokenReq& req);
+  virtual void RenewDelegationToken(
+      apache::hive::service::cli::thrift::TRenewDelegationTokenResp& return_val,
+      const apache::hive::service::cli::thrift::TRenewDelegationTokenReq& req);
 
   // ImpalaService common extensions (implemented in impala-server.cc)
   // ImpalaInternalService rpcs
@@ -288,17 +295,19 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
     virtual int AddRows(const QueryResultSet* other, int start_idx, int num_rows) = 0;
 
     // Returns the approximate size of this result set in bytes.
-    int64_t BytesSize() { return BytesSize(0, size()); }
+    int64_t ByteSize() { return ByteSize(0, size()); }
 
     // Returns the approximate size of the given range of rows in bytes.
-    virtual int64_t BytesSize(int start_idx, int num_rows) = 0;
+    virtual int64_t ByteSize(int start_idx, int num_rows) = 0;
 
     // Returns the size of this result set in number of rows.
     virtual size_t size() = 0;
   };
 
-  class AsciiQueryResultSet; // extends QueryResultSet
-  class TRowQueryResultSet; // extends QueryResultSet
+  // Result set implementations for Beeswax and HS2
+  class AsciiQueryResultSet;
+  class HS2RowOrientedResultSet;
+  class HS2ColumnarResultSet;
 
   struct SessionState;
 
@@ -313,6 +322,11 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
 
   // Ascii output precision for double/float
   static const int ASCII_PRECISION;
+
+  QueryResultSet* CreateHS2ResultSet(
+      apache::hive::service::cli::thrift::TProtocolVersion::type version,
+      const TResultSetMetadata& metadata,
+      apache::hive::service::cli::thrift::TRowSet* rowset = NULL);
 
   // Initiate execution of plan fragment in newly created thread.
   // Creates new FragmentExecState and registers it in fragment_exec_state_map_.
@@ -351,7 +365,8 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // in exec_state), registers it and calls Coordinator::Execute().
   // If it returns with an error status, exec_state will be NULL and nothing
   // will have been registered in query_exec_state_map_.
-  // session_state is a ptr to the session running this query.
+  // session_state is a ptr to the session running this query and must have
+  // been checked out.
   // query_session_state is a snapshot of session state that changes when the
   // query was run. (e.g. default database).
   Status Execute(TQueryCtx* query_ctx,
@@ -366,22 +381,38 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
 
   // Registers the query exec state with query_exec_state_map_ using the globally
   // unique query_id and add the query id to session state's open query list.
+  // The caller must have checked out the session state.
   Status RegisterQuery(boost::shared_ptr<SessionState> session_state,
       const boost::shared_ptr<QueryExecState>& exec_state);
 
-  // Cancel the query execution if the query is still running. Removes exec_state from
-  // query_exec_state_map_, and removes the query id from session state's open query list.
-  // Updates the query's status to that provided, unless status is already not OK or
-  // provided status is NULL.
-  // Returns true if it found a registered exec_state, otherwise false.
-  bool UnregisterQuery(const TUniqueId& query_id, const Status* status = NULL);
+  // Adds the query to the set of in-flight queries for the session. The query remains
+  // in-flight until the query is unregistered.  Until a query is in-flight, an attempt
+  // to cancel or close the query by the user will return an error status.  If the
+  // session is closed before a query is in-flight, then the query cancellation is
+  // deferred until after the issuing path has completed initializing the query.  Once
+  // a query is in-flight, it can be cancelled/closed asynchronously by the user
+  // (e.g. via an RPC) and the session close path can close (cancel and unregister) it.
+  // The query must have already been registered using RegisterQuery().  The caller
+  // must have checked out the session state.
+  Status SetQueryInflight(boost::shared_ptr<SessionState> session_state,
+      const boost::shared_ptr<QueryExecState>& exec_state);
+
+  // Unregister the query by cancelling it, removing exec_state from
+  // query_exec_state_map_, and removing the query id from session state's in-flight
+  // query list.  If check_inflight is true, then return an error if the query is not
+  // yet in-flight.  Otherwise, proceed even if the query isn't yet in-flight (for
+  // cleaning up after an error on the query issuing path).
+  Status UnregisterQuery(const TUniqueId& query_id, bool check_inflight,
+      const Status* cause = NULL);
 
   // Initiates query cancellation reporting the given cause as the query status.
-  // Assumes deliberate cancellation by the user if the cause is NULL.
-  // Returns OK unless query_id is not found.
-  // Queries still need to be unregistered, usually via Close, after cancellation.
-  // Caller should not hold any locks when calling this function.
-  Status CancelInternal(const TUniqueId& query_id, const Status* cause = NULL);
+  // Assumes deliberate cancellation by the user if the cause is NULL.  Returns an
+  // error if query_id is not found.  If check_inflight is true, then return an error
+  // if the query is not yet in-flight.  Otherwise, returns OK.  Queries still need to
+  // be unregistered, after cancellation.  Caller should not hold any locks when
+  // calling this function.
+  Status CancelInternal(const TUniqueId& query_id, bool check_inflight,
+      const Status* cause = NULL);
 
   // Close the session and release all resource used by this session.
   // Caller should not hold any locks when calling this function.
@@ -661,20 +692,8 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   Status TExecuteStatementReqToTQueryContext(
       const apache::hive::service::cli::thrift::TExecuteStatementReq execute_request,
       TQueryCtx* query_ctx);
-  static void TColumnValueToHiveServer2TColumnValue(const TColumnValue& value,
-      const TColumnType& type,
-      apache::hive::service::cli::thrift::TColumnValue* hs2_col_val);
   static void TQueryOptionsToMap(const TQueryOptions& query_option,
       std::map<std::string, std::string>* configuration);
-
-  // Convert an expr value to HiveServer2 TColumnValue
-  static void ExprValueToHiveServer2TColumnValue(const void* value,
-      const TColumnType& type,
-      apache::hive::service::cli::thrift::TColumnValue* hs2_col_val);
-
-  // Helper function to translate between Beeswax and HiveServer2 type
-  static apache::hive::service::cli::thrift::TOperationState::type
-      QueryStateToTOperationState(const beeswax::QueryState::type& query_state);
 
   // Helper method to process cancellations that result from failed backends, called from
   // the cancellation thread pool. The cancellation_work contains the query id to cancel
@@ -776,7 +795,13 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // is one ref count in the SessionStateMap for as long as the session is active.
   // All queries running from this session also have a reference.
   struct SessionState {
-    SessionState() : closed(false), expired(false), ref_count(0) { }
+    // The default hs2_version must be V1 so that child queries (which use HS2, but may
+    // run as children of Beeswax sessions) get results back in the expected format -
+    // child queries inherit the HS2 version from their parents, and a Beeswax session
+    // will never update the HS2 version from the default.
+    SessionState() : closed(false), expired(false), hs2_version(
+        apache::hive::service::cli::thrift::
+        TProtocolVersion::HIVE_CLI_SERVICE_PROTOCOL_V1), ref_count(0) { }
 
     TSessionType::type session_type;
 
@@ -810,6 +835,9 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
 
     // The default query options of this session
     TQueryOptions default_query_options;
+
+    // For HS2 only, the protocol version this session is expecting
+    apache::hive::service::cli::thrift::TProtocolVersion::type hs2_version;
 
     // Inflight queries belonging to this session
     boost::unordered_set<TUniqueId> inflight_queries;
@@ -966,7 +994,7 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
       ProxyUserMap;
   ProxyUserMap authorized_proxy_user_config_;
 
-  // Guards queries_by_timestamp_
+  // Guards queries_by_timestamp_.  Must not be acquired before a session state lock.
   boost::mutex query_expiration_lock_;
 
   // Describes a query expiration event (t, q) where t is the expiration deadline in

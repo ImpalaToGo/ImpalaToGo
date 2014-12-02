@@ -280,7 +280,7 @@ int Expr::ComputeResultsLayout(const vector<Expr*>& exprs, vector<int>* offsets,
   // Collect all the byte sizes and sort them
   for (int i = 0; i < exprs.size(); ++i) {
     data[i].expr_idx = i;
-    if (exprs[i]->type().type == TYPE_STRING || exprs[i]->type().type == TYPE_VARCHAR) {
+    if (exprs[i]->type().IsVarLen()) {
       data[i].byte_size = 16;
       data[i].variable_length = true;
     } else {
@@ -305,7 +305,13 @@ int Expr::ComputeResultsLayout(const vector<Expr*>& exprs, vector<int>* offsets,
     DCHECK_GE(data[i].byte_size, current_alignment);
     // Don't align more than word (8-byte) size.  This is consistent with what compilers
     // do.
-    if (data[i].byte_size != current_alignment && current_alignment != max_alignment) {
+    if (exprs[data[i].expr_idx]->type().type == TYPE_CHAR &&
+        !exprs[data[i].expr_idx]->type().IsVarLen()) {
+      // CHARs are not padded, to be consistent with complier layouts
+      // aligns the next value on an 8 byte boundary
+      current_alignment = (data[i].byte_size + current_alignment) % max_alignment;
+    } else if (data[i].byte_size != current_alignment &&
+               current_alignment != max_alignment) {
       byte_offset += data[i].byte_size - current_alignment;
       current_alignment = min(data[i].byte_size, max_alignment);
     }
@@ -433,6 +439,8 @@ Function* Expr::GetStaticGetValWrapper(ColumnType type, LlvmCodeGen* codegen) {
     case TYPE_DOUBLE:
       return codegen->GetFunction(IRFunction::EXPR_GET_DOUBLE_VAL);
     case TYPE_STRING:
+    case TYPE_CHAR:
+    case TYPE_VARCHAR:
       return codegen->GetFunction(IRFunction::EXPR_GET_STRING_VAL);
     case TYPE_TIMESTAMP:
       return codegen->GetFunction(IRFunction::EXPR_GET_TIMESTAMP_VAL);
@@ -539,7 +547,8 @@ Status Expr::GetCodegendComputeFnWrapper(RuntimeState* state, llvm::Function** f
     *fn = ir_compute_fn_;
     return Status::OK;
   }
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
   Function* static_getval_fn = GetStaticGetValWrapper(type(), codegen);
 
   // Call it passing this as the additional first argument.

@@ -97,6 +97,21 @@ void AggregateFunctions::CountStarUpdate(FunctionContext*, BigIntVal* dst) {
   ++dst->val;
 }
 
+void AggregateFunctions::CountRemove(
+    FunctionContext*, const AnyVal& src, BigIntVal* dst) {
+  DCHECK(!dst->is_null);
+  if (!src.is_null) {
+    --dst->val;
+    DCHECK_GE(dst->val, 0);
+  }
+}
+
+void AggregateFunctions::CountStarRemove(FunctionContext*, BigIntVal* dst) {
+  DCHECK(!dst->is_null);
+  --dst->val;
+  DCHECK_GE(dst->val, 0);
+}
+
 void AggregateFunctions::CountMerge(FunctionContext*, const BigIntVal& src,
     BigIntVal* dst) {
   DCHECK(!dst->is_null);
@@ -117,14 +132,26 @@ void AggregateFunctions::AvgInit(FunctionContext* ctx, StringVal* dst) {
 }
 
 template <typename T>
-void AggregateFunctions::AvgUpdate(FunctionContext* ctx, const T& src,
-    StringVal* dst) {
+void AggregateFunctions::AvgUpdate(FunctionContext* ctx, const T& src, StringVal* dst) {
   if (src.is_null) return;
   DCHECK(dst->ptr != NULL);
   DCHECK_EQ(sizeof(AvgState), dst->len);
   AvgState* avg = reinterpret_cast<AvgState*>(dst->ptr);
   avg->sum += src.val;
   ++avg->count;
+}
+
+template <typename T>
+void AggregateFunctions::AvgRemove(FunctionContext* ctx, const T& src, StringVal* dst) {
+  // Remove doesn't need to explicitly check the number of calls to Update() or Remove()
+  // because Finalize() returns NULL if count is 0.
+  if (src.is_null) return;
+  DCHECK(dst->ptr != NULL);
+  DCHECK_EQ(sizeof(AvgState), dst->len);
+  AvgState* avg = reinterpret_cast<AvgState*>(dst->ptr);
+  avg->sum -= src.val;
+  --avg->count;
+  DCHECK_GE(avg->count, 0);
 }
 
 void AggregateFunctions::AvgMerge(FunctionContext* ctx, const StringVal& src,
@@ -160,6 +187,18 @@ void AggregateFunctions::TimestampAvgUpdate(FunctionContext* ctx,
   ++avg->count;
 }
 
+void AggregateFunctions::TimestampAvgRemove(FunctionContext* ctx,
+    const TimestampVal& src, StringVal* dst) {
+  if (src.is_null) return;
+  DCHECK(dst->ptr != NULL);
+  DCHECK_EQ(sizeof(AvgState), dst->len);
+  AvgState* avg = reinterpret_cast<AvgState*>(dst->ptr);
+  double val = TimestampValue::FromTimestampVal(src);
+  avg->sum -= val;
+  --avg->count;
+  DCHECK_GE(avg->count, 0);
+}
+
 TimestampVal AggregateFunctions::TimestampAvgGetValue(FunctionContext* ctx,
     const StringVal& src) {
   AvgState* val_struct = reinterpret_cast<AvgState*>(src.ptr);
@@ -191,6 +230,16 @@ void AggregateFunctions::DecimalAvgInit(FunctionContext* ctx, StringVal* dst) {
 
 void AggregateFunctions::DecimalAvgUpdate(FunctionContext* ctx, const DecimalVal& src,
     StringVal* dst) {
+  DecimalAvgAddOrRemove(ctx, src, dst, false);
+}
+
+void AggregateFunctions::DecimalAvgRemove(FunctionContext* ctx, const DecimalVal& src,
+    StringVal* dst) {
+  DecimalAvgAddOrRemove(ctx, src, dst, true);
+}
+
+void AggregateFunctions::DecimalAvgAddOrRemove(FunctionContext* ctx,
+    const DecimalVal& src, StringVal* dst, bool remove) {
   if (src.is_null) return;
   DCHECK(dst->ptr != NULL);
   DCHECK_EQ(sizeof(DecimalAvgState), dst->len);
@@ -201,20 +250,26 @@ void AggregateFunctions::DecimalAvgUpdate(FunctionContext* ctx, const DecimalVal
 
   // Since the src and dst are guaranteed to be the same scale, we can just
   // do a simple add.
+  int m = remove ? -1 : 1;
   switch (arg_type.GetByteSize()) {
     case 4:
-      avg->sum.val16 += src.val4;
+      avg->sum.val16 += m * src.val4;
       break;
     case 8:
-      avg->sum.val16 += src.val8;
+      avg->sum.val16 += m * src.val8;
       break;
     case 16:
-      avg->sum.val16 += src.val4;
+      avg->sum.val16 += m * src.val16;
       break;
     default:
       DCHECK(false) << "Invalid byte size for type " << arg_type.DebugString();
   }
-  ++avg->count;
+  if (remove) {
+    --avg->count;
+    DCHECK_GE(avg->count, 0);
+  } else {
+    ++avg->count;
+  }
 }
 
 void AggregateFunctions::DecimalAvgMerge(FunctionContext* ctx,
@@ -241,7 +296,8 @@ DecimalVal AggregateFunctions::DecimalAvgGetValue(FunctionContext* ctx,
   // implementation result in an unacceptable loss of output precision?
   ColumnType sum_type = ColumnType::CreateDecimalType(38, output_desc.scale);
   ColumnType count_type = ColumnType::CreateDecimalType(38, 0);
-  bool is_nan, overflow;
+  bool is_nan = false;
+  bool overflow = false;
   Decimal16Value result = sum.Divide<int128_t>(sum_type, count, count_type,
       output_desc.scale, &is_nan, &overflow);
   if (UNLIKELY(is_nan)) return DecimalVal::null();
@@ -260,29 +316,63 @@ DecimalVal AggregateFunctions::DecimalAvgFinalize(FunctionContext* ctx,
 }
 
 template<typename SRC_VAL, typename DST_VAL>
-void AggregateFunctions::Sum(FunctionContext* ctx, const SRC_VAL& src, DST_VAL* dst) {
-  if (src.is_null) return;
+void AggregateFunctions::SumUpdate(FunctionContext* ctx, const SRC_VAL& src,
+    DST_VAL* dst) {
+  if (src.is_null) {
+    // Do not count null values towards the number of updates
+    ctx->impl()->IncrementNumUpdates(-1);
+    return;
+  }
   if (dst->is_null) InitZero<DST_VAL>(ctx, dst);
   dst->val += src.val;
 }
 
-void AggregateFunctions::SumUpdate(FunctionContext* ctx,
+template<typename SRC_VAL, typename DST_VAL>
+void AggregateFunctions::SumRemove(FunctionContext* ctx, const SRC_VAL& src,
+    DST_VAL* dst) {
+  // Do not count null values towards the number of removes
+  if (src.is_null) ctx->impl()->IncrementNumRemoves(-1);
+  if (ctx->impl()->num_removes() >= ctx->impl()->num_updates()) {
+    *dst = DST_VAL::null();
+    return;
+  }
+  if (src.is_null) return;
+  if (dst->is_null) InitZero<DST_VAL>(ctx, dst);
+  dst->val -= src.val;
+}
+
+void AggregateFunctions::SumDecimalUpdate(FunctionContext* ctx,
     const DecimalVal& src, DecimalVal* dst) {
+  SumDecimalAddOrSubtract(ctx, src, dst);
+}
+
+void AggregateFunctions::SumDecimalRemove(FunctionContext* ctx,
+    const DecimalVal& src, DecimalVal* dst) {
+  if (ctx->impl()->num_removes() >= ctx->impl()->num_updates()) {
+    *dst = DecimalVal::null();
+    return;
+  }
+  SumDecimalAddOrSubtract(ctx, src, dst, true);
+}
+
+void AggregateFunctions::SumDecimalAddOrSubtract(FunctionContext* ctx,
+    const DecimalVal& src, DecimalVal* dst, bool subtract) {
   if (src.is_null) return;
   if (dst->is_null) InitZero<DecimalVal>(ctx, dst);
   const FunctionContext::TypeDesc* arg_desc = ctx->GetArgType(0);
   // Since the src and dst are guaranteed to be the same scale, we can just
   // do a simple add.
+  int m = subtract ? -1 : 1;
   if (arg_desc->precision <= 9) {
-    dst->val16 += src.val4;
+    dst->val16 += m * src.val4;
   } else if (arg_desc->precision <= 19) {
-    dst->val16 += src.val8;
+    dst->val16 += m * src.val8;
   } else {
-    dst->val16 += src.val16;
+    dst->val16 += m * src.val16;
   }
 }
 
-void AggregateFunctions::SumMerge(FunctionContext* ctx,
+void AggregateFunctions::SumDecimalMerge(FunctionContext* ctx,
     const DecimalVal& src, DecimalVal* dst) {
   if (src.is_null) return;
   if (dst->is_null) InitZero<DecimalVal>(ctx, dst);
@@ -615,35 +705,19 @@ double DistinceEstimateFinalize(const StringVal& src) {
   return result;
 }
 
-StringVal AggregateFunctions::PcFinalize(FunctionContext* c, const StringVal& src) {
+BigIntVal AggregateFunctions::PcFinalize(FunctionContext* c, const StringVal& src) {
   DCHECK(!src.is_null);
   double estimate = DistinceEstimateFinalize(src);
-  int64_t result = estimate;
   c->Free(src.ptr);
-
-  // TODO: this should return bigint. this is a hack
-  stringstream ss;
-  ss << result;
-  string str = ss.str();
-  StringVal dst(c, str.length());
-  memcpy(dst.ptr, str.c_str(), str.length());
-  return dst;
+  return static_cast<int64_t>(estimate);
 }
 
-StringVal AggregateFunctions::PcsaFinalize(FunctionContext* c, const StringVal& src) {
+BigIntVal AggregateFunctions::PcsaFinalize(FunctionContext* c, const StringVal& src) {
   DCHECK(!src.is_null);
   // When using stochastic averaging, the result has to be multiplied by NUM_PC_BITMAPS.
   double estimate = DistinceEstimateFinalize(src) * NUM_PC_BITMAPS;
-  int64_t result = estimate;
   c->Free(src.ptr);
-
-  // TODO: this should return bigint. this is a hack
-  stringstream ss;
-  ss << result;
-  string str = ss.str();
-  StringVal dst(c, str.length());
-  memcpy(dst.ptr, str.c_str(), str.length());
-  return dst;
+  return static_cast<int64_t>(estimate);
 }
 
 // Histogram constants
@@ -662,6 +736,9 @@ struct ReservoirSample {
 
   ReservoirSample() : key(-1) { }
   ReservoirSample(const T& val) : val(val), key(-1) { }
+
+  // Gets a copy of the sample value that allocates memory from ctx, if necessary.
+  T GetValue(FunctionContext* ctx) { return val; }
 };
 
 // Template specialization for StringVal because we do not store the StringVal itself.
@@ -677,6 +754,13 @@ struct ReservoirSample<StringVal> {
   ReservoirSample(const StringVal& string_val) : key(-1) {
     len = min(string_val.len, MAX_STRING_SAMPLE_LEN);
     memcpy(&val[0], string_val.ptr, len);
+  }
+
+  // Gets a copy of the sample value that allocates memory from ctx, if necessary.
+  StringVal GetValue(FunctionContext* ctx) {
+    StringVal result = StringVal(ctx, len);
+    memcpy(result.ptr, &val[0], len);
+    return result;
   }
 };
 
@@ -890,21 +974,21 @@ StringVal AggregateFunctions::HistogramFinalize(FunctionContext* ctx,
 }
 
 template <typename T>
-StringVal AggregateFunctions::AppxMedianFinalize(FunctionContext* ctx,
+T AggregateFunctions::AppxMedianFinalize(FunctionContext* ctx,
     const StringVal& src_val) {
   DCHECK(!src_val.is_null);
   DCHECK_EQ(src_val.len, sizeof(ReservoirSampleState<T>));
 
   ReservoirSampleState<T>* src = reinterpret_cast<ReservoirSampleState<T>*>(src_val.ptr);
+  if (src->num_samples == 0) {
+    ctx->Free(src_val.ptr);
+    return T::null();
+  }
   sort(src->samples, src->samples + src->num_samples, SampleValLess<T>);
 
-  stringstream out;
-  PrintSample<T>(src->samples[src->num_samples / 2], &out);
-  const string& out_str = out.str();
-  StringVal result_str(ctx, out_str.size());
-  memcpy(result_str.ptr, out_str.c_str(), result_str.len);
+  T result = src->samples[src->num_samples / 2].GetValue(ctx);
   ctx->Free(src_val.ptr);
-  return result_str;
+  return result;
 }
 
 void AggregateFunctions::HllInit(FunctionContext* ctx, StringVal* dst) {
@@ -942,7 +1026,7 @@ void AggregateFunctions::HllMerge(FunctionContext* ctx, const StringVal& src,
   }
 }
 
-StringVal AggregateFunctions::HllFinalize(FunctionContext* ctx, const StringVal& src) {
+BigIntVal AggregateFunctions::HllFinalize(FunctionContext* ctx, const StringVal& src) {
   DCHECK(!src.is_null);
   DCHECK_EQ(src.len, HLL_LEN);
 
@@ -974,14 +1058,7 @@ StringVal AggregateFunctions::HllFinalize(FunctionContext* ctx, const StringVal&
     estimate = num_streams * log(static_cast<float>(num_streams) / num_zero_registers);
   }
   ctx->Free(src.ptr);
-
-  // Output the estimate as ascii string
-  stringstream out;
-  out << estimate;
-  string out_str = out.str();
-  StringVal result_str(ctx, out_str.size());
-  memcpy(result_str.ptr, out_str.c_str(), result_str.len);
-  return result_str;
+  return estimate;
 }
 
 // An implementation of a simple single pass variance algorithm. A standard UDA must
@@ -1004,14 +1081,15 @@ double ComputeKnuthVariance(const KnuthVarianceState& state, bool pop) {
 
 void AggregateFunctions::KnuthVarInit(FunctionContext* ctx, StringVal* dst) {
   dst->is_null = false;
-  dst->len = sizeof(KnuthVarianceState);
-  dst->ptr = ctx->Allocate(dst->len);
+  DCHECK_EQ(dst->len, sizeof(KnuthVarianceState));
   memset(dst->ptr, 0, dst->len);
 }
 
 template <typename T>
 void AggregateFunctions::KnuthVarUpdate(FunctionContext* ctx, const T& src,
                                         StringVal* dst) {
+  DCHECK(!dst->is_null);
+  DCHECK_EQ(dst->len, sizeof(KnuthVarianceState));
   if (src.is_null) return;
   KnuthVarianceState* state = reinterpret_cast<KnuthVarianceState*>(dst->ptr);
   double temp = 1 + state->count;
@@ -1024,6 +1102,10 @@ void AggregateFunctions::KnuthVarUpdate(FunctionContext* ctx, const T& src,
 
 void AggregateFunctions::KnuthVarMerge(FunctionContext* ctx, const StringVal& src,
                                        StringVal* dst) {
+  DCHECK(!dst->is_null);
+  DCHECK_EQ(dst->len, sizeof(KnuthVarianceState));
+  DCHECK(!src.is_null);
+  DCHECK_EQ(src.len, sizeof(KnuthVarianceState));
   // Reference implementation:
   // http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
   KnuthVarianceState* src_state = reinterpret_cast<KnuthVarianceState*>(src.ptr);
@@ -1045,34 +1127,31 @@ DoubleVal AggregateFunctions::KnuthVarFinalize(
   return DoubleVal(variance);
 }
 
-StringVal AggregateFunctions::KnuthVarPopFinalize(FunctionContext* ctx,
+DoubleVal AggregateFunctions::KnuthVarPopFinalize(FunctionContext* ctx,
                                                   const StringVal& state_sv) {
   DCHECK(!state_sv.is_null);
-  KnuthVarianceState state = *reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
-  ctx->Free(state_sv.ptr);
-  if (state.count == 0) return StringVal::null();
-  double variance = ComputeKnuthVariance(state, true);
-  return ToStringVal(ctx, variance);
+  DCHECK_EQ(state_sv.len, sizeof(KnuthVarianceState));
+  KnuthVarianceState* state = reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
+  if (state->count == 0) return DoubleVal::null();
+  return ComputeKnuthVariance(*state, true);
 }
 
-StringVal AggregateFunctions::KnuthStddevFinalize(FunctionContext* ctx,
+DoubleVal AggregateFunctions::KnuthStddevFinalize(FunctionContext* ctx,
                                                   const StringVal& state_sv) {
   DCHECK(!state_sv.is_null);
-  KnuthVarianceState state = *reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
-  ctx->Free(state_sv.ptr);
-  if (state.count == 0) return StringVal::null();
-  double variance = ComputeKnuthVariance(state, false);
-  return ToStringVal(ctx, sqrt(variance));
+  DCHECK_EQ(state_sv.len, sizeof(KnuthVarianceState));
+  KnuthVarianceState* state = reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
+  if (state->count == 0) return DoubleVal::null();
+  return sqrt(ComputeKnuthVariance(*state, false));
 }
 
-StringVal AggregateFunctions::KnuthStddevPopFinalize(FunctionContext* ctx,
+DoubleVal AggregateFunctions::KnuthStddevPopFinalize(FunctionContext* ctx,
                                                      const StringVal& state_sv) {
   DCHECK(!state_sv.is_null);
-  KnuthVarianceState state = *reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
-  ctx->Free(state_sv.ptr);
-  if (state.count == 0) return StringVal::null();
-  double variance = ComputeKnuthVariance(state, true);
-  return ToStringVal(ctx, sqrt(variance));
+  DCHECK_EQ(state_sv.len, sizeof(KnuthVarianceState));
+  KnuthVarianceState* state = reinterpret_cast<KnuthVarianceState*>(state_sv.ptr);
+  if (state->count == 0) return DoubleVal::null();
+  return sqrt(ComputeKnuthVariance(*state, true));
 }
 
 struct RankState {
@@ -1162,43 +1241,48 @@ void AggregateFunctions::LastValUpdate(FunctionContext* ctx, const StringVal& sr
 }
 
 template <typename T>
-void AggregateFunctions::FirstValUpdate(FunctionContext* ctx, const T& src,
+void AggregateFunctions::LastValRemove(FunctionContext* ctx, const T& src, T* dst) {
+  if (ctx->impl()->num_removes() >= ctx->impl()->num_updates()) *dst = T::null();
+}
+
+template <>
+void AggregateFunctions::LastValRemove(FunctionContext* ctx, const StringVal& src,
     StringVal* dst) {
-  if (!dst->is_null) return;
-  *dst = StringVal(ctx->Allocate(sizeof(T)), sizeof(T));
-  *reinterpret_cast<T*>(dst->ptr) = src;
+  if (ctx->impl()->num_removes() >= ctx->impl()->num_updates()) {
+    if (!dst->is_null) ctx->Free(dst->ptr);
+    *dst = StringVal::null();
+  }
+}
+
+template <typename T>
+void AggregateFunctions::FirstValUpdate(FunctionContext* ctx, const T& src, T* dst) {
+  // The first call to FirstValUpdate sets the value of dst.
+  if (ctx->impl()->num_updates() > 1) return;
+  // num_updates is incremented before calling Update(), so it should never be 0.
+  // Remove() should never be called for FIRST_VALUE.
+  DCHECK_GT(ctx->impl()->num_updates(), 0);
+  DCHECK_EQ(ctx->impl()->num_removes(), 0);
+  *dst = src;
 }
 
 template <>
 void AggregateFunctions::FirstValUpdate(FunctionContext* ctx, const StringVal& src,
     StringVal* dst) {
-  if (!dst->is_null) return;
-  int len = sizeof(StringVal) + src.len;
-  *dst = StringVal(ctx->Allocate(len), len);
-  *reinterpret_cast<StringVal*>(dst->ptr) = src;
+  if (ctx->impl()->num_updates() > 1) return;
+  DCHECK_GT(ctx->impl()->num_updates(), 0);
+  DCHECK_EQ(ctx->impl()->num_removes(), 0);
+  if (src.is_null) {
+    *dst = StringVal::null();
+    return;
+  }
+  *dst = StringVal(ctx->Allocate(src.len), src.len);
+  memcpy(dst->ptr, src.ptr, src.len);
 }
 
 template <typename T>
-T AggregateFunctions::FirstValGetValue(FunctionContext* ctx, const StringVal& src) {
-  if (src.is_null) return T::null();
-  return *reinterpret_cast<T*>(src.ptr);
-}
-
-template <>
-StringVal AggregateFunctions::FirstValGetValue(FunctionContext* ctx, const StringVal& src) {
-  if (src.is_null) return StringVal::null();
-  StringVal* src_val = reinterpret_cast<StringVal*>(src.ptr);
-  // TODO: Revisit whether we should do this without a copy (and having the caller copy)
-  StringVal result(ctx, src_val->len);
-  memcpy(result.ptr, src_val->ptr, src_val->len);
-  return result;
-}
-
-template <typename T>
-T AggregateFunctions::FirstValFinalize(FunctionContext* ctx, const StringVal& src) {
-  T val = FirstValGetValue<T>(ctx, src);
-  if (!src.is_null) ctx->Free(src.ptr);
-  return val;
+void AggregateFunctions::FirstValRewriteUpdate(FunctionContext* ctx, const T& src,
+    const BigIntVal&, T* dst) {
+  LastValUpdate<T>(ctx, src, dst);
 }
 
 template <typename T>
@@ -1207,7 +1291,6 @@ void AggregateFunctions::OffsetFnInit(FunctionContext* ctx, T* dst) {
   DCHECK(ctx->IsArgConstant(1));
   DCHECK(ctx->IsArgConstant(2));
   DCHECK_EQ(ctx->GetArgType(0)->type, ctx->GetArgType(2)->type);
-  // TODO: Does this work for strings?
   *dst = *static_cast<T*>(ctx->GetConstantArg(2));
 }
 
@@ -1224,18 +1307,35 @@ template void AggregateFunctions::AvgUpdate<BigIntVal>(
     FunctionContext* ctx, const BigIntVal& input, StringVal* dst);
 template void AggregateFunctions::AvgUpdate<DoubleVal>(
     FunctionContext* ctx, const DoubleVal& input, StringVal* dst);
+template void AggregateFunctions::AvgRemove<BigIntVal>(
+    FunctionContext* ctx, const BigIntVal& input, StringVal* dst);
+template void AggregateFunctions::AvgRemove<DoubleVal>(
+    FunctionContext* ctx, const DoubleVal& input, StringVal* dst);
 
-template void AggregateFunctions::Sum<TinyIntVal, BigIntVal>(
+template void AggregateFunctions::SumUpdate<TinyIntVal, BigIntVal>(
     FunctionContext*, const TinyIntVal& src, BigIntVal* dst);
-template void AggregateFunctions::Sum<SmallIntVal, BigIntVal>(
+template void AggregateFunctions::SumUpdate<SmallIntVal, BigIntVal>(
     FunctionContext*, const SmallIntVal& src, BigIntVal* dst);
-template void AggregateFunctions::Sum<IntVal, BigIntVal>(
+template void AggregateFunctions::SumUpdate<IntVal, BigIntVal>(
     FunctionContext*, const IntVal& src, BigIntVal* dst);
-template void AggregateFunctions::Sum<BigIntVal, BigIntVal>(
+template void AggregateFunctions::SumUpdate<BigIntVal, BigIntVal>(
     FunctionContext*, const BigIntVal& src, BigIntVal* dst);
-template void AggregateFunctions::Sum<FloatVal, DoubleVal>(
+template void AggregateFunctions::SumUpdate<FloatVal, DoubleVal>(
     FunctionContext*, const FloatVal& src, DoubleVal* dst);
-template void AggregateFunctions::Sum<DoubleVal, DoubleVal>(
+template void AggregateFunctions::SumUpdate<DoubleVal, DoubleVal>(
+    FunctionContext*, const DoubleVal& src, DoubleVal* dst);
+
+template void AggregateFunctions::SumRemove<TinyIntVal, BigIntVal>(
+    FunctionContext*, const TinyIntVal& src, BigIntVal* dst);
+template void AggregateFunctions::SumRemove<SmallIntVal, BigIntVal>(
+    FunctionContext*, const SmallIntVal& src, BigIntVal* dst);
+template void AggregateFunctions::SumRemove<IntVal, BigIntVal>(
+    FunctionContext*, const IntVal& src, BigIntVal* dst);
+template void AggregateFunctions::SumRemove<BigIntVal, BigIntVal>(
+    FunctionContext*, const BigIntVal& src, BigIntVal* dst);
+template void AggregateFunctions::SumRemove<FloatVal, DoubleVal>(
+    FunctionContext*, const FloatVal& src, DoubleVal* dst);
+template void AggregateFunctions::SumRemove<DoubleVal, DoubleVal>(
     FunctionContext*, const DoubleVal& src, DoubleVal* dst);
 
 template void AggregateFunctions::Min<BooleanVal>(
@@ -1444,25 +1544,25 @@ template StringVal AggregateFunctions::HistogramFinalize<TimestampVal>(
 template StringVal AggregateFunctions::HistogramFinalize<DecimalVal>(
     FunctionContext*, const StringVal&);
 
-template StringVal AggregateFunctions::AppxMedianFinalize<BooleanVal>(
+template BooleanVal AggregateFunctions::AppxMedianFinalize<BooleanVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<TinyIntVal>(
+template TinyIntVal AggregateFunctions::AppxMedianFinalize<TinyIntVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<SmallIntVal>(
+template SmallIntVal AggregateFunctions::AppxMedianFinalize<SmallIntVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<IntVal>(
+template IntVal AggregateFunctions::AppxMedianFinalize<IntVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<BigIntVal>(
+template BigIntVal AggregateFunctions::AppxMedianFinalize<BigIntVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<FloatVal>(
+template FloatVal AggregateFunctions::AppxMedianFinalize<FloatVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<DoubleVal>(
+template DoubleVal AggregateFunctions::AppxMedianFinalize<DoubleVal>(
     FunctionContext*, const StringVal&);
 template StringVal AggregateFunctions::AppxMedianFinalize<StringVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<TimestampVal>(
+template TimestampVal AggregateFunctions::AppxMedianFinalize<TimestampVal>(
     FunctionContext*, const StringVal&);
-template StringVal AggregateFunctions::AppxMedianFinalize<DecimalVal>(
+template DecimalVal AggregateFunctions::AppxMedianFinalize<DecimalVal>(
     FunctionContext*, const StringVal&);
 
 template void AggregateFunctions::HllUpdate(
@@ -1520,68 +1620,68 @@ template void AggregateFunctions::LastValUpdate<TimestampVal>(
 template void AggregateFunctions::LastValUpdate<DecimalVal>(
     FunctionContext*, const DecimalVal& src, DecimalVal* dst);
 
+template void AggregateFunctions::LastValRemove<BooleanVal>(
+    FunctionContext*, const BooleanVal& src, BooleanVal* dst);
+template void AggregateFunctions::LastValRemove<TinyIntVal>(
+    FunctionContext*, const TinyIntVal& src, TinyIntVal* dst);
+template void AggregateFunctions::LastValRemove<SmallIntVal>(
+    FunctionContext*, const SmallIntVal& src, SmallIntVal* dst);
+template void AggregateFunctions::LastValRemove<IntVal>(
+    FunctionContext*, const IntVal& src, IntVal* dst);
+template void AggregateFunctions::LastValRemove<BigIntVal>(
+    FunctionContext*, const BigIntVal& src, BigIntVal* dst);
+template void AggregateFunctions::LastValRemove<FloatVal>(
+    FunctionContext*, const FloatVal& src, FloatVal* dst);
+template void AggregateFunctions::LastValRemove<DoubleVal>(
+    FunctionContext*, const DoubleVal& src, DoubleVal* dst);
+template void AggregateFunctions::LastValRemove<StringVal>(
+    FunctionContext*, const StringVal& src, StringVal* dst);
+template void AggregateFunctions::LastValRemove<TimestampVal>(
+    FunctionContext*, const TimestampVal& src, TimestampVal* dst);
+template void AggregateFunctions::LastValRemove<DecimalVal>(
+    FunctionContext*, const DecimalVal& src, DecimalVal* dst);
+
 template void AggregateFunctions::FirstValUpdate<BooleanVal>(
-    FunctionContext*, const BooleanVal& src, StringVal* dst);
+    FunctionContext*, const BooleanVal& src, BooleanVal* dst);
 template void AggregateFunctions::FirstValUpdate<TinyIntVal>(
-    FunctionContext*, const TinyIntVal& src, StringVal* dst);
+    FunctionContext*, const TinyIntVal& src, TinyIntVal* dst);
 template void AggregateFunctions::FirstValUpdate<SmallIntVal>(
-    FunctionContext*, const SmallIntVal& src, StringVal* dst);
+    FunctionContext*, const SmallIntVal& src, SmallIntVal* dst);
 template void AggregateFunctions::FirstValUpdate<IntVal>(
-    FunctionContext*, const IntVal& src, StringVal* dst);
+    FunctionContext*, const IntVal& src, IntVal* dst);
 template void AggregateFunctions::FirstValUpdate<BigIntVal>(
-    FunctionContext*, const BigIntVal& src, StringVal* dst);
+    FunctionContext*, const BigIntVal& src, BigIntVal* dst);
 template void AggregateFunctions::FirstValUpdate<FloatVal>(
-    FunctionContext*, const FloatVal& src, StringVal* dst);
+    FunctionContext*, const FloatVal& src, FloatVal* dst);
 template void AggregateFunctions::FirstValUpdate<DoubleVal>(
-    FunctionContext*, const DoubleVal& src, StringVal* dst);
+    FunctionContext*, const DoubleVal& src, DoubleVal* dst);
 template void AggregateFunctions::FirstValUpdate<StringVal>(
     FunctionContext*, const StringVal& src, StringVal* dst);
 template void AggregateFunctions::FirstValUpdate<TimestampVal>(
-    FunctionContext*, const TimestampVal& src, StringVal* dst);
+    FunctionContext*, const TimestampVal& src, TimestampVal* dst);
 template void AggregateFunctions::FirstValUpdate<DecimalVal>(
-    FunctionContext*, const DecimalVal& src, StringVal* dst);
+    FunctionContext*, const DecimalVal& src, DecimalVal* dst);
 
-template BooleanVal AggregateFunctions::FirstValGetValue<BooleanVal>(
-    FunctionContext*, const StringVal& src);
-template TinyIntVal AggregateFunctions::FirstValGetValue<TinyIntVal>(
-    FunctionContext*, const StringVal& src);
-template SmallIntVal AggregateFunctions::FirstValGetValue<SmallIntVal>(
-    FunctionContext*, const StringVal& src);
-template IntVal AggregateFunctions::FirstValGetValue<IntVal>(
-    FunctionContext*, const StringVal& src);
-template BigIntVal AggregateFunctions::FirstValGetValue<BigIntVal>(
-    FunctionContext*, const StringVal& src);
-template FloatVal AggregateFunctions::FirstValGetValue<FloatVal>(
-    FunctionContext*, const StringVal& src);
-template DoubleVal AggregateFunctions::FirstValGetValue<DoubleVal>(
-    FunctionContext*, const StringVal& src);
-template StringVal AggregateFunctions::FirstValGetValue<StringVal>(
-    FunctionContext*, const StringVal& src);
-template TimestampVal AggregateFunctions::FirstValGetValue<TimestampVal>(
-    FunctionContext*, const StringVal& src);
-template DecimalVal AggregateFunctions::FirstValGetValue<DecimalVal>(
-    FunctionContext*, const StringVal& src);
-
-template BooleanVal AggregateFunctions::FirstValFinalize<BooleanVal>(
-    FunctionContext*, const StringVal& src);
-template TinyIntVal AggregateFunctions::FirstValFinalize<TinyIntVal>(
-    FunctionContext*, const StringVal& src);
-template SmallIntVal AggregateFunctions::FirstValFinalize<SmallIntVal>(
-    FunctionContext*, const StringVal& src);
-template IntVal AggregateFunctions::FirstValFinalize<IntVal>(
-    FunctionContext*, const StringVal& src);
-template BigIntVal AggregateFunctions::FirstValFinalize<BigIntVal>(
-    FunctionContext*, const StringVal& src);
-template FloatVal AggregateFunctions::FirstValFinalize<FloatVal>(
-    FunctionContext*, const StringVal& src);
-template DoubleVal AggregateFunctions::FirstValFinalize<DoubleVal>(
-    FunctionContext*, const StringVal& src);
-template StringVal AggregateFunctions::FirstValFinalize<StringVal>(
-    FunctionContext*, const StringVal& src);
-template TimestampVal AggregateFunctions::FirstValFinalize<TimestampVal>(
-    FunctionContext*, const StringVal& src);
-template DecimalVal AggregateFunctions::FirstValFinalize<DecimalVal>(
-    FunctionContext*, const StringVal& src);
+template void AggregateFunctions::FirstValRewriteUpdate<BooleanVal>(
+    FunctionContext*, const BooleanVal& src, const BigIntVal&, BooleanVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<TinyIntVal>(
+    FunctionContext*, const TinyIntVal& src, const BigIntVal&, TinyIntVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<SmallIntVal>(
+    FunctionContext*, const SmallIntVal& src, const BigIntVal&, SmallIntVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<IntVal>(
+    FunctionContext*, const IntVal& src, const BigIntVal&, IntVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<BigIntVal>(
+    FunctionContext*, const BigIntVal& src, const BigIntVal&, BigIntVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<FloatVal>(
+    FunctionContext*, const FloatVal& src, const BigIntVal&, FloatVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<DoubleVal>(
+    FunctionContext*, const DoubleVal& src, const BigIntVal&, DoubleVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<StringVal>(
+    FunctionContext*, const StringVal& src, const BigIntVal&, StringVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<TimestampVal>(
+    FunctionContext*, const TimestampVal& src, const BigIntVal&, TimestampVal* dst);
+template void AggregateFunctions::FirstValRewriteUpdate<DecimalVal>(
+    FunctionContext*, const DecimalVal& src, const BigIntVal&, DecimalVal* dst);
 
 template void AggregateFunctions::OffsetFnInit<BooleanVal>(
     FunctionContext*, BooleanVal*);

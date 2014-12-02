@@ -71,6 +71,10 @@ const string HdfsScanNode::HDFS_SPLIT_STATS_DESC =
 // TODO: revisit how we do this.
 const int SCANNER_THREAD_MEM_USAGE = 32 * 1024 * 1024;
 
+// Estimated upper bound on the compression ratio of compressed text files. Used to
+// estimate scanner thread memory usage.
+const int COMPRESSED_TEXT_COMPRESSION_RATIO = 11;
+
 HdfsScanNode::HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode,
                            const DescriptorTbl& descs)
     : ScanNode(pool, tnode, descs),
@@ -88,7 +92,7 @@ HdfsScanNode::HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode,
       done_(false),
       all_ranges_started_(false),
       counters_running_(false),
-      rm_callback_id_(0) {
+      rm_callback_id_(-1) {
   max_materialized_row_batches_ = FLAGS_max_row_batches;
   if (max_materialized_row_batches_ <= 0) {
     // TODO: This parameter has an U-shaped effect on performance: increasing the value
@@ -133,7 +137,7 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
 Status HdfsScanNode::GetNextInternal(RuntimeState* state, RowBatch* row_batch, bool* eos) {
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
-  RETURN_IF_ERROR(state->CheckQueryState());
+  RETURN_IF_ERROR(QueryMaintenance(state));
 
   {
     unique_lock<mutex> l(lock_);
@@ -438,10 +442,19 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
         3 * runtime_state_->io_mgr()->max_read_buffer_size();
   }
   // scanner_thread_bytes_required_ now contains the IoBuffer requirement.
-  // Next we add a constant for the other memory the scanner thread will use.
+  // Next we add in the other memory the scanner thread will use.
   // e.g. decompression buffers, tuple buffers, etc.
+  // For compressed text, we estimate this based on the file size (since the whole file
+  // will need to be decompressed at once). For all other formats, we use a constant.
   // TODO: can we do something better?
-  scanner_thread_bytes_required_ += SCANNER_THREAD_MEM_USAGE;
+  int64_t scanner_thread_mem_usage = SCANNER_THREAD_MEM_USAGE;
+  BOOST_FOREACH(HdfsFileDesc* file, per_type_files_[THdfsFileFormat::TEXT]) {
+    if (file->file_compression != THdfsCompression::NONE) {
+      int64_t bytes_required = file->file_length * COMPRESSED_TEXT_COMPRESSION_RATIO;
+      scanner_thread_mem_usage = ::max(bytes_required, scanner_thread_mem_usage);
+    }
+  }
+  scanner_thread_bytes_required_ += scanner_thread_mem_usage;
 
   // Prepare all the partitions scanned by the scan node
   BOOST_FOREACH(const int64_t& partition_id, partition_ids_) {
@@ -466,6 +479,7 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   RETURN_IF_ERROR(Expr::CreateExprTrees(
       runtime_state_->obj_pool(), thrift_plan_node_->conjuncts, &conjunct_ctxs_));
   RETURN_IF_ERROR(Expr::Prepare(conjunct_ctxs_, runtime_state_, row_desc()));
+  AddExprCtxsToFree(conjunct_ctxs_);
 
   // Create reusable codegen'd functions for each file type type needed
   for (int format = THdfsFileFormat::TEXT;
@@ -487,7 +501,9 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
         fn = NULL;
     }
     if (fn != NULL) {
-      runtime_state_->codegen()->AddFunctionToJit(
+      LlvmCodeGen* codegen;
+      RETURN_IF_ERROR(runtime_state_->GetCodegen(&codegen));
+      codegen->AddFunctionToJit(
           fn, &codegend_fn_map_[static_cast<THdfsFileFormat::type>(format)]);
     }
   }
@@ -571,6 +587,9 @@ Status HdfsScanNode::Open(RuntimeState* state) {
   bytes_read_dn_cache_ = ADD_COUNTER(runtime_profile(), "BytesReadDataNodeCache",
       TCounterType::BYTES);
 
+  max_compressed_text_file_length_ = runtime_profile()->AddHighWaterMarkCounter(
+      "MaxCompressedTextFileLength", TCounterType::BYTES);
+
   // Create num_disks+1 bucket counters
   for (int i = 0; i < state->io_mgr()->num_disks() + 1; ++i) {
     hdfs_read_thread_concurrency_bucket_.push_back(
@@ -603,7 +622,7 @@ void HdfsScanNode::Close(RuntimeState* state) {
   SetDone();
 
   state->resource_pool()->SetThreadAvailableCb(NULL);
-  if (state->query_resource_mgr() != NULL) {
+  if (state->query_resource_mgr() != NULL && rm_callback_id_ != -1) {
     state->query_resource_mgr()->RemoveVcoreAvailableCb(rm_callback_id_);
   }
 
@@ -717,12 +736,10 @@ void HdfsScanNode::ThreadTokenAvailableCb(ThreadResourceMgr::ResourcePool* pool)
   //     we are not scanner bound.
   //  5. Don't start up a thread if there isn't enough memory left to run it.
   //  6. Don't start up if there are no thread tokens.
+  //  7. Don't start up if we are running too many threads for our vcore allocation
+  //  (unless the thread is reserved, in which case it has to run).
   bool started_scanner = false;
   while (true) {
-    if (runtime_state_->query_resource_mgr() != NULL &&
-        runtime_state_->query_resource_mgr()->IsVcoreOverSubscribed()) {
-      break;
-    }
     // The lock must be given up between loops in order to give writers to done_,
     // all_ranges_started_ etc. a chance to grab the lock.
     // TODO: This still leans heavily on starvation-free locks, come up with a more
@@ -742,7 +759,16 @@ void HdfsScanNode::ThreadTokenAvailableCb(ThreadResourceMgr::ResourcePool* pool)
     }
 
     // Case 6
-    if (!pool->TryAcquireThreadToken()) break;
+    bool is_reserved = false;
+    if (!pool->TryAcquireThreadToken(&is_reserved)) break;
+
+    // Case 7
+    if (!is_reserved) {
+      if (runtime_state_->query_resource_mgr() != NULL &&
+          runtime_state_->query_resource_mgr()->IsVcoreOverSubscribed()) {
+        break;
+      }
+    }
 
     COUNTER_ADD(&active_scanner_thread_counter_, 1);
     COUNTER_ADD(num_scanner_threads_started_counter_, 1);
