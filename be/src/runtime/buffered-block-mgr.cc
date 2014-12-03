@@ -201,7 +201,9 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, int64_t block_size)
     writes_issued_(0),
     encryption_(FLAGS_disk_spill_encryption),
     check_integrity_(FLAGS_disk_spill_encryption) {
-  state->io_mgr()->RegisterContext(NULL, &io_request_context_);
+	  FileSystemDescriptor nulldescriptor;
+	  nulldescriptor.valid = false;
+	  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
   if (encryption_) {
     static bool openssl_loaded = false;
     if (!openssl_loaded) {
@@ -505,9 +507,6 @@ BufferedBlockMgr::~BufferedBlockMgr() {
   mem_tracker_->UnregisterFromParent();
   mem_tracker_.reset();
 }
-  FileSystemDescriptor nulldescriptor;
-  nulldescriptor.valid = false;
-  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
 
 int64_t BufferedBlockMgr::bytes_allocated() const {
   return mem_tracker_->consumption();
