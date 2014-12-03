@@ -201,18 +201,20 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, int64_t block_size)
     writes_issued_(0),
     encryption_(FLAGS_disk_spill_encryption),
     check_integrity_(FLAGS_disk_spill_encryption) {
-  state->io_mgr()->RegisterContext(NULL, &io_request_context_);
-  if (encryption_) {
-    static bool openssl_loaded = false;
-    if (!openssl_loaded) {
-      // These are idempotent, so no threading worries.
-      OpenSSL_add_all_algorithms();
-      ERR_load_crypto_strings();
-      openssl_loaded = true;
-    }
-    // Seed the random number generator
-    // TODO: try non-blocking read from /dev/random and add that, too.
-    RAND_load_file("/dev/urandom", 4096);
+	  FileSystemDescriptor nulldescriptor;
+	  nulldescriptor.valid = false;
+	  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
+	  if (encryption_) {
+		  static bool openssl_loaded = false;
+		  if (!openssl_loaded) {
+			  // These are idempotent, so no threading worries.
+			  OpenSSL_add_all_algorithms();
+			  ERR_load_crypto_strings();
+			  openssl_loaded = true;
+		  }
+		  // Seed the random number generator
+		  // TODO: try non-blocking read from /dev/random and add that, too.
+		  RAND_load_file("/dev/urandom", 4096);
   }
 }
 
@@ -505,9 +507,6 @@ BufferedBlockMgr::~BufferedBlockMgr() {
   mem_tracker_->UnregisterFromParent();
   mem_tracker_.reset();
 }
-  FileSystemDescriptor nulldescriptor;
-  nulldescriptor.valid = false;
-  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
 
 int64_t BufferedBlockMgr::bytes_allocated() const {
   return mem_tracker_->consumption();
