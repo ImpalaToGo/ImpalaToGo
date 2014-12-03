@@ -66,9 +66,9 @@ namespace ph = std::placeholders;
  * **********************************************************************************************
  */
 
-status::StatusInternal cacheInit(const std::string& root) {
+status::StatusInternal cacheInit(int mem_limit_percent, const std::string& root) {
 	// Initialize singletons.
-	CacheLayerRegistry::init(root);
+	CacheLayerRegistry::init(mem_limit_percent, root);
     CacheManager::init();
     filemgmt::FileSystemManager::init();
 

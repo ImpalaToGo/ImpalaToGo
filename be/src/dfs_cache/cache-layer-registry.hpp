@@ -61,15 +61,17 @@ private:
 	const double m_available_capacity_ratio = 0.85; /**< ratio for setting "cache capacity", percent from available
 	 	 	 	 	 	 	 	 	 	 	 	     * root storage space */
 
-	CacheLayerRegistry(const std::string& root = "") {
+	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "") {
 		m_valid = false;
 		if(root.empty())
 			localstorage(constants::DEFAULT_CACHE_ROOT);
 		else
 			localstorage(root);
 
-		// Get the 85% of available space on the path specified:
-		uintmax_t available = utilities::get_free_space_on_disk(m_localstorageRoot) * m_available_capacity_ratio;
+		double percent = ( (mem_limit_percent > 0 ) && ( mem_limit_percent <= 85) ) ? mem_limit_percent / 100.0 : m_available_capacity_ratio;
+
+		// Get the max 85% of available space on the path specified:
+		uintmax_t available = utilities::get_free_space_on_disk(m_localstorageRoot) * percent;
         if(available == 0)
         	return;
 
@@ -114,10 +116,13 @@ public:
 	/** *************************** External configuration  ************************************************************/
 
     /** Initialize registry. Call this before any Registry usage
-     * @param root - local cache root - file system absolute path
      *
+     * @param mem_limit_percent - limit of available memory on @a root, in percents, that can be
+     * potentially consumed by cache
+     *
+     * @param root              - local cache root - file system absolute path
      */
-    static void init(const std::string& root = "");
+    static void init(int mem_limit_percent = 0, const std::string& root = "");
 
     /** Getter for Local storage root file system path */
     inline std::string localstorage() {return m_localstorageRoot;}

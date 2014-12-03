@@ -16,9 +16,9 @@ namespace impala{
 boost::scoped_ptr<CacheLayerRegistry> CacheLayerRegistry::instance_;
 std::string CacheLayerRegistry::fileSeparator;
 
-void CacheLayerRegistry::init(const std::string& root) {
+void CacheLayerRegistry::init(int mem_limit_percent, const std::string& root) {
   if(CacheLayerRegistry::instance_.get() == NULL)
-	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(root));
+	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root));
 
   // Initialize File class
   managed_file::File::initialize();

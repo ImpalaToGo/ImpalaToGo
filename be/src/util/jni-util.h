@@ -193,8 +193,14 @@ struct JniMethodDescriptor {
 //    to explicitly create a global reference to them.
 class JniUtil {
  public:
-  // Call this prior to any libhdfs calls.
-  static void InitLibhdfs();
+  /*
+   *  Static initialization of cache layer, is required to be called
+   *
+   *  @param cache_location              - cache location
+   *  @param percent_of_memory_for_cache - percent of available on @a cache_location path memory
+   *  which can be potentially consumed by cache
+   */
+  static void InitLibdfs(int percent_of_memory_for_cache = 0, const std::string& cache_location = "");
 
   // Find JniUtil class, and get JniUtil.throwableToString method id
   static Status Init();

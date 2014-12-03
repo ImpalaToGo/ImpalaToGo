@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
   }
 
   LlvmCodeGen::InitializeLlvm();
-  JniUtil::InitLibhdfs();
+  JniUtil::InitLibdfs();
   EXIT_IF_ERROR(HBaseTableScanner::Init());
   EXIT_IF_ERROR(HBaseTableFactory::Init());
   EXIT_IF_ERROR(HBaseTableWriter::InitJNI());

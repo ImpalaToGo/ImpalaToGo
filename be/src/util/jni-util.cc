@@ -137,15 +137,8 @@ Status JniUtil::Init() {
   return Status::OK;
 }
 
-void JniUtil::InitLibhdfs() {
-  // make random libhdfs calls to make sure that the context class loader isn't
-  // null; see xxx for an explanation
-  // Elena : 08.10.2014 Remove hdfs dependency (1)
-  /**
-  hdfsFS fs = hdfsConnect("default", 0);
-  hdfsDisconnect(fs);
-  */
-  cacheInit();
+void JniUtil::InitLibdfs(int percent_of_memory_for_cache, const std::string& cache_location) {
+  cacheInit(percent_of_memory_for_cache, cache_location);
 }
 
 Status JniUtil::Cleanup() {
