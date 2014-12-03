@@ -17,7 +17,7 @@
 #define IMPALA_EXEC_CATALOG_OP_EXECUTOR_H
 
 #include <boost/scoped_ptr.hpp>
-#include "gen-cpp/cli_service_types.h"
+#include "gen-cpp/TCLIService_types.h"
 #include "gen-cpp/Frontend_types.h"
 
 namespace impala {
@@ -56,6 +56,11 @@ class CatalogOpExecutor {
   // otherwise a bad status will be returned.
   Status PrioritizeLoad(const TPrioritizeLoadRequest& req,
       TPrioritizeLoadResponse* result);
+
+  // Makes an RPC to the CatalogServer to verify whether the specified user has privileges
+  // to access the Sentry Policy Service. Returns OK if the user has privileges or
+  // a bad status if the user does not have privileges (or if there was an error).
+  Status SentryAdminCheck(const TSentryAdminCheckRequest& re);
 
   // Set in Exec(), returns a pointer to the TDdlExecResponse of the DDL execution.
   // If called before Exec(), this will return NULL. Only set if the

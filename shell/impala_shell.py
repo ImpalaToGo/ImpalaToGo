@@ -92,6 +92,8 @@ class ImpalaShell(cmd.Cmd):
   DEFAULT_DB = 'default'
   # Regex applied to all tokens of a query to detect the query type.
   INSERT_REGEX = re.compile("^insert$", re.I)
+  # Seperator for queries in the history file.
+  HISTORY_FILE_QUERY_DELIM = '_IMP_DELIM_'
 
   def __init__(self, options):
     cmd.Cmd.__init__(self)
@@ -300,8 +302,7 @@ class ImpalaShell(cmd.Cmd):
       - The contents are passed to the appropriate method for execution.
       - partial_cmd is reset to an empty string.
     """
-    if self.readline:
-      current_history_len = self.readline.get_current_history_length()
+    if self.readline: current_history_len = self.readline.get_current_history_length()
     # Input is incomplete, store the contents and do nothing.
     if not self._cmd_ends_with_delim(cmd):
       # The user input is incomplete, change the prompt to reflect this.
@@ -330,21 +331,15 @@ class ImpalaShell(cmd.Cmd):
       # Reset partial_cmd to an empty string
       self.partial_cmd = str()
       # Replace the most recent history item with the completed command.
-      completed_cmd = sqlparse.format(completed_cmd, strip_comments=True)
+      completed_cmd = sqlparse.format(completed_cmd)
       if self.readline and current_history_len > 0:
-        # Update the history item to replace newlines with spaces. This is needed so
-        # readline can properly restore the history (otherwise it interprets each newline
-        # as a separate history item).
         self.readline.replace_history_item(current_history_len - 1,
-          completed_cmd.encode('utf-8').replace('\n', ' '))
+            completed_cmd.encode('utf-8'))
       # Revert the prompt to its earlier state
       self.prompt = self.cached_prompt
     else:  # Input has a delimiter and partial_cmd is empty
-      completed_cmd = sqlparse.format(cmd, strip_comments=True)
-    # The comments have been parsed out, there is no need to retain the newlines.
-    # They can cause parse errors in sqlparse when unescaped quotes and delimiters
-    # come into play.
-    return completed_cmd.replace('\n', ' ')
+      completed_cmd = sqlparse.format(cmd)
+    return completed_cmd
 
   def _signal_handler(self, signal, frame):
     """Handles query cancellation on a Ctrl+C event"""
@@ -398,7 +393,7 @@ class ImpalaShell(cmd.Cmd):
     table = self.construct_table_header(["Operator", "#Hosts", "Avg Time", "Max Time",
                                            "#Rows", "Est. #Rows", "Peak Mem",
                                            "Est. Peak Mem", "Detail"])
-    self.imp_client.build_summary_table(summary, 0, False, 0, output)
+    self.imp_client.build_summary_table(summary, 0, False, 0, False, output)
     formatter = PrettyOutputFormatter(table)
     self.output_stream = OutputStream(formatter, filename=self.output_file)
     self.output_stream.write(output)
@@ -475,11 +470,11 @@ class ImpalaShell(cmd.Cmd):
     elif len(host_port) == 1:
       host_port.append('21000')
     self.impalad = tuple(host_port)
-    if not self.imp_client:
-      self.imp_client = ImpalaClient(self.impalad, self.use_kerberos,
-                                   self.kerberos_service_name, self.use_ssl,
-                                   self.ca_cert, self.user, self.ldap_password,
-                                   self.use_ldap)
+    if self.imp_client: self.imp_client.close_connection()
+    self.imp_client = ImpalaClient(self.impalad, self.use_kerberos,
+                                 self.kerberos_service_name, self.use_ssl,
+                                 self.ca_cert, self.user, self.ldap_password,
+                                 self.use_ldap)
     self._connect()
     # If the connection fails and the Kerberos has not been enabled,
     # check for a valid kerberos ticket and retry the connection
@@ -533,7 +528,7 @@ class ImpalaShell(cmd.Cmd):
         print_to_stderr(("Unable to import the python 'ssl' module. It is"
                          " required for an SSL-secured connection."))
         sys.exit(1)
-    except socket.error as (code, e):
+    except socket.error, (code, e):
       # if the socket was interrupted, reconnect the connection with the client
       if code == errno.EINTR:
         self._reconnect_cancellation
@@ -662,6 +657,8 @@ class ImpalaShell(cmd.Cmd):
       else:
         # impalad does not support the fetching of metadata for certain types of queries.
         if not self.imp_client.expect_result_metadata(query.query):
+          # Close the query
+          self.imp_client.close_query(self.last_query_handle)
           self.query_handle_closed = True
           return CmdStatus.SUCCESS
 
@@ -706,7 +703,7 @@ class ImpalaShell(cmd.Cmd):
       print_to_stderr(e)
       self.imp_client.connected = False
       self.prompt = ImpalaShell.DISCONNECTED_PROMPT
-    except socket.error as (code, e):
+    except socket.error, (code, e):
       # if the socket was interrupted, reconnect the connection with the client
       if code == errno.EINTR:
         print ImpalaShell.CANCELLATION_MESSAGE
@@ -818,6 +815,7 @@ class ImpalaShell(cmd.Cmd):
       if not os.path.exists(self.history_file): return
       try:
         self.readline.read_history_file(self.history_file)
+        self._replace_history_delimiters(ImpalaShell.HISTORY_FILE_QUERY_DELIM, '\n')
       except IOError, i:
         msg = "Unable to load command history (disabling history collection): %s" % i
         print_to_stderr(msg)
@@ -828,12 +826,28 @@ class ImpalaShell(cmd.Cmd):
     """Save session commands in history."""
     if self.readline:
       try:
+        self._replace_history_delimiters('\n', ImpalaShell.HISTORY_FILE_QUERY_DELIM)
         self.readline.write_history_file(self.history_file)
       except IOError, i:
         msg = "Unable to save command history (disabling history collection): %s" % i
         print_to_stderr(msg)
         # The history file is not writable, disable readline.
         self._disable_readline()
+
+  def _replace_history_delimiters(self, src_delim, tgt_delim):
+    """Replaces source_delim with target_delim for all items in history.
+
+    Read all the items from history into a local list. Clear the history and copy them
+    back after doing the transformation.
+    """
+    history_len = self.readline.get_current_history_length()
+    # load the history and replace the shell's delimiter with EOL
+    history_items = map(self.readline.get_history_item, xrange(1, history_len + 1))
+    history_items = [item.replace(src_delim, tgt_delim) for item in history_items]
+    # Clear the original history and replace it with the mutated history.
+    self.readline.clear_history()
+    for history_item in history_items:
+      self.readline.add_history(history_item)
 
   def default(self, args):
     query = self.imp_client.create_beeswax_query(args, self.set_query_options)
@@ -871,15 +885,8 @@ def print_to_stderr(message):
   print >> sys.stderr, message
 
 def parse_query_text(query_text, utf8_encode_policy='strict'):
-  """Parse query file text, by stripping comments and encoding into utf-8"""
-  return [strip_comments_from_query(q).encode('utf-8', utf8_encode_policy)
-          for q in sqlparse.split(query_text)]
-
-def strip_comments_from_query(query):
-  """Strip comments from an individual query """
-  # We only use the strip_comments filter, using other filters can lead to a significant
-  # performance hit if the query is very large.
-  return sqlparse.format(query, strip_comments=True)
+  """Parse query file text to extract queries and encode into utf-8"""
+  return [q.encode('utf-8', utf8_encode_policy) for q in sqlparse.split(query_text)]
 
 def execute_queries_non_interactive_mode(options):
   """Run queries in non-interactive mode."""
@@ -997,35 +1004,36 @@ if __name__ == "__main__":
   shell = ImpalaShell(options)
   while shell.is_alive:
     try:
-      shell.cmdloop(intro)
-    except KeyboardInterrupt:
-      intro = '\n'
-    # a last measure agaisnt any exceptions thrown by an rpc
-    # not caught in the shell
-    except socket.error as (code, e):
-      # if the socket was interrupted, reconnect the connection with the client
-      if code == errno.EINTR:
-        print shell.CANCELLATION_MESSAGE
-        shell._reconnect_cancellation()
-      else:
-        print_to_stderr("Socket error %s: %s" % (code, e))
+      try:
+        shell.cmdloop(intro)
+      except KeyboardInterrupt:
+        intro = '\n'
+      # A last measure against any exceptions thrown by an rpc
+      # not caught in the shell
+      except socket.error, (code, e):
+        # if the socket was interrupted, reconnect the connection with the client
+        if code == errno.EINTR:
+          print shell.CANCELLATION_MESSAGE
+          shell._reconnect_cancellation()
+        else:
+          print_to_stderr("Socket error %s: %s" % (code, e))
+          shell.imp_client.connected = False
+          shell.prompt = shell.DISCONNECTED_PROMPT
+      except DisconnectedException, e:
+        # the client has lost the connection
+        print_to_stderr(e)
         shell.imp_client.connected = False
         shell.prompt = shell.DISCONNECTED_PROMPT
-    except DisconnectedException, e:
-      # the client has lost the connection
-      print_to_stderr(e)
-      shell.imp_client.connected = False
-      shell.prompt = shell.DISCONNECTED_PROMPT
-    except QueryStateException, e:
-      # an exception occurred while executing the query
-      if shell._no_cancellation_error(e):
-        shell.imp_client.close_query(shell.last_query_handle,
-                                     shell.query_handle_closed)
-        print_to_stderr(e)
-    except RPCException, e:
-      # could not complete the rpc successfully
-      # suppress error if reason is cancellation
-      if shell._no_cancellation_error(e):
-        print_to_stderr(e)
+      except QueryStateException, e:
+        # an exception occurred while executing the query
+        if shell._no_cancellation_error(e):
+          shell.imp_client.close_query(shell.last_query_handle,
+                                       shell.query_handle_closed)
+          print_to_stderr(e)
+      except RPCException, e:
+        # could not complete the rpc successfully
+        # suppress error if reason is cancellation
+        if shell._no_cancellation_error(e):
+          print_to_stderr(e)
     finally:
       intro = ''

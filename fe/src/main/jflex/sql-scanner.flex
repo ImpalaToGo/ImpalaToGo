@@ -107,12 +107,14 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("first", new Integer(SqlParserSymbols.KW_FIRST));
     keywordMap.put("float", new Integer(SqlParserSymbols.KW_FLOAT));
     keywordMap.put("following", new Integer(SqlParserSymbols.KW_FOLLOWING));
+    keywordMap.put("for", new Integer(SqlParserSymbols.KW_FOR));
     keywordMap.put("format", new Integer(SqlParserSymbols.KW_FORMAT));
     keywordMap.put("formatted", new Integer(SqlParserSymbols.KW_FORMATTED));
     keywordMap.put("from", new Integer(SqlParserSymbols.KW_FROM));
     keywordMap.put("full", new Integer(SqlParserSymbols.KW_FULL));
     keywordMap.put("function", new Integer(SqlParserSymbols.KW_FUNCTION));
     keywordMap.put("functions", new Integer(SqlParserSymbols.KW_FUNCTIONS));
+    keywordMap.put("grant", new Integer(SqlParserSymbols.KW_GRANT));
     keywordMap.put("group", new Integer(SqlParserSymbols.KW_GROUP));
     keywordMap.put("having", new Integer(SqlParserSymbols.KW_HAVING));
     keywordMap.put("if", new Integer(SqlParserSymbols.KW_IF));
@@ -166,8 +168,11 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("rename", new Integer(SqlParserSymbols.KW_RENAME));
     keywordMap.put("replace", new Integer(SqlParserSymbols.KW_REPLACE));
     keywordMap.put("returns", new Integer(SqlParserSymbols.KW_RETURNS));
+    keywordMap.put("revoke", new Integer(SqlParserSymbols.KW_REVOKE));
     keywordMap.put("right", new Integer(SqlParserSymbols.KW_RIGHT));
     keywordMap.put("rlike", new Integer(SqlParserSymbols.KW_RLIKE));
+    keywordMap.put("role", new Integer(SqlParserSymbols.KW_ROLE));
+    keywordMap.put("roles", new Integer(SqlParserSymbols.KW_ROLES));
     keywordMap.put("row", new Integer(SqlParserSymbols.KW_ROW));
     keywordMap.put("rows", new Integer(SqlParserSymbols.KW_ROWS));
     keywordMap.put("schema", new Integer(SqlParserSymbols.KW_SCHEMA));
@@ -256,6 +261,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
 
   public static boolean isKeyword(Integer tokenId) {
     String token = tokenIdMap.get(tokenId);
+    if (token == null) return false;
     return keywordMap.containsKey(token.toLowerCase());
   }
 
@@ -289,8 +295,13 @@ QuotedIdentifier = \`(\\.|[^\\\`])*\`
 SingleQuoteStringLiteral = \'(\\.|[^\\\'])*\'
 DoubleQuoteStringLiteral = \"(\\.|[^\\\"])*\"
 
+// Both types of plan hints must appear within a single line.
+TraditionalCommentedPlanHints = "/*" [ ]* "+" [^\r\n*]* "*/"
+// Must end with a line terminator.
+EndOfLineCommentedPlanHints = "--" [ ]* "+" {NonTerminator}* {LineTerminator}
+
 Comment = {TraditionalComment} | {EndOfLineComment}
-TraditionalComment = "/*" [^*] ~"*/" | "/*" "*"+ "/"
+TraditionalComment = "/*" ~"*/"
 EndOfLineComment = "--" {NonTerminator}* {LineTerminator}?
 
 %%
@@ -369,6 +380,20 @@ EndOfLineComment = "--" {NonTerminator}* {LineTerminator}?
 
 {DoubleQuoteStringLiteral} {
   return newToken(SqlParserSymbols.STRING_LITERAL, yytext().substring(1, yytext().length()-1));
+}
+
+{TraditionalCommentedPlanHints} {
+  String text = yytext();
+  // Remove everything before the first '+' as well as the trailing "*/"
+  String hintStr = text.substring(text.indexOf('+') + 1, text.length() - 2);
+  return newToken(SqlParserSymbols.COMMENTED_PLAN_HINTS, hintStr.trim());
+}
+
+{EndOfLineCommentedPlanHints} {
+  String text = yytext();
+  // Remove everything before the first '+'
+  String hintStr = text.substring(text.indexOf('+') + 1);
+  return newToken(SqlParserSymbols.COMMENTED_PLAN_HINTS, hintStr.trim());
 }
 
 {Comment} { /* ignore */ }

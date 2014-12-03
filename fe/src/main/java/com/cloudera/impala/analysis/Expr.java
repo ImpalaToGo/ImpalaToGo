@@ -100,6 +100,27 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
         }
       };
 
+  // Returns true if an Expr is an aggregate function that returns non-null on
+  // an empty set (e.g. count).
+  public final static com.google.common.base.Predicate<Expr>
+      NON_NULL_EMPTY_AGG = new com.google.common.base.Predicate<Expr>() {
+        @Override
+        public boolean apply(Expr arg) {
+          return arg instanceof FunctionCallExpr &&
+              ((FunctionCallExpr)arg).returnsNonNullOnEmpty();
+        }
+      };
+
+  // Returns true if an Expr is a builtin aggregate function.
+  public final static com.google.common.base.Predicate<Expr> IS_BUILTIN_AGG_FN =
+      new com.google.common.base.Predicate<Expr>() {
+        @Override
+        public boolean apply(Expr arg) {
+          return arg instanceof FunctionCallExpr &&
+              ((FunctionCallExpr)arg).getFnName().isBuiltin();
+        }
+      };
+
   public final static com.google.common.base.Predicate<Expr> IS_TRUE_LITERAL =
       new com.google.common.base.Predicate<Expr>() {
         @Override
@@ -354,7 +375,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
       castLiteral.explicitlyCastToFloat(targetType);
       smap.put(l, castLiteral);
     }
-    return child.substitute(smap, analyzer);
+    return child.substitute(smap, analyzer, false);
   }
 
   /**
@@ -466,6 +487,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
    * the exprs have an invalid number of distinct values.
    */
   public static long getNumDistinctValues(List<Expr> exprs) {
+    if (exprs == null || exprs.isEmpty()) return 0;
     long numDistinctValues = 1;
     for (Expr expr: exprs) {
       if (expr.getNumDistinctValues() == -1) {
@@ -573,6 +595,43 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
     return l2.containsAll(l1);
   }
 
+  /**
+   * Return the intersection of l1 and l2.599
+   */
+  public static <C extends Expr> List<C> intersect(List<C> l1, List<C> l2) {
+    List<C> result = new ArrayList<C>();
+    for (C element: l1) {
+      if (l2.contains(element)) result.add(element);
+    }
+    return result;
+  }
+
+  /**
+   * Compute the intersection of l1 and l2, given the smap, and
+   * return the intersecting l1 elements in i1 and the intersecting l2 elements in i2.
+   */
+  public static void intersect(Analyzer analyzer,
+      List<Expr> l1, List<Expr> l2, ExprSubstitutionMap smap,
+      List<Expr> i1, List<Expr> i2) {
+    i1.clear();
+    i2.clear();
+    List<Expr> s1List = Expr.substituteList(l1, smap, analyzer, false);
+    Preconditions.checkState(s1List.size() == l1.size());
+    List<Expr> s2List = Expr.substituteList(l2, smap, analyzer, false);
+    Preconditions.checkState(s2List.size() == l2.size());
+    for (int i = 0; i < s1List.size(); ++i) {
+      Expr s1 = s1List.get(i);
+      for (int j = 0; j < s2List.size(); ++j) {
+        Expr s2 = s2List.get(j);
+        if (s1.equals(s2)) {
+          i1.add(l1.get(i));
+          i2.add(l2.get(j));
+          break;
+        }
+      }
+    }
+  }
+
   @Override
   public int hashCode() {
     if (id_ == null) {
@@ -611,14 +670,19 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
    * this tree, such that the returned result has minimal implicit casts and types.
    * Throws if analyzing the post-substitution expr tree failed.
    * If smap is null, this function is equivalent to clone().
+   * If preserveRootType is true, the resulting expr tree will be cast if necessary to
+   * the type of 'this'.
+   * TODO: set preserveRootType to true in more places?
    */
-  public Expr trySubstitute(ExprSubstitutionMap smap, Analyzer analyzer)
+  public Expr trySubstitute(ExprSubstitutionMap smap, Analyzer analyzer,
+      boolean preserveRootType)
       throws AnalysisException {
     Expr result = clone();
     // Return clone to avoid removing casts.
     if (smap == null) return result;
     result = result.substituteImpl(smap, analyzer);
     result.analyze(analyzer);
+    if (preserveRootType) result = result.castTo(type_);
     return result;
   }
 
@@ -628,30 +692,33 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
    * this tree, such that the returned result has minimal implicit casts and types.
    * Expects the analysis of the post-substitution expr to succeed.
    * If smap is null, this function is equivalent to clone().
+   * If preserveRootType is true, the resulting expr tree will be cast if necessary to
+   * the type of 'this'.
    */
-  public Expr substitute(ExprSubstitutionMap smap, Analyzer analyzer) {
+  public Expr substitute(ExprSubstitutionMap smap, Analyzer analyzer,
+      boolean preserveRootType) {
     try {
-      return trySubstitute(smap, analyzer);
+      return trySubstitute(smap, analyzer, preserveRootType);
     } catch (Exception e) {
       throw new IllegalStateException("Failed analysis after expr substitution.", e);
     }
   }
 
   public static ArrayList<Expr> trySubstituteList(Iterable<? extends Expr> exprs,
-      ExprSubstitutionMap smap, Analyzer analyzer)
+      ExprSubstitutionMap smap, Analyzer analyzer, boolean preserveRootTypes)
           throws AnalysisException {
     if (exprs == null) return null;
     ArrayList<Expr> result = new ArrayList<Expr>();
     for (Expr e: exprs) {
-      result.add(e.trySubstitute(smap, analyzer));
+      result.add(e.trySubstitute(smap, analyzer, preserveRootTypes));
     }
     return result;
   }
 
   public static ArrayList<Expr> substituteList(Iterable<? extends Expr> exprs,
-      ExprSubstitutionMap smap, Analyzer analyzer) {
+      ExprSubstitutionMap smap, Analyzer analyzer, boolean preserveRootTypes) {
     try {
-      return trySubstituteList(exprs, smap, analyzer);
+      return trySubstituteList(exprs, smap, analyzer, preserveRootTypes);
     } catch (Exception e) {
       throw new IllegalStateException("Failed analysis after expr substitution.", e);
     }
@@ -1040,22 +1107,5 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
     collect(Subquery.class, subqueries);
     Preconditions.checkState(subqueries.size() == 1);
     return subqueries.get(0);
-  }
-
-  /**
-   * Converts a subquery expr into an analyzed conjunct to be used in a join. The
-   * conversion is performed in place by replacing the subquery with the first
-   * expr from the associated inline view.
-   */
-  public Expr createJoinConjunct(InlineViewRef inlineView, Analyzer analyzer)
-      throws AnalysisException {
-    Preconditions.checkNotNull(inlineView);
-    ExprSubstitutionMap smap = new ExprSubstitutionMap();
-    Subquery subquery = getSubquery();
-    SlotRef slotRef = new SlotRef(new TableName(null, inlineView.getAlias()),
-        inlineView.getViewStmt().getColLabels().get(0));
-    slotRef.analyze(analyzer);
-    smap.put(subquery, slotRef);
-    return substitute(smap, analyzer);
   }
 }

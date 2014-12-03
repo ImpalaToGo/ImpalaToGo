@@ -1,20 +1,17 @@
 ====
 ---- QUERY: TPCH-Q15
 # Q15 - Top Supplier Query
-drop view if exists revenue_view;
-
-create view revenue_view (supplier_no, total_revenue) as
+with revenue_view as (
   select
-    l_suppkey,
-    round(sum(l_extendedprice * (1 - l_discount)), 1)
+    l_suppkey as supplier_no,
+    round(sum(l_extendedprice * (1 - l_discount)), 1) as total_revenue
   from
     lineitem
   where
     l_shipdate >= '1996-01-01'
     and l_shipdate < '1996-04-01'
   group by
-    l_suppkey;
-
+    l_suppkey)
 select
   s_suppkey,
   s_name,

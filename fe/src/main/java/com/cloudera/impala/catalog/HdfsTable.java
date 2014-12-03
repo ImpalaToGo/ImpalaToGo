@@ -952,12 +952,25 @@ public class HdfsTable extends Table {
           tblFields.addAll(msTbl.getSd().getCols());
         } else {
           // Load the fields from the Avro schema.
-          for (Column parsedCol: AvroSchemaParser.parse(avroSchema_)) {
+          // Since Avro does not include meta-data for CHAR or VARCHAR, an Avro type of
+          // "string" is used for CHAR, VARCHAR and STRING. Default back to the storage
+          // descriptor to determine the the type for "string"
+          List<FieldSchema> sdTypes = msTbl.getSd().getCols();
+          int i = 0;
+          List<Column> avroTypeList = AvroSchemaParser.parse(avroSchema_);
+          boolean canFallBack = sdTypes.size() == avroTypeList.size();
+          for (Column parsedCol: avroTypeList) {
             FieldSchema fs = new FieldSchema();
             fs.setName(parsedCol.getName());
-            fs.setType(parsedCol.getType().toString());
+            String avroType = parsedCol.getType().toString();
+            if (avroType.toLowerCase().equals("string") && canFallBack) {
+              fs.setType(sdTypes.get(i).getType());
+            } else {
+              fs.setType(avroType);
+            }
             fs.setComment("from deserializer");
             tblFields.add(fs);
+            i++;
           }
         }
       } else {
@@ -1249,12 +1262,14 @@ public class HdfsTable extends Table {
     TResultSet result = new TResultSet();
     TResultSetMetadata resultSchema = new TResultSetMetadata();
     result.setSchema(resultSchema);
+
     for (int i = 0; i < numClusteringCols_; ++i) {
       // Add the partition-key values as strings for simplicity.
       Column partCol = getColumns().get(i);
-      TColumn colDesc = new TColumn(partCol.getName(), partCol.getType().toThrift());
+      TColumn colDesc = new TColumn(partCol.getName(), Type.STRING.toThrift());
       resultSchema.addToColumns(colDesc);
     }
+
     resultSchema.addToColumns(new TColumn("#Rows", Type.BIGINT.toThrift()));
     resultSchema.addToColumns(new TColumn("#Files", Type.BIGINT.toThrift()));
     resultSchema.addToColumns(new TColumn("Size", Type.STRING.toThrift()));

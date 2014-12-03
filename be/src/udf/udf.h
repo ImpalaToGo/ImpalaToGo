@@ -585,6 +585,19 @@ struct DecimalVal : public impala_udf::AnyVal {
     return val16 == other.val16;
   }
   bool operator!=(const DecimalVal& other) const { return !(*this == other); }
+
+  DecimalVal& operator=(const DecimalVal& other) {
+    // Depending on the compiler, the default assignment operator may require 16-byte
+    // alignment of 'this' and 'other'. Cast to void* so the compiler doesn't change back
+    // to an assignment.
+    memcpy(reinterpret_cast<void*>(this), reinterpret_cast<const void*>(&other),
+           sizeof(DecimalVal));
+    return *this;
+  }
+
+  DecimalVal(const DecimalVal& other) {
+    *this = other;
+  }
 };
 
 typedef uint8_t* BufferVal;

@@ -15,7 +15,12 @@
 package com.cloudera.impala.analysis;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.analysis.AnalyticWindow.Boundary;
 import com.cloudera.impala.analysis.AnalyticWindow.BoundaryType;
@@ -35,21 +40,31 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 /**
- * Representation of an analytic function with OVER clause.
- * All "subexpressions" (such as the actual function call as well as the
+ * Representation of an analytic function call with OVER clause.
+ * All "subexpressions" (such as the actual function call parameters as well as the
  * partition/ordering exprs, etc.) are embedded as children in order to allow expr
  * substitution:
- *   function call: child 0
- *   partition exprs: children 1 .. numPartitionExprs_
+ *   function call params: child 0 .. #params
+ *   partition exprs: children #params + 1 .. #params + #partition-exprs
  *   ordering exprs:
- *     children numPartitionExprs_ + 1 .. numPartitionExprs_ + orderByElements_.size()
+ *     children #params + #partition-exprs + 1 ..
+ *       #params + #partition-exprs + #order-by-elements
  *   exprs in windowing clause: remaining children
+ *
+ * Note that it's wrong to embed the FunctionCallExpr itself as a child,
+ * because in 'COUNT(..) OVER (..)' the 'COUNT(..)' is not part of a standard aggregate
+ * computation and must not be substituted as such. However, the parameters of the
+ * analytic function call might reference the output of an aggregate computation
+ * and need to be substituted as such; example: COUNT(COUNT(..)) OVER (..)
  */
 public class AnalyticExpr extends Expr {
+  private final static Logger LOG = LoggerFactory.getLogger(AnalyticExpr.class);
+
+  private FunctionCallExpr fnCall_;
+  private final List<Expr> partitionExprs_;
   // These elements are modified to point to the corresponding child exprs to keep them
   // in sync through expr substitutions.
   private List<OrderByElement> orderByElements_ = Lists.newArrayList();
-  private final int numPartitionExprs_;
   private AnalyticWindow window_;
 
   // If set, requires the window to be set to null in resetAnalysisState(). Required for
@@ -67,22 +82,21 @@ public class AnalyticExpr extends Expr {
   private static String RANK = "rank";
   private static String DENSERANK = "dense_rank";
   private static String ROWNUMBER = "row_number";
+  private static String MIN = "min";
+  private static String MAX = "max";
+
+  // Internal function used to implement FIRST_VALUE with a window rewrite and
+  // additional null handling in the backend.
+  public static String FIRST_VALUE_REWRITE = "first_value_rewrite";
 
   public AnalyticExpr(FunctionCallExpr fnCall, List<Expr> partitionExprs,
       List<OrderByElement> orderByElements, AnalyticWindow window) {
     Preconditions.checkNotNull(fnCall);
-    addChild(fnCall);
-    numPartitionExprs_ = partitionExprs != null ? partitionExprs.size() : 0;
-    if (numPartitionExprs_ > 0) addChildren(partitionExprs);
-    if (orderByElements != null) {
-      for (OrderByElement e: orderByElements) {
-        addChild(e.getExpr());
-      }
-      orderByElements_.addAll(orderByElements);
-      // Point the order-by exprs to our children to avoid analyzing them separately.
-      setOrderByExprs();
-    }
+    fnCall_ = fnCall;
+    partitionExprs_ = partitionExprs != null ? partitionExprs : new ArrayList<Expr>();
+    if (orderByElements != null) orderByElements_.addAll(orderByElements);
     window_ = window;
+    setChildren();
   }
 
   /**
@@ -90,19 +104,19 @@ public class AnalyticExpr extends Expr {
    */
   protected AnalyticExpr(AnalyticExpr other) {
     super(other);
+    fnCall_ = (FunctionCallExpr) other.fnCall_.clone();
     for (OrderByElement e: other.orderByElements_) {
       orderByElements_.add(e.clone());
     }
-    numPartitionExprs_ = other.numPartitionExprs_;
+    partitionExprs_ = Expr.cloneList(other.partitionExprs_);
     window_ = (other.window_ != null ? other.window_.clone() : null);
     resetWindow_ = other.resetWindow_;
     sqlString_ = other.sqlString_;
+    setChildren();
   }
 
-  public FunctionCallExpr getFnCall() { return (FunctionCallExpr) getChild(0); }
-  public List<Expr> getPartitionExprs() {
-    return children_.subList(1, numPartitionExprs_ + 1);
-  }
+  public FunctionCallExpr getFnCall() { return fnCall_; }
+  public List<Expr> getPartitionExprs() { return partitionExprs_; }
   public List<OrderByElement> getOrderByElements() { return orderByElements_; }
   public AnalyticWindow getWindow() { return window_; }
 
@@ -110,6 +124,7 @@ public class AnalyticExpr extends Expr {
   public boolean equals(Object obj) {
     if (!super.equals(obj)) return false;
     AnalyticExpr o = (AnalyticExpr)obj;
+    if (!fnCall_.equals(o.getFnCall())) return false;
     if ((window_ == null) != (o.window_ == null)) return false;
     if (window_ != null) {
       if (!window_.equals(o.window_)) return false;
@@ -130,10 +145,10 @@ public class AnalyticExpr extends Expr {
   public String toSqlImpl() {
     if (sqlString_ != null) return sqlString_;
     StringBuilder sb = new StringBuilder();
-    sb.append(getFnCall().toSql()).append(" OVER (");
+    sb.append(fnCall_.toSql()).append(" OVER (");
     boolean needsSpace = false;
-    if (numPartitionExprs_ > 0) {
-      sb.append("PARTITION BY ").append(Expr.toSql(getPartitionExprs()));
+    if (!partitionExprs_.isEmpty()) {
+      sb.append("PARTITION BY ").append(Expr.toSql(partitionExprs_));
       needsSpace = true;
     }
     if (!orderByElements_.isEmpty()) {
@@ -179,6 +194,11 @@ public class AnalyticExpr extends Expr {
   static private boolean isOffsetFn(Function fn) {
     if (!isAnalyticFn(fn)) return false;
     return fn.functionName().equals(LEAD) || fn.functionName().equals(LAG);
+  }
+
+  static private boolean isMinMax(Function fn) {
+    if (!isAnalyticFn(fn)) return false;
+    return fn.functionName().equals(MIN) || fn.functionName().equals(MAX);
   }
 
   static private boolean isRankingFn(Function fn) {
@@ -240,8 +260,24 @@ public class AnalyticExpr extends Expr {
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     if (isAnalyzed_) return;
+    fnCall_.analyze(analyzer);
     super.analyze(analyzer);
     type_ = getFnCall().getType();
+
+    for (Expr e: partitionExprs_) {
+      if (e.isConstant()) {
+        throw new AnalysisException(
+            "Expressions in the PARTITION BY clause must not be constant: "
+              + e.toSql() + " (in " + toSql() + ")");
+      }
+    }
+    for (OrderByElement e: orderByElements_) {
+      if (e.getExpr().isConstant()) {
+        throw new AnalysisException(
+            "Expressions in the ORDER BY clause must not be constant: "
+              + e.getExpr().toSql() + " (in " + toSql() + ")");
+      }
+    }
 
     if (getFnCall().getParams().isDistinct()) {
       throw new AnalysisException(
@@ -272,7 +308,18 @@ public class AnalyticExpr extends Expr {
         throw new AnalysisException(
             "Windowing clause not allowed with '" + getFnCall().toSql() + "'");
       }
-      if (isOffsetFn(fn) && getFnCall().getChildren().size() > 1) checkOffset(analyzer);
+      if (isOffsetFn(fn) && getFnCall().getChildren().size() > 1) {
+        checkOffset(analyzer);
+        // check the default, which needs to be a constant at the moment
+        // TODO: remove this check when the backend can handle non-constants
+        if (getFnCall().getChildren().size() > 2) {
+          if (!getFnCall().getChild(2).isConstant()) {
+            throw new AnalysisException(
+                "The default parameter (parameter 3) of LEAD/LAG must be a constant: "
+                  + getFnCall().toSql());
+          }
+        }
+      }
     }
 
     if (window_ != null) {
@@ -282,12 +329,8 @@ public class AnalyticExpr extends Expr {
       }
       window_.analyze(analyzer);
 
-      // update children
-      Preconditions.checkNotNull(window_.getLeftBoundary());
-      setWindowChildren();
-
-      if (!orderByElements_.isEmpty() &&
-          window_.getType() == AnalyticWindow.Type.RANGE) {
+      if (!orderByElements_.isEmpty()
+          && window_.getType() == AnalyticWindow.Type.RANGE) {
         // check that preceding/following ranges match ordering
         if (window_.getLeftBoundary().getType().isOffset()) {
           checkRangeOffsetBoundaryExpr(window_.getLeftBoundary());
@@ -296,6 +339,12 @@ public class AnalyticExpr extends Expr {
             && window_.getRightBoundary().getType().isOffset()) {
           checkRangeOffsetBoundaryExpr(window_.getRightBoundary());
         }
+      }
+      if (isMinMax(fn) &&
+          window_.getLeftBoundary().getType() != BoundaryType.UNBOUNDED_PRECEDING) {
+        throw new AnalysisException(
+            "'" + getFnCall().toSql() + "' is only supported with an "
+              + "UNBOUNDED PRECEDING start bound.");
       }
     }
 
@@ -307,6 +356,7 @@ public class AnalyticExpr extends Expr {
     sqlString_ = toSql();
 
     standardize(analyzer);
+    setChildren();
   }
 
   /**
@@ -326,6 +376,26 @@ public class AnalyticExpr extends Expr {
    *    UNBOUNDED_PRECEDING.
    * 5. Explicitly set the default window if no window was given but there
    *    are order-by elements.
+   * 6. FIRST_VALUE without UNBOUNDED PRECEDING gets rewritten to use a different window
+   *    and change the function to return the last value. We either set the fn to be
+   *    'last_value' or 'first_value_rewrite', which simply wraps the 'last_value'
+   *    implementation but allows us to handle the first rows in a partition in a special
+   *    way in the backend. There are a few cases:
+   *     a) Start bound is X FOLLOWING or CURRENT ROW (X=0):
+   *        Use 'last_value' with a window where both bounds are X FOLLOWING (or
+   *        CURRENT ROW). Setting the start bound to X following is necessary because the
+   *        X rows at the end of a partition have no rows in their window. Note that X
+   *        FOLLOWING could be rewritten as lead(X) but that would not work for CURRENT
+   *        ROW.
+   *     b) Start bound is X PRECEDING and end bound is CURRENT ROW or FOLLOWING:
+   *        Use 'first_value_rewrite' and a window with an end bound X PRECEDING. An
+   *        extra parameter '-1' is added to indicate to the backend that NULLs should
+   *        not be added for the first X rows.
+   *     c) Start bound is X PRECEDING and end bound is Y PRECEDING:
+   *        Use 'first_value_rewrite' and a window with an end bound X PRECEDING. The
+   *        first Y rows in a partition have empty windows and should be NULL. An extra
+   *        parameter with the integer constant Y is added to indicate to the backend
+   *        that NULLs should be added for the first Y rows.
    */
   private void standardize(Analyzer analyzer) {
     FunctionName analyticFnName = getFnCall().getFnName();
@@ -364,11 +434,10 @@ public class AnalyticExpr extends Expr {
         Preconditions.checkState(getFnCall().getChildren().size() == 3);
       }
       if (newExprParams != null) {
-        FunctionCallExpr newFnCall = new FunctionCallExpr(getFnCall().getFnName(),
+        fnCall_ = new FunctionCallExpr(getFnCall().getFnName(),
             new FunctionParams(newExprParams));
-        newFnCall.setIsAnalyticFnCall(true);
-        newFnCall.analyzeNoThrow(analyzer);
-        setChild(0, newFnCall);
+        fnCall_.setIsAnalyticFnCall(true);
+        fnCall_.analyzeNoThrow(analyzer);
       }
 
       // Set the window.
@@ -384,9 +453,39 @@ public class AnalyticExpr extends Expr {
       } catch (AnalysisException e) {
         throw new IllegalStateException(e);
       }
-      setWindowChildren();
       resetWindow_ = true;
       return;
+    }
+
+    if (analyticFnName.getFunction().equals(FIRSTVALUE)
+        && window_ != null
+        && window_.getLeftBoundary().getType() != BoundaryType.UNBOUNDED_PRECEDING) {
+      if (window_.getLeftBoundary().getType() != BoundaryType.PRECEDING) {
+        window_ = new AnalyticWindow(window_.getType(), window_.getLeftBoundary(),
+            window_.getLeftBoundary());
+        fnCall_ = new FunctionCallExpr(new FunctionName("last_value"),
+            getFnCall().getParams());
+      } else {
+        List<Expr> paramExprs = Expr.cloneList(getFnCall().getParams().exprs());
+        if (window_.getRightBoundary().getType() == BoundaryType.PRECEDING) {
+          // The number of rows preceding for the end bound determines the number of
+          // rows at the beginning of each partition that should have a NULL value.
+          paramExprs.add(window_.getRightBoundary().getExpr());
+        } else {
+          // -1 indicates that no NULL values are inserted even though we set the end
+          // bound to the start bound (which is PRECEDING) below; this is different from
+          // the default behavior of windows with an end bound PRECEDING.
+          paramExprs.add(new NumericLiteral(BigInteger.valueOf(-1), Type.BIGINT));
+        }
+        window_ = new AnalyticWindow(window_.getType(),
+            new Boundary(BoundaryType.UNBOUNDED_PRECEDING, null),
+            window_.getLeftBoundary());
+        fnCall_ = new FunctionCallExpr(new FunctionName("first_value_rewrite"),
+            new FunctionParams(paramExprs));
+      }
+      fnCall_.setIsAnalyticFnCall(true);
+      fnCall_.analyzeNoThrow(analyzer);
+      analyticFnName = getFnCall().getFnName();
     }
 
     // Reverse the ordering and window for windows ending with UNBOUNDED FOLLOWING,
@@ -397,12 +496,6 @@ public class AnalyticExpr extends Expr {
       orderByElements_ = OrderByElement.reverse(orderByElements_);
       window_ = window_.reverse();
 
-      // Replace existing children.
-      for (int i = 0; i < orderByElements_.size(); ++i) {
-        setChild(numPartitionExprs_ + i + 1, orderByElements_.get(i).getExpr());
-      }
-      setWindowChildren();
-
       // Also flip first_value()/last_value(). For other analytic functions there is no
       // need to also change the function.
       FunctionName reversedFnName = null;
@@ -412,11 +505,9 @@ public class AnalyticExpr extends Expr {
         reversedFnName = new FunctionName(FIRSTVALUE);
       }
       if (reversedFnName != null) {
-        FunctionCallExpr reversedFn =
-            new FunctionCallExpr(reversedFnName, getFnCall().getParams());
-        reversedFn.setIsAnalyticFnCall(true);
-        reversedFn.analyzeNoThrow(analyzer);
-        setChild(0, reversedFn);
+        fnCall_ = new FunctionCallExpr(reversedFnName, getFnCall().getParams());
+        fnCall_.setIsAnalyticFnCall(true);
+        fnCall_.analyzeNoThrow(analyzer);
       }
       analyticFnName = getFnCall().getFnName();
     }
@@ -425,6 +516,7 @@ public class AnalyticExpr extends Expr {
     // is UNBOUNDED_PRECEDING.
     if (window_ != null
         && window_.getLeftBoundary().getType() == BoundaryType.UNBOUNDED_PRECEDING
+        && window_.getRightBoundary().getType() != BoundaryType.PRECEDING
         && analyticFnName.getFunction().equals(FIRSTVALUE)) {
       window_.setRightBoundary(new Boundary(BoundaryType.CURRENT_ROW, null));
     }
@@ -433,29 +525,6 @@ public class AnalyticExpr extends Expr {
     if (!orderByElements_.isEmpty() && window_ == null) {
       window_ = AnalyticWindow.DEFAULT_WINDOW;
       resetWindow_ = true;
-    }
-  }
-
-  /**
-   * Sets or adds the corresponding children to the exprs of window_.
-   */
-  private void setWindowChildren() {
-    if (window_.getLeftBoundary().getExpr() != null) {
-      if (numPartitionExprs_ + 1 + orderByElements_.size() >= children_.size()) {
-        addChild(window_.getLeftBoundary().getExpr());
-      } else {
-        setChild(numPartitionExprs_ + 1 + orderByElements_.size(),
-            window_.getLeftBoundary().getExpr());
-      }
-    }
-    if (window_.getRightBoundary() != null
-        && window_.getRightBoundary().getExpr() != null) {
-      if (numPartitionExprs_ + 2 + orderByElements_.size() >= children_.size()) {
-        addChild(window_.getRightBoundary().getExpr());
-      } else {
-        setChild(numPartitionExprs_ + 2 + orderByElements_.size(),
-            window_.getRightBoundary().getExpr());
-      }
     }
   }
 
@@ -470,25 +539,51 @@ public class AnalyticExpr extends Expr {
   }
 
   /**
-   * Point the order by elements to the corresponding children because they
-   * may have been substituted and/or analyzed.
+   * Keep fnCall_, partitionExprs_ and orderByElements_ in sync with children_.
    */
-  private void setOrderByExprs() {
+  private void syncWithChildren() {
+    int numArgs = fnCall_.getChildren().size();
+    for (int i = 0; i < numArgs; ++i) {
+      fnCall_.setChild(i, getChild(i));
+    }
+    int numPartitionExprs = partitionExprs_.size();
+    for (int i = 0; i < numPartitionExprs; ++i) {
+      partitionExprs_.set(i, getChild(numArgs + i));
+    }
     for (int i = 0; i < orderByElements_.size(); ++i) {
-      Expr childExpr = getChild(numPartitionExprs_ + 1 + i);
-      orderByElements_.get(i).setExpr(childExpr);
+      orderByElements_.get(i).setExpr(getChild(numArgs + numPartitionExprs + i));
+    }
+  }
+
+  /**
+   * Populate children_ from fnCall_, partitionExprs_, orderByElements_
+   */
+  private void setChildren() {
+    getChildren().clear();
+    addChildren(fnCall_.getChildren());
+    addChildren(partitionExprs_);
+    for (OrderByElement e: orderByElements_) {
+      addChild(e.getExpr());
+    }
+    if (window_ != null) {
+      if (window_.getLeftBoundary().getExpr() != null) {
+        addChild(window_.getLeftBoundary().getExpr());
+      }
+      if (window_.getRightBoundary() != null
+          && window_.getRightBoundary().getExpr() != null) {
+        addChild(window_.getRightBoundary().getExpr());
+      }
     }
   }
 
   @Override
   protected void resetAnalysisState() {
     super.resetAnalysisState();
+    fnCall_.resetAnalysisState();
     if (resetWindow_) window_ = null;
     resetWindow_ = false;
-    isAnalyzed_ = false;
-    // remove window clause exprs added as children in analyze()
-    children_.subList(
-        1 + numPartitionExprs_ + orderByElements_.size(), children_.size()).clear();
+    // sync with children, now that they've been reset
+    syncWithChildren();
   }
 
   @Override
@@ -496,8 +591,8 @@ public class AnalyticExpr extends Expr {
       throws AnalysisException {
     Expr e = super.substituteImpl(smap, analyzer);
     if (!(e instanceof AnalyticExpr)) return e;
-    // Keep the order-by elements in sync with the possibly substituted child exprs.
-    ((AnalyticExpr) e).setOrderByExprs();
+    // Re-sync state after possible child substitution.
+    ((AnalyticExpr) e).syncWithChildren();
     return e;
   }
 }

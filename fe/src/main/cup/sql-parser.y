@@ -22,12 +22,14 @@ import com.cloudera.impala.catalog.StructType;
 import com.cloudera.impala.catalog.StructField;
 import com.cloudera.impala.catalog.RowFormat;
 import com.cloudera.impala.catalog.View;
+import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.analysis.ColumnDesc;
 import com.cloudera.impala.analysis.UnionStmt.UnionOperand;
 import com.cloudera.impala.analysis.UnionStmt.Qualifier;
 import com.cloudera.impala.thrift.TFunctionCategory;
 import com.cloudera.impala.thrift.TDescribeTableOutputStyle;
 import com.cloudera.impala.thrift.THdfsFileFormat;
+import com.cloudera.impala.thrift.TPrivilegeLevel;
 import com.cloudera.impala.thrift.TTablePropertyType;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -235,22 +237,22 @@ terminal
   KW_DATABASE, KW_DATABASES, KW_DATE, KW_DATETIME, KW_DECIMAL, KW_DELIMITED, KW_DESC,
   KW_DESCRIBE, KW_DISTINCT, KW_DIV, KW_DOUBLE, KW_DROP, KW_ELSE, KW_END, KW_ESCAPED,
   KW_EXISTS, KW_EXPLAIN, KW_EXTERNAL, KW_FALSE, KW_FIELDS, KW_FILEFORMAT, KW_FINALIZE_FN,
-  KW_FIRST, KW_FLOAT, KW_FOLLOWING, KW_FORMAT, KW_FORMATTED, KW_FROM, KW_FULL,
-  KW_FUNCTION, KW_FUNCTIONS, KW_GROUP, KW_HAVING, KW_IF, KW_IN, KW_INIT_FN, KW_INNER,
-  KW_INPATH, KW_INSERT, KW_INT, KW_INTERMEDIATE, KW_INTERVAL, KW_INTO, KW_INVALIDATE,
-  KW_IS, KW_JOIN, KW_LAST, KW_LEFT, KW_LIKE, KW_LIMIT, KW_LINES, KW_LOAD, KW_LOCATION,
-  KW_MAP, KW_MERGE_FN, KW_METADATA, KW_NOT, KW_NULL, KW_NULLS, KW_OFFSET,
+  KW_FIRST, KW_FLOAT, KW_FOLLOWING, KW_FOR, KW_FORMAT, KW_FORMATTED, KW_FROM, KW_FULL,
+  KW_FUNCTION, KW_FUNCTIONS, KW_GRANT, KW_GROUP, KW_HAVING, KW_IF, KW_IN, KW_INIT_FN,
+  KW_INNER, KW_INPATH, KW_INSERT, KW_INT, KW_INTERMEDIATE, KW_INTERVAL, KW_INTO,
+  KW_INVALIDATE, KW_IS, KW_JOIN, KW_LAST, KW_LEFT, KW_LIKE, KW_LIMIT, KW_LINES, KW_LOAD,
+  KW_LOCATION, KW_MAP, KW_MERGE_FN, KW_METADATA, KW_NOT, KW_NULL, KW_NULLS, KW_OFFSET,
   KW_ON, KW_OR, KW_ORDER, KW_OUTER, KW_OVER, KW_OVERWRITE, KW_PARQUET, KW_PARQUETFILE,
   KW_PARTITION, KW_PARTITIONED, KW_PARTITIONS, KW_PRECEDING,
-  KW_PREPARE_FN, KW_PRODUCED, KW_RANGE, KW_RCFILE,
-  KW_REFRESH, KW_REGEXP, KW_RENAME, KW_REPLACE, KW_RETURNS, KW_RIGHT, KW_RLIKE, KW_ROW,
+  KW_PREPARE_FN, KW_PRODUCED, KW_RANGE, KW_RCFILE, KW_REFRESH, KW_REGEXP, KW_RENAME,
+  KW_REPLACE, KW_RETURNS, KW_REVOKE, KW_RIGHT, KW_RLIKE, KW_ROLE, KW_ROLES, KW_ROW,
   KW_ROWS, KW_SCHEMA, KW_SCHEMAS, KW_SELECT, KW_SEMI, KW_SEQUENCEFILE, KW_SERDEPROPERTIES,
-  KW_SERIALIZE_FN, KW_SET, KW_SHOW, KW_SMALLINT, KW_STORED, KW_STRAIGHT_JOIN, KW_STRING,
-  KW_STRUCT, KW_SYMBOL, KW_TABLE, KW_TABLES, KW_TBLPROPERTIES, KW_TERMINATED,
+  KW_SERIALIZE_FN, KW_SET, KW_SHOW, KW_SMALLINT, KW_STORED, KW_STRAIGHT_JOIN,
+  KW_STRING, KW_STRUCT, KW_SYMBOL, KW_TABLE, KW_TABLES, KW_TBLPROPERTIES, KW_TERMINATED,
   KW_TEXTFILE, KW_THEN,
   KW_TIMESTAMP, KW_TINYINT, KW_STATS, KW_TO, KW_TRUE, KW_UNBOUNDED, KW_UNCACHED,
-  KW_UNION, KW_UPDATE_FN,
-  KW_USE, KW_USING, KW_VALUES, KW_VARCHAR, KW_VIEW, KW_WHEN, KW_WHERE, KW_WITH;
+  KW_UNION, KW_UPDATE_FN, KW_USE, KW_USING,
+  KW_VALUES, KW_VARCHAR, KW_VIEW, KW_WHEN, KW_WHERE, KW_WITH;
 
 terminal COLON, COMMA, DOT, DOTDOTDOT, STAR, LPAREN, RPAREN, LBRACKET, RBRACKET,
   DIVIDE, MOD, ADD, SUBTRACT;
@@ -259,6 +261,7 @@ terminal EQUAL, NOT, LESSTHAN, GREATERTHAN;
 terminal String IDENT;
 terminal String EMPTY_IDENT;
 terminal String NUMERIC_OVERFLOW;
+terminal String COMMENTED_PLAN_HINTS;
 terminal BigDecimal INTEGER_LITERAL;
 terminal BigDecimal DECIMAL_LITERAL;
 terminal String STRING_LITERAL;
@@ -297,7 +300,6 @@ nonterminal SelectList select_clause;
 nonterminal SelectList select_list;
 nonterminal SelectListItem select_list_item;
 nonterminal SelectListItem star_expr;
-nonterminal Boolean opt_straight_join;
 nonterminal Expr expr, non_pred_expr, arithmetic_expr, timestamp_arithmetic_expr;
 nonterminal ArrayList<Expr> expr_list;
 nonterminal String alias_clause;
@@ -318,7 +320,7 @@ nonterminal Expr opt_offset_param;
 nonterminal LimitElement opt_limit_offset_clause;
 nonterminal Expr opt_limit_clause, opt_offset_clause;
 nonterminal Expr cast_expr, case_else_clause, analytic_expr;
-nonterminal FunctionCallExpr function_call_expr;
+nonterminal Expr function_call_expr;
 nonterminal AnalyticWindow opt_window_clause;
 nonterminal AnalyticWindow.Type window_type;
 nonterminal AnalyticWindow.Boundary window_boundary;
@@ -400,10 +402,28 @@ nonterminal String opt_kw_column;
 nonterminal String opt_kw_table;
 nonterminal Boolean overwrite_val;
 
-// Used to parse 'SOURCE' and 'SOURCES' as identifiers rather than keywords. Throws a
-// parse exception if the identifier is not SOURCE/SOURCES.
+// For GRANT/REVOKE/AUTH DDL statements
+nonterminal ShowRolesStmt show_roles_stmt;
+nonterminal ShowGrantRoleStmt show_grant_role_stmt;
+nonterminal CreateDropRoleStmt create_drop_role_stmt;
+nonterminal GrantRevokeRoleStmt grant_role_stmt;
+nonterminal GrantRevokeRoleStmt revoke_role_stmt;
+nonterminal GrantRevokePrivStmt grant_privilege_stmt;
+nonterminal GrantRevokePrivStmt revoke_privilege_stmt;
+nonterminal PrivilegeSpec privilege_spec;
+nonterminal TPrivilegeLevel privilege;
+nonterminal Boolean opt_with_grantopt;
+nonterminal Boolean opt_grantopt_for;
+nonterminal Boolean opt_kw_role;
+
+// To avoid creating common keywords such as 'SERVER' or 'SOURCES' we treat them as
+// identifiers rather than keywords. Throws a parse exception if the identifier does not
+// match the expected string.
 nonterminal Boolean source_ident;
 nonterminal Boolean sources_ident;
+nonterminal Boolean server_ident;
+nonterminal Boolean uri_ident;
+nonterminal Boolean option_ident;
 
 // For Create/Drop/Show function ddl
 nonterminal FunctionArgs function_def_args;
@@ -517,6 +537,20 @@ stmt ::=
   {: RESULT = reset_metadata; :}
   | set_stmt:set
   {: RESULT = set; :}
+  | show_roles_stmt:show_roles
+  {: RESULT = show_roles; :}
+  | show_grant_role_stmt:show_grant_role
+  {: RESULT = show_grant_role; :}
+  | create_drop_role_stmt:create_drop_role
+  {: RESULT = create_drop_role; :}
+  | grant_role_stmt:grant_role
+  {: RESULT = grant_role; :}
+  | revoke_role_stmt:revoke_role
+  {: RESULT = revoke_role; :}
+  | grant_privilege_stmt:grant_privilege
+  {: RESULT = grant_privilege; :}
+  | revoke_privilege_stmt:revoke_privilege
+  {: RESULT = revoke_privilege; :}
   ;
 
 load_stmt ::=
@@ -595,6 +629,108 @@ opt_ident_list ::=
 
 opt_kw_table ::=
   KW_TABLE
+  | /* empty */
+  ;
+
+show_roles_stmt ::=
+  KW_SHOW KW_ROLES
+  {: RESULT = new ShowRolesStmt(false, null); :}
+  | KW_SHOW KW_ROLE KW_GRANT KW_GROUP IDENT:group
+  {: RESULT = new ShowRolesStmt(false, group); :}
+  | KW_SHOW KW_CURRENT KW_ROLES
+  {: RESULT = new ShowRolesStmt(true, null); :}
+  ;
+
+show_grant_role_stmt ::=
+  KW_SHOW KW_GRANT KW_ROLE IDENT:role
+  {: RESULT = new ShowGrantRoleStmt(role, null); :}
+  | KW_SHOW KW_GRANT KW_ROLE IDENT:role KW_ON server_ident:server_kw
+  {:
+    RESULT = new ShowGrantRoleStmt(role,
+        PrivilegeSpec.createServerScopedPriv(TPrivilegeLevel.ALL));
+  :}
+  | KW_SHOW KW_GRANT KW_ROLE IDENT:role KW_ON KW_DATABASE IDENT:db_name
+  {:
+    RESULT = new ShowGrantRoleStmt(role,
+        PrivilegeSpec.createDbScopedPriv(TPrivilegeLevel.ALL, db_name));
+  :}
+  | KW_SHOW KW_GRANT KW_ROLE IDENT:role KW_ON KW_TABLE table_name:tbl_name
+  {:
+    RESULT = new ShowGrantRoleStmt(role,
+        PrivilegeSpec.createTableScopedPriv(TPrivilegeLevel.ALL, tbl_name));
+  :}
+  | KW_SHOW KW_GRANT KW_ROLE IDENT:role KW_ON uri_ident:uri_kw STRING_LITERAL:uri
+  {:
+    RESULT = new ShowGrantRoleStmt(role,
+        PrivilegeSpec.createUriScopedPriv(TPrivilegeLevel.ALL, new HdfsUri(uri)));
+  :}
+  ;
+
+create_drop_role_stmt ::=
+  KW_CREATE KW_ROLE IDENT:role
+  {: RESULT = new CreateDropRoleStmt(role, false); :}
+  | KW_DROP KW_ROLE IDENT:role
+  {: RESULT = new CreateDropRoleStmt(role, true); :}
+  ;
+
+grant_role_stmt ::=
+  KW_GRANT KW_ROLE IDENT:role KW_TO KW_GROUP IDENT:group
+  {: RESULT = new GrantRevokeRoleStmt(role, group, true); :}
+  ;
+
+revoke_role_stmt ::=
+  KW_REVOKE KW_ROLE IDENT:role KW_FROM KW_GROUP IDENT:group
+  {: RESULT = new GrantRevokeRoleStmt(role, group, false); :}
+  ;
+
+grant_privilege_stmt ::=
+  KW_GRANT privilege_spec:priv KW_TO opt_kw_role:opt_role IDENT:role
+  opt_with_grantopt:grant_opt
+  {: RESULT = new GrantRevokePrivStmt(role, priv, true, grant_opt); :}
+  ;
+
+revoke_privilege_stmt ::=
+  KW_REVOKE opt_grantopt_for:grant_opt privilege_spec:priv KW_FROM
+  opt_kw_role:opt_role IDENT:role
+  {: RESULT = new GrantRevokePrivStmt(role, priv, false, grant_opt); :}
+  ;
+
+privilege_spec ::=
+  privilege:priv KW_ON server_ident:server_kw
+  {: RESULT = PrivilegeSpec.createServerScopedPriv(priv); :}
+  | privilege:priv KW_ON KW_DATABASE IDENT:db_name
+  {: RESULT = PrivilegeSpec.createDbScopedPriv(priv, db_name); :}
+  | privilege:priv KW_ON KW_TABLE table_name:tbl_name
+  {: RESULT = PrivilegeSpec.createTableScopedPriv(priv, tbl_name); :}
+  | privilege:priv KW_ON uri_ident:uri_kw STRING_LITERAL:uri
+  {: RESULT = PrivilegeSpec.createUriScopedPriv(priv, new HdfsUri(uri)); :}
+  ;
+
+privilege ::=
+  KW_SELECT
+  {: RESULT = TPrivilegeLevel.SELECT; :}
+  | KW_INSERT
+  {: RESULT = TPrivilegeLevel.INSERT; :}
+  | KW_ALL
+  {: RESULT = TPrivilegeLevel.ALL; :}
+  ;
+
+opt_grantopt_for ::=
+  KW_GRANT option_ident:option KW_FOR
+  {: RESULT = true; :}
+  | /* empty */
+  {: RESULT = false; :}
+  ;
+
+opt_with_grantopt ::=
+  KW_WITH KW_GRANT option_ident:option
+  {: RESULT = true; :}
+  | /* empty */
+  {: RESULT = false; :}
+  ;
+
+opt_kw_role ::=
+  KW_ROLE
   | /* empty */
   ;
 
@@ -991,6 +1127,36 @@ sources_ident ::=
   {:
     if (!ident.toUpperCase().equals("SOURCES")) {
       parser.parseError("identifier", SqlParserSymbols.IDENT, "SOURCES");
+    }
+    RESULT = true;
+  :}
+  ;
+
+uri_ident ::=
+  IDENT:ident
+  {:
+    if (!ident.toUpperCase().equals("URI")) {
+      parser.parseError("identifier", SqlParserSymbols.IDENT, "URI");
+    }
+    RESULT = true;
+  :}
+  ;
+
+server_ident ::=
+  IDENT:ident
+  {:
+    if (!ident.toUpperCase().equals("SERVER")) {
+      parser.parseError("identifier", SqlParserSymbols.IDENT, "SERVER");
+    }
+    RESULT = true;
+  :}
+  ;
+
+option_ident ::=
+  IDENT:ident
+  {:
+    if (!ident.toUpperCase().equals("OPTION")) {
+      parser.parseError("identifier", SqlParserSymbols.IDENT, "OPTION");
     }
     RESULT = true;
   :}
@@ -1507,20 +1673,20 @@ select_stmt ::=
   ;
 
 select_clause ::=
-  KW_SELECT opt_straight_join:s select_list:l
+  KW_SELECT opt_plan_hints:hints select_list:l
   {:
-    l.setIsStraightJoin(s);
+    l.setPlanHints(hints);
     RESULT = l;
   :}
-  | KW_SELECT KW_ALL opt_straight_join:s select_list:l
+  | KW_SELECT KW_ALL opt_plan_hints:hints select_list:l
   {:
-    l.setIsStraightJoin(s);
+    l.setPlanHints(hints);
     RESULT = l;
   :}
-  | KW_SELECT KW_DISTINCT opt_straight_join:s select_list:l
+  | KW_SELECT KW_DISTINCT opt_plan_hints:hints select_list:l
   {:
     l.setIsDistinct(true);
-    l.setIsStraightJoin(s);
+    l.setPlanHints(hints);
     RESULT = l;
   :}
   ;
@@ -1532,13 +1698,6 @@ set_stmt ::=
   {: RESULT = new SetStmt(key, ident); :}
   | KW_SET
   {: RESULT = new SetStmt(null, null); :}
-  ;
-
-opt_straight_join ::=
-  KW_STRAIGHT_JOIN
-  {: RESULT = true; :}
-  | /* empty */
-  {: RESULT = false; :}
   ;
 
 select_list ::=
@@ -1673,8 +1832,12 @@ join_operator ::=
   {: RESULT = JoinOperator.FULL_OUTER_JOIN; :}
   | KW_LEFT KW_SEMI KW_JOIN
   {: RESULT = JoinOperator.LEFT_SEMI_JOIN; :}
+  | KW_RIGHT KW_SEMI KW_JOIN
+  {: RESULT = JoinOperator.RIGHT_SEMI_JOIN; :}
   | KW_LEFT KW_ANTI KW_JOIN
   {: RESULT = JoinOperator.LEFT_ANTI_JOIN; :}
+  | KW_RIGHT KW_ANTI KW_JOIN
+  {: RESULT = JoinOperator.RIGHT_ANTI_JOIN; :}
   ;
 
 opt_inner ::=
@@ -1688,9 +1851,27 @@ opt_outer ::=
   ;
 
 opt_plan_hints ::=
-  LBRACKET ident_list:l RBRACKET
+  COMMENTED_PLAN_HINTS:l
+  {:
+    ArrayList<String> hints = new ArrayList<String>();
+    String[] tokens = l.split(",");
+    for (String token: tokens) {
+      String trimmedToken = token.trim();
+      if (trimmedToken.length() > 0) hints.add(trimmedToken);
+    }
+    RESULT = hints;
+  :}
+  /* legacy straight_join hint style */
+  | KW_STRAIGHT_JOIN
+  {:
+    ArrayList<String> hints = new ArrayList<String>();
+    hints.add("straight_join");
+    RESULT = hints;
+  :}
+  /* legacy plan-hint style */
+  | LBRACKET ident_list:l RBRACKET
   {: RESULT = l; :}
-  |
+  | /* empty */
   {: RESULT = null; :}
   ;
 
@@ -1916,17 +2097,28 @@ non_pred_expr ::=
 
 function_call_expr ::=
   function_name:fn_name LPAREN RPAREN
-  {: RESULT = new FunctionCallExpr(fn_name, new ArrayList<Expr>()); :}
+  {:
+    RESULT = FunctionCallExpr.createExpr(
+        fn_name, new FunctionParams(new ArrayList<Expr>()));
+  :}
   | function_name:fn_name LPAREN function_params:params RPAREN
-  {: RESULT = new FunctionCallExpr(fn_name, params); :}
+  {: RESULT = FunctionCallExpr.createExpr(fn_name, params); :}
+  // Below is a special case for EXTRACT. Idents are used to avoid adding new keywords.
+  | function_name:fn_name LPAREN IDENT:u KW_FROM expr:t RPAREN
+  {:  RESULT = new ExtractFromExpr(fn_name, u, t); :}
   ;
 
 // TODO: allow an arbitrary expr here instead of agg/fn call, and check during analysis?
 // The parser errors aren't particularly easy to parse.
 analytic_expr ::=
-  function_call_expr:f KW_OVER
+  function_call_expr:e KW_OVER
     LPAREN opt_partition_by_clause:p opt_order_by_clause:o opt_window_clause:w RPAREN
   {:
+    // Handle cases where function_call_expr resulted in a plain Expr
+    if (!(e instanceof FunctionCallExpr)) {
+      parser.parseError("over", SqlParserSymbols.KW_OVER);
+    }
+    FunctionCallExpr f = (FunctionCallExpr)e;
     f.setIsAnalyticFnCall(true);
     RESULT = new AnalyticExpr(f, p, o, w);
   :}
@@ -2258,4 +2450,3 @@ struct_field_def_list ::=
     RESULT = list;
   :}
   ;
-

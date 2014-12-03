@@ -156,7 +156,16 @@ enum TJoinOp {
   LEFT_OUTER_JOIN,
   LEFT_SEMI_JOIN,
   LEFT_ANTI_JOIN,
+
+  // Similar to LEFT_ANTI_JOIN with special handling for NULLs for the join conjuncts
+  // on the build side. Those NULLs are considered candidate matches, and therefore could
+  // be rejected (ANTI-join), based on the other join conjuncts. This is in contrast
+  // to LEFT_ANTI_JOIN where NULLs are not matches and therefore always returned.
+  NULL_AWARE_LEFT_ANTI_JOIN,
+
   RIGHT_OUTER_JOIN,
+  RIGHT_SEMI_JOIN,
+  RIGHT_ANTI_JOIN,
   FULL_OUTER_JOIN,
   CROSS_JOIN
 }
@@ -235,14 +244,11 @@ enum TAnalyticWindowBoundaryType {
 struct TAnalyticWindowBoundary {
   1: required TAnalyticWindowBoundaryType type
 
-  // Expr to supply offset for range window values when type is PRECEDING or FOLLOWING.
-  // This should be a numeric literal.
-  // TODO: This should be a predicate expr like TAnalyticNode.order_by_lt
-  2: optional Exprs.TExpr range_offset_expr
+  // Predicate that checks: child tuple '<=' buffered tuple + offset for the orderby expr
+  2: optional Exprs.TExpr range_offset_predicate
 
-  // Index offset from the current row. Is positive if type is FOLLOWING, negative if
-  // type is PRECEDING, and 0 if type is CURRENT ROW.
-  3: optional i64 rows_offset_idx
+  // Offset from the current row for ROWS windows.
+  3: optional i64 rows_offset_value
 }
 
 struct TAnalyticWindow {
@@ -291,15 +297,17 @@ struct TAnalyticNode {
   // order_by_exprs are empty
   7: optional Types.TTupleId buffered_tuple_id
 
-  // predicate that checks: child tuple '<' buffered tuple for partition_exprs;
-  // only set if buffered_tuple_id is set; should be evaluated over a row that
-  // is composed of the child tuple and the buffered tuple
-  8: optional Exprs.TExpr partition_by_lt
+  // predicate that checks: child tuple is in the same partition as the buffered tuple,
+  // i.e. each partition expr is equal or both are not null. Only set if
+  // buffered_tuple_id is set; should be evaluated over a row that is composed of the
+  // child tuple and the buffered tuple
+  8: optional Exprs.TExpr partition_by_eq
 
-  // predicate that checks: child tuple '<' buffered tuple for order_by_exprs;
-  // only set if buffered_tuple_id is set; should be evaluated over a row that
-  // is composed of the child tuple and the buffered tuple
-  9: optional Exprs.TExpr order_by_lt
+  // predicate that checks: the order_by_exprs are equal or both NULL when evaluated
+  // over the child tuple and the buffered tuple. only set if buffered_tuple_id is set;
+  // should be evaluated over a row that is composed of the child tuple and the buffered
+  // tuple
+  9: optional Exprs.TExpr order_by_eq
 }
 
 struct TUnionNode {

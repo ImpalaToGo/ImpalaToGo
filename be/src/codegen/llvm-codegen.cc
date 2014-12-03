@@ -372,7 +372,20 @@ Value* LlvmCodeGen::GetIntConstant(PrimitiveType type, int64_t val) {
 
 AllocaInst* LlvmCodeGen::CreateEntryBlockAlloca(Function* f, const NamedVariable& var) {
   IRBuilder<> tmp(&f->getEntryBlock(), f->getEntryBlock().begin());
-  return tmp.CreateAlloca(var.type, 0, var.name.c_str());
+  AllocaInst* alloca = tmp.CreateAlloca(var.type, 0, var.name.c_str());
+  if (var.type == GetType(CodegenAnyVal::LLVM_DECIMALVAL_NAME)) {
+    // Generated functions may manipulate DecimalVal arguments via SIMD instructions such
+    // as 'movaps' that require 16-byte memory alignment. LLVM uses 8-byte alignment by
+    // default, so explicitly set the alignment for DecimalVals.
+    alloca->setAlignment(16);
+  }
+  return alloca;
+}
+
+AllocaInst* LlvmCodeGen::CreateEntryBlockAlloca(const LlvmBuilder& builder, Type* type,
+                                                const char* name) {
+  return CreateEntryBlockAlloca(builder.GetInsertBlock()->getParent(),
+                                NamedVariable(name, type));
 }
 
 void LlvmCodeGen::CreateIfElseBlocks(Function* fn, const string& if_name,
@@ -595,7 +608,12 @@ Status LlvmCodeGen::FinalizeModule() {
   SCOPED_TIMER(profile_.total_time_counter());
   SCOPED_TIMER(compile_timer_);
 
-  if (optimizations_enabled_ && !FLAGS_disable_optimization_passes) OptimizeModule();
+  // Don't waste time optimizing module if there are no functions to JIT. This can happen
+  // if the codegen object is created but no functions are successfully codegen'd.
+  if (optimizations_enabled_ && !FLAGS_disable_optimization_passes &&
+      !fns_to_jit_compile_.empty()) {
+    OptimizeModule();
+  }
 
   // JIT compile all codegen'd functions
   for (int i = 0; i < fns_to_jit_compile_.size(); ++i) {
@@ -895,6 +913,9 @@ Status LlvmCodeGen::LoadIntrinsics() {
 }
 
 void LlvmCodeGen::CodegenMemcpy(LlvmBuilder* builder, Value* dst, Value* src, int size) {
+  DCHECK_GE(size, 0);
+  if (size == 0) return;
+
   // Cast src/dst to int8_t*.  If they already are, this will get optimized away
   DCHECK(PointerType::classof(dst->getType()));
   DCHECK(PointerType::classof(src->getType()));
@@ -1032,13 +1053,30 @@ Function* LlvmCodeGen::GetHashFunction(int num_bytes) {
     }
     return fn;
   } else {
-    // Don't bother with optimizations without crc hash instruction
-    return GetFunction(IRFunction::HASH_FNV);
+    return GetMurmurHashFunction(num_bytes);
   }
 }
 
-Function* LlvmCodeGen::GetFnvHashFunction(int num_bytes) {
-  return GetFunction(IRFunction::HASH_FNV);
+static Function* GetLenOptimizedHashFn(
+    LlvmCodeGen* codegen, IRFunction::Type f, int len) {
+  Function* fn = codegen->GetFunction(f);
+  DCHECK(fn != NULL);
+  if (len != -1) {
+    // Clone this function since we're going to modify it by replacing the
+    // length with num_bytes.
+    fn = codegen->CloneFunction(fn);
+    Value* len_arg = codegen->GetArgument(fn, 1);
+    len_arg->replaceAllUsesWith(codegen->GetIntConstant(TYPE_INT, len));
+  }
+  return codegen->FinalizeFunction(fn);
+}
+
+Function* LlvmCodeGen::GetFnvHashFunction(int len) {
+  return GetLenOptimizedHashFn(this, IRFunction::HASH_FNV, len);
+}
+
+Function* LlvmCodeGen::GetMurmurHashFunction(int len) {
+  return GetLenOptimizedHashFn(this, IRFunction::HASH_MURMUR, len);
 }
 
 void LlvmCodeGen::ReplaceInstWithValue(Instruction* from, Value* to) {

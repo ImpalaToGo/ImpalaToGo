@@ -20,7 +20,7 @@
 
 #include "common/logging.h"
 #include "gen-cpp/Types_types.h"  // for TPrimitiveType
-#include "gen-cpp/cli_service_types.h"  // for HiveServer2 Type
+#include "gen-cpp/TCLIService_types.h"  // for HiveServer2 Type
 
 namespace impala {
 
@@ -61,7 +61,9 @@ struct ColumnType {
   PrimitiveType type;
   // Only set if type == TYPE_CHAR or type == TYPE_VARCHAR
   int len;
-  static const int MAX_VARCHAR_LENGTH = 32672;
+  static const int MAX_VARCHAR_LENGTH = 65355;
+  static const int MAX_CHAR_LENGTH = 255;
+  static const int MAX_CHAR_INLINE_LENGTH = 128;
 
   // Only set if type == TYPE_DECIMAL
   int precision, scale;
@@ -78,7 +80,7 @@ struct ColumnType {
 
   static ColumnType CreateCharType(int len) {
     DCHECK_GE(len, 1);
-    DCHECK_LE(len, MAX_VARCHAR_LENGTH);
+    DCHECK_LE(len, MAX_CHAR_LENGTH);
     ColumnType ret;
     ret.type = TYPE_CHAR;
     ret.len = len;
@@ -164,7 +166,8 @@ struct ColumnType {
   }
 
   inline bool IsVarLen() const {
-    return type == TYPE_STRING || type == TYPE_VARCHAR;
+    return type == TYPE_STRING || type == TYPE_VARCHAR ||
+        (type == TYPE_CHAR && len > MAX_CHAR_INLINE_LENGTH);
   }
 
   // Returns the byte size of this type.  Returns 0 for variable length types.
@@ -174,6 +177,7 @@ struct ColumnType {
       case TYPE_VARCHAR:
         return 0;
       case TYPE_CHAR:
+        if (IsVarLen()) return 0;
         return len;
       case TYPE_NULL:
       case TYPE_BOOLEAN:
@@ -206,6 +210,9 @@ struct ColumnType {
       case TYPE_STRING:
       case TYPE_VARCHAR:
         return 16;
+      case TYPE_CHAR:
+        if (IsVarLen()) return 16;
+        return len;
       default:
         return GetByteSize();
     }

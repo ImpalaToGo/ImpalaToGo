@@ -99,66 +99,76 @@ NULL,30,30,60
 TINYINT, SMALLINT, INT, BIGINT
 ====
 ---- QUERY
-# Test partitions having NULL values
+# Test partitions and ordering expressions having NULL values for both
+# the default window and ROWS windows.
 select tinyint_col, smallint_col,
-sum(int_col) over (partition by tinyint_col order by smallint_col)
+sum(smallint_col) over (partition by tinyint_col order by smallint_col),
+sum(smallint_col) over (partition by tinyint_col order by smallint_col
+                        rows between unbounded preceding and 1 following),
+sum(smallint_col) over (partition by tinyint_col order by smallint_col
+                        rows between 1 following and 2 following)
 from alltypesagg
 where year = 2010 and month = 1 and day = 4 and id <= 3200
     and (smallint_col < 50 or smallint_col is NULL)
     and (tinyint_col = 1 or tinyint_col is NULL)
-order by tinyint_col, smallint_col
----- RESULTS
-1,1,102
-1,1,102
-1,11,224
-1,11,224
-1,21,366
-1,21,366
-1,31,528
-1,31,528
-1,41,710
-1,41,710
-NULL,10,120
-NULL,10,120
-NULL,20,260
-NULL,20,260
-NULL,30,420
-NULL,30,420
-NULL,40,600
-NULL,40,600
-NULL,NULL,900
-NULL,NULL,900
-NULL,NULL,900
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+1,1,2,2,12
+1,1,2,13,22
+1,11,24,24,32
+1,11,24,45,42
+1,21,66,66,52
+1,21,66,97,62
+1,31,128,128,72
+1,31,128,169,82
+1,41,210,210,41
+1,41,210,210,NULL
+NULL,10,20,20,30
+NULL,10,20,40,40
+NULL,20,60,60,50
+NULL,20,60,90,60
+NULL,30,120,120,70
+NULL,30,120,160,80
+NULL,40,200,200,40
+NULL,40,200,200,NULL
+NULL,NULL,200,200,NULL
+NULL,NULL,200,200,NULL
+NULL,NULL,200,200,NULL
 ---- TYPES
-TINYINT, SMALLINT, BIGINT
+TINYINT, SMALLINT, BIGINT, BIGINT, BIGINT
 ====
 ---- QUERY
-# Test multiple partition exprs
-select year, month, tinyint_col,
-count(int_col) over (partition by year, month order by tinyint_col)
-from alltypessmall
-where month >= 3 and tinyint_col < 3
+# Test sum() NULL handling with different sliding windows (sum() has special NULL
+# handling in Remove()).
+select
+sum(tinyint_col) over (order by id nulls last rows between 1 preceding and 1 preceding),
+sum(tinyint_col) over (order by id nulls last rows between 1 preceding and current row),
+sum(tinyint_col) over (order by id nulls last rows between current row and 1 following),
+sum(tinyint_col) over (order by id nulls last rows between 1 following and 1 following)
+from alltypesagg where id < 30 and (tinyint_col is null or tinyint_col < 6)
 ---- RESULTS: VERIFY_IS_EQUAL_SORTED
-2009,3,0,3
-2009,3,0,3
-2009,3,0,3
-2009,3,1,6
-2009,3,1,6
-2009,3,1,6
-2009,3,2,9
-2009,3,2,9
-2009,3,2,9
-2009,4,0,3
-2009,4,0,3
-2009,4,0,3
-2009,4,1,6
-2009,4,1,6
-2009,4,1,6
-2009,4,2,9
-2009,4,2,9
-2009,4,2,9
+NULL,NULL,NULL,NULL
+NULL,NULL,1,1
+NULL,1,3,2
+1,3,5,3
+2,5,7,4
+3,7,9,5
+4,9,5,NULL
+5,5,NULL,NULL
+NULL,NULL,1,1
+NULL,1,3,2
+1,3,5,3
+2,5,7,4
+3,7,9,5
+4,9,5,NULL
+5,5,NULL,NULL
+NULL,NULL,1,1
+NULL,1,3,2
+1,3,5,3
+2,5,7,4
+3,7,9,5
+4,9,5,NULL
 ---- TYPES
-INT, INT, TINYINT, BIGINT
+BIGINT, BIGINT, BIGINT, BIGINT
 ====
 ---- QUERY
 # Test multiple partition exprs and multiple order by exprs
@@ -228,109 +238,33 @@ from alltypestiny
 INT, INT, BIGINT
 ====
 ---- QUERY
-# sum() over ROWS with end bound FOLLOWING
-select bool_col, tinyint_col,
-sum(tinyint_col) over (partition by bool_col order by tinyint_col
-                       rows between unbounded preceding and 1 following)
-from alltypesagg where id <= 10 and day = 1
----- RESULTS: VERIFY_IS_EQUAL_SORTED
-false,1,4
-false,3,9
-false,5,16
-false,7,25
-false,9,25
-true,2,6
-true,4,12
-true,6,20
-true,8,20
-true,NULL,20
-true,NULL,20
----- TYPES
-BOOLEAN, TINYINT, BIGINT
-====
----- QUERY
-# count() over ROWS with end bound FOLLOWING
-select bool_col, tinyint_col,
+# ROWS windows with an end boundary offset, some before or after all results.
+select
 count(tinyint_col) over (partition by bool_col order by tinyint_col
-                         rows between unbounded preceding and 1 following)
-from alltypesagg where id <= 10 and day = 1
----- RESULTS: VERIFY_IS_EQUAL_SORTED
-false,1,2
-false,3,3
-false,5,4
-false,7,5
-false,9,5
-true,2,2
-true,4,3
-true,6,4
-true,8,4
-true,NULL,4
-true,NULL,4
----- TYPES
-BOOLEAN, TINYINT, BIGINT
-====
----- QUERY
-# ROWS with end bound PRECEDING
-select bool_col, tinyint_col,
+                         rows between unbounded preceding and 1 preceding),
 sum(tinyint_col) over (partition by bool_col order by tinyint_col
-                       rows between unbounded preceding and 3 preceding)
-from alltypesagg where id <= 10 and day = 1
----- RESULTS: VERIFY_IS_EQUAL_SORTED
-false,1,NULL
-false,3,NULL
-false,5,NULL
-false,7,1
-false,9,4
-true,2,NULL
-true,4,NULL
-true,6,NULL
-true,8,2
-true,NULL,6
-true,NULL,12
----- TYPES
-BOOLEAN, TINYINT, BIGINT
-====
----- QUERY
-# ROWS with end bound FOLLOWING beyond the end of the results
-select bool_col, tinyint_col,
+                       rows between unbounded preceding and 1 following),
 sum(tinyint_col) over (partition by bool_col order by tinyint_col
-                       rows between unbounded preceding and 20 following)
-from alltypesagg where id <= 10 and day = 1
----- RESULTS: VERIFY_IS_EQUAL_SORTED
-false,1,25
-false,3,25
-false,5,25
-false,7,25
-false,9,25
-true,2,20
-true,4,20
-true,6,20
-true,8,20
-true,NULL,20
-true,NULL,20
----- TYPES
-BOOLEAN, TINYINT, BIGINT
-====
----- QUERY
-# ROWS with end bound PRECEDING before the start of all results
-select bool_col, tinyint_col,
+                       rows between unbounded preceding and 3 preceding),
+sum(tinyint_col) over (partition by bool_col order by tinyint_col
+                       rows between unbounded preceding and 20 following),
 sum(tinyint_col) over (partition by bool_col order by tinyint_col
                        rows between unbounded preceding and 20 preceding)
 from alltypesagg where id <= 10 and day = 1
 ---- RESULTS: VERIFY_IS_EQUAL_SORTED
-false,1,NULL
-false,3,NULL
-false,5,NULL
-false,7,NULL
-false,9,NULL
-true,2,NULL
-true,4,NULL
-true,6,NULL
-true,8,NULL
-true,NULL,NULL
-true,NULL,NULL
+0,4,NULL,25,NULL
+1,9,NULL,25,NULL
+2,16,NULL,25,NULL
+3,25,1,25,NULL
+4,25,4,25,NULL
+0,6,NULL,20,NULL
+1,12,NULL,20,NULL
+2,20,NULL,20,NULL
+3,20,2,20,NULL
+4,20,6,20,NULL
+4,20,12,20,NULL
 ---- TYPES
-BOOLEAN, TINYINT, BIGINT
+BIGINT, BIGINT, BIGINT, BIGINT, BIGINT
 ====
 ---- QUERY
 # multiple analytics in the same select block
@@ -426,16 +360,6 @@ WHERE t1.int_col_1 IS NULL
 BIGINT
 ====
 ---- QUERY
-# Test for IMPALA-1200
-select DISTINCT t1.c1 FROM
-  (SELECT MAX(smallint_col) OVER (PARTITION BY year ORDER BY id DESC) AS c1
-   FROM alltypesagg) t1
----- RESULTS
-99
----- TYPES
-SMALLINT
-====
----- QUERY
 select tinyint_col, id,
 row_number() over (order by tinyint_col, id) total_order,
 row_number() over (partition by tinyint_col order by id) partitioned_order,
@@ -447,29 +371,29 @@ last_value(id) over (partition by tinyint_col order by id
                      rows between unbounded preceding and unbounded following)
 from alltypes where id < 25 order by tinyint_col, id
 ---- RESULTS
-0,0,1,1,0,'0',0,'9',20
-0,10,2,2,0,'0',10,'19',20
-0,20,3,3,0,'0',20,'19',20
-1,1,4,1,1,'1',1,'9',21
-1,11,5,2,1,'1',11,'19',21
-1,21,6,3,1,'1',21,'19',21
-2,2,7,1,2,'2',2,'9',22
-2,12,8,2,2,'2',12,'19',22
-2,22,9,3,2,'2',22,'19',22
-3,3,10,1,3,'3',3,'9',23
-3,13,11,2,3,'3',13,'19',23
-3,23,12,3,3,'3',23,'19',23
-4,4,13,1,4,'4',4,'9',24
-4,14,14,2,4,'4',14,'19',24
-4,24,15,3,4,'4',24,'19',24
-5,5,16,1,5,'5',5,'9',15
-5,15,17,2,5,'5',15,'19',15
-6,6,18,1,6,'6',6,'9',16
-6,16,19,2,6,'6',16,'19',16
-7,7,20,1,7,'7',7,'9',17
-7,17,21,2,7,'7',17,'19',17
-8,8,22,1,8,'8',8,'9',18
-8,18,23,2,8,'8',18,'19',18
+0,0,1,1,0,'0',0,'0',20
+0,10,2,2,0,'0',10,'10',20
+0,20,3,3,0,'0',20,'20',20
+1,1,4,1,1,'1',1,'1',21
+1,11,5,2,1,'1',11,'11',21
+1,21,6,3,1,'1',21,'21',21
+2,2,7,1,2,'2',2,'2',22
+2,12,8,2,2,'2',12,'12',22
+2,22,9,3,2,'2',22,'22',22
+3,3,10,1,3,'3',3,'3',23
+3,13,11,2,3,'3',13,'13',23
+3,23,12,3,3,'3',23,'23',23
+4,4,13,1,4,'4',4,'4',24
+4,14,14,2,4,'4',14,'14',24
+4,24,15,3,4,'4',24,'24',24
+5,5,16,1,5,'5',5,'5',15
+5,15,17,2,5,'5',15,'15',15
+6,6,18,1,6,'6',6,'6',16
+6,16,19,2,6,'6',16,'16',16
+7,7,20,1,7,'7',7,'7',17
+7,17,21,2,7,'7',17,'17',17
+8,8,22,1,8,'8',8,'8',18
+8,18,23,2,8,'8',18,'18',18
 9,9,24,1,9,'9',9,'9',19
 9,19,25,2,9,'9',19,'19',19
 ---- TYPES
@@ -493,39 +417,40 @@ true,6,2,-12345
 BOOLEAN, INT, INT, INT
 ====
 ---- QUERY
-# Tests rank()
+# Tests rank() and dense_rank()
 select year, month, bool_col, tinyint_col,
-rank() over (partition by year, month order by bool_col, tinyint_col)
+rank() over (partition by year, month order by bool_col, tinyint_col),
+dense_rank() over (partition by year, month order by bool_col, tinyint_col)
 from alltypes
 where tinyint_col < 2 and month < 3 and (id % 100 < 10)
 order by year, month, bool_col, tinyint_col
 ---- RESULTS
-2009,1,false,1,1
-2009,1,false,1,1
-2009,1,false,1,1
-2009,1,false,1,1
-2009,1,true,0,5
-2009,1,true,0,5
-2009,1,true,0,5
-2009,1,true,0,5
-2009,2,false,1,1
-2009,2,false,1,1
-2009,2,true,0,3
-2009,2,true,0,3
-2010,1,false,1,1
-2010,1,false,1,1
-2010,1,false,1,1
-2010,1,true,0,4
-2010,1,true,0,4
-2010,1,true,0,4
-2010,2,false,1,1
-2010,2,false,1,1
-2010,2,false,1,1
-2010,2,true,0,4
-2010,2,true,0,4
-2010,2,true,0,4
+2009,1,false,1,1,1
+2009,1,false,1,1,1
+2009,1,false,1,1,1
+2009,1,false,1,1,1
+2009,1,true,0,5,2
+2009,1,true,0,5,2
+2009,1,true,0,5,2
+2009,1,true,0,5,2
+2009,2,false,1,1,1
+2009,2,false,1,1,1
+2009,2,true,0,3,2
+2009,2,true,0,3,2
+2010,1,false,1,1,1
+2010,1,false,1,1,1
+2010,1,false,1,1,1
+2010,1,true,0,4,2
+2010,1,true,0,4,2
+2010,1,true,0,4,2
+2010,2,false,1,1,1
+2010,2,false,1,1,1
+2010,2,false,1,1,1
+2010,2,true,0,4,2
+2010,2,true,0,4,2
+2010,2,true,0,4,2
 ---- TYPES
-INT, INT, BOOLEAN, TINYINT, BIGINT
+INT, INT, BOOLEAN, TINYINT, BIGINT, BIGINT
 ====
 ---- QUERY
 # analytics with inline views
@@ -618,37 +543,484 @@ true,8,20
 BOOLEAN, TINYINT, BIGINT
 ====
 ---- QUERY
-# Tests dense_rank()
-select month, bool_col, tinyint_col,
-dense_rank() over (partition by month order by bool_col, tinyint_col)
-from alltypes
-where year = 2009 and tinyint_col < 5 and month < 3 and (id % 100 < 4)
-order by month, bool_col, tinyint_col
----- RESULTS
-1,false,1,1
-1,false,1,1
-1,false,1,1
-1,false,1,1
-1,false,3,2
-1,false,3,2
-1,false,3,2
-1,false,3,2
-1,true,0,3
-1,true,0,3
-1,true,0,3
-1,true,0,3
-1,true,2,4
-1,true,2,4
-1,true,2,4
-1,true,2,4
-2,false,1,1
-2,false,1,1
-2,false,3,2
-2,false,3,2
-2,true,0,3
-2,true,0,3
-2,true,2,4
-2,true,2,4
+# Test ROWS windows with start boundaries
+select id,
+count(id) over (order by id rows between 3 preceding and 3 preceding) c1,
+count(id) over (order by id rows between 3 preceding and 2 preceding) c2,
+count(id) over (order by id rows between 3 preceding and 1 preceding) c3,
+count(id) over (order by id rows between 3 preceding and current row) c4,
+count(id) over (order by id rows between 3 preceding and 1 following) c5,
+count(id) over (order by id rows between 3 preceding and 2 following) c6,
+count(id) over (order by id rows between 3 preceding and 3 following) c7,
+count(id) over (order by id rows between 2 preceding and 3 following) c8,
+count(id) over (order by id rows between 1 preceding and 3 following) c9,
+count(id) over (order by id rows between current row and 3 following) c10,
+count(id) over (order by id rows between 1 following and 3 following) c11,
+count(id) over (order by id rows between 2 following and 3 following) c12,
+count(id) over (order by id rows between 3 following and 3 following) c13
+from alltypes where id < 8
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+0,0,0,0,1,2,3,4,4,4,4,3,2,1
+1,0,0,1,2,3,4,5,5,5,4,3,2,1
+2,0,1,2,3,4,5,6,6,5,4,3,2,1
+3,1,2,3,4,5,6,7,6,5,4,3,2,1
+4,1,2,3,4,5,6,7,6,5,4,3,2,1
+5,1,2,3,4,5,6,6,5,4,3,2,1,0
+6,1,2,3,4,5,5,5,4,3,2,1,0,0
+7,1,2,3,4,4,4,4,3,2,1,0,0,0
 ---- TYPES
-INT, BOOLEAN, TINYINT, BIGINT
+INT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BIGINT
+====
+---- QUERY
+# Test sum() and avg() removing values
+select id,
+sum(int_col) over (order by id rows between 1 preceding and 1 following),
+sum(double_col) over (order by id rows between 3 preceding and 2 preceding),
+avg(int_col) over (order by id rows between 1 preceding and 1 following),
+avg(double_col) over (order by id rows between 3 preceding and 2 preceding),
+avg(timestamp_col) over (order by id rows between 2 following and 3 following)
+from alltypes where id < 8
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+0,1,NULL,0.5,NULL,2009-01-01 00:02:30.199999809
+1,3,NULL,1,NULL,2009-01-01 00:03:30.449999809
+2,6,0,2,0,2009-01-01 00:04:30.349999904
+3,9,10.1,3,5.05,2009-01-01 00:05:30.124999999
+4,12,30.3,4,15.15,2009-01-01 00:06:30.180000066
+5,15,50.49999999999999,5,25.25,2009-01-01 00:07:00.210000038
+6,18,70.69999999999999,6,35.34999999999999,NULL
+7,13,90.89999999999999,6.5,45.45,NULL
+---- TYPES
+INT, BIGINT, DOUBLE, DOUBLE, DOUBLE, TIMESTAMP
+====
+---- QUERY
+# More testing of start bounds. This exposed a bug in removing
+# values from the window after the partition.
+select tinyint_col, int_col,
+sum(int_col) over (partition by tinyint_col order by int_col nulls last rows between 2 following and 3 following),
+sum(int_col) over (partition by tinyint_col order by int_col nulls last rows between 2 following and 10 following),
+sum(int_col) over (partition by tinyint_col order by int_col nulls last rows between 6 following and 100 following)
+from alltypesagg
+where (tinyint_col is NULL or tinyint_col < 3) and id < 60;
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+NULL,10,40,280,180
+NULL,10,50,260,140
+NULL,20,60,240,100
+NULL,20,70,210,50
+NULL,30,80,180,NULL
+NULL,30,90,140,NULL
+NULL,40,100,100,NULL
+NULL,40,50,50,NULL
+NULL,50,NULL,NULL,NULL
+NULL,50,NULL,NULL,NULL
+NULL,NULL,NULL,NULL,NULL
+NULL,NULL,NULL,NULL,NULL
+1,1,52,144,NULL
+1,11,72,123,NULL
+1,21,92,92,NULL
+1,31,51,51,NULL
+1,41,NULL,NULL,NULL
+1,51,NULL,NULL,NULL
+2,2,54,148,NULL
+2,12,74,126,NULL
+2,22,94,94,NULL
+2,32,52,52,NULL
+2,42,NULL,NULL,NULL
+2,52,NULL,NULL,NULL
+---- TYPES
+TINYINT, INT, BIGINT, BIGINT, BIGINT
+====
+---- QUERY
+# IMPALA-1273: Incorrect results with very large window and small table
+select
+count(int_col) over (order by bigint_col rows between 95 preceding and 40 following)
+from alltypestiny
+---- RESULTS
+8
+8
+8
+8
+8
+8
+8
+8
+---- TYPES
+BIGINT
+====
+---- QUERY
+select count(distinct t1.c1) from
+(select count(id) over (order by id rows between 550 preceding and 550 following) c1
+ from alltypesagg) t1
+---- RESULTS
+551
+---- TYPES
+BIGINT
+====
+---- QUERY
+select count(distinct t1.c1) from
+(select count(id) over (order by id rows between 1050 preceding and 2 following) c1
+ from alltypesagg) t1
+---- RESULTS
+1051
+---- TYPES
+BIGINT
+====
+---- QUERY
+select count(distinct t1.c1) from
+(select count(id) over (order by id rows between 1050 preceding and 500 preceding) c1
+ from alltypesagg) t1
+---- RESULTS
+552
+---- TYPES
+BIGINT
+====
+---- QUERY
+select count(distinct t1.c1) from
+(select count(id) over (order by id rows between 2 following and 1050 following) c1
+ from alltypesagg) t1
+---- RESULTS
+1050
+---- TYPES
+BIGINT
+====
+---- QUERY
+select count(distinct t1.c1) from
+(select count(id) over (order by id rows between 500 following and 1050 following) c1
+ from alltypesagg) t1
+---- RESULTS
+552
+---- TYPES
+BIGINT
+====
+---- QUERY
+select (tinyint_col % 4), id,
+count(id) over (partition by (tinyint_col % 4) order by id
+                rows between 3 following and 10 following)
+from alltypes where id < 20
+order by (tinyint_col % 4), id
+---- RESULTS
+0,0,3
+0,4,2
+0,8,1
+0,10,0
+0,14,0
+0,18,0
+1,1,3
+1,5,2
+1,9,1
+1,11,0
+1,15,0
+1,19,0
+2,2,1
+2,6,0
+2,12,0
+2,16,0
+3,3,1
+3,7,0
+3,13,0
+3,17,0
+---- TYPES
+TINYINT, INT, BIGINT
+====
+---- QUERY
+# Test IMPALA-1269: ROWS windows with offset to current row might not remove
+# correct values after new partitions
+select sum(t2.int_col_1) from
+(select SUM(t1.int_col) OVER (PARTITION BY t1.smallint_col ORDER BY t1.day, t1.int_col
+                              ROWS 7 PRECEDING) AS int_col_1
+ FROM alltypesagg t1 ) t2
+---- RESULTS
+41790600
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Test FIRST_VALUE with strings and null handling
+select cast(floor(id/3) as int), tinyint_col,
+first_value(tinyint_col) over (partition by cast(floor(id/3) as int) order by tinyint_col nulls first),
+first_value(cast(tinyint_col as string)) over (partition by cast(floor(id/3) as int) order by cast(tinyint_col as string) nulls first),
+last_value(tinyint_col) over (partition by cast(floor(id/3) as int) order by tinyint_col nulls first),
+last_value(cast(tinyint_col as string)) over (partition by cast(floor(id/3) as int) order by cast(tinyint_col as string) nulls first)
+from alltypesagg where id < 50 and (tinyint_col is null or tinyint_col < 4)
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+0,NULL,NULL,'NULL',NULL,'NULL'
+0,NULL,NULL,'NULL',NULL,'NULL'
+0,1,NULL,'NULL',1,'1'
+0,2,NULL,'NULL',2,'2'
+1,3,3,'3',3,'3'
+3,NULL,NULL,'NULL',NULL,'NULL'
+3,NULL,NULL,'NULL',NULL,'NULL'
+3,1,NULL,'NULL',1,'1'
+4,2,2,'2',2,'2'
+4,3,2,'2',3,'3'
+6,NULL,NULL,'NULL',NULL,'NULL'
+6,NULL,NULL,'NULL',NULL,'NULL'
+7,1,1,'1',1,'1'
+7,2,1,'1',2,'2'
+7,3,1,'1',3,'3'
+10,NULL,NULL,'NULL',NULL,'NULL'
+10,NULL,NULL,'NULL',NULL,'NULL'
+10,1,NULL,'NULL',1,'1'
+10,2,NULL,'NULL',2,'2'
+11,3,3,'3',3,'3'
+13,NULL,NULL,'NULL',NULL,'NULL'
+13,NULL,NULL,'NULL',NULL,'NULL'
+13,1,NULL,'NULL',1,'1'
+14,2,2,'2',2,'2'
+14,3,2,'2',3,'3'
+---- TYPES
+INT, TINYINT, TINYINT, STRING, TINYINT, STRING
+====
+---- QUERY
+# IMPALA-1302: Incorrect result of FIRST_VALUE query.
+select
+first_value(id) over (order by id rows between 3 preceding and 3 following),
+first_value(id) over (order by id rows between 3 preceding and 2 following),
+first_value(id) over (order by id rows between 3 preceding and 1 following),
+first_value(id) over (order by id rows between 3 preceding and current row),
+first_value(id) over (order by id rows between 3 preceding and 1 preceding),
+first_value(id) over (order by id rows between 3 preceding and 2 preceding),
+first_value(id) over (order by id rows between 3 preceding and 3 preceding),
+first_value(id) over (order by id rows between 2 preceding and 3 following),
+first_value(id) over (order by id rows between 1 preceding and 3 following),
+first_value(id) over (order by id rows between current row and 3 following),
+first_value(id) over (order by id rows between 1 following and 3 following),
+first_value(id) over (order by id rows between 2 following and 3 following),
+first_value(id) over (order by id rows between 3 following and 3 following),
+first_value(id) over (order by id rows between 15 preceding and 15 preceding),
+first_value(id) over (order by id rows between 15 preceding and 15 following),
+first_value(id) over (order by id rows between 15 preceding and 6 preceding),
+first_value(id) over (order by id rows between 6 preceding and 15 following),
+first_value(id) over (order by id rows between 15 following and 15 following),
+first_value(id) over (order by id rows between unbounded preceding and 8 preceding),
+last_value(id) over (order by id rows between 3 preceding and 3 following),
+last_value(id) over (order by id rows between 3 preceding and 2 following),
+last_value(id) over (order by id rows between 3 preceding and 1 following),
+last_value(id) over (order by id rows between 3 preceding and current row),
+last_value(id) over (order by id rows between 3 preceding and 1 preceding),
+last_value(id) over (order by id rows between 3 preceding and 2 preceding),
+last_value(id) over (order by id rows between 3 preceding and 3 preceding),
+last_value(id) over (order by id rows between 2 preceding and 3 following),
+last_value(id) over (order by id rows between 1 preceding and 3 following),
+last_value(id) over (order by id rows between current row and 3 following),
+last_value(id) over (order by id rows between 1 following and 3 following),
+last_value(id) over (order by id rows between 2 following and 3 following),
+last_value(id) over (order by id rows between 3 following and 3 following),
+last_value(id) over (order by id rows between 15 preceding and 15 preceding),
+last_value(id) over (order by id rows between 15 preceding and 15 following),
+last_value(id) over (order by id rows between 15 preceding and 6 preceding),
+last_value(id) over (order by id rows between 6 preceding and 15 following),
+last_value(id) over (order by id rows between 15 following and 15 following),
+last_value(id) over (order by id rows between 8 following and unbounded following)
+from alltypes where id < 10 order by id;
+---- RESULTS
+0,0,0,0,NULL,NULL,NULL,0,0,0,1,2,3,NULL,0,NULL,0,NULL,NULL,3,2,1,0,NULL,NULL,NULL,3,3,3,3,3,3,NULL,9,NULL,9,NULL,9
+0,0,0,0,0,NULL,NULL,0,0,1,2,3,4,NULL,0,NULL,0,NULL,NULL,4,3,2,1,0,NULL,NULL,4,4,4,4,4,4,NULL,9,NULL,9,NULL,9
+0,0,0,0,0,0,NULL,0,1,2,3,4,5,NULL,0,NULL,0,NULL,NULL,5,4,3,2,1,0,NULL,5,5,5,5,5,5,NULL,9,NULL,9,NULL,NULL
+0,0,0,0,0,0,0,1,2,3,4,5,6,NULL,0,NULL,0,NULL,NULL,6,5,4,3,2,1,0,6,6,6,6,6,6,NULL,9,NULL,9,NULL,NULL
+1,1,1,1,1,1,1,2,3,4,5,6,7,NULL,0,NULL,0,NULL,NULL,7,6,5,4,3,2,1,7,7,7,7,7,7,NULL,9,NULL,9,NULL,NULL
+2,2,2,2,2,2,2,3,4,5,6,7,8,NULL,0,NULL,0,NULL,NULL,8,7,6,5,4,3,2,8,8,8,8,8,8,NULL,9,NULL,9,NULL,NULL
+3,3,3,3,3,3,3,4,5,6,7,8,9,NULL,0,0,0,NULL,NULL,9,8,7,6,5,4,3,9,9,9,9,9,9,NULL,9,0,9,NULL,NULL
+4,4,4,4,4,4,4,5,6,7,8,9,NULL,NULL,0,0,1,NULL,NULL,9,9,8,7,6,5,4,9,9,9,9,9,NULL,NULL,9,1,9,NULL,NULL
+5,5,5,5,5,5,5,6,7,8,9,NULL,NULL,NULL,0,0,2,NULL,0,9,9,9,8,7,6,5,9,9,9,9,NULL,NULL,NULL,9,2,9,NULL,NULL
+6,6,6,6,6,6,6,7,8,9,NULL,NULL,NULL,NULL,0,0,3,NULL,0,9,9,9,9,8,7,6,9,9,9,NULL,NULL,NULL,NULL,9,3,9,NULL,NULL
+---- TYPES
+INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT, INT
+====
+---- QUERY
+# Test RANGE with UNBOUNDED FOLLOWING
+select id,
+sum(id) over (order by id range between unbounded preceding and unbounded following)
+from alltypesagg where id <= 30 order by id;
+---- RESULTS
+0,525
+0,525
+1,525
+2,525
+3,525
+4,525
+5,525
+6,525
+7,525
+8,525
+9,525
+10,525
+10,525
+11,525
+12,525
+13,525
+14,525
+15,525
+16,525
+17,525
+18,525
+19,525
+20,525
+20,525
+21,525
+22,525
+23,525
+24,525
+25,525
+26,525
+27,525
+28,525
+29,525
+30,525
+30,525
+---- TYPES
+INT, BIGINT
+====
+---- QUERY
+# IMPALA-1293: DCHECK failure with window ROWS BETWEEN UNBOUNDED PRECEDING
+# AND <large> PRECEDING
+select count(*), count(t1.c1) from
+(select SUM(tinyint_col) OVER (PARTITION BY bigint_col ORDER BY tinyint_col ASC,
+                               id ASC, timestamp_col ASC, day ASC
+                               ROWS BETWEEN UNBOUNDED PRECEDING AND 11 PRECEDING) c1
+ FROM alltypesagg) t1
+---- RESULTS
+11000,0
+---- TYPES
+BIGINT, BIGINT
+====
+---- QUERY
+# Test RANGE with UNBOUNDED FOLLOWING on many partitions
+select count(distinct t1.c1) from
+(select sum(id) over (partition by day order by tinyint_col
+                      range between unbounded preceding and unbounded following) c1
+ from alltypesagg) t1;
+---- RESULTS
+11
+---- TYPES
+BIGINT
+====
+---- QUERY
+# IMPALA-1296: Fix DCHECK when unnecessary buffered tuple (for sum() analytic) not null
+select
+sum(month) over (),
+dense_rank() over (order by date_string_col)
+from alltypes where id < 5
+---- RESULTS
+5,1
+5,1
+5,1
+5,1
+5,1
+---- TYPES
+BIGINT, BIGINT
+====
+---- QUERY
+# IMPALA-1292: Incorrect result in analytic SUM when ORDER BY column is null
+select tinyint_col, id,
+SUM(id) OVER (ORDER BY tinyint_col ASC, id ASC)
+FROM alltypesagg
+where (tinyint_col is NULL or tinyint_col < 2) and id < 100 order by 1, 2
+---- RESULTS
+1,1,1
+1,11,12
+1,21,33
+1,31,64
+1,41,105
+1,51,156
+1,61,217
+1,71,288
+1,81,369
+1,91,460
+NULL,0,460
+NULL,0,460
+NULL,10,480
+NULL,10,480
+NULL,20,520
+NULL,20,520
+NULL,30,580
+NULL,30,580
+NULL,40,660
+NULL,40,660
+NULL,50,760
+NULL,50,760
+NULL,60,880
+NULL,60,880
+NULL,70,1020
+NULL,70,1020
+NULL,80,1180
+NULL,80,1180
+NULL,90,1360
+NULL,90,1360
+---- TYPES
+TINYINT, INT, BIGINT
+====
+---- QUERY
+# IMPALA-1280: Crash running analytic with LEFT SEMI JOIN
+select sum(t1.int_col) over (partition by t1.id order by t1.int_col, t1.month)
+from alltypestiny t1
+where exists (select tt1.month from alltypes tt1 where t1.int_col = tt1.smallint_col)
+---- RESULTS: VERIFY_IS_EQUAL_SORTED
+0
+0
+0
+1
+0
+1
+1
+1
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Regression test for IMPALA-1223. Query with analytic query with right join.
+# Need proper handling of NULLs.
+SELECT SUM(t1.int_col) OVER () AS int_col_1 FROM alltypestiny t1
+RIGHT JOIN alltypestiny t2 ON t2.tinyint_col = t1.bigint_col AND t2.id = t1.month;
+---- RESULTS
+0
+0
+0
+0
+0
+0
+0
+0
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Testing crashes in buffered tuple stream related to IMPALA-1306.
+SELECT AVG(t1.int_col) OVER () AS double_col_1
+FROM alltypestiny t1
+WHERE EXISTS
+    (SELECT t1.month AS int_col_1
+     FROM alltypestiny t1)
+---- RESULTS
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+---- TYPES
+DOUBLE
+====
+---- QUERY
+# IMPALA-1312
+SELECT
+  SUM(t1.int_col * t1.id) OVER (
+    ORDER BY t1.int_col * t1.id ASC, t3.year + t3.tinyint_col ASC ROWS
+    BETWEEN 66 PRECEDING AND 21 FOLLOWING) AS int_col_1
+FROM alltypes t1
+INNER JOIN alltypes t2 ON t2.month = t1.smallint_col
+INNER JOIN alltypes t3 ON t3.bigint_col = t2.bigint_col
+WHERE
+t2.id <= t3.smallint_col + t2.tinyint_col
+order by 1
+limit 5
+---- TYPES
+BIGINT
+---- RESULTS
+22
+23
+24
+25
+26
 ====

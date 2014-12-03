@@ -142,6 +142,8 @@ Status ExecNode::Prepare(RuntimeState* state) {
         runtime_profile()->total_time_counter()));
 
   RETURN_IF_ERROR(Expr::Prepare(conjunct_ctxs_, state, row_desc()));
+  AddExprCtxsToFree(conjunct_ctxs_);
+
   for (int i = 0; i < children_.size(); ++i) {
     RETURN_IF_ERROR(children_[i]->Prepare(state));
   }
@@ -164,8 +166,12 @@ void ExecNode::Close(RuntimeState* state) {
     children_[i]->Close(state);
   }
   if (mem_tracker() != NULL) {
-    DCHECK_EQ(mem_tracker()->consumption(), 0)
-        << "Leaked memory." << endl << mem_tracker()->LogUsage();
+    if (mem_tracker()->consumption() != 0) {
+      LOG(WARNING) << "Query " << state->query_id() << " leaked memory." << endl
+          << state->instance_mem_tracker()->LogUsage();
+      DCHECK_EQ(mem_tracker()->consumption(), 0)
+          << "Leaked memory." << endl << state->instance_mem_tracker()->LogUsage();
+    }
   }
   Expr::Close(conjunct_ctxs_, state);
 }
@@ -263,8 +269,11 @@ Status ExecNode::CreateNode(ObjectPool* pool, const TPlanNode& tnode,
       }
       break;
     case TPlanNodeType::HASH_JOIN_NODE:
-      // Only the partitioned hash join impl supports anti-join
+      // The (old) HashJoinNode does not support left-anti, right-semi, and right-anti
+      // joins.
       if (tnode.hash_join_node.join_op == TJoinOp::LEFT_ANTI_JOIN ||
+          tnode.hash_join_node.join_op == TJoinOp::RIGHT_SEMI_JOIN ||
+          tnode.hash_join_node.join_op == TJoinOp::RIGHT_ANTI_JOIN ||
           FLAGS_enable_partitioned_hash_join) {
         *node = pool->Add(new PartitionedHashJoinNode(pool, tnode, descs));
       } else {
@@ -377,6 +386,21 @@ bool ExecNode::EvalConjuncts(ExprContext* const* ctxs, int num_ctxs, TupleRow* r
   return true;
 }
 
+Status ExecNode::QueryMaintenance(RuntimeState* state) {
+  ExprContext::FreeLocalAllocations(expr_ctxs_to_free_);
+  return state->CheckQueryState();
+}
+
+void ExecNode::AddExprCtxsToFree(const vector<ExprContext*>& ctxs) {
+  for (int i = 0; i < ctxs.size(); ++i) AddExprCtxToFree(ctxs[i]);
+}
+
+void ExecNode::AddExprCtxsToFree(const SortExecExprs& sort_exec_exprs) {
+  AddExprCtxsToFree(sort_exec_exprs.sort_tuple_slot_expr_ctxs());
+  AddExprCtxsToFree(sort_exec_exprs.lhs_ordering_expr_ctxs());
+  AddExprCtxsToFree(sort_exec_exprs.rhs_ordering_expr_ctxs());
+}
+
 // Codegen for EvalConjuncts.  The generated signature is
 // For a node with two conjunct predicates
 // define i1 @EvalConjuncts(%"class.impala::ExprContext"** %ctxs, i32 %num_ctxs,
@@ -424,7 +448,8 @@ Function* ExecNode::CodegenEvalConjuncts(
       return NULL;
     }
   }
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  if (!state->GetCodegen(&codegen).ok()) return NULL;
 
   // Construct function signature to match
   // bool EvalConjuncts(Expr** exprs, int num_exprs, TupleRow* row)

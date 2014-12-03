@@ -78,7 +78,7 @@ void ExprContext::Close(RuntimeState* state) {
 
 int ExprContext::Register(RuntimeState* state,
     const impala_udf::FunctionContext::TypeDesc& return_type,
-    const std::vector<impala_udf::FunctionContext::TypeDesc>& arg_types,
+    const vector<impala_udf::FunctionContext::TypeDesc>& arg_types,
     int varargs_buffer_size) {
   fn_contexts_.push_back(FunctionContextImpl::CreateContext(
       state, pool_.get(), return_type, arg_types, varargs_buffer_size));
@@ -105,8 +105,19 @@ Status ExprContext::Clone(RuntimeState* state, ExprContext** new_ctx) {
 }
 
 void ExprContext::FreeLocalAllocations() {
-  for (int i = 0; i < fn_contexts_.size(); ++i) {
-    fn_contexts_[i]->impl()->FreeLocalAllocations();
+  FreeLocalAllocations(fn_contexts_);
+}
+
+void ExprContext::FreeLocalAllocations(const vector<ExprContext*>& ctxs) {
+  for (int i = 0; i < ctxs.size(); ++i) {
+    ctxs[i]->FreeLocalAllocations();
+  }
+}
+
+void ExprContext::FreeLocalAllocations(const vector<FunctionContext*>& fn_ctxs) {
+  for (int i = 0; i < fn_ctxs.size(); ++i) {
+    if (fn_ctxs[i]->impl()->closed()) continue;
+    fn_ctxs[i]->impl()->FreeLocalAllocations();
   }
 }
 
@@ -166,6 +177,11 @@ void ExprContext::GetValue(TupleRow* row, bool as_ascii, TColumnValue* col_val) 
     case TYPE_VARCHAR:
       string_val = reinterpret_cast<StringValue*>(value);
       tmp.assign(static_cast<char*>(string_val->ptr), string_val->len);
+      col_val->string_val.swap(tmp);
+      col_val->__isset.string_val = true;
+      break;
+    case TYPE_CHAR:
+      tmp.assign(StringValue::CharSlotToPtr(value, root_->type_), root_->type_.len);
       col_val->string_val.swap(tmp);
       col_val->__isset.string_val = true;
       break;
@@ -238,8 +254,13 @@ void* ExprContext::GetValue(Expr* e, TupleRow* row) {
     case TYPE_CHAR: {
       impala_udf::StringVal v = e->GetStringVal(this, row);
       if (v.is_null) return NULL;
-      result_.char_val = reinterpret_cast<char*>(v.ptr);
-      return result_.char_val;
+      result_.string_val.ptr = reinterpret_cast<char*>(v.ptr);
+      result_.string_val.len = v.len;
+      if (e->type_.IsVarLen()) {
+        return &result_.string_val;
+      } else {
+        return result_.string_val.ptr;
+      }
     }
     case TYPE_TIMESTAMP: {
       impala_udf::TimestampVal v = e->GetTimestampVal(this, row);
@@ -271,16 +292,16 @@ void* ExprContext::GetValue(Expr* e, TupleRow* row) {
   }
 }
 
-void ExprContext::PrintValue(TupleRow* row, std::string* str) {
+void ExprContext::PrintValue(TupleRow* row, string* str) {
   RawValue::PrintValue(GetValue(row), root_->type(), root_->output_scale_, str);
 }
-void ExprContext::PrintValue(void* value, std::string* str) {
+void ExprContext::PrintValue(void* value, string* str) {
   RawValue::PrintValue(value, root_->type(), root_->output_scale_, str);
 }
-void ExprContext::PrintValue(void* value, std::stringstream* stream) {
+void ExprContext::PrintValue(void* value, stringstream* stream) {
   RawValue::PrintValue(value, root_->type(), root_->output_scale_, stream);
 }
-void ExprContext::PrintValue(TupleRow* row, std::stringstream* stream) {
+void ExprContext::PrintValue(TupleRow* row, stringstream* stream) {
   RawValue::PrintValue(GetValue(row), root_->type(), root_->output_scale_, stream);
 }
 

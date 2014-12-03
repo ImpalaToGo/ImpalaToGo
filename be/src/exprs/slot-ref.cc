@@ -162,7 +162,8 @@ Status SlotRef::GetCodegendComputeFn(RuntimeState* state, llvm::Function** fn) {
   }
 
   DCHECK_EQ(GetNumChildren(), 0);
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
 
   // SlotRefs are based on the slot_id and tuple_idx.  Combine them to make a
   // query-wide unique id. We also need to combine whether the tuple is nullable. For
@@ -421,7 +422,8 @@ StringVal SlotRef::GetStringVal(ExprContext* context, TupleRow* row) {
   if (t == NULL || t->IsNull(null_indicator_offset_)) return StringVal::null();
   StringVal result;
   if (type_.type == TYPE_CHAR) {
-    result.ptr = reinterpret_cast<uint8_t*>(t->GetSlot(slot_offset_));
+    result.ptr = reinterpret_cast<uint8_t*>(
+        StringValue::CharSlotToPtr(t->GetSlot(slot_offset_), type_));
     result.len = type_.len;
   } else {
     StringValue* sv = reinterpret_cast<StringValue*>(t->GetSlot(slot_offset_));

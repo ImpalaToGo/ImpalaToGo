@@ -82,8 +82,16 @@ functions = [
    '_ZN6impala11UdfBuiltins5TruncEPN10impala_udf15FunctionContextERKNS1_12TimestampValERKNS1_9StringValE',
    '_ZN6impala11UdfBuiltins12TruncPrepareEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE',
    '_ZN6impala11UdfBuiltins10TruncCloseEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE'],
+  # Don't add an entry for EXTRACT(STRING, TIMESTAMP). STRINGs may be used to represent
+  # TIMESTAMPs meaning EXTRACT(STRING, STRING) is valid. If EXTRACT(STRING, TIMESTAMP)
+  # is added, it takes precedence over the existing EXTRACT(TIMESTAMP, STRING)
+  # which could break users.
   [['extract'], 'INT', ['TIMESTAMP', 'STRING'],
    '_ZN6impala11UdfBuiltins7ExtractEPN10impala_udf15FunctionContextERKNS1_12TimestampValERKNS1_9StringValE',
+   '_ZN6impala11UdfBuiltins21SwappedExtractPrepareEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE',
+   '_ZN6impala11UdfBuiltins12ExtractCloseEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE'],
+  [['date_part'], 'INT', ['STRING', 'TIMESTAMP'],
+   '_ZN6impala11UdfBuiltins7ExtractEPN10impala_udf15FunctionContextERKNS1_9StringValERKNS1_12TimestampValE',
    '_ZN6impala11UdfBuiltins14ExtractPrepareEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE',
    '_ZN6impala11UdfBuiltins12ExtractCloseEPN10impala_udf15FunctionContextENS2_18FunctionStateScopeE'],
 
@@ -360,6 +368,7 @@ functions = [
   [['lpad'], 'STRING', ['STRING', 'BIGINT', 'STRING'], 'impala::StringFunctions::Lpad'],
   [['rpad'], 'STRING', ['STRING', 'BIGINT', 'STRING'], 'impala::StringFunctions::Rpad'],
   [['length'], 'INT', ['STRING'], 'impala::StringFunctions::Length'],
+  [['length'], 'INT', ['CHAR'], 'impala::StringFunctions::CharLength'],
   [['char_length'], 'INT', ['STRING'], 'impala::StringFunctions::Length'],
   [['character_length'], 'INT', ['STRING'], 'impala::StringFunctions::Length'],
   [['lower', 'lcase'], 'STRING', ['STRING'], 'impala::StringFunctions::Lower'],

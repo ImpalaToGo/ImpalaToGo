@@ -39,9 +39,9 @@ DEFINE_int32(num_threads_per_disk, 0, "number of threads per disk");
 DEFINE_int32(read_size, 8 * 1024 * 1024, "Read Size (in bytes)");
 DEFINE_int32(min_buffer_size, 1024, "The minimum read buffer size (in bytes)");
 
-// With 8MB buffers, this is up to 1GB of buffers.
+// With 1024B through 8MB buffers, this is up to ~2GB of buffers.
 DEFINE_int32(max_free_io_buffers, 128,
-    "maximum number of io buffers the IoMgr will hold onto");
+    "For each io buffer size, the maximum number of buffers the IoMgr will hold onto");
 
 // Rotational disks should have 1 thread per disk to minimize seeks.  Non-rotational
 // don't have this penalty and benefit from multiple concurrent IO requests.
@@ -676,16 +676,22 @@ void DiskIoMgr::ReturnFreeBuffer(char* buffer, int64_t buffer_size) {
   DCHECK_EQ(BitUtil::Ceil(buffer_size, min_buffer_size_) & ~(1 << idx), 0)
       << "buffer_size_ / min_buffer_size_ should be power of 2, got buffer_size = "
       << buffer_size << ", min_buffer_size_ = " << min_buffer_size_;
-  if (!FLAGS_disable_mem_pools && free_buffers_.size() < FLAGS_max_free_io_buffers) {
-    unique_lock<mutex> lock(free_buffers_lock_);
+  unique_lock<mutex> lock(free_buffers_lock_);
+  if (!FLAGS_disable_mem_pools && free_buffers_[idx].size() < FLAGS_max_free_io_buffers) {
     free_buffers_[idx].push_back(buffer);
+    if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
+      ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Increment(1L);
+    }
   } else {
     process_mem_tracker_->Release(buffer_size);
     --num_allocated_buffers_;
     delete[] buffer;
-  }
-  if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
-    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Increment(1L);
+    if (ImpaladMetrics::IO_MGR_NUM_BUFFERS != NULL) {
+      ImpaladMetrics::IO_MGR_NUM_BUFFERS->Increment(-1L);
+    }
+    if (ImpaladMetrics::IO_MGR_TOTAL_BYTES != NULL) {
+      ImpaladMetrics::IO_MGR_TOTAL_BYTES->Increment(-buffer_size);
+    }
   }
 }
 
@@ -1045,6 +1051,9 @@ Status DiskIoMgr::WriteRangeHelper(FILE* file_handle, WriteRange* write_range) {
     return Status(TStatusCode::RUNTIME_ERROR,
         Substitute("fwrite(buffer, 1, $0, $1) failed with errno=$2 description=$3",
             write_range->len_, write_range->file_, errno, GetStrErrMsg()));
+  }
+  if (ImpaladMetrics::IO_MGR_BYTES_WRITTEN != NULL) {
+    ImpaladMetrics::IO_MGR_BYTES_WRITTEN->Increment(write_range->len_);
   }
 
   return Status::OK;

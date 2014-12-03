@@ -32,7 +32,6 @@ import com.google.common.collect.Lists;
  */
 public class RolePrivilege implements CatalogObject {
   private static final Logger LOG = Logger.getLogger(AuthorizationPolicy.class);
-
   // These Joiners are used to build role names. For simplicity, the role name we
   // use can also be sent to the Sentry library to perform authorization checks
   // so we build them in the same format.
@@ -41,15 +40,6 @@ public class RolePrivilege implements CatalogObject {
 
   private final TPrivilege privilege_;
   private long catalogVersion_ = Catalog.INITIAL_CATALOG_VERSION;
-  // The time this role was created. Used to quickly check if the same privilege
-  // was dropped and re-created.
-  private long createTimeMs_;
-
-  public RolePrivilege(int idParentRole, TPrivilege privilege, long createTimeMs) {
-    privilege_ = privilege;
-    privilege_.setRole_id(idParentRole);
-    createTimeMs_ = createTimeMs;
-  }
 
   private RolePrivilege(TPrivilege privilege) {
     privilege_ = privilege;
@@ -127,6 +117,12 @@ public class RolePrivilege implements CatalogObject {
   }
   @Override
   public boolean isLoaded() { return true; }
-  public long getCreateTimeMs() { return createTimeMs_; }
+
+  // The time this role was created. Used to quickly check if the same privilege
+  // was dropped and re-created. Assumes a role will not be created + dropped + created
+  // in less than 1ms. Returns -1 if create_time_ms was not set for the privilege.
+  public long getCreateTimeMs() {
+    return privilege_.isSetCreate_time_ms() ? privilege_.getCreate_time_ms() : -1L;
+  }
   public TPrivilegeScope getScope() { return privilege_.getScope(); }
 }

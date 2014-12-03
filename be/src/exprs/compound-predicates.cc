@@ -112,7 +112,8 @@ Status CompoundPredicate::CodegenComputeFn(
   Function* rhs_function;
   RETURN_IF_ERROR(children()[1]->GetCodegendComputeFn(state, &rhs_function));
   
-  LlvmCodeGen* codegen = state->codegen();
+  LlvmCodeGen* codegen;
+  RETURN_IF_ERROR(state->GetCodegen(&codegen));
   LLVMContext& context = codegen->context();
   LlvmCodeGen::LlvmBuilder builder(context);
   Value* args[2];
@@ -204,13 +205,18 @@ Status CompoundPredicate::CodegenComputeFn(
 
   // Ret/merge block
   builder.SetInsertPoint(ret_block);
-  PHINode* phi_node = builder.CreatePHI(codegen->GetType(TYPE_BOOLEAN), 2, "ret");
-  phi_node->addIncoming(codegen->false_value(), null_block);
-  phi_node->addIncoming(not_null_phi, not_null_block);
+  PHINode* is_null_phi = builder.CreatePHI(codegen->boolean_type(), 2, "is_null");
+  is_null_phi->addIncoming(codegen->true_value(), null_block);
+  is_null_phi->addIncoming(codegen->false_value(), not_null_block);
 
-  CodegenAnyVal ret_val = CodegenAnyVal::GetNonNullVal(codegen, &builder, TYPE_BOOLEAN);
-  ret_val.SetVal(phi_node);
-  builder.CreateRet(ret_val.value());
+  PHINode* val_phi = builder.CreatePHI(codegen->boolean_type(), 2, "val");
+  val_phi->addIncoming(codegen->false_value(), null_block);
+  val_phi->addIncoming(not_null_phi, not_null_block);
+
+  CodegenAnyVal ret(codegen, &builder, TYPE_BOOLEAN, NULL, "ret");
+  ret.SetIsNull(is_null_phi);
+  ret.SetVal(val_phi);
+  builder.CreateRet(ret.value());
 
   *fn = codegen->FinalizeFunction(function);
   DCHECK(*fn != NULL);

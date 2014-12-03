@@ -106,6 +106,7 @@ Status HdfsTextScanner::IssueInitialRanges(HdfsScanNode* scan_node,
               files[i]->filename.c_str(), files[i]->file_length, 0,
               metadata->partition_id, split->disk_id(), split->try_cache());
           compressed_text_scan_ranges.push_back(file_range);
+          scan_node->max_compressed_text_file_length()->Set(files[i]->file_length);
         }
         break;
 
@@ -477,7 +478,8 @@ Status HdfsTextScanner::FindFirstTuple(bool* tuple_found) {
 Function* HdfsTextScanner::Codegen(HdfsScanNode* node,
                                    const vector<ExprContext*>& conjunct_ctxs) {
   if (!node->runtime_state()->codegen_enabled()) return NULL;
-  LlvmCodeGen* codegen = node->runtime_state()->codegen();
+  LlvmCodeGen* codegen;
+  if (!node->runtime_state()->GetCodegen(&codegen).ok()) return NULL;
   Function* write_complete_tuple_fn =
       CodegenWriteCompleteTuple(node, codegen, conjunct_ctxs);
   if (write_complete_tuple_fn == NULL) return NULL;

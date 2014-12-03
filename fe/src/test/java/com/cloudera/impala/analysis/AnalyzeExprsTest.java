@@ -27,13 +27,20 @@ import junit.framework.Assert;
 import org.junit.Test;
 
 import com.cloudera.impala.analysis.TimestampArithmeticExpr.TimeUnit;
+import com.cloudera.impala.catalog.CatalogException;
+import com.cloudera.impala.catalog.Column;
 import com.cloudera.impala.catalog.PrimitiveType;
 import com.cloudera.impala.catalog.ScalarFunction;
 import com.cloudera.impala.catalog.ScalarType;
+import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.TestSchemaUtils;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.thrift.TExpr;
+import com.cloudera.impala.thrift.TQueryOptions;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 
 public class AnalyzeExprsTest extends AnalyzerTest {
@@ -329,6 +336,15 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     testExprCast("cast('Hello' as VARCHAR(5))", ScalarType.createVarcharType(7));
     testExprCast("cast('Hello' as VARCHAR(5))", ScalarType.createVarcharType(3));
 
+    AnalysisError("select cast('foo' as varchar(0))",
+        "Varchar size must be > 0. Size is too small: 0.");
+    AnalysisError("select cast('foo' as varchar(65356))",
+        "Varchar size must be <= 65355. Size is too large: 65356.");
+    AnalysisError("select cast('foo' as char(0))",
+        "Char size must be > 0. Size is too small: 0.");
+    AnalysisError("select cast('foo' as char(256))",
+        "Char size must be <= 255. Size is too large: 256.");
+
     testExprCast("'Hello'", ScalarType.createCharType(5));
     testExprCast("cast('Hello' as CHAR(5))", ScalarType.STRING);
     testExprCast("cast('Hello' as CHAR(5))", ScalarType.createVarcharType(7));
@@ -337,8 +353,8 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     testExprCast("cast('Hello' as VARCHAR(7))", ScalarType.createCharType(5));
     testExprCast("cast('Hello' as CHAR(5))", ScalarType.createVarcharType(5));
     testExprCast("cast('Hello' as VARCHAR(5))", ScalarType.createCharType(5));
+    testExprCast("1", ScalarType.createCharType(5));
 
-    /* TODO re-enable when we have determined behavior for casting to VARCHAR
     testExprCast("cast('abcde' as char(10)) IN " +
         "(cast('abcde' as CHAR(20)), cast('abcde' as VARCHAR(10)), 'abcde')",
         ScalarType.createCharType(10));
@@ -348,7 +364,7 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     testExprCast("cast('abcde' as varchar(10)) IN " +
         "(cast('abcde' as CHAR(20)), cast('abcde' as VARCHAR(10)), 'abcde')",
         ScalarType.createVarcharType(10));
-    */
+
   }
 
   /**
@@ -381,13 +397,6 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         "Unsupported cast to complex type: MAP<INT,INT>");
     AnalysisError("select cast(1 as struct<a:int,b:char(20)>)",
         "Unsupported cast to complex type: STRUCT<a:INT,b:CHAR(20)>");
-  }
-
-  // Analyzes query and asserts that the first result expr returns the given type.
-  // Requires query to parse to a SelectStmt.
-  private void checkExprType(String query, Type type) {
-    SelectStmt select = (SelectStmt) AnalyzesOk(query);
-    assertEquals(select.getResultExprs().get(0).getType(), type);
   }
 
   @Test
@@ -594,21 +603,26 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         + "from functional.alltypes");
     AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
         + "rows between unbounded preceding and current row) from functional.alltypes");
-    AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
+        + "rows 2 preceding) from functional.alltypes");
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
         + "rows between 2 preceding and unbounded following) from functional.alltypes");
     AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
-        + "rows 2 preceding) from functional.alltypes");
-    AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
         + "rows between unbounded preceding and 2 preceding) from functional.alltypes");
-    AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
         + "rows between 2 following and unbounded following) from functional.alltypes");
-    AnalyzesOk("select max(int_col) over (partition by id order by tinyint_col "
-        + "range between 2 preceding and 6 following) from functional.alltypes");
+    // TODO: Enable after RANGE windows with offset boundaries are supported
+    //AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
+    //    + "range between 2 preceding and unbounded following) from functional.alltypes");
+    //AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
+    //    + "range between 2 preceding and unbounded following) from functional.alltypes");
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
+        + "rows between 2 preceding and 6 following) from functional.alltypes");
         // TODO: substitute constants in-line so that 2*3 becomes implicitly castable
         // to tinyint
         //+ "range between 2 preceding and 2 * 3 following) from functional.alltypes");
-    AnalyzesOk("select max(int_col) over (partition by id order by tinyint_col "
-        + "range between 2 preceding and unbounded following) from functional.alltypes");
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
+        + "rows between 2 preceding and unbounded following) from functional.alltypes");
     AnalyzesOk("select lead(int_col, 1, null) over "
         + "(partition by id order by tinyint_col) from functional.alltypes");
     AnalyzesOk("select rank() over "
@@ -626,20 +640,31 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     AnalyzesOk("select min(count(id)) over (order by tinyint_col) "
         + "from functional.alltypes group by id, tinyint_col "
         + "order by rank() over (order by tinyint_col)");
+    // IMPALA-1231: COUNT(t1.int_col) shows up in two different ways: as agg output
+    // and as an analytic fn call
+    AnalyzesOk("select t1.int_col, COUNT(t1.int_col) OVER (ORDER BY t1.int_col) "
+        + "FROM functional.alltypes t1 GROUP BY t1.int_col HAVING COUNT(t1.int_col) > 1");
 
     // legal windows
     AnalyzesOk(
-        "select max(int_col) over (partition by id order by tinyint_col, int_col "
+        "select sum(int_col) over (partition by id order by tinyint_col, int_col "
           + "rows between 2 following and 4 following) from functional.alltypes");
     AnalyzesOk(
         "select max(int_col) over (partition by id order by tinyint_col, int_col "
-          + "range between unbounded preceding and current row) from functional.alltypes");
-    AnalyzesOk("select max(int_col) over (partition by id order by tinyint_col "
+          + "range between unbounded preceding and current row) "
+          + "from functional.alltypes");
+    AnalyzesOk(
+        "select sum(int_col) over (partition by id order by tinyint_col, int_col "
+          + "range between current row and unbounded following) "
+          + "from functional.alltypes");
+    AnalyzesOk(
+        "select max(int_col) over (partition by id order by tinyint_col, int_col "
+          + "range between unbounded preceding and unbounded following) "
+          + "from functional.alltypes");
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
         + "rows between 4 preceding and 2 preceding) from functional.alltypes");
-    AnalyzesOk("select max(int_col) over (partition by id order by tinyint_col "
+    AnalyzesOk("select sum(int_col) over (partition by id order by tinyint_col "
         + "rows between 2 following and 4 following) from functional.alltypes");
-    AnalyzesOk("select max(int_col) over (partition by id order by tinyint_col "
-        + "range between 2 following and 2 following) from functional.alltypes");
     AnalyzesOk( "select "
         + "2 * min(tinyint_col) over (partition by id order by tinyint_col "
         + "  rows between unbounded preceding and current row), "
@@ -650,6 +675,30 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         + "  order by tinyint_col, smallint_col "
         + "  rows between unbounded preceding and current row)) "
         + "from functional.alltypes");
+    AnalyzesOk(
+        "select sum(int_col) over (partition by id order by tinyint_col, int_col "
+          + "rows between current row and current row) from functional.alltypes");
+    AnalysisError(
+        "select sum(int_col) over (partition by id order by tinyint_col, int_col "
+          + "range between current row and current row) from functional.alltypes",
+        "RANGE is only supported with both the lower and upper bounds UNBOUNDED or one "
+          + "UNBOUNDED and the other CURRENT ROW.");
+    AnalysisError("select sum(int_col) over (partition by id order by tinyint_col "
+          + "range between 2 following and 2 following) from functional.alltypes",
+        "RANGE is only supported with both the lower and upper bounds UNBOUNDED or one "
+            + "UNBOUNDED and the other CURRENT ROW.");
+
+    // Min/max do not support start bounds with offsets
+    AnalysisError("select min(int_col) over (partition by id order by tinyint_col "
+        + "rows between 2 preceding and unbounded following) from functional.alltypes",
+        "'min(int_col)' is only supported with an UNBOUNDED PRECEDING start bound.");
+    AnalysisError("select max(int_col) over (partition by id order by tinyint_col "
+        + "rows 2 preceding) from functional.alltypes",
+        "'max(int_col)' is only supported with an UNBOUNDED PRECEDING start bound.");
+    // TODO: Enable after RANGE windows with offset boundaries are supported
+    //AnalysisError("select max(int_col) over (partition by id order by tinyint_col "
+    //    + "range 2 preceding) from functional.alltypes",
+    //    "'max(int_col)' is only supported with an UNBOUNDED PRECEDING start bound.");
 
     // missing grouping expr
     AnalysisError(
@@ -701,10 +750,34 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         "select min(id) over (order by tinyint_col) as X from functional.alltypes "
           + "group by id, tinyint_col order by rank() over (order by X)",
         "Nesting of analytic expressions is not allowed");
+    // IMPALA-1256: AnalyticExpr.resetAnalysisState() didn't sync up w/ orderByElements_
+    AnalyzesOk("with t as ("
+        + "select * from (select sum(t1.year) over ("
+        + "  order by max(t1.id), t1.year "
+        + "  rows between unbounded preceding and 5 preceding) "
+        + "from functional.alltypes t1 group by t1.year) t1) select * from t");
+    AnalyzesOk("with t as ("
+        + "select sum(t1.smallint_col) over () from functional.alltypes t1) "
+        + "select * from t");
+    // IMPALA-1234
+    AnalyzesOk("with t as (select 1 as int_col_1 from functional.alltypesagg t1) "
+        + "select count(t1.int_col_1) as int_col_1 from t t1 where t1.int_col_1 is null "
+        + "group by t1.int_col_1 union all "
+        + "select min(t1.day) over () from functional.alltypesagg t1");
+    // IMPALA-1354: Constant expressions in order by and partition by exprs
+    AnalysisError(
+        "select rank() over (order by 1) from functional.alltypestiny",
+        "Expressions in the ORDER BY clause must not be constant: 1");
+    AnalysisError(
+        "select rank() over (partition by 2 order by id) from functional.alltypestiny",
+        "Expressions in the PARTITION BY clause must not be constant: 2");
+    AnalysisError(
+        "select rank() over (partition by 2 order by 1) from functional.alltypestiny",
+        "Expressions in the PARTITION BY clause must not be constant: 2");
 
     // nested analytic exprs
     AnalysisError(
-        "select max(int_col) over (partition by id, rank() over (order by int_col) "
+        "select sum(int_col) over (partition by id, rank() over (order by int_col) "
           + "order by tinyint_col, int_col "
           + "rows between 2 following and 4 following) from functional.alltypes",
         "Nesting of analytic expressions is not allowed");
@@ -761,6 +834,10 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         "select lag(int_col, tinyint_col * 2, 5) over ("
           + "order by tinyint_col, int_col) from functional.alltypes",
         "The offset parameter of LEAD/LAG must be a constant positive integer");
+    AnalysisError(
+        "select lag(int_col, 1, int_col) over ("
+          + "order by tinyint_col, int_col) from functional.alltypes",
+        "The default parameter (parameter 3) of LEAD/LAG must be a constant");
 
     // wrong type of function
     AnalysisError("select abs(float_col) over (partition by id order by tinyint_col "
@@ -846,35 +923,36 @@ public class AnalyzeExprsTest extends AnalyzerTest {
         "For ROWS window, the value of a PRECEDING/FOLLOWING offset must be a "
           + "constant positive integer: count(*) PRECEDING");
 
-    AnalysisError(
-        "select min(int_col) over (partition by id order by float_col "
-          + "range between -2.1 preceding and current row) from functional.alltypes",
-        "For RANGE window, the value of a PRECEDING/FOLLOWING offset must be a "
-          + "constant positive number: -2.1 PRECEDING");
-    AnalysisError(
-        "select min(int_col) over (partition by id order by int_col "
-          + "range between current row and 2.1 following) from functional.alltypes",
-        "The value expression of a PRECEDING/FOLLOWING clause of a RANGE window must "
-          + "be implicitly convertable to the ORDER BY expression's type: 2.1 cannot "
-          + "be implicitly converted to INT");
-    AnalysisError(
-        "select min(int_col) over (partition by id order by int_col "
-          + "range between 2 * tinyint_col preceding and current row) "
-          + "from functional.alltypes",
-        "For RANGE window, the value of a PRECEDING/FOLLOWING offset must be a "
-          + "constant positive number");
-    AnalysisError(
-        "select min(int_col) over (partition by id order by int_col "
-          + "range between 3.1 following and 2.0 following) "
-          + "from functional.alltypes",
-        "Offset boundaries are in the wrong order");
-    // multiple ordering exprs w/ range offset
-    AnalysisError(
-        "select min(int_col) over (partition by id order by int_col, tinyint_col "
-          + "range between 2 preceding and current row) "
-          + "from functional.alltypes",
-        "Only one ORDER BY expression allowed if used with a RANGE window with "
-          + "PRECEDING/FOLLOWING");
+    // TODO: Enable after RANGE windows with offset boundaries are supported.
+    //AnalysisError(
+    //    "select min(int_col) over (partition by id order by float_col "
+    //      + "range between -2.1 preceding and current row) from functional.alltypes",
+    //    "For RANGE window, the value of a PRECEDING/FOLLOWING offset must be a "
+    //      + "constant positive number: -2.1 PRECEDING");
+    //AnalysisError(
+    //    "select min(int_col) over (partition by id order by int_col "
+    //      + "range between current row and 2.1 following) from functional.alltypes",
+    //    "The value expression of a PRECEDING/FOLLOWING clause of a RANGE window must "
+    //      + "be implicitly convertable to the ORDER BY expression's type: 2.1 cannot "
+    //      + "be implicitly converted to INT");
+    //AnalysisError(
+    //    "select min(int_col) over (partition by id order by int_col "
+    //      + "range between 2 * tinyint_col preceding and current row) "
+    //      + "from functional.alltypes",
+    //    "For RANGE window, the value of a PRECEDING/FOLLOWING offset must be a "
+    //      + "constant positive number");
+    //AnalysisError(
+    //    "select min(int_col) over (partition by id order by int_col "
+    //      + "range between 3.1 following and 2.0 following) "
+    //      + "from functional.alltypes",
+    //    "Offset boundaries are in the wrong order");
+    //// multiple ordering exprs w/ range offset
+    //AnalysisError(
+    //    "select min(int_col) over (partition by id order by int_col, tinyint_col "
+    //      + "range between 2 preceding and current row) "
+    //      + "from functional.alltypes",
+    //    "Only one ORDER BY expression allowed if used with a RANGE window with "
+    //      + "PRECEDING/FOLLOWING");
   }
 
   /**
@@ -1338,6 +1416,19 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     // No matching signature for complex type.
     AnalysisError("select lower(int_struct_col) from functional.allcomplextypes",
         "No matching function with signature: lower(STRUCT<f1:INT,f2:INT>).");
+
+    // Special cases for FROM in function call
+    AnalyzesOk("select extract(year from now())");
+    AnalysisError("select extract(foo from now())",
+        "Time unit 'foo' in expression 'EXTRACT(foo FROM now())' is invalid. Expected " +
+        "one of YEAR, MONTH, DAY, HOUR, MINUTE, SECOND, MILLISECOND, EPOCH.");
+    AnalysisError("select extract(year from 0)",
+        "Expression '0' in 'EXTRACT(year FROM 0)' has a return type of TINYINT but a " +
+        "TIMESTAMP is required.");
+    AnalysisError("select functional.extract(year from now())",
+        "Function functional.extract conflicts with the EXTRACT builtin");
+    AnalysisError("select date_part(year from now())",
+        "Function DATE_PART does not accept the keyword FROM");
   }
 
   @Test
@@ -1464,6 +1555,76 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     AnalyzesOk("select case 1 when 2 then NULL else 3 end");
     AnalyzesOk("select case 1 when 2 then 3 else NULL end");
     AnalyzesOk("select case NULL when NULL then NULL else NULL end");
+  }
+
+  @Test
+  public void TestDecodeExpr() throws AnalysisException {
+    AnalyzesOk("select decode(1, 1, 1)");
+    AnalyzesOk("select decode(1, 1, 'foo')");
+    AnalyzesOk("select decode(1, 2, true, false)");
+    AnalyzesOk("select decode(null, null, null, null, null, null)");
+    assertCaseEquivalence(
+        "CASE WHEN 1 = 2 THEN NULL ELSE 'foo' END",
+        "decode(1, 2, NULL, 'foo')");
+    assertCaseEquivalence(
+        "CASE WHEN 1 = 2 THEN NULL ELSE 4 END",
+        "decode(1, 2, NULL, 4)");
+    assertCaseEquivalence(
+        "CASE WHEN string_col = 'a' THEN 1 WHEN string_col = 'b' THEN 2 ELSE 3 END",
+        "decode(string_col, 'a', 1, 'b', 2, 3)");
+    assertCaseEquivalence(
+        "CASE WHEN int_col IS NULL AND bigint_col IS NULL "
+            + "OR int_col = bigint_col THEN tinyint_col ELSE smallint_col END",
+        "decode(int_col, bigint_col, tinyint_col, smallint_col)");
+    assertCaseEquivalence(
+        "CASE WHEN int_col = 1 THEN 1 WHEN int_col IS NULL AND bigint_col IS NULL OR "
+            + "int_col = bigint_col THEN 2 WHEN int_col IS NULL THEN 3 ELSE 4 END",
+        "decode(int_col, 1, 1, bigint_col, 2, NULL, 3, 4)");
+    assertCaseEquivalence(
+        "CASE WHEN NULL IS NULL THEN NULL ELSE NULL END",
+        "decode(null, null, null, null)");
+
+    AnalysisError("select decode()",
+        "DECODE in 'decode()' requires at least 3 arguments");
+    AnalysisError("select decode(1)",
+        "DECODE in 'decode(1)' requires at least 3 arguments");
+    AnalysisError("select decode(1, 2)",
+        "DECODE in 'decode(1, 2)' requires at least 3 arguments");
+    AnalysisError("select decode(*)", "Cannot pass '*'");
+    AnalysisError("select decode(distinct 1, 2, 3)", "Cannot pass 'DISTINCT'");
+    AnalysisError("select decode(true, 'foo', 1)",
+        "operands of type BOOLEAN and STRING are not comparable: TRUE = 'foo'");
+    AnalysisError("select functional.decode(1, 1, 1)", "functional.decode() unknown");
+  }
+
+  /**
+   * Assert that the caseSql and decodeSql have the same underlying child expr
+   * and thrift representation.
+   */
+  void assertCaseEquivalence(String caseSql, String decodeSql)
+      throws AnalysisException {
+    String sqlTemplate = "select %s from functional.alltypes";
+    SelectStmt stmt = (SelectStmt)AnalyzesOk(String.format(sqlTemplate, caseSql));
+    CaseExpr caseExpr =
+        (CaseExpr)stmt.getSelectList().getItems().get(0).getExpr();
+    List<SlotRef> slotRefs = Lists.newArrayList();
+    caseExpr.collect(Predicates.instanceOf(SlotRef.class), slotRefs);
+    for (SlotRef slotRef: slotRefs) {
+      slotRef.getDesc().setIsMaterialized(true);
+      slotRef.getDesc().setByteOffset(0);
+    }
+    TExpr caseThrift = caseExpr.treeToThrift();
+    stmt = (SelectStmt)AnalyzesOk(String.format(sqlTemplate, decodeSql));
+    CaseExpr decodeExpr =
+        (CaseExpr)stmt.getSelectList().getItems().get(0).getExpr();
+    Assert.assertEquals(caseSql, decodeExpr.toCaseSql());
+    slotRefs.clear();
+    decodeExpr.collect(Predicates.instanceOf(SlotRef.class), slotRefs);
+    for (SlotRef slotRef: slotRefs) {
+      slotRef.getDesc().setIsMaterialized(true);
+      slotRef.getDesc().setByteOffset(0);
+    }
+    Assert.assertEquals(caseThrift, decodeExpr.treeToThrift());
   }
 
   @Test
@@ -1934,5 +2095,70 @@ public class AnalyzeExprsTest extends AnalyzerTest {
       exprStr.append(closeFunc);
     }
     return exprStr.toString();
+  }
+
+  @Test
+  public void TestAppxCountDistinctOption() throws AnalysisException, CatalogException {
+    TQueryOptions queryOptions = new TQueryOptions();
+    queryOptions.setAppx_count_distinct(true);
+
+    // Accumulates count(distinct) for all columns of alltypesTbl or decimalTbl.
+    List<String> countDistinctFns = Lists.newArrayList();
+    // Accumulates count(distinct) for all columns of both alltypesTbl and decimalTbl.
+    List<String> allCountDistinctFns = Lists.newArrayList();
+
+    Table alltypesTbl = catalog_.getTable("functional", "alltypes");
+    for (Column col: alltypesTbl.getColumns()) {
+      String colName = col.getName();
+      // Test a single count(distinct) with some other aggs.
+      AnalyzesOk(String.format(
+          "select count(distinct %s), sum(distinct smallint_col), " +
+          "avg(float_col), min(%s) " +
+          "from functional.alltypes",
+          colName, colName), createAnalyzer(queryOptions));
+      countDistinctFns.add(String.format("count(distinct %s)", colName));
+    }
+    // Test a single query with a count(distinct) on all columns of alltypesTbl.
+    AnalyzesOk(String.format("select %s from functional.alltypes",
+        Joiner.on(",").join(countDistinctFns)), createAnalyzer(queryOptions));
+
+    allCountDistinctFns.addAll(countDistinctFns);
+    countDistinctFns.clear();
+    Table decimalTbl = catalog_.getTable("functional", "decimal_tbl");
+    for (Column col: decimalTbl.getColumns()) {
+      String colName = col.getName();
+      // Test a single count(distinct) with some other aggs.
+      AnalyzesOk(String.format(
+          "select count(distinct %s), sum(distinct d1), " +
+          "avg(d2), min(%s) " +
+          "from functional.decimal_tbl",
+          colName, colName), createAnalyzer(queryOptions));
+      countDistinctFns.add(String.format("count(distinct %s)", colName));
+    }
+    // Test a single query with a count(distinct) on all columns of decimalTbl.
+    AnalyzesOk(String.format("select %s from functional.decimal_tbl",
+        Joiner.on(",").join(countDistinctFns)), createAnalyzer(queryOptions));
+
+    allCountDistinctFns.addAll(countDistinctFns);
+
+    // Test a single query with a count(distinct) on all columns of both
+    // alltypes/decimalTbl.
+    AnalyzesOk(String.format(
+        "select %s from functional.alltypes cross join functional.decimal_tbl",
+        Joiner.on(",").join(countDistinctFns)), createAnalyzer(queryOptions));
+
+    // The rewrite does not work for multiple count() arguments.
+    AnalysisError("select count(distinct int_col, bigint_col), " +
+        "count(distinct string_col, float_col) from functional.alltypes",
+        createAnalyzer(queryOptions),
+        "all DISTINCT aggregate functions need to have the same set of parameters as " +
+        "count(DISTINCT int_col, bigint_col); deviating function: " +
+        "count(DISTINCT string_col, float_col)");
+    // The rewrite only applies to the count() function.
+    AnalysisError(
+        "select avg(distinct int_col), sum(distinct float_col) from functional.alltypes",
+        createAnalyzer(queryOptions),
+        "all DISTINCT aggregate functions need to have the same set of parameters as " +
+        "avg(DISTINCT int_col); deviating function: sum(DISTINCT");
   }
 }

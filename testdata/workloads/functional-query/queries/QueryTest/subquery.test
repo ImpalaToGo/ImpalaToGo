@@ -49,6 +49,86 @@ and id < 5
 INT, INT, INT
 ====
 ---- QUERY
+# Uncorrelated NOT IN subquery that returns only null values
+select id
+from functional.alltypestiny
+where int_col not in (select int_col from functional.alltypesagg where int_col is null)
+and id < 10
+---- RESULTS
+---- TYPES
+INT
+====
+---- QUERY
+# Uncorrelated NOT IN subquery that returns null and non-null values
+select id
+from functional.alltypestiny
+where int_col not in (select int_col from functional.alltypesagg)
+---- RESULTS
+---- TYPES
+INT
+====
+---- QUERY
+# Uncorrelated NOT IN subquery that returns an empty set
+# (result should include all the tuples of the outer)
+select id, int_col
+from functional.alltypestiny
+where int_col not in (select int_col from functional.alltypesagg where id < 0)
+order by id
+---- RESULTS
+0,0
+1,1
+2,0
+3,1
+4,0
+5,1
+6,0
+7,1
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Outer with nulls and an uncorrelated NOT IN subquery that returns an empty set
+# (result should include NULLs in int_col)
+select id, int_col
+from functional.alltypesagg
+where int_col not in (select int_col from functional.alltypestiny where id < 0)
+and id < 5
+order by id
+---- RESULTS
+0,NULL
+0,NULL
+1,1
+2,2
+3,3
+4,4
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Outer with NULLS and an uncorrelated NOT IN
+select id
+from functional.alltypesagg
+where int_col is null and
+int_col not in (select int_col from functional.alltypestiny)
+---- RESULTS
+---- TYPES
+INT
+====
+---- QUERY
+# Outer with NULLS and an uncorrelated NOT IN subquery that returns an empty set
+select id, int_col
+from functional.alltypesagg
+where int_col is null and
+int_col not in (select int_col from functional.alltypestiny where id < 0)
+and id < 10
+order by id
+---- RESULTS
+0,NULL
+0,NULL
+---- TYPES
+INT, INT
+====
+---- QUERY
 # Correlated IN subquery
 select s.id, s.bool_col, s.int_col, s.date_string_col
 from functional.alltypessmall s
@@ -76,6 +156,121 @@ order by s.id
 4,true,4
 ---- TYPES
 INT, BOOLEAN, INT
+====
+---- QUERY
+# Correlated NOT IN subquery that returns an empty set
+# (results should include all the tuples of the outer that pass
+# the remaining predicates)
+select id, int_col
+from functional.alltypestiny t
+where t.int_col not in
+  (select int_col from functional.alltypes a where t.id = a.id and a.bigint_col < 0)
+and id < 5
+order by id
+---- RESULTS
+0,0
+1,1
+2,0
+3,1
+4,0
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Correlated NOT IN subquery that returns nulls
+select id, int_col
+from functional.alltypestiny t
+where t.int_col not in
+  (select int_col from functional.alltypesagg a where int_col is null and a.id = t.id)
+order by id
+---- RESULTS
+1,1
+2,0
+3,1
+4,0
+5,1
+6,0
+7,1
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Outer with nulls and a correlated NOT IN subquery that returns null and
+# non-null values
+select id, int_col
+from functional.alltypesagg a
+where a.int_col not in
+  (select int_col from functional.alltypesagg b where a.id = b.id)
+and id < 10
+---- RESULTS
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Outer with nulls and a correlated NOT IN subquery that does not return nulls
+select id, int_col
+from functional.alltypesagg a
+where int_col not in
+  (select int_col from functional.alltypestiny t where a.id = t.id)
+and bigint_col = 10
+order by id
+---- RESULTS
+1001,1
+2001,1
+3001,1
+4001,1
+5001,1
+6001,1
+7001,1
+8001,1
+9001,1
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Correlated NOT IN subquery that returns an empty set
+select id, int_col, bigint_col
+from functional.alltypesagg a
+where int_col not in
+  (select int_col from alltypestiny t where a.id = t.id and t.bigint_col < 0)
+and bigint_col = 10
+order by id
+---- RESULTS
+1,1,10
+1001,1,10
+2001,1,10
+3001,1,10
+4001,1,10
+5001,1,10
+6001,1,10
+7001,1,10
+8001,1,10
+9001,1,10
+---- TYPES
+INT, INT, BIGINT
+====
+---- QUERY
+# Outer that has only nulls, correlated NOT IN subquery
+select id, int_col, bigint_col
+from alltypesagg a
+where int_col not in (select int_col from alltypesagg t where a.id = t.id)
+and int_col is null
+---- RESULTS
+---- TYPES
+INT, INT, BIGINT
+====
+---- QUERY
+# Correlated NOT IN subquery (IMPALA-1297)
+select count(distinct id)
+from alltypesagg t1
+where t1.day not in
+  (select tt1.tinyint_col as tinyint_col_1
+   from alltypesagg tt1
+   where t1.smallint_col = tt1.smallint_col)
+---- RESULTS
+8200
+---- TYPES
+BIGINT
 ====
 ---- QUERY
 # Correlated EXISTS subquery
@@ -425,4 +620,110 @@ order by id
 10
 ---- TYPES
 INT
+====
+---- QUERY
+# Correlated EXISTS subquery with an analytic function and a group by clause
+select id, int_col
+from functional.alltypesagg a
+where exists
+  (select id, sum(int_col) over (partition by bool_col)
+   from functional.alltypes b
+   where a.id = b.id and b.bigint_col < 100
+   group by id, int_col, bool_col
+   order by id)
+and id < 5
+order by id
+---- RESULTS
+0,NULL
+0,NULL
+1,1
+2,2
+3,3
+4,4
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Correlated NOT EXISTS subquery with analytic function and group by
+select id, int_col from alltypestiny t
+where not exists
+  (select id, sum(int_col) over (partition by bool_col)
+   from alltypesagg a where bool_col = false and t.id = a.int_col
+   group by id, int_col, bool_col having sum(id) = 1)
+order by id, int_col
+---- RESULTS
+0,0
+2,0
+3,1
+4,0
+5,1
+6,0
+7,1
+---- TYPES
+INT, INT
+====
+---- QUERY
+# Testing a crash in the buffered tuple stream related to IMPALA-1306.
+SELECT COUNT(t1.id) AS int_col_1
+FROM alltypes t1
+WHERE t1.month IN
+    (SELECT tt1.tinyint_col AS tinyint_col_1
+     FROM alltypes tt1
+     WHERE t1.month = tt1.tinyint_col)
+  AND EXISTS
+    (SELECT MIN(tt1.tinyint_col) AS tinyint_col_1
+     FROM alltypestiny tt1)
+  AND
+    (SELECT t1.year AS int_col_1
+     FROM alltypes t1
+     ORDER BY t1.year ASC LIMIT 1) = t1.id
+---- RESULTS
+1
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Testing a crash in the buffered tuple stream related to IMPALA-1306.
+SELECT COUNT(t1.id) AS int_col_1
+FROM alltypestiny t1
+WHERE t1.month IN
+    (SELECT tt1.tinyint_col AS tinyint_col_1
+     FROM alltypes tt1
+     WHERE t1.month = tt1.tinyint_col)
+  AND EXISTS
+    (SELECT MIN(tt1.tinyint_col) AS tinyint_col_1
+     FROM alltypestiny tt1)
+  AND
+    (SELECT t1.year AS int_col_1
+     FROM alltypes t1
+     ORDER BY t1.year ASC LIMIT 1) = t1.id
+---- RESULTS
+0
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Regression test for IMPALA-1318.
+select count(t1.c) over () from
+  (select max(int_col) c from functional.alltypestiny) t1
+where t1.c not in
+  (select sum(t1.smallint_col) from functional.alltypes t1)
+---- RESULTS
+1
+---- TYPES
+BIGINT
+====
+---- QUERY
+# Regression test for IMPALA-1348.
+select count(*)
+FROM alltypesagg t1
+WHERE t1.int_col NOT IN
+  (SELECT tt1.month AS tinyint_col_1
+   FROM alltypesagg tt1
+   LEFT JOIN alltypestiny tt2 ON tt2.year = tt1.id
+      AND t1.bigint_col = tt2.smallint_col)
+---- RESULTS
+11000
+---- TYPES
+BIGINT
 ====
