@@ -11,6 +11,7 @@
 
 #include <cstring>
 #include <list>
+#include <unordered_map>
 #include <memory>
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
@@ -21,6 +22,31 @@
 #include "dfs_cache/common-include.hpp"
 #include "dfs_cache/filesystem-descriptor-bound.hpp"
 #include "dfs_cache/utilities.hpp"
+
+/** pointer hash utility */
+template<typename Tval>
+struct _PointerHash {
+    size_t operator()(const Tval* val) const {
+        static const size_t shift = (size_t)log2(1 + sizeof(Tval));
+        return (size_t)(val) >> shift;
+    }
+    size_t operator()(const Tval* val, size_t size) const {
+           static const size_t shift = (size_t)log2(1 + size);
+           return (size_t)(val) >> shift;
+       }
+};
+
+/** Hash for dfsFile */
+namespace std {
+    template <>
+        class hash<dfsFile> {
+        public :
+            size_t operator()(const dfsFile &file ) const
+            {
+                return _PointerHash<void>()(file->file, file->size);
+            }
+    };
+};
 
 /**
  * @namespace impala
@@ -42,8 +68,8 @@ typedef std::map<DFS_TYPE, std::map<std::string, boost::shared_ptr<FileSystemDes
  * key   - local file handle (cache)
  * value - remote file handle (bound FileSystem)
  */
-typedef std::map<dfsFile, dfsFile> CreateFromSelectFiles;
-typedef std::map<dfsFile, dfsFile>::iterator itCreateFromSelect;
+typedef std::unordered_map<dfsFile, dfsFile> CreateFromSelectFiles;
+typedef std::unordered_map<dfsFile, dfsFile>::iterator itCreateFromSelect;
 
 /**
  * Represent cache data registry.

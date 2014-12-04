@@ -132,10 +132,10 @@ bool CacheLayerRegistry::unregisterCreateFromSelectScenario(const dfsFile& local
 
 dfsFile CacheLayerRegistry::getCreateFromSelectScenario(const dfsFile& local, bool& exists){
 	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
-	itCreateFromSelect it;
-	if (!( (it = m_createFromSelect.find(local)) == m_createFromSelect.end()) ) {
-			exists = false;
-			return NULL;
+	itCreateFromSelect it = m_createFromSelect.find(local);
+	if (it == m_createFromSelect.end()) {
+		exists = false;
+		return NULL;
 	}
 	exists = true;
 	return (*it).second;

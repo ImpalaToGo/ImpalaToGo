@@ -20,6 +20,8 @@
 #ifndef LIBDFS_CACHE_H_
 #define LIBDFS_CACHE_H_
 
+#include <functional>
+
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 

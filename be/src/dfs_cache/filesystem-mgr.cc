@@ -113,7 +113,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
 
-	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
+	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED, 0, 0};
 
 	// calculate fully qualified local path from requested
 	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, path);
@@ -209,6 +209,8 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 	// Got file opened, reply it
 	file->file = fp;
 	file->type = dfsStreamType::INPUT;
+	file->size = sizeof(FILE);
+
 	available = true;
 
 	return file;

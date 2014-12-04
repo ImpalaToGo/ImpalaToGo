@@ -200,6 +200,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 	// file is available locally:
 	LOG (INFO) << "Successfully opened both local and remote files for write : \"" <<
 			path << "\"." << "\n";
+
 	// pin opened handles in the registry:
 	ret = CacheLayerRegistry::instance()->registerCreateFromSelectScenario(handle, hfile);
 	if(ret)
@@ -317,7 +318,7 @@ static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescrip
        return status::StatusInternal::NO_STATUS;
 	}
 
-	LOG (INFO)<< "dfsCloseFile() is requested for file write operation." << "\n";
+	LOG (INFO) << "dfsCloseFile() is requested for file write operation." << "\n";
 
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
@@ -340,6 +341,8 @@ static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescrip
     			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
     }
+	ret = CacheLayerRegistry::instance()->unregisterCreateFromSelectScenario(file);
+
 	return status::StatusInternal::OK;
 }
 

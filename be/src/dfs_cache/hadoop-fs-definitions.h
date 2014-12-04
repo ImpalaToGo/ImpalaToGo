@@ -73,6 +73,7 @@ struct dfsFile_internal{
 	void*              file;   /**< file handle */
 	enum dfsStreamType type;   /**< bound stream type */
 	int                flags;  /**< flags which the stream was opened with */
+    size_t             size;   /**< size of file handle */
 };
 
 /** A type definition for internal dfs file */
