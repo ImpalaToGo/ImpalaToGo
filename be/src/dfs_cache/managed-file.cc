@@ -178,8 +178,9 @@ void File::drop(){
 		e.what() << "\n";
 	}
 	if(!ec){
-		LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";
+		return;
 	}
+	LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";
 }
 
 status::StatusInternal File::forceDelete(){

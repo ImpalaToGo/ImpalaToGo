@@ -469,8 +469,13 @@ private:
                  this->value(item);
 
                  long long weight = m_mgr->m_owner->tellWeight(item);
+                 LOG (INFO) << "Node add : item weight = " << std::to_string(weight);
+                 LOG (INFO) << "capacity before node added : "
+                		 << std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
                  // Read-modify-write actions are guaranteed to read the most recently written value regardless of memory ordering
                  std::atomic_fetch_add_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
+                 LOG (INFO) << "capacity after node added : " <<
+                		 std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
 			}
 
 			virtual ~Node() {
@@ -575,8 +580,12 @@ private:
                 	// say no external value is managed more by this node
                     this->value(nullptr);
 
+                    LOG (INFO) << "capacity before node removal : " <<
+                    		std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << "\n";
                     // decrease cache current capacity once the node is removed
                 	std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
+                    LOG (INFO) << "capacity after node removal : " <<
+                    		std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << "\n";
                 	// decrease number of hard items
                     std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
                 }
@@ -709,6 +718,7 @@ private:
         /** checks to see if cache is still valid and if LifespanMgr needs to do maintenance */
         void checkValid(){
         	boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
 
         	// If lock is currently acquired, just skip and let next touch() perform the cleanup.
@@ -752,12 +762,15 @@ private:
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
         	int weightToRemove = currentCapacity - m_owner->m_capacityLimit;
 
+        	LOG (INFO) << "LRU Cleanup is triggered. Current capacity = " << std::to_string(currentCapacity) <<
+        			". Weight to remove = " << std::to_string(weightToRemove) << "\n";
+
         	boost::mutex::scoped_lock lock(*lifespan_mux());
 
         	auto it = m_bucketsKeys->begin();
 
         	// go over buckets, from very old to newer, until the necessary cleanup is done:
-        	while( (weightToRemove) > 0 && it != m_bucketsKeys->end()) {
+        	while( weightToRemove > 0 && it != m_bucketsKeys->end()) {
             	// get the key to describe the oldest bucket:
             	long long key = (*(it));
 
@@ -1061,7 +1074,7 @@ private:
 	 */
     LRUCache(boost::posix_time::ptime startFrom,  long long capacity, isValidPredicate isValid = 0) : m_startTime(startFrom){
 
-    	m_capacityLimit = capacity * 0.9; // get the idea how many capacity Cache is allowed for
+    	m_capacityLimit = capacity;
 
         m_isValid  = isValid;
         m_lifeSpan = new LifespanMgr(this, startFrom);

@@ -58,7 +58,9 @@ namespace managed_file {
       FILE_IS_IDLE,                      /**< File is idle. No client sessions exist for this file. It is not handled by nobody.
       	  	  	  	  	  	  	  	  	 * This is the only state when file may be deleted from the cache.
       	  	  	  	  	  	  	  	  	 */
-      FILE_IS_FORBIDDEN                 /**< File is forbidden, do not use it */
+      FILE_IS_FORBIDDEN,                 /**< File is forbidden, do not use it */
+
+      FILE_IS_UNDER_WRITE,               /**< File is being written by some scenario */
    };
 
    /**
@@ -167,7 +169,7 @@ namespace managed_file {
 	   /** getter for File state */
 	   inline State state() { return m_state.load(std::memory_order_acquire); }
 
-	   /** flag, idicates that the file is in valid state and can be used */
+	   /** flag, indicates that the file is in valid state and can be used */
 	   inline bool exists() {
 		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
 	   }
@@ -189,7 +191,8 @@ namespace managed_file {
 	   inline bool nonreferenced(){
 		   return !(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS ||
 				   m_subscribers.load(std::memory_order_acquire) != 0 ||
-				   m_state.load(std::memory_order_acquire) == State::FILE_IS_IN_USE_BY_SYNC);
+				   m_state.load(std::memory_order_acquire) == State::FILE_IS_IN_USE_BY_SYNC) ||
+				   m_state.load(std::memory_order_acquire) == State::FILE_IS_UNDER_WRITE;
 	   }
 	   /** setter for file state
 	    * @param state - file state to mark the file with

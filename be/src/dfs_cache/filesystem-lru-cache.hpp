@@ -137,6 +137,8 @@ public:
     FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true) :
     		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity), m_root(root){
 
+    	LOG (INFO) << "LRU cache capacity limit = " << std::to_string(capacity) << "\n";
+
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
     	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isSafeToDeleteItem), this, _1);

@@ -32,8 +32,6 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 		file->drop();
 	}
 
-	// get rid of file metadata object:
-	delete file;
 	{
 		boost::mutex::scoped_lock lock(m_deletionsmux);
 		// add the item into deletions list
@@ -42,6 +40,9 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 		// notify deletion happens
 		m_deletionHappensCondition.notify_all();
 	}
+	// get rid of file metadata object:
+	delete file;
+
 	return true;
 }
 
@@ -232,8 +233,13 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
 
     	// we create and destruct File objects only here, in LRU cache layer
     	file = new managed_file::File(path.c_str());
-    	file->estimated_size(boost::filesystem::file_size(path));
-
+    	try {
+    		file->estimated_size(boost::filesystem::file_size(path));
+    	}
+    	catch (boost::filesystem::filesystem_error &e) {
+    		// the path specified does not exist locally.
+    		file->estimated_size(0);
+    	}
     	success = LRUCache<managed_file::File>::add(file, duplicate);
     	if(duplicate)
     		// no need for this file, get the rid of
