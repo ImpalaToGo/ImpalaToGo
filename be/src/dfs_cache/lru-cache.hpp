@@ -471,11 +471,11 @@ private:
                  long long weight = m_mgr->m_owner->tellWeight(item);
                  LOG (INFO) << "Node add : item weight = " << std::to_string(weight);
                  LOG (INFO) << "capacity before node added : "
-                		 << std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
+                		 << std::to_string(m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
                  // Read-modify-write actions are guaranteed to read the most recently written value regardless of memory ordering
                  std::atomic_fetch_add_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
                  LOG (INFO) << "capacity after node added : " <<
-                		 std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
+                		 std::to_string(m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
 			}
 
 			virtual ~Node() {
@@ -581,11 +581,11 @@ private:
                     this->value(nullptr);
 
                     LOG (INFO) << "capacity before node removal : " <<
-                    		std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << "\n";
+                    		std::to_string((m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
                     // decrease cache current capacity once the node is removed
                 	std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
                     LOG (INFO) << "capacity after node removal : " <<
-                    		std::to_string(&m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << "\n";
+                    		std::to_string( (m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
                 	// decrease number of hard items
                     std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
                 }

@@ -20,14 +20,17 @@ namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
-	if(!isSafeToDeleteItem(file))
+	if(!isSafeToDeleteItem(file)){
+		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
 		return false;
+	}
 
 	// no usage so far, mark the file for deletion:
 	file->state(managed_file::State::FILE_IS_MARKED_FOR_DELETION);
 
 	// for physical removal scenario, drop the file from file system
 	if (physically) {
+		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed." << "\n";
 		// delegate further deletion scenario to the file itself:
 		file->drop();
 	}
@@ -136,8 +139,8 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 		return;
 	}
 	else
-	// file is present and is ready to use
-	file->state(managed_file::State::FILE_IS_IDLE);
+		// file is present and is ready to use
+		file->state(managed_file::State::FILE_HAS_CLIENTS);
 }
 
 bool FileSystemLRUCache::reload(const std::string& root){

@@ -153,6 +153,18 @@ public:
 	 */
 	tSize filePread(raiiDfsConnection& conn, dfsFile file, tOffset position,
 			void* buffer, tSize length);
+
+	/**
+	 * Positional read of data from an opened stream.
+	 *
+	 * @param conn     - wrapped managed connection
+	 * @param file     - file handle.
+	 * @param buffer   - buffer to get bytes to write from.
+	 * @param length   - length of the buffer.
+	 *
+	 * @return      See fileWrte
+	 */
+	tSize fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length);
 };
 }
 

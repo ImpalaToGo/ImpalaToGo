@@ -38,6 +38,14 @@ namespace impala {
 typedef std::map<DFS_TYPE, std::map<std::string, boost::shared_ptr<FileSystemDescriptorBound> > > DFSConnections;
 
 /**
+ * Set of file handles that are stored for "CREATE FROM SELECT" scenario:
+ * key   - local file handle (cache)
+ * value - remote file handle (bound FileSystem)
+ */
+typedef std::map<dfsFile, dfsFile> CreateFromSelectFiles;
+typedef std::map<dfsFile, dfsFile>::iterator itCreateFromSelect;
+
+/**
  * Represent cache data registry.
  */
 class CacheLayerRegistry{
@@ -49,6 +57,9 @@ private:
 
 	FileRegistry*       m_cache;       /**< Registry of cache-managed files */
 	DFSConnections      m_filesystems; /**< Registry of file systems adaptors registered as a target for impala as a client */
+
+	CreateFromSelectFiles m_createFromSelect;     /**< local and remote file handles pairs, created in "CREATE FROM SELECT" scenario*/
+    boost::mutex          m_createfromselect_mux; /**< mutex to protect "CREATE FROM SELECT" file write scenario */
 
 	std::string m_localstorageRoot;   /**< path to local file system storage root */
 
@@ -75,7 +86,10 @@ private:
         if(available == 0)
         	return;
 
-		// create the autoload LRU cache, default is 50 Gb
+    	LOG (INFO) << "LRU percent from available space  = " << std::to_string(percent) << " on path \""
+    			<< m_localstorageRoot << "\"." << " Space limit, bytes = " << std::to_string(available) << ".\n";
+
+		// create the autoload LRU cache
 		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, true);
 		m_valid = true;
 	}
@@ -191,6 +205,36 @@ public:
 	 * false - operation was not success due to reasons
 	 */
 	bool deleteFile(const FileSystemDescriptor &descriptor, const char* path);
+
+	/**
+	 * start new "CREATE FROM SELECT" scenario.
+	 *
+	 * @param local  - handle to local file
+	 * @param remote - handle to remote file
+	 *
+	 * @return operation status, true on success (scenario is registered), false otehrwise
+	 * (do not use the scenario)
+	 */
+	bool registerCreateFromSelectScenario(const dfsFile& local, const dfsFile& remote);
+
+	/**
+	 * Completes "CREATE FROM SELECT" scenario.
+	 *
+	 * @param local - handle to local file
+	 *
+	 * @return operation status, true on success (scenario is unregistered)
+	 */
+	bool unregisterCreateFromSelectScenario(const dfsFile& local);
+
+	/**
+	 * Retrieve "CREATE FROM SELECT" scenario
+	 *
+	 * @param [in] local   - handle to local file
+	 * @param [out] exists - flag, indicates that the requested scenario exists
+	 *
+	 * @return handle to remote file participating in scenario, NULL is scenario is not exist
+	 */
+	dfsFile getCreateFromSelectScenario(const dfsFile& local, bool& exists);
 
 	struct StrExpComp
 	{

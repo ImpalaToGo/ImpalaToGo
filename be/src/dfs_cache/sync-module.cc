@@ -186,7 +186,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 }
 
 	 // update file status as "ready to use":
-	 managed_file->state(managed_file::State::FILE_IS_IDLE);
+	 managed_file->state(managed_file::State::FILE_HAS_CLIENTS);
 
 	 if(task->condition()){ // cancellation was requested:
 		 LOG (WARNING) << "Cancellation was requested during file read \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<

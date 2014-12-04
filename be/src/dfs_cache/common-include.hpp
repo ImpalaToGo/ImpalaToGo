@@ -97,6 +97,7 @@ typedef enum {
 	CACHE_OBJECT_NOT_FOUND,         /**< reports the problem wit ha cache, when the object is missed when expected */
 
 	NOT_IMPLEMENTED,                 /**< for developer purposes */
+	NO_STATUS,
 } StatusInternal;
 }
 

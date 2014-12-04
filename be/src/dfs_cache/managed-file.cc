@@ -178,6 +178,7 @@ void File::drop(){
 		e.what() << "\n";
 	}
 	if(!ec){
+		LOG (INFO) << "File \"" << fqp() << "\" is removed from file system." << "\n";
 		return;
 	}
 	LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";

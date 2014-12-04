@@ -158,6 +158,9 @@ tSize FileSystemDescriptorBound::filePread(raiiDfsConnection& conn, dfsFile file
 	return _dfsPread(conn.connection()->connection, file, position, buffer, length);
 }
 
+tSize FileSystemDescriptorBound::fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length){
+	return _dfsWrite(conn.connection()->connection, file, buffer, length);
+}
 
 } /** namespace impala */
 

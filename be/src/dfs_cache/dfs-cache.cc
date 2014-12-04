@@ -18,6 +18,7 @@
  */
 
 #include <string.h>
+#include <fcntl.h>
 
 #include <boost/uuid/uuid.hpp>            // uuid class
 #include <boost/uuid/uuid_generators.hpp> // generators
@@ -112,65 +113,241 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  * ***********************   APIs to work with files. Inherited from libhdfs  *******************
  * **********************************************************************************************
  */
-dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
-		int bufferSize, short replication, tSize blocksize, bool& available) {
-	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
+
+/**
+ * Handle "open file for write" scenario
+ *
+ * @param [in]  fsDescriptor - filesystem descriptor
+ * @param [in]  path         - file path
+ * @param [in]  bufferSize   - buffer size
+ * @param [in]  replication  - replication (hdfs-only relevant)
+ * @param [in]  blockSize    - block size
+ * @param [out] available    - flag, indicates whether the file is available after all
+ *
+ * @return local (cached) file handle
+ */
+static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const char* path,
+		int bufferSize, short replication, tSize blocksize, bool& available){
+
 	Uri uri = Uri::Parse(path);
+
+	// locate the remote filesystem adapter:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if(fsAdaptor == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return NULL;
+	}
+
+    raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, unable to create file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return NULL;
+    }
+
+    // Add the reference to new file into LRU registry
     managed_file::File* managed_file;
+    bool ret = CacheLayerRegistry::instance()->addFile(uri.FilePath.c_str(), fsDescriptor, managed_file);
+    if(!ret){
+    	LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return NULL;
+    }
+    managed_file->open();
+
+    // say file is busy with "write" operation:
+    managed_file->state(managed_file::State::FILE_IS_UNDER_WRITE);
+
+	// open remote file:
+	dfsFile hfile = fsAdaptor->fileOpen(connection, managed_file->relative_name().c_str(), O_WRONLY, 0, 0, 0);
+
+	if(hfile == NULL){
+		LOG (ERROR) << "Failed to open remote file \"" << path << "\" for write on FileSystem \"" << fsDescriptor.dfs_type << "//:" <<
+				fsDescriptor.host << "\"" << "\n";
+		// update file status:
+		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		return NULL;
+	}
+
+	int retstatus = -1;
+
+	// open local file:
+	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
+			fsDescriptor, uri.FilePath.c_str(), O_WRONLY, bufferSize, replication,
+			blocksize, available);
+	// check we have it opened
+	if(handle == nullptr || !available){
+		// file was not opened for write, cleanup opened dfs file handle
+		LOG (ERROR) << "Failed to open local file for write : \"" <<
+						path << "\"." << "\n";
+
+		// cleanup:
+		// remotely (file close):
+		retstatus = fsAdaptor->fileClose(connection, hfile);
+		if(retstatus != 0){
+			LOG (ERROR) << "Failed to close remote file : \"" << path << "\"." << "\n";
+		}
+		// from registry:
+		ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
+		if(!ret){
+			LOG (ERROR) << "Failed to clean the file : \"" << path << "\" from LRU registry." << "\n";
+		}
+		return NULL;
+	}
+
+	// file is available locally:
+	LOG (INFO) << "Successfully opened both local and remote files for write : \"" <<
+			path << "\"." << "\n";
+	// pin opened handles in the registry:
+	ret = CacheLayerRegistry::instance()->registerCreateFromSelectScenario(handle, hfile);
+	if(ret)
+		return handle;
+
+    LOG (ERROR)<< "Failed to register CREATE ON SELECT scenario within the registry for file : \"" << path << "\"." << "\n";
+	// cleanup:
+	// remote file close:
+	retstatus = fsAdaptor->fileClose(connection, hfile);
+	if (retstatus != 0) {
+		LOG (ERROR)<< "Failed to close remote file : \"" << path << "\"." << "\n";
+	}
+	// local file close:
+	status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, handle);
+	if(status != status::StatusInternal::OK){
+		LOG (ERROR)<< "Failed to close local file : \"" << path << "\"; operation status : " << status << "\n";
+	}
+	// from registry:
+	ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
+	if (!ret) {
+		LOG (ERROR)<< "Failed to clean the file : \"" << path << "\" from LRU registry." << "\n";
+	}
+	return NULL;
+}
+
+/**
+ * Handle "open file for read/create file" scenario
+ *
+ * @param [in]  fsDescriptor - filesystem descriptor
+ * @param [in]  path         - file path
+ * @param [in]  bufferSize   - buffer size
+ * @param [in]  replication  - replication (hdfs-only relevant)
+ * @param [in]  blockSize    - block size
+ * @param [out] available    - flag, indicates whether the file is available after all
+ *
+ * @return local (cached) file handle
+ */
+static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, const char* path,
+		int flags, int bufferSize, short replication, tSize blocksize, bool& available){
+
+	Uri uri = Uri::Parse(path);
+
+	managed_file::File* managed_file;
 	// first check whether the file is already in the registry.
 	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist
-    // in the registry or it happens to be retrieved in a forbidden/near-to-be-deleted state:
-	if(!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(), fsDescriptor, managed_file) || managed_file == nullptr ||
-			!managed_file->valid() ){
-		LOG (ERROR) << "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
+	// in the registry or it happens to be retrieved in a forbidden/near-to-be-deleted state:
+	if (!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(),
+			fsDescriptor, managed_file) || managed_file == nullptr
+			|| !managed_file->valid()) {
+		LOG (ERROR)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
-    boost::condition_variable* condition;
-    boost::mutex* mux;
+	boost::condition_variable* condition;
+	boost::mutex* mux;
 
-    // subscribe for file updates, all is need to have a progress on the file
-    managed_file->subscribe_for_updates(condition, mux);
+	// subscribe for file updates, all is need to have a progress on the file
+	managed_file->subscribe_for_updates(condition, mux);
 
 	// at this point, file may have the status "IN_SYNC", which means it is in progress to be delivered locally by another request.
 	// if so, wait for the file to be delivered:
-	if(managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC){
-    	// is to know that the file is not under sync more:
+	if (managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC) {
+		// is to know that the file is not under sync more:
 		boost::unique_lock<boost::mutex> lock(*mux);
-	    (*condition).wait(lock, [&]{ return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC; });
-	    lock.unlock();
+		(*condition).wait(lock,
+				[&] {return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC;});
+		lock.unlock();
 	}
 
 	bool exists = false;
 	// so as the file is available locally, just open it:
-	if(managed_file->exists()){
+	if (managed_file->exists()) {
 		managed_file->open(); // mark the file with the one more usage
 		exists = true;
-	}
-	else{
+	} else {
 		// and reply no data available otherwise
-		LOG (ERROR) << "File \"" << path << "\" is not available locally." << "\n";
+		LOG (ERROR)<< "File \"" << path << "\" is not available locally." << "\n";
 	}
 	// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
 	managed_file->unsubscribe_from_updates();
 
-	if(!exists)
+	if (!exists)
 		return NULL;
 
-	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsDescriptor, uri.FilePath.c_str(), flags,
-				bufferSize, replication, blocksize, available);
-    if(handle != nullptr && available){
-    	// file is available locally, just reply it back:
-    	return handle;
+	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
+			fsDescriptor, uri.FilePath.c_str(), flags, bufferSize, replication,
+			blocksize, available);
+	if (handle != nullptr && available) {
+		// file is available locally, just reply it back:
+		LOG (INFO) << "dfsOpenFile() : \"" << path << "\" is opened successfully.";
+		return handle;
+	}
+	LOG (ERROR)<< "File \"" << path << "\" is not available" << "\n";
+	// no close will be performed on non-successful open
+	managed_file->close();
+	return handle;
+}
+
+dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
+		int bufferSize, short replication, tSize blocksize, bool& available) {
+	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
+
+	// check whether the file is opened for write:
+    if(flags == O_WRONLY){
+       return openForWrite(fsDescriptor, path, bufferSize, replication, blocksize, available);
     }
-    LOG (ERROR) << "File \"" << path << "\" is not available" << "\n";
-    // no close will be performed on non-successful open
-    managed_file->close();
-    return handle;
+    return openForReadOrCreate(fsDescriptor, path, flags, bufferSize, replication, blocksize, available);
+}
+
+static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescriptor & fsDescriptor, dfsFile file){
+	// First check the scenario, if one is "CREATE FROM SELECT", extra actions are required:
+	bool available;
+
+	dfsFile hfile = CacheLayerRegistry::instance()->getCreateFromSelectScenario(file, available);
+	if(hfile == NULL || !available){
+       return status::StatusInternal::NO_STATUS;
+	}
+
+	LOG (INFO)<< "dfsCloseFile() is requested for file write operation." << "\n";
+
+	// locate the remote filesystem adapter:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (fsAdaptor == nullptr) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable to close file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+	}
+    int ret = fsAdaptor->fileClose(connection, hfile);
+    if(ret != 0){
+    	LOG (ERROR) << "Failed to close file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+    }
+	return status::StatusInternal::OK;
 }
 
 status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
 	LOG (INFO) << "dfsCloseFile()" << "\n";
-	status::StatusInternal status;
+
+	status::StatusInternal status = handleCloseFileInWriteMode(fsDescriptor, file);
+
 	std::string path = filemgmt::FileSystemManager::filePathByDescriptor(file);
     if(path.empty()){
     	status = status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
@@ -216,7 +393,41 @@ tSize dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset 
 }
 
 tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length) {
-	return filemgmt::FileSystemManager::instance()->dfsWrite(fsDescriptor, file, buffer, length);
+	// First check the scenario, if one is "CREATE FROM SELECT", extra actions are required:
+	bool available;
+
+	dfsFile hfile = CacheLayerRegistry::instance()->getCreateFromSelectScenario(file, available);
+	if(hfile == NULL || !available){
+		LOG (ERROR) << "File write is invoked for non-existing WRITE scenario." << "\n";
+		return -1;
+	}
+
+	// locate the remote filesystem adapter:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if(fsAdaptor == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return -1;
+	}
+
+    raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, unable to create file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return -1;
+    }
+
+    tSize remotebytes_written = fsAdaptor->fileWrite(connection, hfile, buffer, length);
+    if(remotebytes_written == -1){
+    	LOG (ERROR) << "Failed to write into remote file. " << "\n";
+    }
+
+    tSize localbytes_written = filemgmt::FileSystemManager::instance()->dfsWrite(fsDescriptor, file, buffer, length);
+    if(localbytes_written == -1){
+    	LOG (ERROR) << "Failed to write into local file. " << "\n";
+    }
+    return localbytes_written;
 }
 
 status::StatusInternal dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file) {

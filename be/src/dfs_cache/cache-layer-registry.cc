@@ -114,6 +114,32 @@ bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, cons
 	// If any pending users, the file won't be removed
 	return m_cache->remove(std::string(fqp));
 }
+
+bool CacheLayerRegistry::registerCreateFromSelectScenario(const dfsFile& local, const dfsFile& remote){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+	if (!( m_createFromSelect.find(local) == m_createFromSelect.end()) ) {
+		return true;
+		m_createFromSelect[local] = remote;
+	}
+	return false;
+}
+
+bool CacheLayerRegistry::unregisterCreateFromSelectScenario(const dfsFile& local){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+	size_t erased_items = m_createFromSelect.erase(local);
+	return erased_items == 1 ? true : false;
+}
+
+dfsFile CacheLayerRegistry::getCreateFromSelectScenario(const dfsFile& local, bool& exists){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+	itCreateFromSelect it;
+	if (!( (it = m_createFromSelect.find(local)) == m_createFromSelect.end()) ) {
+			exists = false;
+			return NULL;
+	}
+	exists = true;
+	return (*it).second;
+}
 }
 
 #endif /* CACHE_LAYER_REGISTRY_CC_ */
