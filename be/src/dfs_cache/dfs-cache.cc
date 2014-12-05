@@ -312,7 +312,8 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
     return openForReadOrCreate(fsDescriptor, path, flags, bufferSize, replication, blocksize, available);
 }
 
-static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescriptor & fsDescriptor, dfsFile file){
+static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescriptor & fsDescriptor, dfsFile file,
+		managed_file::File* managed_file){
 	// First check the scenario, if one is "CREATE FROM SELECT", extra actions are required:
 	bool available;
 
@@ -321,9 +322,15 @@ static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescrip
        return status::StatusInternal::NO_STATUS;
 	}
 
+	// assign the estimated size as the local file size.
+	// TODO : more efficiently this may be done on each file write operation.
+	// To avoid retrieving managed file on each write from registry, managed file reference may be
+	// preserved in "create from select scenario" along with both file handles, local and remote
+	managed_file->estimated_size(managed_file->size());
+
 	LOG (INFO) << "dfsCloseFile() is requested for file write operation." << "\n";
 
-	// locate the remote filesystem adapter:
+	// locate the remote filesystem adaptor:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 	if (fsAdaptor == nullptr) {
 		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
@@ -352,9 +359,16 @@ static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescrip
 status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
 	LOG (INFO) << "dfsCloseFile()" << "\n";
 
-	status::StatusInternal status = handleCloseFileInWriteMode(fsDescriptor, file);
+	managed_file::File* managed_file;
+	status::StatusInternal status = status::StatusInternal::NO_STATUS;
 
 	std::string path = filemgmt::FileSystemManager::filePathByDescriptor(file);
+	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), managed_file) || managed_file == nullptr){
+		status = status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
+	}
+
+	status = handleCloseFileInWriteMode(fsDescriptor, file, managed_file);
+
     if(path.empty()){
     	status = status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
     	LOG (WARNING) << "File descriptor is not resolved within the system!" << "\n";
@@ -364,14 +378,10 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
     // anyway try close the file
     status = filemgmt::FileSystemManager::instance()->dfsCloseFile(fsDescriptor, file);
 
-	managed_file::File* managed_file;
 	// if no file path resolved from the file descriptor, no chance to find it in the cache.
 	if(path.empty())
 		return status;
 
-	if(!CacheLayerRegistry::instance()->findFile(path.c_str(), managed_file) || managed_file == nullptr){
-		status = status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
-	}
 	if( managed_file != nullptr)
 		managed_file->close();
 

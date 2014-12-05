@@ -165,6 +165,24 @@ public:
 	 * @return      See fileWrte
 	 */
 	tSize fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length);
+
+	/**
+	 * Get the specified path info
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path - path to get info(s) for
+	 *
+	 * @return path info(s)
+	 */
+	dfsFileInfo* fileInfo(raiiDfsConnection& conn, const char* path);
+
+	/**
+	 * Free file info
+	 *
+	 * @param fileInfo     - file info set to free
+	 * @param numOfEntries - number of entries in file info set
+	 */
+	void freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries);
 };
 }
 

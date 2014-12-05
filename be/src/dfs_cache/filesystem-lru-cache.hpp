@@ -36,6 +36,8 @@ namespace ph = std::placeholders;
  */
 class FileSystemLRUCache : LRUCache<managed_file::File>{
 private:
+
+
 	IIndex<std::string>* m_idxFileLocalPath = nullptr; /**< the only index is for file local path  */
     std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
     std::string          m_root;                       /**< root directory to manage */
@@ -43,6 +45,8 @@ private:
     boost::condition_variable m_deletionHappensCondition; /**< deletion conditio variable */
     boost::mutex           m_deletionsmux;                /**< mux to protect deletions list */
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
+
+    managed_file::File::WeightChangedEvent m_weightChangedPredicate; /** the callback that should be called on "item weight is changed" event */
 
 	/** try mark item for deletion
 	 *  @param file - file to mark for deletion
@@ -101,11 +105,14 @@ private:
      * construct new object of File basing on its path
      *
      * @param path - file path
+     * @param eve  - callback that should be called by the file in case if its size is changed
      *
      * @return constructed file object if its has correct configuration and nullptr otherwise
      */
     managed_file::File* constructNew(std::string path){
-    	managed_file::File* file = new managed_file::File(path.c_str());
+    	// if the file is auto-created by Cache itself, so that the cache should be subscribed for updates regarding the file
+    	// size changes.
+    	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
      	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
     		delete file;
     		file = nullptr;
@@ -149,6 +156,8 @@ public:
 
     	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1, _2);
 
+    	m_weightChangedPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::handleCapacityChanged), this, _1);
+
     	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string { return file->fqp(); };
     	LRUCache<managed_file::File>::LoadItemFunc<std::string>      lif = 0;
     	LRUCache<managed_file::File>::ConstructItemFunc<std::string> cif = 0;
@@ -181,7 +190,7 @@ public:
     managed_file::File* find(std::string path);
 
     /** reset the cache */
-    inline void reset() {
+    void reset() {
  	   this->clear();
     }
 
@@ -195,9 +204,17 @@ public:
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
      *  */
-    inline bool remove(std::string path){
+    bool remove(std::string path){
  	   return m_idxFileLocalPath->remove(path, true);
     }
+
+    /**
+     * Handle callback from item about its size is changed.
+     * This should be reflected on cache metrics
+     *
+     * @param size - size_delta reported by one of containg items.
+     */
+    void handleCapacityChanged(long long size_delta);
 };
 
 }

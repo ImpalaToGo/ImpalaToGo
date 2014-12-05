@@ -162,5 +162,13 @@ tSize FileSystemDescriptorBound::fileWrite(raiiDfsConnection& conn, dfsFile file
 	return _dfsWrite(conn.connection()->connection, file, buffer, length);
 }
 
+dfsFileInfo* FileSystemDescriptorBound::fileInfo(raiiDfsConnection& conn, const char* path){
+	return _dfsGetPathInfo(conn.connection()->connection, path);
+}
+
+void FileSystemDescriptorBound::freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries){
+	return _dfsFreeFileInfo(fileInfo, numOfEntries);
+}
+
 } /** namespace impala */
 

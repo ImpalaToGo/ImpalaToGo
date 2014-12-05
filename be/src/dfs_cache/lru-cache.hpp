@@ -56,7 +56,7 @@ public:
 	template<typename KeyType_>
 	using LoadItemFunc = typename boost::function<void(ItemType_* item)>;
 
-	/** predicate to construct/acquire externally the cache-managed object using the key */
+	/** predicate to construct/acquire externally the cache-managed object using the key and the "weight is changed" event*/
 	template<typename KeyType_>
 	using ConstructItemFunc = typename boost::function<ItemType_*(KeyType_ key)>;
 
@@ -114,6 +114,8 @@ protected:
     AcceptAssignedTimestamp    m_acceptAssignedTimestamp;     /**< predicate to update external item with assigned timestamp */
     ItemDeletionPredicate      m_itemDeletionPredicate;       /**< predicate to run externally when the item is removed from the cache */
 
+    mutable std::atomic<long long>  m_currentCapacity;    /**< current cache capacity, in regards to capacity units configured.
+                                                               represents  real weight of whole cache data */
 private:
 
     /** Internal Index API between Cache Manager and Indexes */
@@ -256,6 +258,7 @@ private:
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
         		}
+        		// here,
         		if(!node)
         			return nullptr;
         	}
@@ -992,8 +995,6 @@ private:
 	std::unordered_map<std::string, IIndexInternal* >*  m_indexList;  /**< set of defined indexes */
 
 	long long                       m_capacityLimit;      /**< cache capacity limit, configurable. We use 90% from configured value */
-	mutable std::atomic<long long>  m_currentCapacity;    /**< current cache capacity, in regards to capacity units configured.
-                                                               represents  real weight of whole cache data */
 
 	mutable std::atomic<unsigned>  m_numberOfHardItems;  /**< number of hard items - really hosted by Cache right now */
 	mutable std::atomic<unsigned>  m_numberOfSoftItems;  /**< number of soft items - have ever been added into the cache since last indexes clean.
@@ -1161,6 +1162,13 @@ private:
     /** Add an item to the cache (not needed if accessed by index) */
     bool add(ItemType_*& item, bool& duplicate)
     {
+    	// cannot add an item to the cache is the capacity limit exceeded:
+
+    	if(m_currentCapacity > m_capacityLimit){
+    		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded.\n";
+    		return false;
+    	}
+
     	bool success = false;
     	duplicate    = false;
 

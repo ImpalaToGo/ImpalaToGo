@@ -251,6 +251,14 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     	return success;
 }
 
+void FileSystemLRUCache::handleCapacityChanged(long long size_delta){
+	if(size_delta == 0)
+		return;
+	if(size_delta > 0)
+		std::atomic_fetch_add_explicit(&m_currentCapacity, size_delta, std::memory_order_relaxed);
+	else
+		std::atomic_fetch_sub_explicit(&m_currentCapacity, size_delta, std::memory_order_relaxed);
+}
 }
 
 

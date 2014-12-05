@@ -57,8 +57,6 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 
 	// create the path object from local path:
 	boost::filesystem::path local_path(local);
-	LOG (INFO) << "substr to cut the local configured cache root from path. Root : \"" <<
-			root << "\"; local_path : \"" << local_path << "\" n";
 
 	// cut the local cache configured root:
 	std::string temp = local_path.string().substr(root.length(), local_path.string().length() - root.length());

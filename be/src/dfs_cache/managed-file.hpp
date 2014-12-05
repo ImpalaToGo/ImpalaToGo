@@ -71,6 +71,11 @@ namespace managed_file {
     * - keeps unique name (hash key)
     */
    class File {
+   public:
+
+		/** callback to be invoked on LRU from its item to update about the item weight */
+		using WeightChangedEvent = typename boost::function<void(long long delta)>;
+
    private:
 	   std::atomic<State> m_state;                   /**< current file state */
 	   std::atomic<int>   m_subscribers;             /**< number of subscribers of this file (who may wait for this file to be downloaded */
@@ -79,6 +84,8 @@ namespace managed_file {
 	   std::string        m_fqnp;                    /**< fully qualified path (network) */
 	   boost::uintmax_t   m_size;                    /**< file size. For internal and user statistics and memory planning. */
 	   std::size_t        m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
+
+	   std::size_t        m_prevsize;                /**< always contains the "previous size", initially 0 */
 
 	   std::string        m_filename;         /**< relative file name. Within the scope where it is accessed now (remotely, locally) */
        std::string        m_originhost;       /**< origin host */
@@ -103,9 +110,10 @@ namespace managed_file {
 	   boost::condition_variable m_state_changed_condition;   /**< condition variable for those who waits for file state changed */
 	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
-   public:
+	   WeightChangedEvent m_weightIsChangedcallback;          /**< "weight is changed" event callback */
 
-       static void initialize();
+   public:
+        static void initialize();
 
 	   /** Search predicate to find the handle by its shared pointer */
 	   struct FileHandleEqPredicate
@@ -127,8 +135,8 @@ namespace managed_file {
         * @param path       - full file local path
 	    */
 	   File(const char* path)
-         :  m_fqp(path), m_size(0), m_estimatedsize(0),
-            m_schema(DFS_TYPE::NON_SPECIFIED){
+         :  m_fqp(path), m_size(0), m_estimatedsize(0), m_prevsize(0),
+            m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0){
 
 		   m_state.store(State::FILE_IS_AMORPHOUS, std::memory_order_release);
 
@@ -147,6 +155,15 @@ namespace managed_file {
            m_subscribers.store(0);
            // specify that the attempt to resync the file from remote side can be performed once at 5 minutes
            m_duration_next_attempt_to_sync = boost::posix_time::minutes(_defaultTimeSliceInMinutes);
+	   }
+
+	   /**
+	    * Construct the managed file object basing on path.
+	    * Assign the "weight is changed" callback to be fired when the file detects its size is changed
+	    * (local size)
+	    */
+	   File(const char* path, const WeightChangedEvent& eve) : File(path){
+		   m_weightIsChangedcallback= eve;
 	   }
 
 	   ~File(){
@@ -314,7 +331,14 @@ namespace managed_file {
 	    * to be possible.
 	    * @param size - estimated file size
 	    */
-	   inline void estimated_size(std::size_t size) { m_estimatedsize = size; }
+	   inline void estimated_size(std::size_t size) {
+		   long long delta = size - m_prevsize;
+		   // if any subscribers for size change, send the signal with a delta:
+		   if(m_weightIsChangedcallback)
+			   m_weightIsChangedcallback(delta);
+		   m_prevsize = size;
+		   m_estimatedsize = size;
+	   }
 
 
 	   /** getter for File last access (local).
