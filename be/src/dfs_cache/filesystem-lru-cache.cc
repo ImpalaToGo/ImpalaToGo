@@ -20,13 +20,10 @@ namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
-	if(!isSafeToDeleteItem(file)){
+	if(!markForDeletion(file)){
 		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
 		return false;
 	}
-
-	// no usage so far, mark the file for deletion:
-	file->state(managed_file::State::FILE_IS_MARKED_FOR_DELETION);
 
 	// for physical removal scenario, drop the file from file system
 	if (physically) {
@@ -203,18 +200,8 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	if(file == nullptr)
     		return file;
 
-    	// if file is "near to be deleted" or "is forbidden but the time between sync attempts elapsed", it should be resync.
-    	//
-    	// prevent outer world from usage of invalid or near-to-delete references:
-    	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
-    	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
-    		// resync the file if the time between sync attempts elapsed:
-    		if(file->shouldtryresync()){
-    			sync(file);
-    		}
-    	}
+    	// if file is marked for deletion, so that should wait while it will be deleted and then try reclaim it:
         if(file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION){
-
         	// wait while the item will be deleted and reach the deletions list
         	boost::unique_lock<boost::mutex> lock(m_deletionsmux);
         	std::list<std::string>::iterator it;
@@ -226,7 +213,20 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
         	m_deletionList.erase(it);
         	// and reclaim it:
         	file = m_idxFileLocalPath->operator [](path);
+        	if(file == nullptr)
+        		return nullptr;
         }
+
+    	// if file is "forbidden but the time between sync attempts elapsed", it should be resync.
+    	//
+    	// prevent outer world from usage of invalid or near-to-delete references:
+    	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
+    	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
+    		// resync the file if the time between sync attempts elapsed:
+    		if(file->shouldtryresync()){
+    			sync(file);
+    		}
+    	}
     	return file;
     }
 

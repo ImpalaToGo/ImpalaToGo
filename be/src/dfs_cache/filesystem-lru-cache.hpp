@@ -44,13 +44,14 @@ private:
     boost::mutex           m_deletionsmux;                /**< mux to protect deletions list */
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
-	/** tell item has no outer references
-	 *  @param file - file to query for status
+	/** try mark item for deletion
+	 *  @param file - file to mark for deletion
 	 *
-	 *  @return true if file can be removed, false otherwise
+	 *  @return true if file was marked for deletion and can be removed,
+	 *  false otherwise
 	 */
-    inline bool isSafeToDeleteItem(managed_file::File* file){
-    	return file->nonreferenced();
+    inline bool markForDeletion(managed_file::File* file){
+    	return file->mark_for_deletion();
     }
 
     /** get the current file timestamp
@@ -141,7 +142,7 @@ public:
 
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
-    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isSafeToDeleteItem), this, _1);
+    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::markForDeletion), this, _1);
 
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
     	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);

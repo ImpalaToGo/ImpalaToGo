@@ -576,6 +576,10 @@ private:
                 	catch(...){
                 		// external operations are nothrow locally
                 	}
+                    if(!result){
+                    	LOG (WARNING) << "Node deletion is requested for item that cannot be removed. Node will not be removed as well.\n";
+                    	return result;
+                    }
 
                 	// say no external value is managed more by this node
                     this->value(nullptr);
@@ -760,10 +764,11 @@ private:
         	// and more buckets if needed.
 
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
-        	int weightToRemove = currentCapacity - m_owner->m_capacityLimit;
+        	long long weightToRemove = currentCapacity - m_owner->m_capacityLimit;
 
         	LOG (INFO) << "LRU Cleanup is triggered. Current capacity = " << std::to_string(currentCapacity) <<
-        			". Weight to remove = " << std::to_string(weightToRemove) << "\n";
+        			". Weight to remove = " << std::to_string(weightToRemove) << "; capacity limit = " <<
+        			std::to_string(m_owner->m_capacityLimit) << ".\n";
 
         	boost::mutex::scoped_lock lock(*lifespan_mux());
 
@@ -790,7 +795,7 @@ private:
         			if( node->value() != nullptr && node->bucket() != nullptr ){
         				if( node->bucket() == bucket ) {
         					// item has not been touched since bucket was closed, so remove it from LifespanMgr if it is allowed for removal.
-                            if(!m_owner->checkRemovalApproval(node->value())){
+                            if(!m_owner->markForDeletion(node->value())){
                             	// no approval for item removal received. Deny the age bucket removal
                             	deletePermitted = false;
 
@@ -809,12 +814,28 @@ private:
                             }
         					// get the weight the item will release:
         					long long toRelease = m_owner->tellWeight(node->value());
-        					weightToRemove -= toRelease;
 
-                			// remove the node
+        					// remove the node
                 		    bool result = node->remove(true);
-                		    if(!result)
+                		    if(!result){
                 		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
+
+                            	if(!active){
+                            		active = node;
+                            		node->bucket()->first = active;
+                            	}
+                            	else
+                            	{
+                            		active->next() = node;
+                            	}
+                            	// try next node:
+                            	node = next;
+
+                		    	continue;
+                		    }
+
+                		    weightToRemove -= toRelease;
+                		    LOG (INFO) << "Cleanup : to remove = " << std::to_string(weightToRemove) << std::endl;
                 		    // cut off it from registry
                 			node.reset();
         				}
@@ -876,7 +897,7 @@ private:
         }
 
         /** get ready a new AgeBucket for usage. Close the previous one
-         * @param start - start time for new bucket
+         * @param start - start time for new bucketadd
          *
          * @return constructed bucket
          */
@@ -996,7 +1017,7 @@ private:
     }
 
     /** external call to get the item deletion approval */
-    bool checkRemovalApproval(ItemType_* item){
+    bool markForDeletion(ItemType_* item){
     	if(m_tellItemIsIdle)
     		return m_tellItemIsIdle(item);
     	return true;

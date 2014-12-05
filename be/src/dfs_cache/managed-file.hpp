@@ -185,19 +185,46 @@ namespace managed_file {
 	   }
 
 	   /**
-	    * flag, indicates that there's no references to the file are in use.
-	    * Should be checked before to delete the file
+	    * Try mark the file for deletion
+	    *
+        * @return true if file was marked for deletion
+        * No one should reference this file since it is marked for deletion
 	    */
-	   inline bool nonreferenced(){
-		   return !(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS ||
-				   m_subscribers.load(std::memory_order_acquire) != 0 ||
-				   m_state.load(std::memory_order_acquire) == State::FILE_IS_IN_USE_BY_SYNC) ||
-				   m_state.load(std::memory_order_acquire) == State::FILE_IS_UNDER_WRITE;
+	   inline bool mark_for_deletion(){
+		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+		   // check all states that allow to mark the file for deletion:
+		   State expected = State::FILE_IS_IDLE;
+           bool marked    = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           if(marked && (m_subscribers.load(std::memory_order_acquire) == 0)){
+        	   m_state_changed_condition.notify_all();
+        	   return true;
+           }
+
+           expected = State::FILE_IS_FORBIDDEN;
+           marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           if(marked && (m_subscribers.load(std::memory_order_acquire) == 0)){
+        	   m_state_changed_condition.notify_all();
+        	   return true;
+           }
+
+           expected = State::FILE_IS_AMORPHOUS;
+           marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           m_state_changed_condition.notify_all();
+           return (marked && (m_subscribers.load(std::memory_order_acquire) == 0));
+
 	   }
+
 	   /** setter for file state
 	    * @param state - file state to mark the file with
 	    */
 	   inline void state(State state) {
+		   // do not change file state when it is marked for deletion:
+		   if(m_state.load(std::memory_order_acquire) == State::FILE_IS_MARKED_FOR_DELETION)
+			   return;
+
 		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
 			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
 		   // fire the condition variable for whoever waits for file status to be changed:
@@ -210,11 +237,17 @@ namespace managed_file {
 	    *
 	    * @param [out] condition_var - condition variable to signal that the state is changed
 	    * @param [out] mux           - mutex to protect the condition subject (the status)
+	    *
+	    * @return if subscription is valid (if file is marked for deletion, the subscription is not valid)
 	    */
-	   inline void subscribe_for_updates(boost::condition_variable*& condition_var, boost::mutex*& mux){
+	   inline bool subscribe_for_updates(boost::condition_variable*& condition_var, boost::mutex*& mux){
+		   if(m_state.load(std::memory_order_acquire) == State::FILE_IS_MARKED_FOR_DELETION)
+		   			   return false;
+
 		   condition_var = &m_state_changed_condition;
 		   mux           = &m_state_changed_mux;
 		   m_subscribers++;
+		   return true;
 	   }
 
 	   /**

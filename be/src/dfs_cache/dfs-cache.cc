@@ -257,7 +257,10 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	boost::mutex* mux;
 
 	// subscribe for file updates, all is need to have a progress on the file
-	managed_file->subscribe_for_updates(condition, mux);
+	if(!managed_file->subscribe_for_updates(condition, mux)){
+    	LOG (ERROR) << "Failed to subscribe for file \"" << path << "\" status updates, unable to proceed." << "\n";
+    	return NULL;
+    }
 
 	// at this point, file may have the status "IN_SYNC", which means it is in progress to be delivered locally by another request.
 	// if so, wait for the file to be delivered:
