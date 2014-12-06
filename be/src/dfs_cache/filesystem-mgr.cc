@@ -327,6 +327,8 @@ status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor &
 status::StatusInternal FileSystemManager::dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath, const char* newPath){
 	std::string localPathOld = managed_file::File::constructLocalPath(fsDescriptor,  oldPath);
 	std::string localPathNew = managed_file::File::constructLocalPath(fsDescriptor,  newPath);
+
+	LOG (INFO) << "Renaming \"" << localPathOld.c_str() << "\" to \"" << localPathNew.c_str() << "\".\n";
 	int ret = std::rename(localPathOld.c_str(), localPathNew.c_str());
 	if(ret != 0)
 		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;

@@ -522,7 +522,8 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     }
 
     // rename local file:
-    status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor, oldPath, newPath);
+    status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor,
+    		uriOld.FilePath.c_str(), uriNew.FilePath.c_str());
     managed_file->close();
     return status;
 }
