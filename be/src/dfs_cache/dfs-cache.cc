@@ -173,9 +173,9 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 
 	int retstatus = -1;
 
-	// open local file:
+	// create local file:
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
-			fsDescriptor, uri.FilePath.c_str(), O_WRONLY, bufferSize, replication,
+			fsDescriptor, uri.FilePath.c_str(), O_CREAT, bufferSize, replication,
 			blocksize, available);
 	// check we have it opened
 	if(handle == nullptr || !available){
@@ -189,6 +189,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 		if(retstatus != 0){
 			LOG (ERROR) << "Failed to close remote file : \"" << path << "\"." << "\n";
 		}
+		managed_file->close();
 		// from registry:
 		ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
 		if(!ret){
@@ -218,6 +219,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 	if(status != status::StatusInternal::OK){
 		LOG (ERROR)<< "Failed to close local file : \"" << path << "\"; operation status : " << status << "\n";
 	}
+	managed_file->close();
 	// from registry:
 	ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
 	if (!ret) {

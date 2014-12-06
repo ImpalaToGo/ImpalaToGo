@@ -117,9 +117,10 @@ bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, cons
 
 bool CacheLayerRegistry::registerCreateFromSelectScenario(const dfsFile& local, const dfsFile& remote){
 	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
-	if (!( m_createFromSelect.find(local) == m_createFromSelect.end()) ) {
-		return true;
+    // if no scenario for file specified exists, add one.
+	if (m_createFromSelect.find(local) == m_createFromSelect.end() ) {
 		m_createFromSelect[local] = remote;
+		return true;
 	}
 	return false;
 }
