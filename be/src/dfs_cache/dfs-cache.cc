@@ -487,15 +487,6 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 		LOG (WARNING) << "Failed to delete old temp file \"" << oldPath << "\" from cache.\n";
 	}
 
-	// and create new one, renamed.
-	managed_file::File* managed_file;
-	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
-		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
-				fsDescriptor.host << "\"" << "\n";
-		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
-	}
-	managed_file->open();
-
 	// locate the remote filesystem adaptor:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 	if (fsAdaptor == nullptr) {
@@ -511,6 +502,16 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
 		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
 	}
+
+	// create new one file in the registry, renamed.
+	managed_file::File* managed_file;
+	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
+		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
+	}
+	managed_file->open();
+
 	// rename remote file:
     int ret = fsAdaptor->fileRename(connection, oldPath, newPath);
 
@@ -519,8 +520,11 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
     }
+
     // rename local file:
-	return filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor, oldPath, newPath);
+    status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor, oldPath, newPath);
+    managed_file->close();
+    return status;
 }
 
 status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path) {
