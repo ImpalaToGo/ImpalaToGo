@@ -224,13 +224,14 @@ public:
 
 	/**
 	 * Delete file from cache and from file system
-	 * @param descriptor - file system descriptor
-	 * @param path 		 - relative path to a file to remove
+	 * @param descriptor  - file system descriptor
+	 * @param path 		  - relative path to a file to remove
+	 * @param physically  - flag, indicates whether physical file removal is required
 	 *
 	 * @return status of operation, true means that file was removed according scenario.
 	 * false - operation was not success due to reasons
 	 */
-	bool deleteFile(const FileSystemDescriptor &descriptor, const char* path);
+	bool deleteFile(const FileSystemDescriptor &descriptor, const char* path, bool physically = true);
 
 	/**
 	 * start new "CREATE FROM SELECT" scenario.

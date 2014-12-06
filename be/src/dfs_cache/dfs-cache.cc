@@ -478,6 +478,48 @@ status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, cons
 
 status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath,
 		const char* newPath) {
+	LOG (INFO) << "dfsRename() : \"" << oldPath << "\" to \"" << newPath << "\".\n";
+
+	Uri uriOld = Uri::Parse(oldPath);
+	Uri uriNew = Uri::Parse(newPath);
+	// drop old file from registry. Instruction below just clean the file reference from registry, without physical affect
+	if(!CacheLayerRegistry::instance()->deleteFile(fsDescriptor, uriOld.FilePath.c_str(), false)){
+		LOG (WARNING) << "Failed to delete old temp file \"" << oldPath << "\" from cache.\n";
+	}
+
+	// and create new one, renamed.
+	managed_file::File* managed_file;
+	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
+		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
+	}
+	managed_file->open();
+
+	// locate the remote filesystem adaptor:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (fsAdaptor == nullptr) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable to rename the file \"" << oldPath << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+	}
+	// rename remote file:
+    int ret = fsAdaptor->fileRename(connection, oldPath, newPath);
+
+    if(ret != 0){
+    	LOG (ERROR) << "Failed to rename file \"" << oldPath << "\" on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+    }
+    // rename local file:
 	return filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor, oldPath, newPath);
 }
 

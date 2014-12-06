@@ -203,9 +203,12 @@ public:
 
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
-     *  */
-    bool remove(std::string path){
- 	   return m_idxFileLocalPath->remove(path, true);
+     * @param physically - flag, indicates whether physical removal is required
+     *
+     * @return operation status, true on success
+     */
+    bool remove(std::string path, bool physically = true){
+ 	   return m_idxFileLocalPath->remove(path, physically);
     }
 
     /**

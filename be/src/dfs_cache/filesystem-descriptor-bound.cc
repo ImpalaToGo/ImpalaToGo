@@ -85,8 +85,6 @@ raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
 	i1 = std::find_if(m_connections.begin(), m_connections.end(),
 			predicateFreeConnection);
 	if (i1 != m_connections.end()) {
-		LOG (INFO)<< "Existing free connection is found and will be used for file system \"" << m_fsDescriptor.dfs_type << ":"
-		<< m_fsDescriptor.host << "\"" << "\n";
 		// return the connection, mark it busy!
 		(*i1)->state = dfsConnection::BUSY_OK;
 		return std::move(raiiDfsConnection(*i1));
@@ -160,6 +158,10 @@ tSize FileSystemDescriptorBound::filePread(raiiDfsConnection& conn, dfsFile file
 
 tSize FileSystemDescriptorBound::fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length){
 	return _dfsWrite(conn.connection()->connection, file, buffer, length);
+}
+
+int FileSystemDescriptorBound::fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath){
+	return _dfsRename(conn.connection()->connection, oldPath, newPath);
 }
 
 dfsFileInfo* FileSystemDescriptorBound::fileInfo(raiiDfsConnection& conn, const char* path){

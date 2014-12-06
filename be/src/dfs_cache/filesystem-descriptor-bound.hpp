@@ -167,6 +167,17 @@ public:
 	tSize fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length);
 
 	/**
+	 * Rename the file, specified by @a oldPath, to @a newPath
+	 *
+	 * @param conn    - wrapped managed connection
+	 * @param oldPath - old file path
+	 * @param newPath - new file path
+	 *
+	 * @return operation status, 0 is "success"
+	 */
+	int fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath);
+
+	/**
 	 * Get the specified path info
 	 *
 	 * @param conn - wrapped managed connection
