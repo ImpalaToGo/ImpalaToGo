@@ -1173,8 +1173,10 @@ private:
     	duplicate    = false;
 
     	// items that are issued earlier than specified in m_startTime are rejected as well as null-items:
-    	if(item == nullptr || (m_tellItemTimestamp && m_tellItemTimestamp(item) < m_startTime))
+    	if(item == nullptr || (m_tellItemTimestamp && m_tellItemTimestamp(item) < m_startTime)){
+    		LOG (WARNING) << "File creation time is older than the cache start timestamp, this item will not be tracked.\n";
     		return success;
+    	}
 
         addInternal(item, success, duplicate);
         return success;

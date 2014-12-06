@@ -344,20 +344,14 @@ namespace managed_file {
 	   /** getter for File last access (local).
 	    *
 	    * @return If there was an error during last access retrieval, the default time will be returned.
-	    *         Otherwise, last access time will be returned
+	    * Otherwise, last access time will be returned
 	    */
 	   inline boost::posix_time::ptime last_access() {
-		   // if last access is requested while the item is amorphous (to-be-restored-from file-system),
-		   // reply the real timestamp from file system.
-		   if(state() == State::FILE_IS_AMORPHOUS){
-			   boost::system::error_code ec;
-			   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
-			   // check ec, should be 0 in case of success:
-			   if(!ec)
-				   return boost::posix_time::from_time_t(last_access_time);
-			   return boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
-		   }
-		   // if file last access time is requested on the constructed file, reply "now" for timestamp
+		   boost::system::error_code ec;
+		   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
+		   // check ec, should be 0 in case of success:
+		   if(!ec)
+			   return boost::posix_time::from_time_t(last_access_time);
 		   return boost::posix_time::microsec_clock::local_time();
 	   }
 

@@ -235,7 +235,7 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     	bool success   = false;
 
     	// we create and destruct File objects only here, in LRU cache layer
-    	file = new managed_file::File(path.c_str());
+    	file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
     	try {
     		file->estimated_size(boost::filesystem::file_size(path));
     	}
@@ -243,10 +243,13 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     		// the path specified does not exist locally.
     		file->estimated_size(0);
     	}
+    	// when item is externally injected to the cache, it should have time "now"
     	success = LRUCache<managed_file::File>::add(file, duplicate);
-    	if(duplicate)
+    	if(duplicate){
+    		LOG(WARNING) << "Attemp to add the duplicate to the cache, path = \"" << path << "\"\n";
     		// no need for this file, get the rid of
     		delete file;
+    	}
 
     	return success;
 }
