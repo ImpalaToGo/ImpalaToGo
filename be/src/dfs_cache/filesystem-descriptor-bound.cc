@@ -164,6 +164,10 @@ int FileSystemDescriptorBound::fileRename(raiiDfsConnection& conn, const char* o
 	return _dfsRename(conn.connection()->connection, oldPath, newPath);
 }
 
+int FileSystemDescriptorBound::pathDelete(raiiDfsConnection& conn, const char* path, int recursive){
+	return _dfsDelete(conn.connection()->connection, path, recursive);
+}
+
 dfsFileInfo* FileSystemDescriptorBound::fileInfo(raiiDfsConnection& conn, const char* path){
 	return _dfsGetPathInfo(conn.connection()->connection, path);
 }

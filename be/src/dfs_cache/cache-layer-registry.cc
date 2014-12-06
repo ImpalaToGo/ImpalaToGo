@@ -110,9 +110,20 @@ bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, cons
 		LOG (WARNING) << "Cache Layer Registry : file was not deleted. Unable construct fqp from \"" << path << "\"\n";
 		return false;
 	}
-	// Below instruction will drop the file form file system - in case if there's no usage of that file so far.
+	// Below instruction will drop the file from file system - in case if there's no usage of that file so far.
 	// If any pending users, the file won't be removed
 	return m_cache->remove(std::string(fqp), physically);
+}
+
+bool CacheLayerRegistry::deletePath(const FileSystemDescriptor &descriptor, const char* path){
+	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
+	if(fqp.empty()){
+		LOG (WARNING) << "Cache Layer Registry : path was not deleted. Unable construct fqp from \"" << path << "\"\n";
+		return false;
+	}
+	// Below instruction will remove the path from file system - in case if there's no usage of its content so far.
+	// If any pending users on some files, the overall operation status will be "false"
+	return m_cache->deletePath(std::string(fqp));
 }
 
 bool CacheLayerRegistry::registerCreateFromSelectScenario(const dfsFile& local, const dfsFile& remote){

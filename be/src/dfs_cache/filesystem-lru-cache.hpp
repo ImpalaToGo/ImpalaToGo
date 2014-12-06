@@ -212,6 +212,15 @@ public:
     }
 
     /**
+     * Delete all pat hrecursively
+     *
+     * @param path - path to delete the content of in a recusrsive way
+     *
+     * @return operation status, true on success
+     */
+    bool deletePath(const std::string& path);
+
+    /**
      * Handle callback from item about its size is changed.
      * This should be reflected on cache metrics
      *

@@ -234,6 +234,16 @@ public:
 	bool deleteFile(const FileSystemDescriptor &descriptor, const char* path, bool physically = true);
 
 	/**
+	 * Delete path from cache and from file system
+	 * @param descriptor  - file system descriptor
+	 * @param path 		  - relative path to remove along with a possible content
+	 *
+	 * @return status of operation, true means that path was removed according scenario.
+	 * false - operation was not success due to reasons
+	 */
+	bool deletePath(const FileSystemDescriptor &descriptor, const char* path);
+
+	/**
 	 * start new "CREATE FROM SELECT" scenario.
 	 *
 	 * @param local  - handle to local file

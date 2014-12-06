@@ -178,6 +178,17 @@ public:
 	int fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath);
 
 	/**
+	 * Delete specified path.
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path      - path to delete
+	 * @param recursive - flag, indicates whether recursive removal is required
+	 *
+	 * @return operation status, 0 is "success"
+	 */
+	int pathDelete(raiiDfsConnection& conn, const char* path, int recursive);
+
+	/**
 	 * Get the specified path info
 	 *
 	 * @param conn - wrapped managed connection

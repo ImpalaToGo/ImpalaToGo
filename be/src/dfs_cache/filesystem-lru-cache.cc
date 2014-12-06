@@ -46,6 +46,43 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	return true;
 }
 
+bool FileSystemLRUCache::deletePath(const std::string& path){
+	boost::filesystem::recursive_directory_iterator end_iter;
+
+	// collection to hold files under the path:
+	typedef std::vector<boost::filesystem::path> files;
+	typedef std::vector<boost::filesystem::path>::iterator files_it;
+	files _files;
+
+	bool ret = true;
+
+	if (!boost::filesystem::exists(path))
+		return false;
+
+	// if path is the directory:
+	if (boost::filesystem::is_directory(path)){
+		for (boost::filesystem::recursive_directory_iterator dir_iter(path);
+				dir_iter != end_iter; ++dir_iter) {
+			if (boost::filesystem::is_regular_file(dir_iter->status())) {
+				_files.push_back(*dir_iter);
+			}
+		}
+		files_it it = _files.begin();
+
+		if (it == _files.end())
+			return true;
+
+		for (; it != _files.end(); it++) {
+			// drop all files:
+			ret = ret && remove((*it).string(), true);
+		}
+		return ret;
+	}
+
+	// the path is a file, so just remove it physically
+	return remove(path, true);
+}
+
 void FileSystemLRUCache::sync(managed_file::File* file){
 	// if file is not valid, break the handler
 	if (file == nullptr || !file->valid())

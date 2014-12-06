@@ -466,14 +466,42 @@ status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const 
 }
 
 status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive = 1) {
-	status::StatusInternal status;
-	// Remove the file from registry if it is there:
-	bool result = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
-	status = result ? status::StatusInternal::OK : status::FILE_OBJECT_OPERATION_FAILURE;
+	LOG (INFO) << "dfsDelete() : path = \"" << path << "\"\n";
 
-	// delete the file from the file system:
-	//status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsDelete(fsDescriptor, path, recursive);
-	return status;
+	// Remove the file from registry if it is there:
+	Uri uri = Uri::Parse(path);
+
+	if (CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str())){
+		LOG (ERROR) << "Path \"" << path << "\" was not deleted from registry." << "\n";
+		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
+	}
+
+	LOG (INFO) << "Path \"" << path << "\" successfully deleted from registry." << "\n";
+
+	// locate the remote filesystem adapter:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if(fsAdaptor == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, unable to delete file from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+    int ret = fsAdaptor->pathDelete(connection, path, recursive);
+    if(ret != 0){
+    	LOG (ERROR) << "Failed to delete remote path\"" << path << "\" from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+    }
+
+    LOG (INFO) << "dfsDelete() : succeed for path = \"" << path << "\"\n";
+    return status::StatusInternal::OK;
 }
 
 status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath,
