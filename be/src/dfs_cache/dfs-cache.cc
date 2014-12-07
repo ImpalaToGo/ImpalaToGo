@@ -471,7 +471,7 @@ status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, cons
 	// Remove the file from registry if it is there:
 	Uri uri = Uri::Parse(path);
 
-	if (CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str())){
+	if (!CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str())){
 		LOG (ERROR) << "Path \"" << path << "\" was not deleted from registry." << "\n";
 		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
 	}
