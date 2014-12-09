@@ -64,6 +64,11 @@ namespace managed_file {
    };
 
    /**
+    * stringify the File Status
+    */
+   // extern std::ostream& operator<<(std::ostream& out, const managed_file::State value);
+
+   /**
     * Represents managed file.
     * - keeps state;
     * - keeps list of opened handles to this file to be sure we have no handles leak if somebody forgot to call the close()
@@ -163,7 +168,7 @@ namespace managed_file {
 	    * (local size)
 	    */
 	   File(const char* path, const WeightChangedEvent& eve) : File(path){
-		   m_weightIsChangedcallback= eve;
+		   m_weightIsChangedcallback = eve;
 	   }
 
 	   ~File(){
@@ -202,36 +207,50 @@ namespace managed_file {
 	   }
 
 	   /**
-	    * Try mark the file for deletion
+	    * Try mark the file for deletion. Only few file states permit this operation to happen.
 	    *
         * @return true if file was marked for deletion
         * No one should reference this file since it is marked for deletion
 	    */
 	   inline bool mark_for_deletion(){
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+		   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() << "\" is requested for deletion." <<
+				   "subscribers # = " <<  m_subscribers.load(std::memory_order_acquire) << "\n";
 		   // check all states that allow to mark the file for deletion:
 		   State expected = State::FILE_IS_IDLE;
-           bool marked    = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+           bool marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
 
-           if(marked && (m_subscribers.load(std::memory_order_acquire) == 0)){
+           if(marked){
         	   m_state_changed_condition.notify_all();
-        	   return true;
+        	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+        			   "\" is successfully marked for deletion." << "\n";
+        	   if(m_subscribers.load(std::memory_order_acquire) == 0)
+        		   return true;
+        	   return false;
            }
 
            expected = State::FILE_IS_FORBIDDEN;
            marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
 
-           if(marked && (m_subscribers.load(std::memory_order_acquire) == 0)){
+           if(marked){
         	   m_state_changed_condition.notify_all();
-        	   return true;
+        	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+        			   "\" is successfully marked for deletion." << "\n";
+        	   if(m_subscribers.load(std::memory_order_acquire) == 0)
+        		   return true;
+        	   return false;
            }
 
            expected = State::FILE_IS_AMORPHOUS;
            marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
 
            m_state_changed_condition.notify_all();
-           return (marked && (m_subscribers.load(std::memory_order_acquire) == 0));
+           marked = (marked && (m_subscribers.load(std::memory_order_acquire) == 0));
+           std::string marked_str = marked ? "successfully" : "NOT";
+    	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+    			   "\" is " << marked_str  << " marked for deletion." << "\n";
 
+    	   return marked;
 	   }
 
 	   /** setter for file state
@@ -291,7 +310,6 @@ namespace managed_file {
 	    */
 	   inline void fqp(std::string fqp) {
 		   m_fqp = fqp;
-		   // TODO : reconstruct origin host and port
 	   }
 
 	   /** getter for File network path. When the file is reconstructed from existing local cache,
@@ -413,6 +431,7 @@ namespace managed_file {
       /* *******************************************************************************************************/
    };
 }  /** namespace managed_file */
+
 }  /** namespace impala */
 
 

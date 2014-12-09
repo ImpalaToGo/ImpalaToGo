@@ -54,7 +54,7 @@ private:
 	 *  @return true if file was marked for deletion and can be removed,
 	 *  false otherwise
 	 */
-    inline bool markForDeletion(managed_file::File* file){
+    inline bool markItemForDeletion(managed_file::File* file){
     	return file->mark_for_deletion();
     }
 
@@ -149,7 +149,7 @@ public:
 
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
-    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::markForDeletion), this, _1);
+    	m_markForDeletion = boost::bind(boost::mem_fn(&FileSystemLRUCache::markItemForDeletion), this, _1);
 
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
     	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);

@@ -14,6 +14,24 @@ namespace impala {
 
 namespace managed_file {
 
+/*
+std::ostream& operator<<(std::ostream& out, const managed_file::State value){
+	static std::map<managed_file::State, std::string> strings;
+	if (strings.size() == 0) {
+#define INSERT_ELEMENT(p) strings[p] = #p
+		INSERT_ELEMENT(FILE_IS_MARKED_FOR_DELETION);
+		INSERT_ELEMENT(FILE_IS_IN_USE_BY_SYNC);
+		INSERT_ELEMENT(FILE_HAS_CLIENTS);
+		INSERT_ELEMENT(FILE_IS_AMORPHOUS);
+		INSERT_ELEMENT(FILE_IS_IDLE);
+		INSERT_ELEMENT(FILE_IS_FORBIDDEN);
+		INSERT_ELEMENT(FILE_IS_UNDER_WRITE);
+#undef INSERT_ELEMENT
+	}
+	return out << strings[value];
+}
+*/
+
 std::string File::fileSeparator;
 std::vector<std::string> File::m_supportedFs;
 

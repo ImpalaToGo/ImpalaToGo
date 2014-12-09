@@ -20,14 +20,14 @@ namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
-	if(!markForDeletion(file)){
+	if(!markItemForDeletion(file)){
 		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
 		return false;
 	}
 
 	// for physical removal scenario, drop the file from file system
 	if (physically) {
-		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed." << "\n";
+		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed on disk." << "\n";
 		// delegate further deletion scenario to the file itself:
 		file->drop();
 	}
@@ -76,6 +76,9 @@ bool FileSystemLRUCache::deletePath(const std::string& path){
 			// drop all files:
 			ret = ret && remove((*it).string(), true);
 		}
+		// if all files were removed, its safe to remove the path completely
+		if(ret)
+			boost::filesystem::remove_all(path);
 		return ret;
 	}
 
@@ -248,6 +251,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
         	);
         	// now drop the file from deletions list:
         	m_deletionList.erase(it);
+        	lock.unlock();
         	// and reclaim it:
         	file = m_idxFileLocalPath->operator [](path);
         	if(file == nullptr)

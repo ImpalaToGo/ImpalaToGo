@@ -17,6 +17,8 @@
 #include "dfs_cache/dfs-connection.hpp"
 #include "dfs_cache/filesystem-mgr.hpp"
 
+#include "util/runtime-profile.h"
+
 namespace impala {
 
 status::StatusInternal Sync::estimateTimeToGetFileLocally(const FileSystemDescriptor & fsDescriptor, const char* path,
@@ -93,8 +95,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
    	 return status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
     }
 
+    #define BUFFER_SIZE 17408
 	// open remote file:
-	dfsFile hfile = fsAdaptor->fileOpen(connection, managed_file->relative_name().c_str(), O_RDONLY, 0, 0, 0);
+	dfsFile hfile = fsAdaptor->fileOpen(connection, managed_file->relative_name().c_str(), O_RDONLY, BUFFER_SIZE, 0, 0);
 
 	if(hfile == NULL){
 		LOG (ERROR) << "Requested file \"" << path << "\" is not available on \"" << fsDescriptor.dfs_type << "//:" <<
@@ -107,7 +110,6 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	}
 
-	 #define BUFFER_SIZE 4096
 	 char* buffer = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 	 if(buffer == NULL){
 		 LOG (ERROR) << "Insufficient memory to read remote file \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
@@ -137,9 +139,13 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
      }
 
+     MonotonicStopWatch sw;
+
 	 // read from the remote file
 	 tSize last_read = BUFFER_SIZE;
-	 //for (; last_read == BUFFER_SIZE;) {
+
+	 sw.Start();
+
 	 for (; last_read != 0;) {
 		 boost::mutex::scoped_lock lock(*mux);
 		 if(task->condition()){
@@ -148,12 +154,15 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 			 conditionvar->notify_all();
 			 break;
 		 }
-		 managed_file->estimated_size(managed_file->estimated_size() + last_read);
-
-		 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, last_read);
+		 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
 		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, last_read);
+		 managed_file->estimated_size(managed_file->estimated_size() + last_read);
 		 fp->localBytes += last_read;
 	 }
+	 uint64_t ti = sw.ElapsedTime();
+	 std::cout << "Elapsed time for \"" << path << "\" download = " << std::to_string(ti) << std::endl;
+	 sw.Stop();
+
 	 LOG (INFO) << "Remote bytes read = " << std::to_string(fp->localBytes) << " for file \"" << path << "\".\n";
 
 	 // whatever happens, clean resources:

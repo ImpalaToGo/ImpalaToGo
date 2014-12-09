@@ -121,7 +121,7 @@ enum taskOverallStatus{
 /** Formatters for enumerations */
 extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
 extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
-extern std::ostream& operator<<(std::ostream& out, const DFS_TYPE value);
+extern std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value);
 
 /**
  * Connection details as configured

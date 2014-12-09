@@ -255,39 +255,34 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 		LOG (ERROR)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 		return NULL; // return plain NULL to support past-c++0x
 	}
+
 	boost::condition_variable* condition;
 	boost::mutex* mux;
 
-	// subscribe for file updates, all is need to have a progress on the file
-	if(!managed_file->subscribe_for_updates(condition, mux)){
-    	LOG (ERROR) << "Failed to subscribe for file \"" << path << "\" status updates, unable to proceed." << "\n";
-    	return NULL;
-    }
-
-	// at this point, file may have the status "IN_SYNC", which means it is in progress to be delivered locally by another request.
-	// if so, wait for the file to be delivered:
-	if (managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC) {
-		// is to know that the file is not under sync more:
+	// subscribe for file status updates if file is under sync just now:
+	if ((managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC)){
+		if(!managed_file->subscribe_for_updates(condition, mux)){
+			LOG (ERROR) << "Failed to subscribe for file \"" << path << "\" status updates, unable to proceed." << "\n";
+			return NULL;
+		}
+		// wait for sync is completed:
 		boost::unique_lock<boost::mutex> lock(*mux);
 		(*condition).wait(lock,
 				[&] {return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC;});
 		lock.unlock();
-	}
 
-	bool exists = false;
+		// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
+		managed_file->unsubscribe_from_updates();
+    }
+
 	// so as the file is available locally, just open it:
 	if (managed_file->exists()) {
 		managed_file->open(); // mark the file with the one more usage
-		exists = true;
 	} else {
 		// and reply no data available otherwise
 		LOG (ERROR)<< "File \"" << path << "\" is not available locally." << "\n";
-	}
-	// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
-	managed_file->unsubscribe_from_updates();
-
-	if (!exists)
 		return NULL;
+	}
 
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
 			fsDescriptor, uri.FilePath.c_str(), flags, bufferSize, replication,
@@ -495,7 +490,7 @@ status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, cons
     }
     int ret = fsAdaptor->pathDelete(connection, path, recursive);
     if(ret != 0){
-    	LOG (ERROR) << "Failed to delete remote path\"" << path << "\" from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    	LOG (ERROR) << "Failed to delete remote path \"" << path << "\" from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
     			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
     }

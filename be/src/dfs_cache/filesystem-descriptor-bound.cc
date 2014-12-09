@@ -11,7 +11,7 @@
 
 namespace impala {
 
-std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
+std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value) {
 	static std::map<DFS_TYPE, std::string> strings;
 	if (strings.size() == 0) {
 #define INSERT_ELEMENT(p) strings[p] = #p

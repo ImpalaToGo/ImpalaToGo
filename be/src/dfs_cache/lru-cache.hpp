@@ -69,8 +69,8 @@ public:
 	/** "check item can be removed" predicate.
 	 * @param item - item to check for removal approval
 	 *
-	 * @return bool if item is allowed if removal */
-	using TellItemIsIdle = typename boost::function<bool(ItemType_* item)>;
+	 * @return predicate to try mark the item for deletion*/
+	using MarkItemForDeletion = typename boost::function<bool(ItemType_* item)>;
 
 	/** "get the item timestamp" predicate */
 	using TellItemTimestamp = typename boost::function<boost::posix_time::ptime(ItemType_* item)>;
@@ -109,7 +109,7 @@ protected:
     isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaidity */
     TellCapacityLimitPredicate m_tellCapacityLimitPredicate;  /**< predicate to be invoked to get the limit of capacity. For capacity planning */
     TellWeightPredicate        m_tellWeightPredicate;         /**< predicate to be invoked to get the weight of item. For cleanup planning */
-    TellItemIsIdle             m_tellItemIsIdle;              /**< predicate to check whether item can be removed. */
+    MarkItemForDeletion        m_markForDeletion;             /**< predicate to mark the item for deletion. */
     TellItemTimestamp          m_tellItemTimestamp;           /**< predicate to tell item timestamp */
     AcceptAssignedTimestamp    m_acceptAssignedTimestamp;     /**< predicate to update external item with assigned timestamp */
     ItemDeletionPredicate      m_itemDeletionPredicate;       /**< predicate to run externally when the item is removed from the cache */
@@ -577,7 +577,7 @@ private:
                 		result = m_mgr->m_owner->deleteItemExt(this->value(), cleanup);
                 	}
                 	catch(...){
-                		// external operations are nothrow locally
+                		LOG (WARNING) << "Exception thrown from external deleter." << "\n";
                 	}
                     if(!result){
                     	LOG (WARNING) << "Node deletion is requested for item that cannot be removed. Node will not be removed as well.\n";
@@ -1019,8 +1019,8 @@ private:
 
     /** external call to get the item deletion approval */
     bool markForDeletion(ItemType_* item){
-    	if(m_tellItemIsIdle)
-    		return m_tellItemIsIdle(item);
+    	if(m_markForDeletion)
+    		return m_markForDeletion(item);
     	return true;
     }
 
