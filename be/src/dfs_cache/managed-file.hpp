@@ -409,8 +409,10 @@ namespace managed_file {
 
       /**
        * Drop the file from file system
+       *
+       * @return operation status, true if file was removed
        */
-      void drop();
+      bool drop();
 
 	   /* ***********************   Methods group to fit the intrusive concept (LRU Cache)   ******************************/
 

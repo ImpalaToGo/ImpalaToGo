@@ -163,12 +163,19 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 }
 
 status::StatusInternal File::open() {
-	m_state = State::FILE_HAS_CLIENTS;
+	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
+		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
+
+	if(m_state != State::FILE_IS_FORBIDDEN)
+		m_state = State::FILE_HAS_CLIENTS;
 	std::atomic_fetch_add_explicit (&m_users, 1u, std::memory_order_relaxed);
 	return status::OK;
 }
 
 status::StatusInternal File::close() {
+	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
+		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
+
 	if ( std::atomic_fetch_sub_explicit (&m_users, 1u, std::memory_order_release) == 1 ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
 		m_state = State::FILE_IS_IDLE;
@@ -176,12 +183,16 @@ status::StatusInternal File::close() {
 	return status::OK;
 }
 
-void File::drop(){
+bool File::drop(){
+	// we only drop objects marked for finalization:
+	if(m_state.load(std::memory_order_acquire) != State::FILE_IS_MARKED_FOR_DELETION)
+		return false;
+
 	// if there're clients using the file in read/write or clients who is waiting for the file update,
 	// the file cannot be deleted
 	if(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS || m_subscribers.load(std::memory_order_acquire) != 0){
 		  LOG (WARNING) << "Rejecting an attempt to delete file \"" << fqp() << "\". Reason : in direct use or referenced." << "\n";
-		return;
+		return false;
 	}
 
 	boost::system::error_code ec;
@@ -195,9 +206,10 @@ void File::drop(){
 	}
 	if(!ec){
 		LOG (INFO) << "File \"" << fqp() << "\" is removed from file system." << "\n";
-		return;
+		return true;
 	}
 	LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";
+	return false;
 }
 
 status::StatusInternal File::forceDelete(){

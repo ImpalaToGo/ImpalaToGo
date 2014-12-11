@@ -16,6 +16,8 @@
 #define FILESYSTEM_LRU_CACHE_HPP_
 
 #include <list>
+#include <mutex>
+#include <condition_variable>
 
 #include "dfs_cache/managed-file.hpp"
 #include "dfs_cache/lru-cache.hpp"
@@ -34,7 +36,7 @@ namespace ph = std::placeholders;
  * of them.
  *
  */
-class FileSystemLRUCache : LRUCache<managed_file::File>{
+class FileSystemLRUCache : private LRUCache<managed_file::File>{
 private:
 
 
@@ -42,8 +44,9 @@ private:
     std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
     std::string          m_root;                       /**< root directory to manage */
 
-    boost::condition_variable m_deletionHappensCondition; /**< deletion conditio variable */
-    boost::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+    std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
+    std::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
     managed_file::File::WeightChangedEvent m_weightChangedPredicate; /** the callback that should be called on "item weight is changed" event */
@@ -170,6 +173,12 @@ public:
 
     	// finally define index "by file fully qualified local path"
     	m_idxFileLocalPath = addIndex<std::string>( "fqp", gkf, lif, cif);
+
+    }
+
+    ~FileSystemLRUCache(){
+    	clear();
+    	LOG (INFO) << "Filesystem LRU cache is destructed." << "\n";
     }
 
     /** reload the cache.
@@ -181,7 +190,8 @@ public:
     bool reload(const std::string& root);
 
     /**
-     * Get the file by its local path
+     * Get the file by its local path.
+     * This will "open" the file (increase the reference counter)
      *
      * @param path -file local path
      *

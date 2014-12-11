@@ -205,6 +205,16 @@ public:
 	 * @param numOfEntries - number of entries in file info set
 	 */
 	void freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries);
+
+	/*
+	 * Check that specified @a path exists on the specified fs
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path - path to check for existence
+	 *
+	 * @return true if path exists, false otherwise
+	 */
+	bool pathExists(raiiDfsConnection& conn, const char* path);
 };
 }
 

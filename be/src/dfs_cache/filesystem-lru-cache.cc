@@ -19,29 +19,42 @@
 namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
+	// preserve path for future usage:
+	std::string path = file->fqp();
+
 	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
 	if(!markItemForDeletion(file)){
 		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
 		return false;
 	}
 
+	{
+		std::lock_guard<std::mutex> lock(m_deletionsmux);
+
+		// add the item into deletions list
+		m_deletionList.push_back(file->fqp());
+	}
+	// notify deletion action is scheduled
+	m_deletionHappensCondition.notify_all();
+
 	// for physical removal scenario, drop the file from file system
 	if (physically) {
-		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed on disk." << "\n";
+		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed from the disk." << "\n";
 		// delegate further deletion scenario to the file itself:
 		file->drop();
 	}
 
-	{
-		boost::mutex::scoped_lock lock(m_deletionsmux);
-		// add the item into deletions list
-		m_deletionList.push_back(file->fqp());
-
-		// notify deletion happens
-		m_deletionHappensCondition.notify_all();
-	}
 	// get rid of file metadata object:
 	delete file;
+
+	{
+		std::lock_guard<std::mutex> lock(m_deletionsmux);
+
+    	// now drop the file from deletions list:
+    	m_deletionList.remove(path);
+	}
+	// notify deletion happens
+	m_deletionHappensCondition.notify_all();
 
 	return true;
 }
@@ -240,27 +253,36 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	if(file == nullptr)
     		return file;
 
-    	// if file is marked for deletion, so that should wait while it will be deleted and then try reclaim it:
-        if(file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION){
-        	// wait while the item will be deleted and reach the deletions list
-        	boost::unique_lock<boost::mutex> lock(m_deletionsmux);
+    	std::unique_lock<std::mutex> lock(m_deletionsmux);
+    	// check whether the requested file is under finalization maybe?
+    	bool under_finalization = std::find(m_deletionList.begin(), m_deletionList.end(), path) != m_deletionList.end();
+
+    	// if file is under finalization already or was unable to be opened, wait while it will be finalized
+    	// and then reclaim it
+        if(under_finalization || (file->open() != status::StatusInternal::OK)){
+
+        	// Check the active deletions list, if the file is there, do not use it and reclaim it for reload when deletion completes:
         	std::list<std::string>::iterator it;
         	m_deletionHappensCondition.wait(lock, [&] {
-        				 it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
-        				 return it != m_deletionList.end();}
+        		it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
+        		return it == m_deletionList.end();
+        	}
         	);
-        	// now drop the file from deletions list:
-        	m_deletionList.erase(it);
         	lock.unlock();
-        	// and reclaim it:
+
+        	// reclaim the file:
         	file = m_idxFileLocalPath->operator [](path);
         	if(file == nullptr)
         		return nullptr;
+
+        	return file;
         }
 
-    	// if file is "forbidden but the time between sync attempts elapsed", it should be resync.
-    	//
-    	// prevent outer world from usage of invalid or near-to-delete references:
+    	// unlock deletions list, will work only if file was "opened" successfully
+    	lock.unlock();
+
+     	// if file is "forbidden but the time between sync attempts elapsed", it should be resync.
+    	// prevent outer world from usage of invalid:
     	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
     	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
     		// resync the file if the time between sync attempts elapsed:

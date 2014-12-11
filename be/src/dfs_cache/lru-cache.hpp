@@ -1112,14 +1112,27 @@ private:
     }
 
     /** cleanup */
-    ~LRUCache() {
-    	clear();
+    virtual ~LRUCache() {
+    	if(m_indexList == nullptr || m_lifeSpan == nullptr)
+    		return;
+
     	for(auto item : (*m_indexList)){
     		delete item.second;
        	}
 
+    	// delete indexes list:
+    	if(m_indexList != nullptr)
+    		delete m_indexList;
+    	m_indexList = nullptr;
+
     	if(m_lifeSpan != nullptr)
     		delete m_lifeSpan;
+
+    	m_lifeSpan = nullptr;
+
+    	if(m_indexList != nullptr)
+    		delete m_indexList;
+    	m_indexList = nullptr;
     }
 
     /** Retrieve a index by name */

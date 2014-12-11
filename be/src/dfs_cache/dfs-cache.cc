@@ -276,11 +276,10 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
     }
 
 	// so as the file is available locally, just open it:
-	if (managed_file->exists()) {
-		managed_file->open(); // mark the file with the one more usage
-	} else {
+	if (!managed_file->exists()) {
 		// and reply no data available otherwise
 		LOG (ERROR)<< "File \"" << path << "\" is not available locally." << "\n";
+		managed_file->close();
 		return NULL;
 	}
 
@@ -484,15 +483,23 @@ status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, cons
 
     raiiDfsConnection connection(fsAdaptor->getFreeConnection());
     if(!connection.valid()) {
-    	LOG (ERROR) << "No connection to dfs available, unable to delete file from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    	LOG (ERROR) << "No connection to dfs available, unable to delete file from FileSystem \"" << fsDescriptor.dfs_type << "://" <<
     			fsDescriptor.host << "\"" << "\n";
     	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
     }
     int ret = fsAdaptor->pathDelete(connection, path, recursive);
     if(ret != 0){
-    	LOG (ERROR) << "Failed to delete remote path \"" << path << "\" from FileSystem \"" << fsDescriptor.dfs_type << ":" <<
-    			fsDescriptor.host << "\"" << "\n";
-    	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+    	LOG (WARNING) << "Negative server reply received when trying to delete remote path \"" << path << "\" from FileSystem \""
+    			<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+
+    	ret = fsAdaptor->pathExists(connection, path);
+    	if(ret == 0){
+    		LOG (WARNING) << "Path assigned for removal still exists on remote part : \"" << path << "\" on FileSystem \""
+    				<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+
+    	}
+    	// as discussed, don't stuck here if remote part respond with negative
+    	return status::StatusInternal::OK;
     }
 
     LOG (INFO) << "dfsDelete() : succeed for path = \"" << path << "\"\n";

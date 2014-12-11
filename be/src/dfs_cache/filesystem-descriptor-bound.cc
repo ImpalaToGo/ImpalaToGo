@@ -176,5 +176,9 @@ void FileSystemDescriptorBound::freeFileInfo(dfsFileInfo* fileInfo, int numOfEnt
 	return _dfsFreeFileInfo(fileInfo, numOfEntries);
 }
 
+bool FileSystemDescriptorBound::pathExists(raiiDfsConnection& conn, const char* path){
+	return (_dfsPathExists(conn.connection()->connection, path) == 0 ? true : false);
+}
+
 } /** namespace impala */
 

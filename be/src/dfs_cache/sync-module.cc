@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "dfs_cache/sync-module.hpp"
 #include "dfs_cache/dfs-connection.hpp"
@@ -107,6 +108,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
 		// update file status:
 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		managed_file->close();
 		return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	}
 
@@ -117,8 +119,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 fp->error    = true;
     	 fp->errdescr = "Insufficient memory for file operation";
 
- 		// update file status:
- 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+    	 // update file status:
+    	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+    	 managed_file->close();
 		 return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	 }
 
@@ -136,37 +139,97 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
     	 // update file status:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+    	 managed_file->close();
     	 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
      }
 
      MonotonicStopWatch sw;
 
 	 // read from the remote file
-	 tSize last_read = BUFFER_SIZE;
+	 tSize last_read = 0;
 
-	 sw.Start();
+	 sw.Start();  // start track time consumed by download:
 
-	 for (; last_read != 0;) {
-		 boost::mutex::scoped_lock lock(*mux);
-		 if(task->condition()){
-			 // stop reading, cancellation received.
-			 // If so, notify the caller (no matter if it waits for this or no):
-			 conditionvar->notify_all();
-			 break;
-		 }
+	 // define a reader
+	 boost::function<void ()> reader = [&]() {
 		 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
-		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, last_read);
-		 managed_file->estimated_size(managed_file->estimated_size() + last_read);
-		 fp->localBytes += last_read;
+		 for (; last_read > 0;) {
+		 		 boost::mutex::scoped_lock lock(*mux);
+		 		 if(task->condition()){
+		 			 // stop reading, cancellation received.
+		 			 // If so, notify the caller (no matter if it waits for this or no):
+		 			 conditionvar->notify_all();
+		 			 break;
+		 		 }
+		 		 // write bytes locally:
+		 		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, last_read);
+		 		 managed_file->estimated_size(managed_file->estimated_size() + last_read);
+		 		 // update job progress:
+		 		 fp->localBytes += last_read;
+		 		 // read next data buffer:
+		 		 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
+		 	 }
+	 };
+	 // and run the reader
+	 reader();
+
+	 int retry = 0;
+
+	 const int seconds  = 2;
+	 unsigned int delay = 1000000 * seconds;
+
+	 if(last_read == -1){
+		 LOG (WARNING) << "Remote file \"" << path << "\" read encountered IO exception, going to retry 3 times." << "\n";
+
+		 while(retry++ <= 2){
+			LOG (INFO) << "Retry # " << std::to_string(retry) << " to deliver the file \"" << path << "\" after disconnection. position = "
+					<< std::to_string(fp->localBytes) << "\n";
+			// IO Exception happens, close the current remote file and reopen it,
+			// seek to last read position and retry. Do this once per 2 seconds, 3 times
+			usleep (delay);
+
+			// close old remote handle:
+			fsAdaptor->fileClose(connection, hfile);
+
+			// reopen the remote file:
+			hfile = fsAdaptor->fileOpen(connection,
+					managed_file->relative_name().c_str(), O_RDONLY,
+					BUFFER_SIZE, 0, 0);
+
+			if (hfile == NULL){
+				LOG (WARNING) << "Retry # " << std::to_string(retry) << " for \"" << path << "\". Failed to open remote file." << "\n";
+				continue;
+			}
+			// seek the file to last successfully read position:
+            int ret = fsAdaptor->fileSeek(connection, hfile, fp->localBytes);
+            if(ret != 0){
+            	LOG (WARNING) << "Retry # " << std::to_string(retry) << " for \"" << path << "\". Failed to seek remote file to position = "
+            			<< std::to_string(fp->localBytes) << "\n";
+            	continue;
+            }
+            // run reader
+			reader();
+			// check last-read. If stream is read to end, break the reader
+			if(last_read == 0)
+				break;
+		 }
 	 }
 	 uint64_t ti = sw.ElapsedTime();
 	 std::cout << "Elapsed time for \"" << path << "\" download = " << std::to_string(ti) << std::endl;
 	 sw.Stop();
 
 	 LOG (INFO) << "Remote bytes read = " << std::to_string(fp->localBytes) << " for file \"" << path << "\".\n";
-
 	 // whatever happens, clean resources:
 	 free(buffer);
+
+     if(last_read != 0){
+    	 // remote file was not read to end, report a problem:
+    	 status = status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+    	 fp->error    = true;
+    	 fp->errdescr = "Error during remote file read";
+    	 // update the managed file state:
+    	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+     }
 
 	 int ret;
 	 // close remote file:
@@ -191,11 +254,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		 fp->error = true;
 		 fp->errdescr == strerror(errno);
+		 managed_file->close();
 		 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	 }
-
-	 // update file status as "ready to use":
-	 managed_file->state(managed_file::State::FILE_HAS_CLIENTS);
 
 	 if(task->condition()){ // cancellation was requested:
 		 LOG (WARNING) << "Cancellation was requested during file read \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
@@ -203,7 +264,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 filemgmt::FileSystemManager::instance()->dfsDelete(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), true);
 	 }
 
-	return status::StatusInternal::OK;
+	 managed_file->close();
+	 return status::StatusInternal::OK;
 }
 
 status::StatusInternal Sync::cancelFileMakeProgress(bool async, request::CancellableTask* const & task){
