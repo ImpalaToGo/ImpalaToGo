@@ -391,20 +391,6 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path, bool* exists) {
 	*exists = false;
 
-	// first check for file locally
-	Uri uri = Uri::Parse(path);
-
-	managed_file::File* managed_file;
-	// check whether file exists locally and reply "exists" if so
-	if (CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(),
-			fsDescriptor, managed_file) || managed_file == nullptr
-			|| !managed_file->valid()) {
-		LOG (INFO)<< "File \"/" << "/" << path << "\" is available locally." << "\n";
-		*exists = true;
-		managed_file->close();
-		return status::StatusInternal::OK;
-	}
-
 	// try look for file remotely:
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
