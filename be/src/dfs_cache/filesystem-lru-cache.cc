@@ -22,6 +22,8 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// preserve path for future usage:
 	std::string path = file->fqp();
 
+	file->close();
+
 	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
 	if(!markItemForDeletion(file)){
 		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
@@ -189,8 +191,9 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 		return;
 	}
 	else
-		// file is present and is ready to use
-		file->state(managed_file::State::FILE_HAS_CLIENTS);
+	{
+		file->open();
+	}
 }
 
 bool FileSystemLRUCache::reload(const std::string& root){
@@ -306,10 +309,12 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     		// the path specified does not exist locally.
     		file->estimated_size(0);
     	}
+    	// increase refcount to this file before being shared to outer world
+    	file->open();
     	// when item is externally injected to the cache, it should have time "now"
     	success = LRUCache<managed_file::File>::add(file, duplicate);
     	if(duplicate){
-    		LOG(WARNING) << "Attemp to add the duplicate to the cache, path = \"" << path << "\"\n";
+    		LOG(WARNING) << "Attempt to add the duplicate to the cache, path = \"" << path << "\"\n";
     		// no need for this file, get the rid of
     		delete file;
     	}

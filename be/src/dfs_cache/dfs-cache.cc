@@ -155,8 +155,6 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
     			fsDescriptor.host << "\"" << "\n";
     	return NULL;
     }
-    managed_file->open();
-
     // say file is busy with "write" operation:
     managed_file->state(managed_file::State::FILE_IS_UNDER_WRITE);
 
@@ -168,6 +166,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 				fsDescriptor.host << "\"" << "\n";
 		// update file status:
 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		managed_file->close();
 		return NULL;
 	}
 
@@ -263,6 +262,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	if ((managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC)){
 		if(!managed_file->subscribe_for_updates(condition, mux)){
 			LOG (ERROR) << "Failed to subscribe for file \"" << path << "\" status updates, unable to proceed." << "\n";
+			managed_file->close();
 			return NULL;
 		}
 		// wait for sync is completed:
@@ -379,7 +379,10 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 		return status;
 
 	if( managed_file != nullptr)
-		managed_file->close();
+		// unbind 2 references. 1 is from preceding "file open()" scenario and one is from
+		// local "find file" scenario which, on success, auto-open the file to save it from
+		// deletion
+		managed_file->close(2);
 
 	return status;
 }
@@ -512,6 +515,7 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 
 	Uri uriOld = Uri::Parse(oldPath);
 	Uri uriNew = Uri::Parse(newPath);
+
 	// drop old file from registry. Instruction below just clean the file reference from registry, without physical affect
 	if(!CacheLayerRegistry::instance()->deleteFile(fsDescriptor, uriOld.FilePath.c_str(), false)){
 		LOG (WARNING) << "Failed to delete old temp file \"" << oldPath << "\" from cache.\n";
@@ -533,15 +537,6 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
 	}
 
-	// create new one file in the registry, renamed.
-	managed_file::File* managed_file;
-	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
-		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
-				fsDescriptor.host << "\"" << "\n";
-		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
-	}
-	managed_file->open();
-
 	// rename remote file:
     int ret = fsAdaptor->fileRename(connection, oldPath, newPath);
 
@@ -554,6 +549,19 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     // rename local file:
     status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor,
     		uriOld.FilePath.c_str(), uriNew.FilePath.c_str());
+    if(status != status::StatusInternal::OK){
+    	LOG (ERROR) << "Failed to rename \"" << oldPath << "\" to \"" << newPath << "\" on local filesystem." << "\n";
+    	return status;
+    }
+
+    // create new one file in the registry, renamed.
+	managed_file::File* managed_file;
+	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
+		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
+	}
+
     managed_file->close();
     return status;
 }

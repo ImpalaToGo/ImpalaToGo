@@ -394,18 +394,18 @@ namespace managed_file {
       status::StatusInternal forceDelete();
 
       /**
-       * Add new opened handle to the list of handles.
+       * Mark the file with one more usage
        *
        * @return Operation status
        */
-      status::StatusInternal open();
+      status::StatusInternal open(unsigned int ref_count = 1u);
 
       /**
-       * Explicitly remove the reference to a handle from the list of handles
+       * Unbind 1 or more usages of the file
        *
        * @return Operation status
        */
-      status::StatusInternal close();
+      status::StatusInternal close(unsigned int ref_count = 1u);
 
       /**
        * Drop the file from file system

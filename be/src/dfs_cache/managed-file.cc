@@ -162,21 +162,21 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	return descriptor;
 }
 
-status::StatusInternal File::open() {
+status::StatusInternal File::open(unsigned int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
 	if(m_state != State::FILE_IS_FORBIDDEN)
 		m_state = State::FILE_HAS_CLIENTS;
-	std::atomic_fetch_add_explicit (&m_users, 1u, std::memory_order_relaxed);
+	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_relaxed);
 	return status::OK;
 }
 
-status::StatusInternal File::close() {
+status::StatusInternal File::close(unsigned int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
-	if ( std::atomic_fetch_sub_explicit (&m_users, 1u, std::memory_order_release) == 1 ) {
+	if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == 1 ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
 		m_state = State::FILE_IS_IDLE;
 	}
