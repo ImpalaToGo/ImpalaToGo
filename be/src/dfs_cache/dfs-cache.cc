@@ -155,6 +155,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
     			fsDescriptor.host << "\"" << "\n";
     	return NULL;
     }
+    managed_file->open(); // create one more reference as a client who will be back for this file
     // say file is busy with "write" operation:
     managed_file->state(managed_file::State::FILE_IS_UNDER_WRITE);
 
@@ -166,7 +167,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 				fsDescriptor.host << "\"" << "\n";
 		// update file status:
 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
-		managed_file->close();
+		managed_file->close(); // close the reference to file as a "client"
 		return NULL;
 	}
 
@@ -188,7 +189,8 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 		if(retstatus != 0){
 			LOG (ERROR) << "Failed to close remote file : \"" << path << "\"." << "\n";
 		}
-		managed_file->close();
+		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		managed_file->close(); // close the reference to file as a "client"
 		// from registry:
 		ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
 		if(!ret){
@@ -218,7 +220,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 	if(status != status::StatusInternal::OK){
 		LOG (ERROR)<< "Failed to close local file : \"" << path << "\"; operation status : " << status << "\n";
 	}
-	managed_file->close();
+	managed_file->close(); // close the reference to file as a "client"
 	// from registry:
 	ret = CacheLayerRegistry::instance()->deleteFile(fsDescriptor, path);
 	if (!ret) {
@@ -379,16 +381,54 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 		return status;
 
 	if( managed_file != nullptr)
-		// unbind 2 references. 1 is from preceding "file open()" scenario and one is from
-		// local "find file" scenario which, on success, auto-open the file to save it from
-		// deletion
+		// unbind 2 references. 1 is from preceding "file open()" scenario ("i hold reference as a client who opened the file")
+		// and one is from local "find file" scenario which, on success, auto-open the file to save it from deletion
 		managed_file->close(2);
 
 	return status;
 }
 
-status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path) {
-	return filemgmt::FileSystemManager::instance()->dfsExists(fsDescriptor, path);
+status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path, bool* exists) {
+	*exists = false;
+
+	// first check for file locally
+	Uri uri = Uri::Parse(path);
+
+	managed_file::File* managed_file;
+	// check whether file exists locally and reply "exists" if so
+	if (CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(),
+			fsDescriptor, managed_file) || managed_file == nullptr
+			|| !managed_file->valid()) {
+		LOG (INFO)<< "File \"/" << "/" << path << "\" is available locally." << "\n";
+		*exists = true;
+		managed_file->close();
+		return status::StatusInternal::OK;
+	}
+
+	// try look for file remotely:
+	// locate the remote filesystem adapter:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if(fsAdaptor == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+    if(!connection.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, unable to create file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+    int ret = fsAdaptor->pathExists(connection, path);
+	if(ret == 0){
+		LOG (INFO) << "Path \"" << path << "\" exists on FileSystem \""
+				<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+		*exists = true;
+	}
+	return status::StatusInternal::OK;
 }
 
 status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos) {
@@ -561,8 +601,6 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 				fsDescriptor.host << "\"" << "\n";
 		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
 	}
-
-    managed_file->close();
     return status;
 }
 
@@ -580,11 +618,39 @@ dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const c
 }
 
 dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path) {
-	return filemgmt::FileSystemManager::instance()->dfsGetPathInfo(fsDescriptor, path);
+
+	// We always get statistics from remote side:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (fsAdaptor == nullptr) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return NULL;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable get path info for file \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return NULL;
+	}
+
+	// get file statistics:
+	dfsFileInfo* info = fsAdaptor->fileInfo(connection, path);
+
+    if(info == NULL){
+    	LOG (ERROR) << "Failed to retrieve file info for file \"" << path << "\" on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    }
+    return info;
 }
 
 void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries) {
-	return filemgmt::FileSystemManager::instance()->dfsFreeFileInfo(fsDescriptor, dfsFileInfo, numEntries);
+	if(dfsFileInfo == NULL)
+		return;
+
+	// We delegate statistics cleanup to jni layer. Free file statistics:
+	FileSystemDescriptorBound::freeFileInfo(dfsFileInfo, numEntries);
 }
 
 tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host) {

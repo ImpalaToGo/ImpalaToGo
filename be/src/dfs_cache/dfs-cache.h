@@ -195,10 +195,11 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
  * @param fsDescriptor  - FS connection details, may be need to locate the file locally.
  *                        Check what we receive in "path" here.
  * @param path          - The path to look for
+ * @param exists        - flag, indicates whether the file exists
  *
  * @return Operation status
  */
-status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path);
+status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path, bool* exists);
 
 /**
  * @fn status::StatusInternal dfsSeek(const FileSystemDescriptor & namenode, dfsFile file, tOffset desiredPos)

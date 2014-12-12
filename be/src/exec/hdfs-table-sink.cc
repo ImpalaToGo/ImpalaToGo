@@ -284,7 +284,8 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   // Check if tmp_hdfs_file_name exists.
   const char* tmp_hdfs_file_name_cstr =
       output_partition->current_file_name.c_str();
-  if (dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr) == 0) {
+  bool available;
+  if ((dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr, &available) == 0) && available) {
     return Status(GetHdfsErrorMsg("Temporary HDFS file already exists: ",
         output_partition->current_file_name));
   }

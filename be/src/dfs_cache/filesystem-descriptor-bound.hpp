@@ -204,7 +204,7 @@ public:
 	 * @param fileInfo     - file info set to free
 	 * @param numOfEntries - number of entries in file info set
 	 */
-	void freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries);
+	static void freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries);
 
 	/*
 	 * Check that specified @a path exists on the specified fs

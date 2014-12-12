@@ -169,6 +169,7 @@ status::StatusInternal File::open(unsigned int ref_count) {
 	if(m_state != State::FILE_IS_FORBIDDEN)
 		m_state = State::FILE_HAS_CLIENTS;
 	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_relaxed);
+	LOG (INFO) << "File open \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	return status::OK;
 }
 
@@ -176,10 +177,12 @@ status::StatusInternal File::close(unsigned int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
-	if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == 1 ) {
+	if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == ref_count ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
 		m_state = State::FILE_IS_IDLE;
+		LOG (INFO) << "File \"" << fqp() << "\" is no more referenced. refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	}
+	LOG (INFO) << "File close \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	return status::OK;
 }
 
