@@ -408,8 +408,8 @@ status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, cons
     	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
     }
 
-    int ret = fsAdaptor->pathExists(connection, path);
-	if(ret == 0){
+    bool ret = fsAdaptor->pathExists(connection, path);
+	if(ret){
 		LOG (INFO) << "Path \"" << path << "\" exists on FileSystem \""
 				<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
 		*exists = true;
