@@ -292,7 +292,7 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   uint64_t block_size = output_partition->partition_descriptor->block_size();
   if (block_size == 0) block_size = output_partition->writer->default_block_size();
 
-  bool available;
+  available = false;
   output_partition->tmp_hdfs_file = dfsOpenFile(hdfs_connection_,
       tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size, available);
   if (output_partition->tmp_hdfs_file == NULL || !available) {
