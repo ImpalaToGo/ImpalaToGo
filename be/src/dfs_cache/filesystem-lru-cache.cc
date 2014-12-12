@@ -302,13 +302,7 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
 
     	// we create and destruct File objects only here, in LRU cache layer
     	file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
-    	try {
-    		file->estimated_size(boost::filesystem::file_size(path));
-    	}
-    	catch (boost::filesystem::filesystem_error &e) {
-    		// the path specified does not exist locally.
-    		file->estimated_size(0);
-    	}
+
     	// increase refcount to this file before being shared to outer world
     	file->open();
     	// when item is externally injected to the cache, it should have time "now"
