@@ -1,0 +1,28 @@
+From 01c8dda7d93a68bb12ba2d51283583130755bd3f Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Mon, 6 Oct 2014 23:24:44 -0700
+Subject: [PATCH 74/75] HBASE-12039 Lower log level for TableNotFoundException log message when throwing (stack)
+
+Reason: Supportability
+Author: Michael Stack
+Ref: CDH-21053
+---
+ .../hadoop/hbase/client/HConnectionManager.java    |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+index 4c7ea92..8288bfb 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionManager.java
+@@ -1142,8 +1142,6 @@ public class HConnectionManager {
+       } catch (IOException e) {
+         if (ExceptionUtil.isInterrupt(e)) {
+           Thread.currentThread().interrupt();
+-        } else {
+-          LOG.warn("Encountered problems when prefetch hbase:meta table: ", e);
+         }
+       }
+     }
+-- 
+1.7.0.4
+
