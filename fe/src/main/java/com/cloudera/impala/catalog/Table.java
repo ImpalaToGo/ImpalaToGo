@@ -140,7 +140,7 @@ public abstract class Table implements CatalogObject {
       colStats = client.getTableColumnStatistics(db_.getName(), name_, col.getName());
     } catch (Exception e) {
       // Elena : 16.12.2014
-      LOG.warn("Exception occur while loading column stats for " + col.getName());
+      LOG.warn("Exception occur while loading column stats for " + col.getName() + "; ex :" + e.getMessage());
       // don't try to load stats for this column
       return;
     }
