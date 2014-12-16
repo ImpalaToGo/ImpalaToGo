@@ -487,6 +487,8 @@ public class HdfsTable extends Table {
    */
   private void loadColumns(List<FieldSchema> fieldSchemas, HiveMetaStoreClient client)
       throws TableLoadingException {
+    // Elena : 16.12.2014
+    LOG.info("loadColumns() : begin.");
     int pos = 0;
     for (FieldSchema s: fieldSchemas) {
       Type type = parseColumnType(s);
@@ -502,9 +504,13 @@ public class HdfsTable extends Table {
       addColumn(col);
       ++pos;
 
+      // Elena : 16.12.2014
+      LOG.info("going to load column stats from HDFS table for col " + col.getName());
       // Load and set column stats in col.
       loadColumnStats(col, client);
     }
+    // Elena : 16.12.2014
+    LOG.info("loadColumns() : end.");
   }
 
   /**
@@ -915,8 +921,9 @@ public class HdfsTable extends Table {
       org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
     numHdfsFiles_ = 0;
     totalHdfsBytes_ = 0;
-    LOG.debug("load table: " + db_.getName() + "." + name_);
-
+    //LOG.debug("load table: " + db_.getName() + "." + name_);
+    // Elena : 16.12.2014
+    LOG.info("load table: " + db_.getName() + "." + name_);
     // turn all exceptions into TableLoadingException
     try {
       // set nullPartitionKeyValue from the hive conf.
@@ -983,6 +990,9 @@ public class HdfsTable extends Table {
       // The number of clustering columns is the number of partition keys.
       numClusteringCols_ = partKeys.size();
       loadColumns(fieldSchemas, client);
+
+      // Elena : 16.12.2014
+      LOG.info("columns loaded for " + db_.getName() + "." + name_);
 
       // Collect the list of partitions to use for the table. Partitions may be reused
       // from the existing cached table entry (if one exists), read from the metastore,

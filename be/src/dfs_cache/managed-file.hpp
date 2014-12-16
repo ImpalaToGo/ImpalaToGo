@@ -12,7 +12,6 @@
 #include <list>
 #include <atomic>
 
-#include <boost/intrusive/set.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/filesystem.hpp>
