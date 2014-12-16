@@ -278,9 +278,13 @@ public class TableLoadingMgr {
    */
   private void loadNextTable() throws InterruptedException {
     // Always get the next table from the head of the deque.
+
+    LOG.info("loadNextTable() - before to get first");
+
     final TTableName tblName = tableLoadingDeque_.takeFirst();
+    LOG.info("loadNextTable() - after get first, before to remove");
     tableLoadingSet_.remove(tblName);
-    LOG.debug("Loading next table. Remaining items in queue: "
+    LOG.info("Loading next table. Remaining items in queue: "
         + tableLoadingDeque_.size());
     try {
       LOG.info("going to getOrLoadTable on " + tblName.getTable_name());
