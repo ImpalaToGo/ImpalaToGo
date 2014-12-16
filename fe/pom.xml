@@ -206,7 +206,12 @@
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
     </dependency>
-
+    <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    
     <!-- This driver supports PostgreSQL 7.2 and newer -->
     <dependency>
       <groupId>postgresql</groupId>
