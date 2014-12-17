@@ -250,7 +250,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	bool under_finalization = std::find(m_deletionList.begin(), m_deletionList.end(), path) != m_deletionList.end();
 
     	// if file is under finalization already or was unable to be opened, wait while it will be finalized
-    	// and then reclaim it
+    	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
         if(under_finalization || (file->open() != status::StatusInternal::OK)){
 
         	// Check the active deletions list, if the file is there, do not use it and reclaim it for reload when deletion completes:
@@ -270,7 +270,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
         	return file;
         }
 
-    	// unlock deletions list, will work only if file was "opened" successfully
+    	// unlock deletions list, will work only if alive file was "opened" successfully
     	lock.unlock();
 
      	// if file is "forbidden but the time between sync attempts elapsed", it should be resync.

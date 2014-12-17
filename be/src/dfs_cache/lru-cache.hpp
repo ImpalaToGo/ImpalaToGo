@@ -31,16 +31,10 @@
 
 #include "dfs_cache/sync-with-utilities.hpp"
 #include "dfs_cache/lru-generator.hpp"
+#include "dfs_cache/utilities.hpp"
 #include "common/logging.h"
 
 namespace impala{
-
-/** Giving the boost::shared_ptr<T> to nothing (nullptr) */
-class {
-public:
-    template<typename T>
-    operator boost::shared_ptr<T>() { return boost::shared_ptr<T>(); }
-} nullPtr;
 
 /** Represents LRU (least recent used ) cache */
 template<typename ItemType_>
@@ -552,9 +546,14 @@ private:
 				return m_mgr->m_owner->tellWeight(this->value());
 			}
 
-			/** get next node */
+			/** set next node */
 			boost::shared_ptr<Node> next(){
 				return m_next;
+			}
+
+			/** get next node */
+			void next(const boost::shared_ptr<Node>& node){
+				m_next = node;
 			}
 
 			/** get age bucket */
@@ -736,7 +735,7 @@ private:
         		if(lock){
         			// get the current capacity once again (another thread may issued cleanup till now)
         			currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
-        			if((now > m_checkTime) || (currentCapacity >= m_owner->m_capacityLimit)){
+        			if((now > m_checkTime) || (currentCapacity > m_owner->m_capacityLimit)){
         				// if cache is no longer valid throw contents away and start over, else cleanup old items
         				if( m_numberOfBuckets > m_numberOfBucketsLimit || (m_owner->m_isValid && !m_owner->m_isValid()) ){
         					// unlock lifespan manager so far and let it run cleanup
@@ -789,15 +788,30 @@ private:
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
+        		// handle the situation when there's single node in the bucket and the bucket is the recent one,
+        		// so, the cleanup was triggered by adding the node which is near to be deleted right now (suppress this).
+        		// cleanup will be triggered next time and remove this node without affect of possible current usage
+        		if((m_bucketsKeys->size() == 1) && node && !node->next()){
+        			it++;
+        			continue;
+        		}
+        		// and reverse nodes under this bucket so that most recent added will be last to delete:
+        		utilities::reverse(node);
                 // store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
                 boost::shared_ptr<Node> active = nullPtr;
 
-        		while(node){
+                while(node && (weightToRemove > 0)){
         			// note the node next to current one
         			boost::shared_ptr<Node> next = node->next();
 
         			if( node->value() != nullptr && node->bucket() != nullptr ){
         				if( node->bucket() == bucket ) {
+        					// cannot remove this node as it seems just was added. Set transit exit condition
+                        	if((m_bucketsKeys->size() == 1) && node && !node->next()){
+                        		weightToRemove = 0;
+                        		break;
+                        	}
+
         					// item has not been touched since bucket was closed, so remove it from LifespanMgr if it is allowed for removal.
                             if(!m_owner->markForDeletion(node->value())){
                             	// no approval for item removal received. Deny the age bucket removal
@@ -809,11 +823,10 @@ private:
                             	}
                             	else
                             	{
-                            		active->next() = node;
+                            		active->next(node);
                             	}
                             	// try next node:
                             	node = next;
-
                             	continue;
                             }
         					// get the weight the item will release back to the cache:
@@ -830,7 +843,7 @@ private:
                             	}
                             	else
                             	{
-                            		active->next() = node;
+                            		active->next(node);
                             	}
                             	// try next node:
                             	node = next;
@@ -845,7 +858,7 @@ private:
         				}
         				else {
         					// item has been touched and should be moved to correct age bag now
-        					node->next() = node->bucket()->first;
+        					node->next(node->bucket()->first);
         					// and point another Age Bucket to this node as to the first node:
         					node->bucket()->first = node;
         				}

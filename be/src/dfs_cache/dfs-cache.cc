@@ -604,7 +604,7 @@ dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const c
 }
 
 dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path) {
-
+	LOG (INFO) << "getPathInfo() for \"" << path << "\".\n";
 	// We always get statistics from remote side:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 	if (fsAdaptor == nullptr) {

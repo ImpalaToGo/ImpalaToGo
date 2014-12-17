@@ -169,7 +169,9 @@ public:
 
     	m_weightChangedPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::handleCapacityChanged), this, _1);
 
-    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string { return file->fqp(); };
+    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string {
+    				return (file != nullptr ? file->fqp() : ""); };
+
     	LRUCache<managed_file::File>::LoadItemFunc<std::string>      lif = 0;
     	LRUCache<managed_file::File>::ConstructItemFunc<std::string> cif = 0;
 

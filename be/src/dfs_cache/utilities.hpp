@@ -81,8 +81,7 @@ public:
 		// hierarchy
 		if (pathStart != uriEnd) {
 			auto distance = std::distance(uri.begin(), pathStart);
-			result.Hierarchy = uri.substr(distance,
-					fileNameStart - distance);
+			result.Hierarchy = uri.substr(distance, fileNameStart - distance);
 		}
 
 		return result;
@@ -91,9 +90,18 @@ public:
 };
 // uri
 
-namespace impala
-{
-namespace utilities{
+namespace impala {
+
+/** Giving the boost::shared_ptr<T> to nothing (nullptr) */
+class {
+public:
+	template<typename T>
+	operator boost::shared_ptr<T>() {
+		return boost::shared_ptr<T>();
+	}
+} nullPtr;
+
+namespace utilities {
 
 /** split the given string basing on given delimiter
  *
@@ -103,7 +111,8 @@ namespace utilities{
  *
  * @return split elements vector
  */
-std::vector<std::string> &split(const std::string &original, char delimiter, std::vector<std::string> &elements);
+std::vector<std::string> &split(const std::string &original, char delimiter,
+		std::vector<std::string> &elements);
 
 /** split the given string basing on given delimiter
  * @param [in]     original  - original string
@@ -121,7 +130,7 @@ std::vector<std::string> split(const std::string &original, char delimiter);
  *
  * @return true if @a original ends with @a ending
  */
-bool endsWith (const std::string& fullString, const std::string& ending);
+bool endsWith(const std::string& fullString, const std::string& ending);
 
 /**
  * converts posix time to time_t
@@ -130,13 +139,15 @@ bool endsWith (const std::string& fullString, const std::string& ending);
 time_t posix_time_to_time_t(boost::posix_time::ptime time);
 
 /** Case-insensitive comparator for strings */
-struct insensitive_compare : public std::unary_function<std::string, bool>{
-	explicit insensitive_compare(const std::string &baseline) : baseline(baseline) {}
+struct insensitive_compare: public std::unary_function<std::string, bool> {
+	explicit insensitive_compare(const std::string &baseline) :
+			baseline(baseline) {
+	}
 
-	  bool operator() (const std::string &arg){
-		  return boost::iequals(arg, baseline);
-	  }
-	  std::string baseline;
+	bool operator()(const std::string &arg) {
+		return boost::iequals(arg, baseline);
+	}
+	std::string baseline;
 };
 
 /**
@@ -146,6 +157,22 @@ struct insensitive_compare : public std::unary_function<std::string, bool>{
  * @return available space for path specified
  */
 boost::uintmax_t get_free_space_on_disk(const std::string& path);
+
+/** reverse the linked list */
+template<typename _Node>
+void reverse(_Node& head) {
+	_Node pred;
+	_Node one = head;
+	_Node two = head;
+	do {
+		two = two->next();
+		one->next(pred);
+		pred = one;
+		one = two;
+	}while(two->next());
+	two->next(pred);
+	head = two;
+}
 
 }
 }
