@@ -381,9 +381,9 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 		return status;
 
 	if( managed_file != nullptr)
-		// unbind 2 references. 1 is from preceding "file open()" scenario ("i hold reference as a client who opened the file")
+		// unbind reference as a client - from preceding "file open()" scenario ("i hold reference as a client who opened the file")
 		// and one is from local "find file" scenario which, on success, auto-open the file to save it from deletion
-		managed_file->close(2);
+		managed_file->close(2); // this will still leave 1 internal reference on the file as a underlying LRU collection item
 
 	return status;
 }

@@ -41,7 +41,6 @@ private:
 
 
 	IIndex<std::string>* m_idxFileLocalPath = nullptr; /**< the only index is for file local path  */
-    std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
     std::string          m_root;                       /**< root directory to manage */
 
     std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
@@ -58,7 +57,14 @@ private:
 	 *  false otherwise
 	 */
     inline bool markItemForDeletion(managed_file::File* file){
-    	return file->mark_for_deletion();
+    	// try close the file as the collection item
+    	file->close();
+        // if file was not marked for deletion, reopen it as a collection item
+    	if(!file->mark_for_deletion()){
+    		file->open();
+    		return false;
+    	}
+    	return true;
     }
 
     /** get the current file timestamp
@@ -91,7 +97,7 @@ private:
      *
      * @return capacity limit as configured.
      */
-    inline std::size_t getCapacity(){
+    inline long long getCapacity(){
     	return m_capacityLimit;
     }
 
@@ -120,9 +126,11 @@ private:
     		delete file;
     		file = nullptr;
     	}
-     	else
+     	else{
+     		file->open();
      		// mark file as "in progress" immediately, before to publish it to the outer world:
      		file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
+     	}
     	return file;
     }
 

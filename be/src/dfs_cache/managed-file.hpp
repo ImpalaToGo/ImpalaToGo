@@ -104,7 +104,7 @@ namespace managed_file {
        boost::posix_time::ptime m_lastsyncattempt;    	/**< last attempt to synchronize the file locally. Is relevant for file
         												* only if it is in FORBIDDEN state */
 
-       volatile std::atomic<unsigned> m_users;        /**< number of users so far */
+       volatile std::atomic<int>       m_users;        /**< number of users so far */
 
 	   static std::string              fileSeparator;  /**< platform-specific file separator */
 
@@ -397,14 +397,14 @@ namespace managed_file {
        *
        * @return Operation status
        */
-      status::StatusInternal open(unsigned int ref_count = 1u);
+      status::StatusInternal open(int ref_count = 1);
 
       /**
        * Unbind 1 or more usages of the file
        *
        * @return Operation status
        */
-      status::StatusInternal close(unsigned int ref_count = 1u);
+      status::StatusInternal close(int ref_count = 1);
 
       /**
        * Drop the file from file system

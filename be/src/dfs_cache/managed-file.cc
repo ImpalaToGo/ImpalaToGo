@@ -162,7 +162,7 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	return descriptor;
 }
 
-status::StatusInternal File::open(unsigned int ref_count) {
+status::StatusInternal File::open( int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
@@ -173,7 +173,7 @@ status::StatusInternal File::open(unsigned int ref_count) {
 	return status::OK;
 }
 
-status::StatusInternal File::close(unsigned int ref_count) {
+status::StatusInternal File::close(int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
@@ -233,6 +233,6 @@ status::StatusInternal File::forceDelete(){
 }
 
 
-} /** namespace ManagedFile */
+} /** namespace managed_file */
 } /** namespace impala */
 

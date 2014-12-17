@@ -116,6 +116,7 @@ protected:
 
     mutable std::atomic<long long>  m_currentCapacity;    /**< current cache capacity, in regards to capacity units configured.
                                                                represents  real weight of whole cache data */
+    long long                       m_capacityLimit;      /**< cache capacity limit, configurable. We use 90% from configured value */
 private:
 
     /** Internal Index API between Cache Manager and Indexes */
@@ -815,7 +816,7 @@ private:
 
                             	continue;
                             }
-        					// get the weight the item will release:
+        					// get the weight the item will release back to the cache:
         					long long toRelease = m_owner->tellWeight(node->value());
 
         					// remove the node
@@ -852,8 +853,10 @@ private:
         			node = next;
         		}
 
-        		if(!deletePermitted)
+        		if(!deletePermitted){
+        			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
+        		}
 
         		// drop the bucket from set of buckets:
         		m_buckets->erase(key);
@@ -993,8 +996,6 @@ private:
 
 	LifespanMgr* m_lifeSpan;
 	std::unordered_map<std::string, IIndexInternal* >*  m_indexList;  /**< set of defined indexes */
-
-	long long                       m_capacityLimit;      /**< cache capacity limit, configurable. We use 90% from configured value */
 
 	mutable std::atomic<unsigned>  m_numberOfHardItems;  /**< number of hard items - really hosted by Cache right now */
 	mutable std::atomic<unsigned>  m_numberOfSoftItems;  /**< number of soft items - have ever been added into the cache since last indexes clean.
@@ -1175,9 +1176,8 @@ private:
     /** Add an item to the cache (not needed if accessed by index) */
     bool add(ItemType_*& item, bool& duplicate)
     {
-    	// cannot add an item to the cache is the capacity limit exceeded:
-
-    	if(m_currentCapacity > m_capacityLimit){
+    	// cannot add an item to the cache if the capacity limit exceeded (for example, all cache content is still in use):
+    	if(m_currentCapacity.load(std::memory_order_acquire) > m_capacityLimit){
     		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded.\n";
     		return false;
     	}

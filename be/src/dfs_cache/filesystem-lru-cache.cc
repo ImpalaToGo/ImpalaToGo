@@ -21,15 +21,6 @@ namespace impala{
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// preserve path for future usage:
 	std::string path = file->fqp();
-
-	file->close();
-
-	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
-	if(!markItemForDeletion(file)){
-		LOG (WARNING) << "File \"" << file->fqp() << "\" is requested for deletion but found as \"BUSY\"." << "\n";
-		return false;
-	}
-
 	{
 		std::lock_guard<std::mutex> lock(m_deletionsmux);
 
@@ -190,10 +181,8 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 		file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		return;
 	}
-	else
-	{
-		file->open();
-	}
+	file->state(managed_file::State::FILE_HAS_CLIENTS);
+
 }
 
 bool FileSystemLRUCache::reload(const std::string& root){
