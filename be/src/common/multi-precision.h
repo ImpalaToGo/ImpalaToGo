@@ -21,13 +21,17 @@
 #ifdef __GNUC__
 #  include <features.h>
 #  if __GNUC_PREREQ(4,9)
-//      If  gcc_version >= 4.0
+//      If  gcc_version >= 4.9
 
 #  elif __GNUC_PREREQ(4,8)
 //       If gcc_version >= 4.8
-#define BOOST_NOEXCEPT
-#define BOOST_NOEXCEPT_IF(Predicate)
+
+#define BOOST_NO_CXX11_NOEXCEPT
+//#define BOOST_NOEXCEPT
+//#define BOOST_NOEXCEPT_IF(Predicate)
 #define BOOST_NO_CXX11_CONSTEXPR
+#define BOOST_NO_CXX11_STATIC_ASSERT
+
 #define BOOST_NO_CXX11_DECLTYPE
 #define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
 #define BOOST_NO_CXX11_HDR_ARRAY
