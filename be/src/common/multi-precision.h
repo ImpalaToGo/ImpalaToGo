@@ -17,19 +17,35 @@
 
 // The boost library is for C++11 on a newer version of boost than we use.
 // We need to make these #defines to compile for pre c++11
-// Elena 18.12
+
+#ifdef __GNUC__
+#  include <features.h>
+#  if __GNUC_PREREQ(4,9)
+//      If  gcc_version >= 4.0
+
+#  elif __GNUC_PREREQ(4,8)
+//       If gcc_version >= 4.8
+#define BOOST_NOEXCEPT
+#define BOOST_NO_CXX11_CONSTEXPR
+#define BOOST_NO_CXX11_DECLTYPE
+#define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
+#define BOOST_NO_CXX11_HDR_ARRAY
+#define BOOST_NO_CXX11_RVALUE_REFERENCES
+#define BOOST_NO_CXX11_USER_DEFINED_LITERALS
+#define BOOST_NO_CXX11_VARIADIC_TEMPLATES
+
+#  else
+//       Else
+#  endif
+#else
+//    If not gcc
+#endif
+
 // #define BOOST_NOEXCEPT
 
 // #define BOOST_NOEXCEPT_IF(Predicate)
 #define BOOST_FORCEINLINE inline __attribute__ ((__always_inline__))
 
-// #define BOOST_NO_CXX11_CONSTEXPR
-// #define BOOST_NO_CXX11_DECLTYPE
-// #define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
-// #define BOOST_NO_CXX11_HDR_ARRAY
-// #define BOOST_NO_CXX11_RVALUE_REFERENCES
-// #define BOOST_NO_CXX11_USER_DEFINED_LITERALS
-// #define BOOST_NO_CXX11_VARIADIC_TEMPLATES
 
 // Finally include the boost library.
 // #include "boost_multiprecision/cpp_int.hpp"
