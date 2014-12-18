@@ -41,91 +41,30 @@ Development environment prerequisites (Ubuntu)
     sudo update-alternatives --config g++
     ```
     
-  - **configure boost.** Default recent dev boost package is not compatible with impala. Download boost 1.46.1 and build packages required by impala (always can be found in ${IMPALA_HOME}/CMakeLists.txt):
-    ####thread regex-mt system-mt filesystem-mt date_time
+  - **configure boost in 1 click.** Now, default boost package is compatible with Impala, thus in order to configure boost, regular dev package is enough ( note that boost version should be >= 1.46.1 )
+```sh
+sudo apt-get install libboost-all-dev
+```
+Just be careful to have environment clear from boost artifacts before deploying new boost package (especially using apt-get).
+To get rid of old possible boost artifacts:
+```sh
+sudo apt-get --purge remove libboost-dev
+sudo apt-get --purge remove libboost-all-dev
 
-    1. **First fix some bugs in boost sources.**
-    	* Being built with gcc, boost thread package encounters the conflict between gcc’s TIME\_UTC  (defined in 		/usr/include/time.h) and      self-defined TIME\_UTC (defined in  “boost path”/boost/thread/xtime.hpp). 	This happens because xtime.hpp includes “boost path”/boost/thread/thread\_time.hpp which in turn reference 		time.h from gcc’s headers.
-	There’s a bug on this that existed for a long time cross release
-	https://svn.boost.org/trac/boost/ticket/6940
-	and was fixed only in latest boost release.
-	To fix this, all TIME\_UTC menions in boost sources should be changed to TIME\_UTC\_ to get the rid of 			conflict with gcc.
-	**See changelist:** https://svn.boost.org/trac/boost/changeset/78973#file3
-	To fast apply the fix,
-	in boost sources tree:
-	```sh
-	find . -type f -print0 | xargs -0 sed -i 's/TIME_UTC/TIME_UTC_/g'
-	```
-	
-	* If compiled with gcc/g++ 4.7 and higher, where the reference to pthreads have changed to 				GLIBCXX_HAS_GTHREADS, so boost is unable to find pthreads and disable it.
-     	Bug: https://svn.boost.org/trac/boost/ticket/6165
-	Thus need to patch the file "your boost folder"/boost/config/stdlib/libstdcpp3.hpp
-	Required change is described here: 					
-	https://svn.boost.org/trac/boost/attachment/ticket/6165/libstdcpp3.hpp.patch
-	In short, in file following should be changed:
+# check installed boost version
+cat /usr/include/boost/version.hpp | grep "BOOST_LIB_VERSION"
 
-	```c
-	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
-	# if defined(_GLIBCXX_HAVE_GTHR_DEFAULT) \ 
-	|| defined(_GLIBCXX__PTHREADS) 
-	// If the std lib has thread support turned on, then turn it on in 
-	// Boost as well. We do this because some gcc-3.4 std lib headers
-	// define _REENTANT while others do not... 
-	// 
-	# define BOOST_HAS_THREADS 
-	# else 
-	# define BOOST_DISABLE_THREADS 
-	# endif
-	```
-	
-	To
-	
-	```c
-	#ifdef __GLIBCXX__ // gcc 3.4 and greater: 
-	# if defined(_GLIBCXX_HAVE_GTHR_DEFAULT) \ 
-	|| defined(_GLIBCXX__PTHREADS) \ 
-	|| defined(_GLIBCXX_HAS_GTHREADS) 
-	// gcc 4.7 
-	// If the std lib has thread support turned on, then turn it on in Boost 
-	// as well. We do this because some gcc-3.4 std lib headers define _REENTANT 
-	// while others do not... 
-	// 
-	# define BOOST_HAS_THREADS 
-	# else 
-	# define BOOST_DISABLE_THREADS 
-	# endif
-	```
-	
-	- Fix in boost/cstdint.hpp:
-    	
-	```c
-	// typedef  ::boost::long_long_type            int64_t;
-	typedef long int int64_t;
-	// typedef  ::boost::ulong_long_type   uint64_t;
-	typedef long unsigned int uint64_t;
-	```
-	
-	This will resolve ambiguous definitions (between system sys/types.h and boost’s boost/cstdint.hpp)
-	And another fix here (put new lines instead of commented lines)
-	
-	```c
-	// #if defined(BOOST_HAS_STDINT_H) && (!defined(__GLIBC__) ||
-	// defined(__GLIBC_HAVE_LONG_LONG))
-	# if defined(BOOST_HAS_STDINT_H)					\
-  	&& (!defined(__GLIBC__)					\
-      	|| defined(__GLIBC_HAVE_LONG_LONG)			\
-      	|| (defined(__GLIBC__) && ((__GLIBC__ > 2) || ((__GLIBC__ == 2) && 
-  	(__GLIBC_MINOR__ >= 17)))))
-	```
-        
- 	- Fix for boost::shared_ptr (copy constructor is missed). See   https://svn.boost.org/trac/boost/changeset/73202.
-        Fast fix: in shared_ptr.hpp ( /usr/local/include/boost/smart_ptr/shared_ptr.hpp) add default copy constructor (c++11 only)
+# check Boost package name:
+dpkg -S /usr/include/boost/version.hpp
 
-       ```c 
-       shared_ptr(const shared_ptr&) = default;
-       ```
-        
-    2. **Fast reference to build the boost.**
+# Then having package name:
+sudo apt-get autoremove package
+
+sudo apt-get remove libboost*
+sudo apt-get autoclean
+```
+
+  - **Fast reference to build the boost manually.**
     Newest boost builds do not contain packages with -mt prefixes as stated by boost.
     
     > To build libraries with -mt sufix:
@@ -187,12 +126,12 @@ mvn -version
 
 Impala build
 ----
-put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources
+put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources.  BOOST_LIBRARY_DIR and LD_LIBRARY_DIR should point to boost libraries location
 ```sh
 export JAVA_HOME=/usr/lib/jvm/java-7-oracle
 export IMPALA_HOME=YOUR_PATH/ImpalaToGo
-export BOOST_LIBRARYDIR=/usr/lib64
-export LD_LIBRARY_PATH=/usr/lib64
+export BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 ```
 and then run
 ```sh
@@ -245,14 +184,14 @@ Note that they will be rewritten with default values after frontend build.
  > In hive-site.xml, specify connection string, hive user and a password for one (for metastore usage). 
     
 2. ####Start all services.
-Before to start any impala service(impalad, catalogd, statestored) run prerequisites in shell (for environment variables setup on the shell). Here /usr/lib64 is the boost libraries location, specify yours there:
+Before to start any impala service(impalad, catalogd, statestored) run prerequisites in shell (for environment variables setup on the shell). Here /usr/lib/x86_64-linux-gnu is the boost libraries location, check and specify yours:
 
 ```sh
 export JAVA_HOME=/usr/lib/jvm/java-7-oracle
 export IMPALA_HOME=/home/elenav/src/ImpalaToGo
-export BOOST_LIBRARYDIR=/usr/lib64
+export BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
  . bin/impala-config.sh
-export LD_LIBRARY_PATH=/usr/lib64
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 ```
 - **start metastore:**
 For the first time, run the script:
