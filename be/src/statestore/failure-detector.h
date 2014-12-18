@@ -19,6 +19,7 @@
 #include <boost/thread/thread_time.hpp>
 #include <string>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
 namespace impala {

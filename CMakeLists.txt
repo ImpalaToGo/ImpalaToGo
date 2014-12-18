@@ -38,7 +38,7 @@ ENDIF (DEFINED ENV{BOOST_ROOT})
 
 set(Boost_DEBUG TRUE)
 set(Boost_USE_MULTITHREADED ON)
-find_package(Boost REQUIRED COMPONENTS thread regex-mt system-mt filesystem-mt date_time)
+find_package(Boost REQUIRED COMPONENTS thread regex system filesystem date_time)
 include_directories(${Boost_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${Boost_LIBRARIES})
 message(STATUS "Boost include dir: " ${Boost_INCLUDE_DIRS})
@@ -171,9 +171,9 @@ include_directories(${RAPIDJSON_INCLUDE_DIR})
 message(STATUS "RapidJson include dir: " ${RAPIDJSON_INCLUDE_DIR})
 
 # find boost multi precision headers
-find_package(BoostMultiPrecision REQUIRED)
-include_directories(${BOOST_MULTI_PRECISION_INCLUDE_DIR})
-message(STATUS "BoostMultiPrecision include dir: " ${BOOST_MULTI_PRECISION_INCLUDE_DIR})
+#find_package(BoostMultiPrecision REQUIRED)
+#include_directories(${BOOST_MULTI_PRECISION_INCLUDE_DIR})
+#message(STATUS "BoostMultiPrecision include dir: " ${BOOST_MULTI_PRECISION_INCLUDE_DIR})
 
 # find Avro headers and libs
 find_package(Avro REQUIRED)
