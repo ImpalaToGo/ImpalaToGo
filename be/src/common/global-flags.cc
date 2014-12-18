@@ -28,6 +28,11 @@ DEFINE_string(hostname, "", "Hostname to use for this daemon, also used as part 
 
 DEFINE_int32(be_port, 22000, "port on which ImpalaInternalService is exported");
 
+DEFINE_string(cache_location, "/var/cache/impalatogo/", "Cache location on current impala node");
+DEFINE_int32(cache_mem_percent_of_available, 85,
+		"percent of available memory which can be consumed by cache. Concerning the cache location arg \"cache_location\". "
+		"Should be the number from 1 to 100, currently everything > 85% will be set to 85%.");
+
 // Kerberos is enabled if and only if principal is set.
 DEFINE_string(principal, "", "Kerberos principal. If set, both client and backend network"
     "connections will use Kerberos encryption and authentication.");

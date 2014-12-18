@@ -12,7 +12,6 @@
 #include <list>
 #include <atomic>
 
-#include <boost/intrusive/set.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/filesystem.hpp>
@@ -58,8 +57,15 @@ namespace managed_file {
       FILE_IS_IDLE,                      /**< File is idle. No client sessions exist for this file. It is not handled by nobody.
       	  	  	  	  	  	  	  	  	 * This is the only state when file may be deleted from the cache.
       	  	  	  	  	  	  	  	  	 */
-      FILE_IS_FORBIDDEN                 /**< File is forbidden, do not use it */
+      FILE_IS_FORBIDDEN,                 /**< File is forbidden, do not use it */
+
+      FILE_IS_UNDER_WRITE,               /**< File is being written by some scenario */
    };
+
+   /**
+    * stringify the File Status
+    */
+   // extern std::ostream& operator<<(std::ostream& out, const managed_file::State value);
 
    /**
     * Represents managed file.
@@ -69,6 +75,11 @@ namespace managed_file {
     * - keeps unique name (hash key)
     */
    class File {
+   public:
+
+		/** callback to be invoked on LRU from its item to update about the item weight */
+		using WeightChangedEvent = typename boost::function<void(long long delta)>;
+
    private:
 	   std::atomic<State> m_state;                   /**< current file state */
 	   std::atomic<int>   m_subscribers;             /**< number of subscribers of this file (who may wait for this file to be downloaded */
@@ -77,6 +88,8 @@ namespace managed_file {
 	   std::string        m_fqnp;                    /**< fully qualified path (network) */
 	   boost::uintmax_t   m_size;                    /**< file size. For internal and user statistics and memory planning. */
 	   std::size_t        m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
+
+	   std::size_t        m_prevsize;                /**< always contains the "previous size", initially 0 */
 
 	   std::string        m_filename;         /**< relative file name. Within the scope where it is accessed now (remotely, locally) */
        std::string        m_originhost;       /**< origin host */
@@ -91,7 +104,7 @@ namespace managed_file {
        boost::posix_time::ptime m_lastsyncattempt;    	/**< last attempt to synchronize the file locally. Is relevant for file
         												* only if it is in FORBIDDEN state */
 
-       volatile std::atomic<unsigned> m_users;        /**< number of users so far */
+       volatile std::atomic<int>       m_users;        /**< number of users so far */
 
 	   static std::string              fileSeparator;  /**< platform-specific file separator */
 
@@ -101,9 +114,10 @@ namespace managed_file {
 	   boost::condition_variable m_state_changed_condition;   /**< condition variable for those who waits for file state changed */
 	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
-   public:
+	   WeightChangedEvent m_weightIsChangedcallback;          /**< "weight is changed" event callback */
 
-       static void initialize();
+   public:
+        static void initialize();
 
 	   /** Search predicate to find the handle by its shared pointer */
 	   struct FileHandleEqPredicate
@@ -125,8 +139,8 @@ namespace managed_file {
         * @param path       - full file local path
 	    */
 	   File(const char* path)
-         :  m_fqp(path), m_size(0), m_estimatedsize(0),
-            m_schema(DFS_TYPE::NON_SPECIFIED){
+         :  m_fqp(path), m_size(0), m_estimatedsize(0), m_prevsize(0),
+            m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0){
 
 		   m_state.store(State::FILE_IS_AMORPHOUS, std::memory_order_release);
 
@@ -145,6 +159,15 @@ namespace managed_file {
            m_subscribers.store(0);
            // specify that the attempt to resync the file from remote side can be performed once at 5 minutes
            m_duration_next_attempt_to_sync = boost::posix_time::minutes(_defaultTimeSliceInMinutes);
+	   }
+
+	   /**
+	    * Construct the managed file object basing on path.
+	    * Assign the "weight is changed" callback to be fired when the file detects its size is changed
+	    * (local size)
+	    */
+	   File(const char* path, const WeightChangedEvent& eve) : File(path){
+		   m_weightIsChangedcallback = eve;
 	   }
 
 	   ~File(){
@@ -167,7 +190,7 @@ namespace managed_file {
 	   /** getter for File state */
 	   inline State state() { return m_state.load(std::memory_order_acquire); }
 
-	   /** flag, idicates that the file is in valid state and can be used */
+	   /** flag, indicates that the file is in valid state and can be used */
 	   inline bool exists() {
 		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
 	   }
@@ -183,18 +206,60 @@ namespace managed_file {
 	   }
 
 	   /**
-	    * flag, indicates that there's no references to the file are in use.
-	    * Should be checked before to delete the file
+	    * Try mark the file for deletion. Only few file states permit this operation to happen.
+	    *
+        * @return true if file was marked for deletion
+        * No one should reference this file since it is marked for deletion
 	    */
-	   inline bool nonreferenced(){
-		   return !(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS ||
-				   m_subscribers.load(std::memory_order_acquire) != 0 ||
-				   m_state.load(std::memory_order_acquire) == State::FILE_IS_IN_USE_BY_SYNC);
+	   inline bool mark_for_deletion(){
+		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+		   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() << "\" is requested for deletion." <<
+				   "subscribers # = " <<  m_subscribers.load(std::memory_order_acquire) << "\n";
+		   // check all states that allow to mark the file for deletion:
+		   State expected = State::FILE_IS_IDLE;
+           bool marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           if(marked){
+        	   m_state_changed_condition.notify_all();
+        	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+        			   "\" is successfully marked for deletion." << "\n";
+        	   if(m_subscribers.load(std::memory_order_acquire) == 0)
+        		   return true;
+        	   return false;
+           }
+
+           expected = State::FILE_IS_FORBIDDEN;
+           marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           if(marked){
+        	   m_state_changed_condition.notify_all();
+        	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+        			   "\" is successfully marked for deletion." << "\n";
+        	   if(m_subscribers.load(std::memory_order_acquire) == 0)
+        		   return true;
+        	   return false;
+           }
+
+           expected = State::FILE_IS_AMORPHOUS;
+           marked   =  m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+           m_state_changed_condition.notify_all();
+           marked = (marked && (m_subscribers.load(std::memory_order_acquire) == 0));
+           std::string marked_str = marked ? "successfully" : "NOT";
+    	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
+    			   "\" is " << marked_str  << " marked for deletion." << "\n";
+
+    	   return marked;
 	   }
+
 	   /** setter for file state
 	    * @param state - file state to mark the file with
 	    */
 	   inline void state(State state) {
+		   // do not change file state when it is marked for deletion:
+		   if(m_state.load(std::memory_order_acquire) == State::FILE_IS_MARKED_FOR_DELETION)
+			   return;
+
 		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
 			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
 		   // fire the condition variable for whoever waits for file status to be changed:
@@ -207,11 +272,17 @@ namespace managed_file {
 	    *
 	    * @param [out] condition_var - condition variable to signal that the state is changed
 	    * @param [out] mux           - mutex to protect the condition subject (the status)
+	    *
+	    * @return if subscription is valid (if file is marked for deletion, the subscription is not valid)
 	    */
-	   inline void subscribe_for_updates(boost::condition_variable*& condition_var, boost::mutex*& mux){
+	   inline bool subscribe_for_updates(boost::condition_variable*& condition_var, boost::mutex*& mux){
+		   if(m_state.load(std::memory_order_acquire) == State::FILE_IS_MARKED_FOR_DELETION)
+		   			   return false;
+
 		   condition_var = &m_state_changed_condition;
 		   mux           = &m_state_changed_mux;
 		   m_subscribers++;
+		   return true;
 	   }
 
 	   /**
@@ -238,7 +309,6 @@ namespace managed_file {
 	    */
 	   inline void fqp(std::string fqp) {
 		   m_fqp = fqp;
-		   // TODO : reconstruct origin host and port
 	   }
 
 	   /** getter for File network path. When the file is reconstructed from existing local cache,
@@ -278,26 +348,27 @@ namespace managed_file {
 	    * to be possible.
 	    * @param size - estimated file size
 	    */
-	   inline void estimated_size(std::size_t size) { m_estimatedsize = size; }
+	   inline void estimated_size(std::size_t size) {
+		   long long delta = size - m_prevsize;
+		   // if any subscribers for size change, send the signal with a delta:
+		   if(m_weightIsChangedcallback)
+			   m_weightIsChangedcallback(delta);
+		   m_prevsize = size;
+		   m_estimatedsize = size;
+	   }
 
 
 	   /** getter for File last access (local).
 	    *
 	    * @return If there was an error during last access retrieval, the default time will be returned.
-	    *         Otherwise, last access time will be returned
+	    * Otherwise, last access time will be returned
 	    */
 	   inline boost::posix_time::ptime last_access() {
-		   // if last access is requested while the item is amorphous (to-be-restored-from file-system),
-		   // reply the real timestamp from file system.
-		   if(state() == State::FILE_IS_AMORPHOUS){
-			   boost::system::error_code ec;
-			   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
-			   // check ec, should be 0 in case of success:
-			   if(!ec)
-				   return boost::posix_time::from_time_t(last_access_time);
-			   return boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
-		   }
-		   // if file last access time is requested on the constructed file, reply "now" for timestamp
+		   boost::system::error_code ec;
+		   std::time_t last_access_time = boost::filesystem::last_write_time(m_fqp, ec);
+		   // check ec, should be 0 in case of success:
+		   if(!ec)
+			   return boost::posix_time::from_time_t(last_access_time);
 		   return boost::posix_time::microsec_clock::local_time();
 	   }
 
@@ -322,23 +393,25 @@ namespace managed_file {
       status::StatusInternal forceDelete();
 
       /**
-       * Add new opened handle to the list of handles.
+       * Mark the file with one more usage
        *
        * @return Operation status
        */
-      status::StatusInternal open();
+      status::StatusInternal open(int ref_count = 1);
 
       /**
-       * Explicitly remove the reference to a handle from the list of handles
+       * Unbind 1 or more usages of the file
        *
        * @return Operation status
        */
-      status::StatusInternal close();
+      status::StatusInternal close(int ref_count = 1);
 
       /**
        * Drop the file from file system
+       *
+       * @return operation status, true if file was removed
        */
-      void drop();
+      bool drop();
 
 	   /* ***********************   Methods group to fit the intrusive concept (LRU Cache)   ******************************/
 
@@ -359,6 +432,7 @@ namespace managed_file {
       /* *******************************************************************************************************/
    };
 }  /** namespace managed_file */
+
 }  /** namespace impala */
 
 

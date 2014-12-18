@@ -95,7 +95,7 @@ class HdfsTableWriter {
   virtual std::string file_extension() const = 0;
 
  protected:
-  // Size to buffer output before calling Write() (which calls hdfsWrite), in bytes
+  // Size to buffer output before calling Write(), in bytes
   // to minimize the overhead of Write()
   static const int HDFS_FLUSH_WRITE_SIZE = 50 * 1024;
 

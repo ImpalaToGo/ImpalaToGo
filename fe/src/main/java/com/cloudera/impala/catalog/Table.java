@@ -135,11 +135,17 @@ public abstract class Table implements CatalogObject {
   protected void loadColumnStats(Column col, HiveMetaStoreClient client) {
     ColumnStatistics colStats = null;
     try {
+      // Elena : 16.12.2014
+      LOG.info("Going to load column stats for " + col.getName());
       colStats = client.getTableColumnStatistics(db_.getName(), name_, col.getName());
     } catch (Exception e) {
+      // Elena : 16.12.2014
+      LOG.warn("Exception occur while loading column stats for " + col.getName() + "; ex :" + e.getMessage());
       // don't try to load stats for this column
       return;
     }
+    // Elena : 16.12.2014
+    LOG.info("Column stats loaded for " + col.getName());
 
     // we should never see more than one ColumnStatisticsObj here
     if (colStats.getStatsObj().size() > 1) return;
@@ -150,7 +156,8 @@ public abstract class Table implements CatalogObject {
           "type of column (%s)",  name_, col.getName(), col.getType().toString()));
       return;
     }
-
+    // Elena : 16.12.2014
+    LOG.info("Going to update column stats for " + col.getName());
     // Update the column stats data
     if (!col.updateStats(colStats.getStatsObj().get(0).getStatsData())) {
       LOG.warn(String.format("Applying the column stats update to table %s / " +
@@ -159,6 +166,9 @@ public abstract class Table implements CatalogObject {
           " regenerated for this column.",
           name_, col.getName(), col.getType().toString()));
     }
+    // Elena : 16.12.2014
+    else
+      LOG.info("Update column stats finished for " + col.getName());
   }
 
   /**

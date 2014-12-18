@@ -130,7 +130,7 @@ Status HdfsTableSink::Prepare(RuntimeState* state) {
     return Status(error_msg.str());
   }
 
-  staging_dir_ = Substitute("$0/.impala_insert_staging/$1/", table_desc_->hdfs_base_dir(),
+  staging_dir_ = Substitute("$0/impala_insert_staging/$1", table_desc_->hdfs_base_dir(),
       PrintId(state->query_id(), "_"));
 
   RETURN_IF_ERROR(PrepareExprs(state));
@@ -242,7 +242,7 @@ void HdfsTableSink::BuildHdfsFileNames(
   // Path: <hdfs_base_dir>/<partition_values>/<unique_id_str>
 
   // Temporary files are written under the following path which is unique to this sink:
-  // <table_dir>/.impala_insert_staging/<query_id>/<per_fragment_unique_id>_dir/
+  // <table_dir>/impala_insert_staging/<query_id>/<per_fragment_unique_id>_dir/
   // Both the temporary directory and the file name, when moved to the real partition
   // directory must be unique.
   // Prefix the directory name with "." to make it hidden and append "_dir" at the end
@@ -254,7 +254,7 @@ void HdfsTableSink::BuildHdfsFileNames(
   const string& query_suffix = Substitute("$0_$1_data", unique_id_str_, rand());
 
   output_partition->tmp_hdfs_dir_name =
-      Substitute("$0/.$1_$2_dir/", staging_dir_, unique_id_str_, rand());
+      Substitute("$0/$1_$2_dir/", staging_dir_, unique_id_str_, rand());
   output_partition->tmp_hdfs_file_name_prefix = Substitute("$0$1$2",
       output_partition->tmp_hdfs_dir_name, output_partition->partition_name,
       query_suffix);
@@ -284,14 +284,15 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   // Check if tmp_hdfs_file_name exists.
   const char* tmp_hdfs_file_name_cstr =
       output_partition->current_file_name.c_str();
-  if (dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr) == 0) {
+  bool available;
+  if ((dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr, &available) == 0) && available) {
     return Status(GetHdfsErrorMsg("Temporary HDFS file already exists: ",
         output_partition->current_file_name));
   }
   uint64_t block_size = output_partition->partition_descriptor->block_size();
   if (block_size == 0) block_size = output_partition->writer->default_block_size();
 
-  bool available;
+  available = false;
   output_partition->tmp_hdfs_file = dfsOpenFile(hdfs_connection_,
       tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size, available);
   if (output_partition->tmp_hdfs_file == NULL || !available) {

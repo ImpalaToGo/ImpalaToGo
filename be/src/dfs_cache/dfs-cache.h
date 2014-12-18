@@ -20,6 +20,8 @@
 #ifndef LIBDFS_CACHE_H_
 #define LIBDFS_CACHE_H_
 
+#include <functional>
+
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 
@@ -37,10 +39,13 @@ namespace impala {
  * @fn StatusInternal cacheInit()
  * @brief Initialize the module and underlying mechanisms.
  *
- * @param root - local cache root - absoulte filesystem path.
+ * @param mem_limit_percent - limit of available memory on @a root, in percents, that can be
+ * potentially consumed by cache
+ * @param root              - local cache root - absoulte filesystem path.
+ *
  * @return Operation status.
  */
-status::StatusInternal cacheInit(const std::string& root = "");
+status::StatusInternal cacheInit(int mem_limit_percent = 0, const std::string& root = "");
 
 /**
  * @fn StatusInternal cacheConfigureNameNode(const FileSystemDescriptor & adaptor)
@@ -190,10 +195,11 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
  * @param fsDescriptor  - FS connection details, may be need to locate the file locally.
  *                        Check what we receive in "path" here.
  * @param path          - The path to look for
+ * @param exists        - flag, indicates whether the file exists
  *
  * @return Operation status
  */
-status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path);
+status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, const char *path, bool* exists);
 
 /**
  * @fn status::StatusInternal dfsSeek(const FileSystemDescriptor & namenode, dfsFile file, tOffset desiredPos)

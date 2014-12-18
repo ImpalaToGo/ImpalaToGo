@@ -49,7 +49,7 @@ class CacheLayerTest : public ::testing::Test {
 	  impala::InitThreading();
 	  cacheInit();
 
-	  cacheInit("/home/elenav/src/ImpalaToGo/datastorage/local_root/");
+	  cacheInit(85, "/home/elenav/src/ImpalaToGo/datastorage/local_root/");
 
 	  m_namenode1    = {DFS_TYPE::OTHER, "", 0, "", "", true};
 	  m_namenodeHdfs = {DFS_TYPE::hdfs, "104.236.39.60", 8020, "", "", true};

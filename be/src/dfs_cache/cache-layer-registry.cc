@@ -16,9 +16,9 @@ namespace impala{
 boost::scoped_ptr<CacheLayerRegistry> CacheLayerRegistry::instance_;
 std::string CacheLayerRegistry::fileSeparator;
 
-void CacheLayerRegistry::init(const std::string& root) {
+void CacheLayerRegistry::init(int mem_limit_percent, const std::string& root) {
   if(CacheLayerRegistry::instance_.get() == NULL)
-	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(root));
+	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root));
 
   // Initialize File class
   managed_file::File::initialize();
@@ -104,15 +104,53 @@ bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& d
 	return m_cache->add(fqp, file);
 }
 
-bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, const char* path){
+bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, const char* path, bool physically){
 	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
 	if(fqp.empty()){
 		LOG (WARNING) << "Cache Layer Registry : file was not deleted. Unable construct fqp from \"" << path << "\"\n";
 		return false;
 	}
-	// Below instruction will drop the file form file system - in case if there's no usage of that file so far.
+	// Below instruction will drop the file from file system - in case if there's no usage of that file so far.
 	// If any pending users, the file won't be removed
-	return m_cache->remove(std::string(fqp));
+	return m_cache->remove(std::string(fqp), physically);
+}
+
+bool CacheLayerRegistry::deletePath(const FileSystemDescriptor &descriptor, const char* path){
+	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
+	if(fqp.empty()){
+		LOG (WARNING) << "Cache Layer Registry : path was not deleted. Unable construct fqp from \"" << path << "\"\n";
+		return false;
+	}
+	// Below instruction will remove the path from file system - in case if there's no usage of its content so far.
+	// If any pending users on some files, the overall operation status will be "false"
+	return m_cache->deletePath(std::string(fqp));
+}
+
+bool CacheLayerRegistry::registerCreateFromSelectScenario(const dfsFile& local, const dfsFile& remote){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+    // if no scenario for file specified exists, add one.
+	if (m_createFromSelect.find(local) == m_createFromSelect.end() ) {
+		m_createFromSelect[local] = remote;
+		return true;
+	}
+	return false;
+}
+
+bool CacheLayerRegistry::unregisterCreateFromSelectScenario(const dfsFile& local){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+	size_t erased_items = m_createFromSelect.erase(local);
+	return erased_items == 1 ? true : false;
+}
+
+dfsFile CacheLayerRegistry::getCreateFromSelectScenario(const dfsFile& local, bool& exists){
+	boost::mutex::scoped_lock lockconn(m_createfromselect_mux);
+	itCreateFromSelect it = m_createFromSelect.find(local);
+	if (it == m_createFromSelect.end()) {
+		exists = false;
+		return NULL;
+	}
+	exists = true;
+	return (*it).second;
 }
 }
 

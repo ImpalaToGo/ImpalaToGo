@@ -113,7 +113,7 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
                       int bufferSize, short replication, tSize blocksize, bool& available){
 
 
-	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED};
+	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED, 0, 0};
 
 	// calculate fully qualified local path from requested
 	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, path);
@@ -209,6 +209,8 @@ dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor
 	// Got file opened, reply it
 	file->file = fp;
 	file->type = dfsStreamType::INPUT;
+	file->size = sizeof(FILE);
+
 	available = true;
 
 	return file;
@@ -323,7 +325,14 @@ status::StatusInternal FileSystemManager::dfsDelete(const FileSystemDescriptor &
 }
 
 status::StatusInternal FileSystemManager::dfsRename(const FileSystemDescriptor & fsDescriptor, const char* oldPath, const char* newPath){
-	return status::StatusInternal::NOT_IMPLEMENTED;
+	std::string localPathOld = managed_file::File::constructLocalPath(fsDescriptor,  oldPath);
+	std::string localPathNew = managed_file::File::constructLocalPath(fsDescriptor,  newPath);
+
+	LOG (INFO) << "Renaming \"" << localPathOld.c_str() << "\" to \"" << localPathNew.c_str() << "\".\n";
+	int ret = std::rename(localPathOld.c_str(), localPathNew.c_str());
+	if(ret != 0)
+		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+	return status::StatusInternal::OK;
 }
 
 status::StatusInternal FileSystemManager::dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path){

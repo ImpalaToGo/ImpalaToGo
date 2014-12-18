@@ -601,7 +601,8 @@ Status Coordinator::FinalizeSuccessfulInsert() {
         if (FLAGS_insert_inherit_permissions) {
           PopulatePathPermissionCache(hdfs_connection, part_path, &permissions_cache);
         }
-        if (dfsExists(hdfs_connection, part_path.c_str()) != -1) {
+        bool available;
+        if ((dfsExists(hdfs_connection, part_path.c_str() , &available) == 0) && available) {
           partition_create_ops.Add(DELETE_THEN_CREATE, part_path);
         } else {
           // Otherwise just create the directory.
@@ -612,7 +613,8 @@ Status Coordinator::FinalizeSuccessfulInsert() {
       if (FLAGS_insert_inherit_permissions) {
         PopulatePathPermissionCache(hdfs_connection, part_path, &permissions_cache);
       }
-      if (dfsExists(hdfs_connection, part_path.c_str()) == -1) {
+      bool available;
+      if ((dfsExists(hdfs_connection, part_path.c_str(), &available) == 0 ) && !available) {
         partition_create_ops.Add(CREATE_DIR, part_path);
       }
     }

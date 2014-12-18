@@ -138,6 +138,7 @@ public class CatalogServiceCatalog extends Catalog {
   public void prioritizeLoad(List<TCatalogObject> objectDescs) {
     for (TCatalogObject catalogObject: objectDescs) {
       Preconditions.checkState(catalogObject.isSetTable());
+      LOG.info("Construct the table.");
       TTable table = catalogObject.getTable();
       tableLoadingMgr_.prioritizeLoad(new TTableName(table.getDb_name().toLowerCase(),
           table.getTbl_name().toLowerCase()));
@@ -415,9 +416,13 @@ public class CatalogServiceCatalog extends Catalog {
     catalogLock_.readLock().lock();
     try {
       Table tbl = getTable(dbName, tblName);
-      if (tbl == null || tbl.isLoaded()) return tbl;
+      if (tbl == null || tbl.isLoaded()) {
+        LOG.info("table " + tblName + " is loaded or null");
+        return tbl;
+      }
       previousCatalogVersion = tbl.getCatalogVersion();
       loadReq = tableLoadingMgr_.loadAsync(tableName, null);
+      LOG.info("load async is execued for table " + tblName + ".");
     } finally {
       catalogLock_.readLock().unlock();
     }

@@ -14,6 +14,24 @@ namespace impala {
 
 namespace managed_file {
 
+/*
+std::ostream& operator<<(std::ostream& out, const managed_file::State value){
+	static std::map<managed_file::State, std::string> strings;
+	if (strings.size() == 0) {
+#define INSERT_ELEMENT(p) strings[p] = #p
+		INSERT_ELEMENT(FILE_IS_MARKED_FOR_DELETION);
+		INSERT_ELEMENT(FILE_IS_IN_USE_BY_SYNC);
+		INSERT_ELEMENT(FILE_HAS_CLIENTS);
+		INSERT_ELEMENT(FILE_IS_AMORPHOUS);
+		INSERT_ELEMENT(FILE_IS_IDLE);
+		INSERT_ELEMENT(FILE_IS_FORBIDDEN);
+		INSERT_ELEMENT(FILE_IS_UNDER_WRITE);
+#undef INSERT_ELEMENT
+	}
+	return out << strings[value];
+}
+*/
+
 std::string File::fileSeparator;
 std::vector<std::string> File::m_supportedFs;
 
@@ -57,8 +75,6 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 
 	// create the path object from local path:
 	boost::filesystem::path local_path(local);
-	LOG (INFO) << "substr to cut the local configured cache root from path. Root : \"" <<
-			root << "\"; local_path : \"" << local_path << "\" n";
 
 	// cut the local cache configured root:
 	std::string temp = local_path.string().substr(root.length(), local_path.string().length() - root.length());
@@ -146,26 +162,40 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	return descriptor;
 }
 
-status::StatusInternal File::open() {
-	m_state = State::FILE_HAS_CLIENTS;
-	std::atomic_fetch_add_explicit (&m_users, 1u, std::memory_order_relaxed);
+status::StatusInternal File::open( int ref_count) {
+	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
+		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
+
+	if(m_state != State::FILE_IS_FORBIDDEN)
+		m_state = State::FILE_HAS_CLIENTS;
+	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_relaxed);
+	LOG (INFO) << "File open \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	return status::OK;
 }
 
-status::StatusInternal File::close() {
-	if ( std::atomic_fetch_sub_explicit (&m_users, 1u, std::memory_order_release) == 1 ) {
+status::StatusInternal File::close(int ref_count) {
+	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
+		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
+
+	if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == ref_count ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
 		m_state = State::FILE_IS_IDLE;
+		LOG (INFO) << "File \"" << fqp() << "\" is no more referenced. refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	}
+	LOG (INFO) << "File close \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << std::endl;
 	return status::OK;
 }
 
-void File::drop(){
+bool File::drop(){
+	// we only drop objects marked for finalization:
+	if(m_state.load(std::memory_order_acquire) != State::FILE_IS_MARKED_FOR_DELETION)
+		return false;
+
 	// if there're clients using the file in read/write or clients who is waiting for the file update,
 	// the file cannot be deleted
 	if(m_state.load(std::memory_order_acquire) == State::FILE_HAS_CLIENTS || m_subscribers.load(std::memory_order_acquire) != 0){
 		  LOG (WARNING) << "Rejecting an attempt to delete file \"" << fqp() << "\". Reason : in direct use or referenced." << "\n";
-		return;
+		return false;
 	}
 
 	boost::system::error_code ec;
@@ -178,8 +208,11 @@ void File::drop(){
 		e.what() << "\n";
 	}
 	if(!ec){
-		LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";
+		LOG (INFO) << "File \"" << fqp() << "\" is removed from file system." << "\n";
+		return true;
 	}
+	LOG (ERROR) << "Failed to delete the file \"" << fqp() << "\". Message : \"" << ec.message() << "\".\n";
+	return false;
 }
 
 status::StatusInternal File::forceDelete(){
@@ -200,6 +233,6 @@ status::StatusInternal File::forceDelete(){
 }
 
 
-} /** namespace ManagedFile */
+} /** namespace managed_file */
 } /** namespace impala */
 

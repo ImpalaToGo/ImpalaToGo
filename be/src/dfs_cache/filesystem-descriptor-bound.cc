@@ -11,7 +11,7 @@
 
 namespace impala {
 
-std::ostream& operator<<(std::ostream& out, const DFS_TYPE value) {
+std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value) {
 	static std::map<DFS_TYPE, std::string> strings;
 	if (strings.size() == 0) {
 #define INSERT_ELEMENT(p) strings[p] = #p
@@ -85,8 +85,6 @@ raiiDfsConnection FileSystemDescriptorBound::getFreeConnection() {
 	i1 = std::find_if(m_connections.begin(), m_connections.end(),
 			predicateFreeConnection);
 	if (i1 != m_connections.end()) {
-		LOG (INFO)<< "Existing free connection is found and will be used for file system \"" << m_fsDescriptor.dfs_type << ":"
-		<< m_fsDescriptor.host << "\"" << "\n";
 		// return the connection, mark it busy!
 		(*i1)->state = dfsConnection::BUSY_OK;
 		return std::move(raiiDfsConnection(*i1));
@@ -158,6 +156,29 @@ tSize FileSystemDescriptorBound::filePread(raiiDfsConnection& conn, dfsFile file
 	return _dfsPread(conn.connection()->connection, file, position, buffer, length);
 }
 
+tSize FileSystemDescriptorBound::fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length){
+	return _dfsWrite(conn.connection()->connection, file, buffer, length);
+}
+
+int FileSystemDescriptorBound::fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath){
+	return _dfsRename(conn.connection()->connection, oldPath, newPath);
+}
+
+int FileSystemDescriptorBound::pathDelete(raiiDfsConnection& conn, const char* path, int recursive){
+	return _dfsDelete(conn.connection()->connection, path, recursive);
+}
+
+dfsFileInfo* FileSystemDescriptorBound::fileInfo(raiiDfsConnection& conn, const char* path){
+	return _dfsGetPathInfo(conn.connection()->connection, path);
+}
+
+void FileSystemDescriptorBound::freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries){
+	return _dfsFreeFileInfo(fileInfo, numOfEntries);
+}
+
+bool FileSystemDescriptorBound::pathExists(raiiDfsConnection& conn, const char* path){
+	return (_dfsPathExists(conn.connection()->connection, path) == 0 ? true : false);
+}
 
 } /** namespace impala */
 

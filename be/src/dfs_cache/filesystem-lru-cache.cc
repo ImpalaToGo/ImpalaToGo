@@ -19,30 +19,77 @@
 namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
-	// no matter the scenario, do not pass to removal if any clients still use or reference the file:
-	if(!isSafeToDeleteItem(file))
-		return false;
+	// preserve path for future usage:
+	std::string path = file->fqp();
+	{
+		std::lock_guard<std::mutex> lock(m_deletionsmux);
 
-	// no usage so far, mark the file for deletion:
-	file->state(managed_file::State::FILE_IS_MARKED_FOR_DELETION);
+		// add the item into deletions list
+		m_deletionList.push_back(file->fqp());
+	}
+	// notify deletion action is scheduled
+	m_deletionHappensCondition.notify_all();
 
 	// for physical removal scenario, drop the file from file system
 	if (physically) {
+		LOG (INFO) << "File \"" << file->fqp() << "\" is near to be removed from the disk." << "\n";
 		// delegate further deletion scenario to the file itself:
 		file->drop();
 	}
 
 	// get rid of file metadata object:
 	delete file;
-	{
-		boost::mutex::scoped_lock lock(m_deletionsmux);
-		// add the item into deletions list
-		m_deletionList.push_back(file->fqp());
 
-		// notify deletion happens
-		m_deletionHappensCondition.notify_all();
+	{
+		std::lock_guard<std::mutex> lock(m_deletionsmux);
+
+    	// now drop the file from deletions list:
+    	m_deletionList.remove(path);
 	}
+	// notify deletion happens
+	m_deletionHappensCondition.notify_all();
+
 	return true;
+}
+
+bool FileSystemLRUCache::deletePath(const std::string& path){
+	boost::filesystem::recursive_directory_iterator end_iter;
+
+	// collection to hold files under the path:
+	typedef std::vector<boost::filesystem::path> files;
+	typedef std::vector<boost::filesystem::path>::iterator files_it;
+	files _files;
+
+	bool ret = true;
+
+	if (!boost::filesystem::exists(path))
+		return false;
+
+	// if path is the directory:
+	if (boost::filesystem::is_directory(path)){
+		for (boost::filesystem::recursive_directory_iterator dir_iter(path);
+				dir_iter != end_iter; ++dir_iter) {
+			if (boost::filesystem::is_regular_file(dir_iter->status())) {
+				_files.push_back(*dir_iter);
+			}
+		}
+		files_it it = _files.begin();
+
+		if (it == _files.end())
+			return true;
+
+		for (; it != _files.end(); it++) {
+			// drop all files:
+			ret = ret && remove((*it).string(), true);
+		}
+		// if all files were removed, its safe to remove the path completely
+		if(ret)
+			boost::filesystem::remove_all(path);
+		return ret;
+	}
+
+	// the path is a file, so just remove it physically
+	return remove(path, true);
 }
 
 void FileSystemLRUCache::sync(managed_file::File* file){
@@ -134,9 +181,8 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 		file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		return;
 	}
-	else
-	// file is present and is ready to use
-	file->state(managed_file::State::FILE_IS_IDLE);
+	file->state(managed_file::State::FILE_HAS_CLIENTS);
+
 }
 
 bool FileSystemLRUCache::reload(const std::string& root){
@@ -199,9 +245,36 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	if(file == nullptr)
     		return file;
 
-    	// if file is "near to be deleted" or "is forbidden but the time between sync attempts elapsed", it should be resync.
-    	//
-    	// prevent outer world from usage of invalid or near-to-delete references:
+    	std::unique_lock<std::mutex> lock(m_deletionsmux);
+    	// check whether the requested file is under finalization maybe?
+    	bool under_finalization = std::find(m_deletionList.begin(), m_deletionList.end(), path) != m_deletionList.end();
+
+    	// if file is under finalization already or was unable to be opened, wait while it will be finalized
+    	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
+        if(under_finalization || (file->open() != status::StatusInternal::OK)){
+
+        	// Check the active deletions list, if the file is there, do not use it and reclaim it for reload when deletion completes:
+        	std::list<std::string>::iterator it;
+        	m_deletionHappensCondition.wait(lock, [&] {
+        		it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
+        		return it == m_deletionList.end();
+        	}
+        	);
+        	lock.unlock();
+
+        	// reclaim the file:
+        	file = m_idxFileLocalPath->operator [](path);
+        	if(file == nullptr)
+        		return nullptr;
+
+        	return file;
+        }
+
+    	// unlock deletions list, will work only if alive file was "opened" successfully
+    	lock.unlock();
+
+     	// if file is "forbidden but the time between sync attempts elapsed", it should be resync.
+    	// prevent outer world from usage of invalid:
     	// if file state is "FORBIDDEN" (which means the file was not synchronized locally successfully on last attempt)
     	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
     		// resync the file if the time between sync attempts elapsed:
@@ -209,20 +282,6 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     			sync(file);
     		}
     	}
-        if(file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION){
-
-        	// wait while the item will be deleted and reach the deletions list
-        	boost::unique_lock<boost::mutex> lock(m_deletionsmux);
-        	std::list<std::string>::iterator it;
-        	m_deletionHappensCondition.wait(lock, [&] {
-        				 it = std::find(m_deletionList.begin(), m_deletionList.end(), path);
-        				 return it != m_deletionList.end();}
-        	);
-        	// now drop the file from deletions list:
-        	m_deletionList.erase(it);
-        	// and reclaim it:
-        	file = m_idxFileLocalPath->operator [](path);
-        }
     	return file;
     }
 
@@ -231,17 +290,29 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     	bool success   = false;
 
     	// we create and destruct File objects only here, in LRU cache layer
-    	file = new managed_file::File(path.c_str());
-    	file->estimated_size(boost::filesystem::file_size(path));
+    	file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
 
+    	// increase refcount to this file before being shared to outer world
+    	file->open();
+    	// when item is externally injected to the cache, it should have time "now"
     	success = LRUCache<managed_file::File>::add(file, duplicate);
-    	if(duplicate)
+    	if(duplicate){
+    		LOG(WARNING) << "Attempt to add the duplicate to the cache, path = \"" << path << "\"\n";
     		// no need for this file, get the rid of
     		delete file;
+    	}
 
     	return success;
 }
 
+void FileSystemLRUCache::handleCapacityChanged(long long size_delta){
+	if(size_delta == 0)
+		return;
+	if(size_delta > 0)
+		std::atomic_fetch_add_explicit(&m_currentCapacity, size_delta, std::memory_order_relaxed);
+	else
+		std::atomic_fetch_sub_explicit(&m_currentCapacity, size_delta, std::memory_order_relaxed);
+}
 }
 
 

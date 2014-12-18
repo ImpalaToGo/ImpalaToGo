@@ -45,6 +45,10 @@ using namespace std;
 
 DECLARE_string(classpath);
 DECLARE_bool(use_statestore);
+
+DECLARE_string(cache_location);
+DECLARE_int32(cache_mem_percent_of_available);
+
 DECLARE_int32(beeswax_port);
 DECLARE_int32(hs2_port);
 DECLARE_int32(be_port);
@@ -55,7 +59,10 @@ int main(int argc, char** argv) {
 
   LlvmCodeGen::InitializeLlvm();
 
-  JniUtil::InitLibhdfs();
+  // init the cache layer with cache data location and percent of available space on the location
+  // that can be potentially consumed by cache:
+  JniUtil::InitLibdfs(FLAGS_cache_mem_percent_of_available, FLAGS_cache_location);
+
   EXIT_IF_ERROR(HBaseTableScanner::Init());
   EXIT_IF_ERROR(HBaseTableFactory::Init());
   EXIT_IF_ERROR(HBaseTableWriter::InitJNI());

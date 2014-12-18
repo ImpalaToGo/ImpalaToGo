@@ -31,16 +31,10 @@
 
 #include "dfs_cache/sync-with-utilities.hpp"
 #include "dfs_cache/lru-generator.hpp"
+#include "dfs_cache/utilities.hpp"
 #include "common/logging.h"
 
 namespace impala{
-
-/** Giving the boost::shared_ptr<T> to nothing (nullptr) */
-class {
-public:
-    template<typename T>
-    operator boost::shared_ptr<T>() { return boost::shared_ptr<T>(); }
-} nullPtr;
 
 /** Represents LRU (least recent used ) cache */
 template<typename ItemType_>
@@ -56,7 +50,7 @@ public:
 	template<typename KeyType_>
 	using LoadItemFunc = typename boost::function<void(ItemType_* item)>;
 
-	/** predicate to construct/acquire externally the cache-managed object using the key */
+	/** predicate to construct/acquire externally the cache-managed object using the key and the "weight is changed" event*/
 	template<typename KeyType_>
 	using ConstructItemFunc = typename boost::function<ItemType_*(KeyType_ key)>;
 
@@ -69,8 +63,8 @@ public:
 	/** "check item can be removed" predicate.
 	 * @param item - item to check for removal approval
 	 *
-	 * @return bool if item is allowed if removal */
-	using TellItemIsIdle = typename boost::function<bool(ItemType_* item)>;
+	 * @return predicate to try mark the item for deletion*/
+	using MarkItemForDeletion = typename boost::function<bool(ItemType_* item)>;
 
 	/** "get the item timestamp" predicate */
 	using TellItemTimestamp = typename boost::function<boost::posix_time::ptime(ItemType_* item)>;
@@ -109,11 +103,14 @@ protected:
     isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaidity */
     TellCapacityLimitPredicate m_tellCapacityLimitPredicate;  /**< predicate to be invoked to get the limit of capacity. For capacity planning */
     TellWeightPredicate        m_tellWeightPredicate;         /**< predicate to be invoked to get the weight of item. For cleanup planning */
-    TellItemIsIdle             m_tellItemIsIdle;              /**< predicate to check whether item can be removed. */
+    MarkItemForDeletion        m_markForDeletion;             /**< predicate to mark the item for deletion. */
     TellItemTimestamp          m_tellItemTimestamp;           /**< predicate to tell item timestamp */
     AcceptAssignedTimestamp    m_acceptAssignedTimestamp;     /**< predicate to update external item with assigned timestamp */
     ItemDeletionPredicate      m_itemDeletionPredicate;       /**< predicate to run externally when the item is removed from the cache */
 
+    mutable std::atomic<long long>  m_currentCapacity;    /**< current cache capacity, in regards to capacity units configured.
+                                                               represents  real weight of whole cache data */
+    long long                       m_capacityLimit;      /**< cache capacity limit, configurable. We use 90% from configured value */
 private:
 
     /** Internal Index API between Cache Manager and Indexes */
@@ -256,6 +253,7 @@ private:
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
         		}
+        		// here,
         		if(!node)
         			return nullptr;
         	}
@@ -469,8 +467,13 @@ private:
                  this->value(item);
 
                  long long weight = m_mgr->m_owner->tellWeight(item);
+                 LOG (INFO) << "Node add : item weight = " << std::to_string(weight);
+                 LOG (INFO) << "capacity before node added : "
+                		 << std::to_string(m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
                  // Read-modify-write actions are guaranteed to read the most recently written value regardless of memory ordering
                  std::atomic_fetch_add_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
+                 LOG (INFO) << "capacity after node added : " <<
+                		 std::to_string(m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
 			}
 
 			virtual ~Node() {
@@ -543,9 +546,14 @@ private:
 				return m_mgr->m_owner->tellWeight(this->value());
 			}
 
-			/** get next node */
+			/** set next node */
 			boost::shared_ptr<Node> next(){
 				return m_next;
+			}
+
+			/** get next node */
+			void next(const boost::shared_ptr<Node>& node){
+				m_next = node;
 			}
 
 			/** get age bucket */
@@ -569,14 +577,22 @@ private:
                 		result = m_mgr->m_owner->deleteItemExt(this->value(), cleanup);
                 	}
                 	catch(...){
-                		// external operations are nothrow locally
+                		LOG (WARNING) << "Exception thrown from external deleter." << "\n";
                 	}
+                    if(!result){
+                    	LOG (WARNING) << "Node deletion is requested for item that cannot be removed. Node will not be removed as well.\n";
+                    	return result;
+                    }
 
                 	// say no external value is managed more by this node
                     this->value(nullptr);
 
+                    LOG (INFO) << "capacity before node removal : " <<
+                    		std::to_string((m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
                     // decrease cache current capacity once the node is removed
                 	std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
+                    LOG (INFO) << "capacity after node removal : " <<
+                    		std::to_string( (m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
                 	// decrease number of hard items
                     std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
                 }
@@ -709,6 +725,7 @@ private:
         /** checks to see if cache is still valid and if LifespanMgr needs to do maintenance */
         void checkValid(){
         	boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
 
         	// If lock is currently acquired, just skip and let next touch() perform the cleanup.
@@ -718,7 +735,7 @@ private:
         		if(lock){
         			// get the current capacity once again (another thread may issued cleanup till now)
         			currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
-        			if((now > m_checkTime) || (currentCapacity >= m_owner->m_capacityLimit)){
+        			if((now > m_checkTime) || (currentCapacity > m_owner->m_capacityLimit)){
         				// if cache is no longer valid throw contents away and start over, else cleanup old items
         				if( m_numberOfBuckets > m_numberOfBucketsLimit || (m_owner->m_isValid && !m_owner->m_isValid()) ){
         					// unlock lifespan manager so far and let it run cleanup
@@ -750,14 +767,18 @@ private:
         	// and more buckets if needed.
 
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
-        	int weightToRemove = currentCapacity - m_owner->m_capacityLimit;
+        	long long weightToRemove = currentCapacity - m_owner->m_capacityLimit;
+
+        	LOG (INFO) << "LRU Cleanup is triggered. Current capacity = " << std::to_string(currentCapacity) <<
+        			". Weight to remove = " << std::to_string(weightToRemove) << "; capacity limit = " <<
+        			std::to_string(m_owner->m_capacityLimit) << ".\n";
 
         	boost::mutex::scoped_lock lock(*lifespan_mux());
 
         	auto it = m_bucketsKeys->begin();
 
         	// go over buckets, from very old to newer, until the necessary cleanup is done:
-        	while( (weightToRemove) > 0 && it != m_bucketsKeys->end()) {
+        	while( weightToRemove > 0 && it != m_bucketsKeys->end()) {
             	// get the key to describe the oldest bucket:
             	long long key = (*(it));
 
@@ -767,17 +788,32 @@ private:
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
+        		// handle the situation when there's single node in the bucket and the bucket is the recent one,
+        		// so, the cleanup was triggered by adding the node which is near to be deleted right now (suppress this).
+        		// cleanup will be triggered next time and remove this node without affect of possible current usage
+        		if((m_bucketsKeys->size() == 1) && node && !node->next()){
+        			it++;
+        			continue;
+        		}
+        		// and reverse nodes under this bucket so that most recent added will be last to delete:
+        		utilities::reverse(node);
                 // store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
                 boost::shared_ptr<Node> active = nullPtr;
 
-        		while(node){
+                while(node && (weightToRemove > 0)){
         			// note the node next to current one
         			boost::shared_ptr<Node> next = node->next();
 
         			if( node->value() != nullptr && node->bucket() != nullptr ){
         				if( node->bucket() == bucket ) {
+        					// cannot remove this node as it seems just was added. Set transit exit condition
+                        	if((m_bucketsKeys->size() == 1) && node && !node->next()){
+                        		weightToRemove = 0;
+                        		break;
+                        	}
+
         					// item has not been touched since bucket was closed, so remove it from LifespanMgr if it is allowed for removal.
-                            if(!m_owner->checkRemovalApproval(node->value())){
+                            if(!m_owner->markForDeletion(node->value())){
                             	// no approval for item removal received. Deny the age bucket removal
                             	deletePermitted = false;
 
@@ -787,27 +823,42 @@ private:
                             	}
                             	else
                             	{
-                            		active->next() = node;
+                            		active->next(node);
+                            	}
+                            	// try next node:
+                            	node = next;
+                            	continue;
+                            }
+        					// get the weight the item will release back to the cache:
+        					long long toRelease = m_owner->tellWeight(node->value());
+
+        					// remove the node
+                		    bool result = node->remove(true);
+                		    if(!result){
+                		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
+
+                            	if(!active){
+                            		active = node;
+                            		node->bucket()->first = active;
+                            	}
+                            	else
+                            	{
+                            		active->next(node);
                             	}
                             	// try next node:
                             	node = next;
 
-                            	continue;
-                            }
-        					// get the weight the item will release:
-        					long long toRelease = m_owner->tellWeight(node->value());
-        					weightToRemove -= toRelease;
+                		    	continue;
+                		    }
 
-                			// remove the node
-                		    bool result = node->remove(true);
-                		    if(!result)
-                		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
+                		    weightToRemove -= toRelease;
+                		    LOG (INFO) << "Cleanup : to remove = " << std::to_string(weightToRemove) << std::endl;
                 		    // cut off it from registry
                 			node.reset();
         				}
         				else {
         					// item has been touched and should be moved to correct age bag now
-        					node->next() = node->bucket()->first;
+        					node->next(node->bucket()->first);
         					// and point another Age Bucket to this node as to the first node:
         					node->bucket()->first = node;
         				}
@@ -815,8 +866,10 @@ private:
         			node = next;
         		}
 
-        		if(!deletePermitted)
+        		if(!deletePermitted){
+        			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
+        		}
 
         		// drop the bucket from set of buckets:
         		m_buckets->erase(key);
@@ -863,7 +916,7 @@ private:
         }
 
         /** get ready a new AgeBucket for usage. Close the previous one
-         * @param start - start time for new bucket
+         * @param start - start time for new bucketadd
          *
          * @return constructed bucket
          */
@@ -957,10 +1010,6 @@ private:
 	LifespanMgr* m_lifeSpan;
 	std::unordered_map<std::string, IIndexInternal* >*  m_indexList;  /**< set of defined indexes */
 
-	long long                       m_capacityLimit;      /**< cache capacity limit, configurable. We use 90% from configured value */
-	mutable std::atomic<long long>  m_currentCapacity;    /**< current cache capacity, in regards to capacity units configured.
-                                                               represents  real weight of whole cache data */
-
 	mutable std::atomic<unsigned>  m_numberOfHardItems;  /**< number of hard items - really hosted by Cache right now */
 	mutable std::atomic<unsigned>  m_numberOfSoftItems;  /**< number of soft items - have ever been added into the cache since last indexes clean.
 	                                                           Soft means that this amount includes either deleted nodes and existing.
@@ -983,9 +1032,9 @@ private:
     }
 
     /** external call to get the item deletion approval */
-    bool checkRemovalApproval(ItemType_* item){
-    	if(m_tellItemIsIdle)
-    		return m_tellItemIsIdle(item);
+    bool markForDeletion(ItemType_* item){
+    	if(m_markForDeletion)
+    		return m_markForDeletion(item);
     	return true;
     }
 
@@ -1061,7 +1110,7 @@ private:
 	 */
     LRUCache(boost::posix_time::ptime startFrom,  long long capacity, isValidPredicate isValid = 0) : m_startTime(startFrom){
 
-    	m_capacityLimit = capacity * 0.9; // get the idea how many capacity Cache is allowed for
+    	m_capacityLimit = capacity;
 
         m_isValid  = isValid;
         m_lifeSpan = new LifespanMgr(this, startFrom);
@@ -1077,14 +1126,27 @@ private:
     }
 
     /** cleanup */
-    ~LRUCache() {
-    	clear();
+    virtual ~LRUCache() {
+    	if(m_indexList == nullptr || m_lifeSpan == nullptr)
+    		return;
+
     	for(auto item : (*m_indexList)){
     		delete item.second;
        	}
 
+    	// delete indexes list:
+    	if(m_indexList != nullptr)
+    		delete m_indexList;
+    	m_indexList = nullptr;
+
     	if(m_lifeSpan != nullptr)
     		delete m_lifeSpan;
+
+    	m_lifeSpan = nullptr;
+
+    	if(m_indexList != nullptr)
+    		delete m_indexList;
+    	m_indexList = nullptr;
     }
 
     /** Retrieve a index by name */
@@ -1127,12 +1189,20 @@ private:
     /** Add an item to the cache (not needed if accessed by index) */
     bool add(ItemType_*& item, bool& duplicate)
     {
+    	// cannot add an item to the cache if the capacity limit exceeded (for example, all cache content is still in use):
+    	if(m_currentCapacity.load(std::memory_order_acquire) > m_capacityLimit){
+    		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded.\n";
+    		return false;
+    	}
+
     	bool success = false;
     	duplicate    = false;
 
     	// items that are issued earlier than specified in m_startTime are rejected as well as null-items:
-    	if(item == nullptr || (m_tellItemTimestamp && m_tellItemTimestamp(item) < m_startTime))
+    	if(item == nullptr || (m_tellItemTimestamp && m_tellItemTimestamp(item) < m_startTime)){
+    		LOG (WARNING) << "File creation time is older than the cache start timestamp, this item will not be tracked.\n";
     		return success;
+    	}
 
         addInternal(item, success, duplicate);
         return success;

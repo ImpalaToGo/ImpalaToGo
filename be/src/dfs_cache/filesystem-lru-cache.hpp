@@ -16,6 +16,8 @@
 #define FILESYSTEM_LRU_CACHE_HPP_
 
 #include <list>
+#include <mutex>
+#include <condition_variable>
 
 #include "dfs_cache/managed-file.hpp"
 #include "dfs_cache/lru-cache.hpp"
@@ -34,23 +36,35 @@ namespace ph = std::placeholders;
  * of them.
  *
  */
-class FileSystemLRUCache : LRUCache<managed_file::File>{
+class FileSystemLRUCache : private LRUCache<managed_file::File>{
 private:
+
+
 	IIndex<std::string>* m_idxFileLocalPath = nullptr; /**< the only index is for file local path  */
-    std::size_t          m_capacityLimit;              /**< capacity limit for underlying LRU cache. For cleanup tuning */
     std::string          m_root;                       /**< root directory to manage */
 
-    boost::condition_variable m_deletionHappensCondition; /**< deletion conditio variable */
-    boost::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+    std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
+    std::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
-	/** tell item has no outer references
-	 *  @param file - file to query for status
+    managed_file::File::WeightChangedEvent m_weightChangedPredicate; /** the callback that should be called on "item weight is changed" event */
+
+	/** try mark item for deletion
+	 *  @param file - file to mark for deletion
 	 *
-	 *  @return true if file can be removed, false otherwise
+	 *  @return true if file was marked for deletion and can be removed,
+	 *  false otherwise
 	 */
-    inline bool isSafeToDeleteItem(managed_file::File* file){
-    	return file->nonreferenced();
+    inline bool markItemForDeletion(managed_file::File* file){
+    	// try close the file as the collection item
+    	file->close();
+        // if file was not marked for deletion, reopen it as a collection item
+    	if(!file->mark_for_deletion()){
+    		file->open();
+    		return false;
+    	}
+    	return true;
     }
 
     /** get the current file timestamp
@@ -83,7 +97,7 @@ private:
      *
      * @return capacity limit as configured.
      */
-    inline std::size_t getCapacity(){
+    inline long long getCapacity(){
     	return m_capacityLimit;
     }
 
@@ -100,18 +114,23 @@ private:
      * construct new object of File basing on its path
      *
      * @param path - file path
+     * @param eve  - callback that should be called by the file in case if its size is changed
      *
      * @return constructed file object if its has correct configuration and nullptr otherwise
      */
     managed_file::File* constructNew(std::string path){
-    	managed_file::File* file = new managed_file::File(path.c_str());
+    	// if the file is auto-created by Cache itself, so that the cache should be subscribed for updates regarding the file
+    	// size changes.
+    	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
      	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
     		delete file;
     		file = nullptr;
     	}
-     	else
+     	else{
+     		file->open();
      		// mark file as "in progress" immediately, before to publish it to the outer world:
      		file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
+     	}
     	return file;
     }
 
@@ -137,16 +156,22 @@ public:
     FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true) :
     		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity), m_root(root){
 
+    	LOG (INFO) << "LRU cache capacity limit = " << std::to_string(capacity) << "\n";
+
     	m_tellCapacityLimitPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getCapacity), this);
     	m_tellWeightPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::getWeight), this, _1);
-    	m_tellItemIsIdle = boost::bind(boost::mem_fn(&FileSystemLRUCache::isSafeToDeleteItem), this, _1);
+    	m_markForDeletion = boost::bind(boost::mem_fn(&FileSystemLRUCache::markItemForDeletion), this, _1);
 
     	m_tellItemTimestamp =  boost::bind(boost::mem_fn(&FileSystemLRUCache::getTimestamp), this, _1);
     	m_acceptAssignedTimestamp = boost::bind(boost::mem_fn(&FileSystemLRUCache::updateTimestamp), this, _1, _2);
 
     	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1, _2);
 
-    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string { return file->fqp(); };
+    	m_weightChangedPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::handleCapacityChanged), this, _1);
+
+    	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string {
+    				return (file != nullptr ? file->fqp() : ""); };
+
     	LRUCache<managed_file::File>::LoadItemFunc<std::string>      lif = 0;
     	LRUCache<managed_file::File>::ConstructItemFunc<std::string> cif = 0;
 
@@ -158,6 +183,12 @@ public:
 
     	// finally define index "by file fully qualified local path"
     	m_idxFileLocalPath = addIndex<std::string>( "fqp", gkf, lif, cif);
+
+    }
+
+    ~FileSystemLRUCache(){
+    	clear();
+    	LOG (INFO) << "Filesystem LRU cache is destructed." << "\n";
     }
 
     /** reload the cache.
@@ -169,7 +200,8 @@ public:
     bool reload(const std::string& root);
 
     /**
-     * Get the file by its local path
+     * Get the file by its local path.
+     * This will "open" the file (increase the reference counter)
      *
      * @param path -file local path
      *
@@ -178,7 +210,7 @@ public:
     managed_file::File* find(std::string path);
 
     /** reset the cache */
-    inline void reset() {
+    void reset() {
  	   this->clear();
     }
 
@@ -191,10 +223,30 @@ public:
 
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
-     *  */
-    inline bool remove(std::string path){
- 	   return m_idxFileLocalPath->remove(path, true);
+     * @param physically - flag, indicates whether physical removal is required
+     *
+     * @return operation status, true on success
+     */
+    bool remove(std::string path, bool physically = true){
+ 	   return m_idxFileLocalPath->remove(path, physically);
     }
+
+    /**
+     * Delete all pat hrecursively
+     *
+     * @param path - path to delete the content of in a recusrsive way
+     *
+     * @return operation status, true on success
+     */
+    bool deletePath(const std::string& path);
+
+    /**
+     * Handle callback from item about its size is changed.
+     * This should be reflected on cache metrics
+     *
+     * @param size - size_delta reported by one of containg items.
+     */
+    void handleCapacityChanged(long long size_delta);
 };
 
 }

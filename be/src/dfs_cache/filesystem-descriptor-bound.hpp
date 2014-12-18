@@ -153,6 +153,68 @@ public:
 	 */
 	tSize filePread(raiiDfsConnection& conn, dfsFile file, tOffset position,
 			void* buffer, tSize length);
+
+	/**
+	 * Positional read of data from an opened stream.
+	 *
+	 * @param conn     - wrapped managed connection
+	 * @param file     - file handle.
+	 * @param buffer   - buffer to get bytes to write from.
+	 * @param length   - length of the buffer.
+	 *
+	 * @return      See fileWrte
+	 */
+	tSize fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length);
+
+	/**
+	 * Rename the file, specified by @a oldPath, to @a newPath
+	 *
+	 * @param conn    - wrapped managed connection
+	 * @param oldPath - old file path
+	 * @param newPath - new file path
+	 *
+	 * @return operation status, 0 is "success"
+	 */
+	int fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath);
+
+	/**
+	 * Delete specified path.
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path      - path to delete
+	 * @param recursive - flag, indicates whether recursive removal is required
+	 *
+	 * @return operation status, 0 is "success"
+	 */
+	int pathDelete(raiiDfsConnection& conn, const char* path, int recursive);
+
+	/**
+	 * Get the specified path info
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path - path to get info(s) for
+	 *
+	 * @return path info(s)
+	 */
+	dfsFileInfo* fileInfo(raiiDfsConnection& conn, const char* path);
+
+	/**
+	 * Free file info
+	 *
+	 * @param fileInfo     - file info set to free
+	 * @param numOfEntries - number of entries in file info set
+	 */
+	static void freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries);
+
+	/*
+	 * Check that specified @a path exists on the specified fs
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path - path to check for existence
+	 *
+	 * @return true if path exists, false otherwise
+	 */
+	bool pathExists(raiiDfsConnection& conn, const char* path);
 };
 }
 

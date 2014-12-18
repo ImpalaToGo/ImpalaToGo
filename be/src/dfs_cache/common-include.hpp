@@ -94,9 +94,12 @@ typedef enum {
 
 	FILE_OBJECT_OPERATION_FAILURE,
 
-	CACHE_OBJECT_NOT_FOUND,         /**< reports the problem wit ha cache, when the object is missed when expected */
+	CACHE_OBJECT_NOT_FOUND,          /**< reports the problem wit ha cache, when the object is missed when expected */
+    CACHE_OBJECT_OPERATION_FAILURE,  /**< failure occur during cache object operation */
+    CACHE_OBJECT_UNDER_FINALIZATION, /**< requested cache object is under finalization and should not be used. It only can be recalimed */
 
 	NOT_IMPLEMENTED,                 /**< for developer purposes */
+	NO_STATUS,
 } StatusInternal;
 }
 
@@ -119,7 +122,7 @@ enum taskOverallStatus{
 /** Formatters for enumerations */
 extern std::ostream& operator<<(std::ostream& out, const taskOverallStatus value);
 extern std::ostream& operator<<(std::ostream& out, const status::StatusInternal value);
-extern std::ostream& operator<<(std::ostream& out, const DFS_TYPE value);
+extern std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value);
 
 /**
  * Connection details as configured

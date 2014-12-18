@@ -136,6 +136,7 @@ public class JniCatalog {
    */
   public byte[] resetMetadata(byte[] thriftResetMetadataReq)
       throws ImpalaException, TException {
+    LOG.info("Reset metadata request is received.");
     TResetMetadataRequest req = new TResetMetadataRequest();
     JniUtil.deserializeThrift(protocolFactory_, req, thriftResetMetadataReq);
     TSerializer serializer = new TSerializer(protocolFactory_);
@@ -210,6 +211,7 @@ public class JniCatalog {
 
   public void prioritizeLoad(byte[] thriftLoadReq) throws ImpalaException,
       TException  {
+    LOG.info("Prioritize load request received.");
     TPrioritizeLoadRequest request = new TPrioritizeLoadRequest();
     JniUtil.deserializeThrift(protocolFactory_, request, thriftLoadReq);
     catalog_.prioritizeLoad(request.getObject_descs());
