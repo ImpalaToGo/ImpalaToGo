@@ -26,6 +26,7 @@
 #  elif __GNUC_PREREQ(4,8)
 //       If gcc_version >= 4.8
 #define BOOST_NOEXCEPT
+#define BOOST_NOEXCEPT_IF(Predicate)
 #define BOOST_NO_CXX11_CONSTEXPR
 #define BOOST_NO_CXX11_DECLTYPE
 #define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
@@ -41,9 +42,6 @@
 //    If not gcc
 #endif
 
-// #define BOOST_NOEXCEPT
-
-// #define BOOST_NOEXCEPT_IF(Predicate)
 #define BOOST_FORCEINLINE inline __attribute__ ((__always_inline__))
 
 
