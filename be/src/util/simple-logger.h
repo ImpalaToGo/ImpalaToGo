@@ -15,6 +15,7 @@
 #ifndef IMPALA_SERVICE_SIMPLE_LOGGER_H
 #define IMPALA_SERVICE_SIMPLE_LOGGER_H
 
+#include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <fstream>
 

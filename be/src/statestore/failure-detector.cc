@@ -18,7 +18,6 @@
 
 using namespace impala;
 using namespace std;
-using namespace boost;
 using namespace boost::posix_time;
 
 static const map<FailureDetector::PeerState, string> PEER_STATE_TO_STRING =
@@ -38,18 +37,18 @@ const string& FailureDetector::PeerStateToString(FailureDetector::PeerState peer
 FailureDetector::PeerState TimeoutFailureDetector::UpdateHeartbeat(
     const string& peer, bool seen) {
   {
-    lock_guard<mutex> l(lock_);
-    if (seen) peer_heartbeat_record_[peer] = get_system_time();
+    boost::lock_guard<boost::mutex> l(lock_);
+    if (seen) peer_heartbeat_record_[peer] = boost::get_system_time();
   }
   return GetPeerState(peer);
 }
 
 FailureDetector::PeerState TimeoutFailureDetector::GetPeerState(const string& peer) {
-  lock_guard<mutex> l(lock_);
-  map<string, system_time>::iterator heartbeat_record = peer_heartbeat_record_.find(peer);
+  boost::lock_guard<boost::mutex> l(lock_);
+  map<string, boost::system_time>::iterator heartbeat_record = peer_heartbeat_record_.find(peer);
   if (heartbeat_record == peer_heartbeat_record_.end()) return UNKNOWN;
 
-  time_duration duration = get_system_time() - heartbeat_record->second;
+  time_duration duration = boost::get_system_time() - heartbeat_record->second;
   if (duration > failure_timeout_) {
     return FAILED;
   } else if (duration > suspect_timeout_) {
@@ -60,14 +59,14 @@ FailureDetector::PeerState TimeoutFailureDetector::GetPeerState(const string& pe
 }
 
 void TimeoutFailureDetector::EvictPeer(const string& peer) {
-  lock_guard<mutex> l(lock_);
+	boost::lock_guard<boost::mutex> l(lock_);
   peer_heartbeat_record_.erase(peer);
 }
 
 FailureDetector::PeerState MissedHeartbeatFailureDetector::UpdateHeartbeat(
     const string& peer, bool seen) {
   {
-    lock_guard<mutex> l(lock_);
+	  boost::lock_guard<boost::mutex> l(lock_);
     if (seen) {
       missed_heartbeat_counts_[peer] = 0;
       return OK;
@@ -81,7 +80,7 @@ FailureDetector::PeerState MissedHeartbeatFailureDetector::UpdateHeartbeat(
 
 FailureDetector::PeerState MissedHeartbeatFailureDetector::GetPeerState(
     const string& peer) {
-  lock_guard<mutex> l(lock_);
+	boost::lock_guard<boost::mutex> l(lock_);
   map<string, int32_t>::iterator heartbeat_record = missed_heartbeat_counts_.find(peer);
 
   if (heartbeat_record == missed_heartbeat_counts_.end()) {
@@ -96,6 +95,6 @@ FailureDetector::PeerState MissedHeartbeatFailureDetector::GetPeerState(
 }
 
 void MissedHeartbeatFailureDetector::EvictPeer(const string& peer) {
-  lock_guard<mutex> l(lock_);
+	boost::lock_guard<boost::mutex> l(lock_);
   missed_heartbeat_counts_.erase(peer);
 }

@@ -19,18 +19,15 @@
 #include <boost/filesystem.hpp>
 
 using namespace std;
-using namespace boost;
-using namespace boost::filesystem;
-using namespace boost::posix_time;
 using namespace impala;
 
-const ptime EPOCH = time_from_string("1970-01-01 00:00:00.000");
+const boost::posix_time::ptime EPOCH = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
 
 Status InitLoggingDir(const string& log_dir) {
-  if (!exists(log_dir)) {
+  if (!boost::filesystem::exists(log_dir.c_str())) {
     LOG(INFO) << "Log directory does not exist, creating: " << log_dir;
     try {
-      create_directory(log_dir);
+    	boost::filesystem::create_directory(log_dir.c_str());
     } catch (const std::exception& e) { // Explicit std:: to distinguish from boost::
       LOG(ERROR) << "Could not create log directory: "
                  << log_dir << ", " << e.what();
@@ -38,7 +35,7 @@ Status InitLoggingDir(const string& log_dir) {
     }
   }
 
-  if (!is_directory(log_dir)) {
+  if (!boost::filesystem::is_directory(log_dir.c_str())) {
     LOG(ERROR) << "Log path is not a directory ("
                << log_dir << ")";
     return Status("Log path is not a directory");
@@ -49,7 +46,7 @@ Status InitLoggingDir(const string& log_dir) {
 void SimpleLogger::GenerateLogFileName() {
   stringstream ss;
   int64_t ms_since_epoch =
-      (microsec_clock::universal_time() - EPOCH).total_milliseconds();
+      (boost::posix_time::microsec_clock::universal_time() - EPOCH).total_milliseconds();
   ss << log_dir_ << "/" << log_file_name_prefix_ << ms_since_epoch;
   log_file_name_ = ss.str();
 }
@@ -74,7 +71,7 @@ Status SimpleLogger::Init() {
 }
 
 Status SimpleLogger::AppendEntry(const std::string& entry) {
-  lock_guard<mutex> l(log_file_lock_);
+  boost::lock_guard<boost::mutex> l(log_file_lock_);
   if (num_log_file_entries_ > max_entries_per_file_) {
     num_log_file_entries_ = 0;
     GenerateLogFileName();
@@ -88,7 +85,7 @@ Status SimpleLogger::AppendEntry(const std::string& entry) {
 }
 
 Status SimpleLogger::Flush() {
-  lock_guard<mutex> l(log_file_lock_);
+  boost::lock_guard<boost::mutex> l(log_file_lock_);
   return FlushInternal();
 }
 

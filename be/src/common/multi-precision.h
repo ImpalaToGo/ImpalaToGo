@@ -17,21 +17,29 @@
 
 // The boost library is for C++11 on a newer version of boost than we use.
 // We need to make these #defines to compile for pre c++11
+
+/*
 #define BOOST_NOEXCEPT
 #define BOOST_NOEXCEPT_IF(Predicate)
-#define BOOST_FORCEINLINE inline __attribute__ ((__always_inline__))
-
 #define BOOST_NO_CXX11_CONSTEXPR
+#define BOOST_NO_CXX11_STATIC_ASSERT
+
 #define BOOST_NO_CXX11_DECLTYPE
 #define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
 #define BOOST_NO_CXX11_HDR_ARRAY
 #define BOOST_NO_CXX11_RVALUE_REFERENCES
 #define BOOST_NO_CXX11_USER_DEFINED_LITERALS
 #define BOOST_NO_CXX11_VARIADIC_TEMPLATES
+*/
+
+#define BOOST_FORCEINLINE inline __attribute__ ((__always_inline__))
+
 
 // Finally include the boost library.
-#include "boost_multiprecision/cpp_int.hpp"
-#include "boost_multiprecision/cpp_dec_float.hpp"
+// #include "boost_multiprecision/cpp_int.hpp"
+// #include "boost_multiprecision/cpp_dec_float.hpp"
+#include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/cpp_dec_float.hpp>
 
 #include <limits>
 
@@ -42,7 +50,7 @@ typedef __int128_t int128_t;
 
 // Define 256 bit int type.
 typedef boost::multiprecision::number<
-    boost::multiprecision::cpp_int_backend<256, 256,
+    boost::multiprecision::backends::cpp_int_backend<256, 256,
     boost::multiprecision::signed_magnitude,
     boost::multiprecision::unchecked, void> > int256_t;
 

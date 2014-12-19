@@ -982,7 +982,7 @@ private:
         		return bucket->first;
         	}
         	// downcast current node to internal type:
-            boost::shared_ptr<Node> internalCurrent = boost::shared_polymorphic_downcast<Node>(currentNode);
+            boost::shared_ptr<Node> internalCurrent = boost::dynamic_pointer_cast<Node>(currentNode);
         	if(internalCurrent->next()){ // if there's something next exists
         		if(internalCurrent->next()->value() != nullptr)
         			return internalCurrent->next();
