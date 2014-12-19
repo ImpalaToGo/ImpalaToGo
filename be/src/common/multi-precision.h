@@ -18,7 +18,7 @@
 // The boost library is for C++11 on a newer version of boost than we use.
 // We need to make these #defines to compile for pre c++11
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__GNUG__)
 #  include <features.h>
 #  if __GNUC_PREREQ(4,9)
 //      If  gcc_version >= 4.9
@@ -26,9 +26,8 @@
 #  elif __GNUC_PREREQ(4,8)
 //       If gcc_version >= 4.8
 
-#define BOOST_NO_CXX11_NOEXCEPT
-//#define BOOST_NOEXCEPT
-//#define BOOST_NOEXCEPT_IF(Predicate)
+#define BOOST_NOEXCEPT
+#define BOOST_NOEXCEPT_IF(Predicate)
 #define BOOST_NO_CXX11_CONSTEXPR
 #define BOOST_NO_CXX11_STATIC_ASSERT
 
@@ -42,9 +41,37 @@
 #  else
 //       Else
 #  endif
+
+#elif  defined(IR_COMPILE)
+#define BOOST_NOEXCEPT
+#define BOOST_NOEXCEPT_IF(Predicate)
+#define BOOST_NO_CXX11_CONSTEXPR
+#define BOOST_NO_CXX11_STATIC_ASSERT
+
+#define BOOST_NO_CXX11_DECLTYPE
+#define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
+#define BOOST_NO_CXX11_HDR_ARRAY
+#define BOOST_NO_CXX11_RVALUE_REFERENCES
+#define BOOST_NO_CXX11_USER_DEFINED_LITERALS
+#define BOOST_NO_CXX11_VARIADIC_TEMPLATES
 #else
 //    If not gcc
 #endif
+
+/*
+#define BOOST_NOEXCEPT
+#define BOOST_NOEXCEPT_IF(Predicate)
+#define BOOST_NO_CXX11_CONSTEXPR
+#define BOOST_NO_CXX11_STATIC_ASSERT
+
+#define BOOST_NO_CXX11_DECLTYPE
+#define BOOST_NO_CXX11_EXPLICIT_CONVERSION_OPERATORS
+#define BOOST_NO_CXX11_HDR_ARRAY
+#define BOOST_NO_CXX11_RVALUE_REFERENCES
+#define BOOST_NO_CXX11_USER_DEFINED_LITERALS
+#define BOOST_NO_CXX11_VARIADIC_TEMPLATES
+*/
+
 
 #define BOOST_FORCEINLINE inline __attribute__ ((__always_inline__))
 
