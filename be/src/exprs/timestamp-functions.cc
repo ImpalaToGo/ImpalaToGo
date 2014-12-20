@@ -161,12 +161,10 @@ IntVal TimestampFunctions::Unix(FunctionContext* context, const TimestampVal& ts
 }
 
 IntVal TimestampFunctions::Unix(FunctionContext* context) {
-  TimestampValue default_tv;
-  TimestampValue* tv = &default_tv;
-  default_tv = TimestampValue(context->impl()->state()->now());
-  if (tv->date().is_special()) return IntVal::null();
+  const TimestampValue* const now = context->impl()->state()->now();
+  if (now->date().is_special()) return IntVal::null();
   ptime temp;
-  tv->ToPtime(&temp);
+  now->ToPtime(&temp);
   return IntVal(to_time_t(temp));
 }
 
@@ -184,9 +182,9 @@ void TimestampFunctions::ReportBadFormat(FunctionContext* context,
   stringstream ss;
   const StringValue& fmt = StringValue::FromStringVal(format);
   if (format.is_null || format.len <= 0) {
-    ss << "Bad date/time coversion format: format string is NULL or has 0 length";
+    ss << "Bad date/time conversion format: format string is NULL or has 0 length";
   } else {
-    ss << "Bad date/time coversion format: " << fmt.DebugString();
+    ss << "Bad date/time conversion format: " << fmt.DebugString();
   }
   if (is_error) {
     context->SetError(ss.str().c_str());

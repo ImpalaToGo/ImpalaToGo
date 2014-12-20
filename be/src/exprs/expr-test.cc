@@ -2904,6 +2904,15 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestValidTimestampValue("current_timestamp()");
   TestValidTimestampValue("cast(unix_timestamp() as timestamp)");
 
+  // Test that the epoch is reasonable, a 10 second window should be more than enough
+  // allowance for execution time.
+  int seconds_in_day = 24 * 60 * 60;
+  time_t epoch_time = time(NULL);
+  stringstream expr_sql;
+  expr_sql << "unix_timestamp() between " << epoch_time - seconds_in_day
+      << " and " << epoch_time + seconds_in_day;
+  TestValue(expr_sql.str(), TYPE_BOOLEAN, true);
+
   // Test alias
   TestValue("now() = current_timestamp()", TYPE_BOOLEAN, true);
 
