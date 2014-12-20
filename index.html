@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Impala2go : A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Impala2go</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/ImpalaToGo/ImpalaToGo">View on GitHub</a>
+
+          <h1 id="project_title">Impala2go</h1>
+          <h2 id="project_tagline">A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/ImpalaToGo/ImpalaToGo/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/ImpalaToGo/ImpalaToGo/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a id="impalatogo" class="anchor" href="#impalatogo" aria-hidden="true"><span class="octicon octicon-link"></span></a>ImpalaToGo</h1>
+
+<p>A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.</p>
+
+<h3>
+<a id="why-impalatogo" class="anchor" href="#why-impalatogo" aria-hidden="true"><span class="octicon octicon-link"></span></a>Why ImpalaToGo</h3>
+
+<hr>
+
+<blockquote>
+<ol>
+<li>Remove the hard dependency to hdfs for those who want impala running for other distributed filesystems.</li>
+<li>Run fast queries on your machine without any extra setup. Hive metastore service is enough prerequisite to start work with impala, no extra installations/configurations required.</li>
+<li>No dependency on hdfs, thus, data locality is emulated via new layer, the cache, and is achieved via adaptive algorithms to map remote dfs data to impala cluster nodes cache.</li>
+<li>Transparent interaction with user via new set of commands. All operations are user-driven and user-friendly. </li>
+<li>All shell commands along with impala cluster statistics are available via web interface.</li>
+<li>Potential integration with any distributed file system via the compatible plugin.</li>
+<li>ImpalaToGo has a lot of ideas so far to make impala usage simple!</li>
+</ol>
+</blockquote>
+
+<h2>
+<a id="development-environment-prerequisites-ubuntu" class="anchor" href="#development-environment-prerequisites-ubuntu" aria-hidden="true"><span class="octicon octicon-link"></span></a>Development environment prerequisites (Ubuntu)</h2>
+
+<ul>
+<li>
+<p>Install Java</p>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get install python-software-properties
+sudo add-apt-repository ppa:webupd8team/java -y
+sudo apt-get update -y
+sudo apt-get install oracle-jdk7-installer -y</pre></div>
+</li>
+<li>
+<p>install other prerequsites</p>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get install git build-essential cmake bison flex pkg-config libsasl2-dev autoconf automake libtool maven subversion doxygen libbz2-dev zlib1g-dev  python-setuptools python-dev libssl-dev -y</pre></div>
+</li>
+<li>
+<p>install recent gcc and g++ (4.9 for now)</p>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get update
+sudo apt-get install gcc-4.9
+sudo apt-get install g++-4.9
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 20
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 20
+sudo update-alternatives --config gcc
+sudo update-alternatives --config g++</pre></div>
+</li>
+<li><p><strong>configure boost in 1 click.</strong> Now, default boost package is compatible with Impala, thus in order to configure boost, regular dev package is enough ( note that boost version should be &gt;= 1.46.1 )</p></li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get install libboost-all-dev</pre></div>
+
+<p>Just be careful to have environment clear from boost artifacts before deploying new boost package (especially using apt-get).
+To get rid of old possible boost artifacts:</p>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get --purge remove libboost-dev
+sudo apt-get --purge remove libboost-all-dev
+
+<span class="pl-c"># check installed boost version</span>
+cat /usr/include/boost/version.hpp <span class="pl-k">|</span> grep <span class="pl-s1"><span class="pl-pds">"</span>BOOST_LIB_VERSION<span class="pl-pds">"</span></span>
+
+<span class="pl-c"># check Boost package name:</span>
+dpkg -S /usr/include/boost/version.hpp
+
+<span class="pl-c"># Then having package name:</span>
+sudo apt-get autoremove package
+
+sudo apt-get remove libboost<span class="pl-k">*</span>
+sudo apt-get autoclean</pre></div>
+
+<ul>
+<li>
+<p><strong>Fast reference to build the boost manually.</strong>
+Newest boost builds do not contain packages with -mt prefixes as stated by boost.</p>
+
+<blockquote>
+<p>To build libraries with -mt sufix:</p>
+</blockquote>
+
+<div class="highlight highlight-sh"><pre>./bootstrap.sh --with-libraries=filesystem, regex, system
+sudo ./bjam --layout=tagged --libdir=/usr/lib64 cxxflags=-fPIC threading=multi install</pre></div>
+
+<blockquote>
+<p>To build libraries without a suffix:  </p>
+</blockquote>
+
+<div class="highlight highlight-sh"><pre>./bootstrap.sh --with-libraries=thread, date_time, system
+sudo ./bjam --libdir=/usr/lib64 cxxflags=-fPIC link=static threading=single runtime-link=static install</pre></div>
+</li>
+</ul>
+
+<ul>
+<li>install hive metastore database, for example, postgres, if going to run it locally</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>sudo apt-get install postgresql -y</pre></div>
+
+<ul>
+<li>compile LLVM from source</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>wget http://llvm.org/releases/3.3/llvm-3.3.src.tar.gz
+tar xvf llvm-3.3.src.tar.gz
+<span class="pl-s3">cd</span> llvm-3.3.src/tools/
+svn co http://llvm.org/svn/llvm-project/cfe/tags/RELEASE_33/final/ clang
+<span class="pl-s3">cd</span> ../projects/
+svn co http://llvm.org/svn/llvm-project/compiler-rt/tags/RELEASE_33/final
+<span class="pl-s3">cd</span> ..
+./configure --with-pic
+make -j4 REQUIRES_RTTI=1
+sudo make install</pre></div>
+
+<ul>
+<li>configure JAVA HOME</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s">export</span> JAVA_HOME=/usr/lib/jvm/java-7-oracle</pre></div>
+
+<ul>
+<li>install Maven</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>wget http://www.interior-dsgn.com/apache/maven/maven-3/3.0.5/binaries/apache-maven-3.0.5-bin.tar.gz
+tar xvf apache-maven-3.0.5-bin.tar.gz <span class="pl-k">&amp;&amp;</span> sudo mv apache-maven-3.0.5 /usr/local</pre></div>
+
+<ul>
+<li>Add the following three lines to your .bashrc:</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s">export</span> M2_HOME=/usr/local/apache-maven-3.0.5
+<span class="pl-s">export</span> M2=<span class="pl-vo">$M2_HOME</span>/bin  
+<span class="pl-s">export</span> PATH=<span class="pl-vo">$M2</span>:<span class="pl-vo">$PATH</span></pre></div>
+
+<p>Confirm by running</p>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s3">source</span> <span class="pl-k">~</span>/.bashrc
+mvn -version</pre></div>
+
+<h2>
+<a id="impala-build" class="anchor" href="#impala-build" aria-hidden="true"><span class="octicon octicon-link"></span></a>Impala build</h2>
+
+<p>put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources.  BOOST_LIBRARY_DIR and LD_LIBRARY_DIR should point to boost libraries location</p>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s">export</span> JAVA_HOME=/usr/lib/jvm/java-7-oracle
+<span class="pl-s">export</span> IMPALA_HOME=YOUR_PATH/ImpalaToGo
+<span class="pl-s">export</span> BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
+<span class="pl-s">export</span> LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu</pre></div>
+
+<p>and then run</p>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s3">source</span> <span class="pl-k">~</span>/.bashrc</pre></div>
+
+<ul>
+<li>cd to Impala source cloned dir, run </li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>bin/impala-config.sh</pre></div>
+
+<ul>
+<li>build thirdparty :</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>./bin/build_thirdparty.sh</pre></div>
+
+<ul>
+<li>run impala build:</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>./buildall.sh</pre></div>
+
+<p>To run unit testing on backend , do the following in the ImpalaToGo bin directory</p>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s">export</span> IMPALA_BE_DIR=/root/ImpalaToGo/be/
+./run-backend-tests.sh
+</pre></div>
+
+<h2>
+<a id="start-work-with-impala" class="anchor" href="#start-work-with-impala" aria-hidden="true"><span class="octicon octicon-link"></span></a>Start work with impala</h2>
+
+<p>To run Impala locally, edit Impala configuration files.
+Impala will read configuration files that it founds on CLASSPATH. By defaut, fe test resources are added on CLASSPATH already ($IMPALA_HOME/fe/src/test/resources), so core-site.xml, hive-site.xml and hdfs-site.xml can be placed and edited there.
+Note that they will be rewritten with default values after frontend build.</p>
+
+<ol>
+<li>
+<h4>
+<a id="make-changes-in-configuration-files-to-run-impala-locally" class="anchor" href="#make-changes-in-configuration-files-to-run-impala-locally" aria-hidden="true"><span class="octicon octicon-link"></span></a>Make changes in configuration files to run impala locally.</h4>
+
+<blockquote>
+<p>In core-site.xml, following properties should be set to file:///</p>
+
+<div class="highlight highlight-xml"><pre>&lt;<span class="pl-ent">property</span>&gt;
+  &lt;<span class="pl-ent">name</span>&gt;fs.defaultFS&lt;/<span class="pl-ent">name</span>&gt;
+  &lt;<span class="pl-ent">value</span>&gt;file:///&lt;/<span class="pl-ent">value</span>&gt;
+&lt;/<span class="pl-ent">property</span>&gt;
+&lt;<span class="pl-ent">property</span>&gt;
+  &lt;<span class="pl-ent">name</span>&gt;fs.default.name&lt;/<span class="pl-ent">name</span>&gt;
+  &lt;<span class="pl-ent">value</span>&gt;file:///&lt;/<span class="pl-ent">value</span>&gt;
+  &lt;<span class="pl-ent">description</span>&gt;The name of the default file system.  A URI whose scheme and authority determine the FileSystem implementation.&lt;/<span class="pl-ent">description</span>&gt;
+&lt;/<span class="pl-ent">property</span>&gt;</pre></div>
+
+<p>In hive-site.xml, specify connection string, hive user and a password for one (for metastore usage). </p>
+</blockquote>
+</li>
+<li>
+<h4>
+<a id="start-all-services" class="anchor" href="#start-all-services" aria-hidden="true"><span class="octicon octicon-link"></span></a>Start all services.</h4>
+
+<p>Before to start any impala service(impalad, catalogd, statestored) run prerequisites in shell (for environment variables setup on the shell). Here /usr/lib/x86_64-linux-gnu is the boost libraries location, check and specify yours:</p>
+</li>
+</ol>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s">export</span> JAVA_HOME=/usr/lib/jvm/java-7-oracle
+<span class="pl-s">export</span> IMPALA_HOME=/home/elenav/src/ImpalaToGo
+<span class="pl-s">export</span> BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
+ <span class="pl-s3">.</span> bin/impala-config.sh
+<span class="pl-s">export</span> LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu</pre></div>
+
+<ul>
+<li>
+<strong>start metastore:</strong>
+For the first time, run the script:</li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-vo">${IMPALA_HOME}</span>/bin/create-test-configuration.sh</pre></div>
+
+<p>this will create the hive_impalatogo database and the hiveuser user in postgresql along with all required       permissions.
+Note this is needed only for the first time and is usually done by buildall script.</p>
+
+<p>start metastore:</p>
+
+<div class="highlight highlight-sh"><pre><span class="pl-s3">cd</span> thirdparty/hive-0.10.0-cdh4.5.0/
+bin/hive --service metastore</pre></div>
+
+<ul>
+<li><strong>start statestored:</strong></li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-vo">${IMPALA_HOME}</span>/bin/start-statestore.sh</pre></div>
+
+<ul>
+<li><strong>start catalogd:</strong></li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-vo">${IMPALA_HOME}</span>/bin/start-catalogd.sh</pre></div>
+
+<ul>
+<li><strong>start impalad:</strong></li>
+</ul>
+
+<div class="highlight highlight-sh"><pre><span class="pl-vo">${IMPALA_HOME}</span>/bin/start-impalad.sh</pre></div>
+
+<h4>
+<a id="test-impala-with-the-local-file-via-impala-shell" class="anchor" href="#test-impala-with-the-local-file-via-impala-shell" aria-hidden="true"><span class="octicon octicon-link"></span></a>Test impala with the local file via impala shell:</h4>
+
+<ul>
+<li><strong>start impala shell:</strong></li>
+</ul>
+
+<div class="highlight highlight-sh"><pre>  <span class="pl-s3">.</span> bin/impala-shell.sh</pre></div>
+
+<p>When running on the same data node as Impalad, no need to connect explcitly. The prompt is automatically shows the conection to Impalad:</p>
+
+<p>[impalad_hostname:21000] &gt;</p>
+
+<p>Place a csv file to some local directory and run some statements on this location to be sure impala works for you:</p>
+
+<div class="highlight highlight-sql"><pre>create external table test_table (name string, category string, score double) ROW FORMAT DELIMITED fields terminated BY <span class="pl-s1"><span class="pl-pds">'</span><span class="pl-cce">\t</span><span class="pl-pds">'</span></span> lines terminated BY <span class="pl-s1"><span class="pl-pds">'</span><span class="pl-cce">\n</span><span class="pl-pds">'</span></span> location <span class="pl-s1"><span class="pl-pds">'</span>/home/username/src/ImpalaToGo/datastorage/<span class="pl-pds">'</span></span>;</pre></div>
+
+<div class="highlight highlight-sql"><pre><span class="pl-k">select</span> <span class="pl-k">*</span> <span class="pl-k">from</span> test_table <span class="pl-k">where</span> category<span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>xyz<span class="pl-pds">"</span></span>;</pre></div>
+
+<h2>
+<a id="license" class="anchor" href="#license" aria-hidden="true"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p><a href="http://www.apache.org/licenses/LICENSE-2.0.htm">Apache License</a></p>
+
+<h4>
+<a id="2014" class="anchor" href="#2014" aria-hidden="true"><span class="octicon octicon-link"></span></a>2014</h4>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Impala2go maintained by <a href="https://github.com/ImpalaToGo">ImpalaToGo</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+              <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-57890489-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+
+  </body>
+</html>
