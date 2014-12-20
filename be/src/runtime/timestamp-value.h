@@ -49,14 +49,20 @@ class TimestampValue {
         date_(tv.date_) {
   }
 
+  // An explicit pointer constructor is provided otherwise the compiler chooses
+  // TimestampValue(bool).
+  TimestampValue(const TimestampValue* const tv)
+      : time_of_day_(tv->time_of_day_),
+        date_(tv->date_) {
+  }
+
   TimestampValue& operator=(const boost::posix_time::ptime& t) {
     *this =  TimestampValue(t);
     return *this;
   }
 
   void ToPtime(boost::posix_time::ptime* ptp) const {
-    boost::posix_time::ptime temp(this->date_, this->time_of_day_);
-    *ptp = temp;
+    *ptp = boost::posix_time::ptime(this->date_, this->time_of_day_);
   }
 
   TimestampValue(int64_t t, int64_t n) {
@@ -180,6 +186,8 @@ class TimestampValue {
 
   boost::posix_time::time_duration time_of_day() { return time_of_day_; }
   boost::gregorian::date date() { return date_;}
+  const boost::posix_time::time_duration time_of_day() const { return time_of_day_; }
+  const boost::gregorian::date date() const { return date_;}
 
   // Returns the local time
   static TimestampValue local_time() {
