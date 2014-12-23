@@ -481,7 +481,49 @@ tOffset dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
 
 status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
 		const FileSystemDescriptor & fsDescriptor2, const char* dst) {
-	return filemgmt::FileSystemManager::instance()->dfsCopy(fsDescriptor1, src, fsDescriptor2, dst);
+
+	LOG (INFO) << "dfsCopy() for source fs \"" << fsDescriptor1.dfs_type << ":" <<
+			fsDescriptor1.host << "\", file \"" << src << "\";" << "dest fs \"" <<
+			fsDescriptor2.dfs_type << ":" <<
+						fsDescriptor2.host << "\", file \"" << dst << "\".\n";
+
+	// locate the remote filesystem adaptor for source host:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorSource =
+			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor1));
+	if(fsAdaptorSource == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+				fsDescriptor1.host << "\"" << "\n";
+		// no file system adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connectionSource(fsAdaptorSource->getFreeConnection());
+    if(!connectionSource.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, file will not be copied from FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+    			fsDescriptor1.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+	// locate the remote filesystem adaptor for source host:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorDestination =
+			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor2));
+	if(fsAdaptorDestination == nullptr){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+				fsDescriptor1.host << "\"" << "\n";
+		// no file system adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connectionDest(fsAdaptorDestination->getFreeConnection());
+    if(!connectionDest.valid()) {
+    	LOG (ERROR) << "No connection to destination dfs available, file will not be copied to FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+    			fsDescriptor1.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+    // ask source adaptor to do the copy to target adaptor:
+    bool ret = FileSystemDescriptorBound::fileCopy(connectionSource, src, connectionDest, dst);
+    return (ret ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE);
 }
 
 status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst) {

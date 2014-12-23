@@ -178,6 +178,19 @@ public:
 	int fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath);
 
 	/**
+	 * Copy file described by path @a src within the source file system described by @a conn_src connection
+	 * to path @a dst within the target file system @a conn_dest
+	 *
+	 * @param conn_src  - wrapped managed connection to source fs
+	 * @param src       - source file name within source fs
+	 * @param conn_dest - wrapped managed connection to target fs
+	 * @param dst       - destination file name within destination fs
+	 *
+	 * @return operation status, 0 is "success"
+	 */
+	static int fileCopy(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst);
+
+	/**
 	 * Delete specified path.
 	 *
 	 * @param conn - wrapped managed connection
@@ -215,6 +228,7 @@ public:
 	 * @return true if path exists, false otherwise
 	 */
 	bool pathExists(raiiDfsConnection& conn, const char* path);
+
 };
 }
 

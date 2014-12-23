@@ -306,11 +306,6 @@ status::StatusInternal FileSystemManager::dfsCopy(const FileSystemDescriptor & f
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }
 
-status::StatusInternal FileSystemManager::dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
-		const FileSystemDescriptor & namenode2, const char* dst){
-	return status::StatusInternal::NOT_IMPLEMENTED;
-}
-
 status::StatusInternal FileSystemManager::dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst){
 	return status::StatusInternal::NOT_IMPLEMENTED;
 }

@@ -180,5 +180,9 @@ bool FileSystemDescriptorBound::pathExists(raiiDfsConnection& conn, const char* 
 	return (_dfsPathExists(conn.connection()->connection, path) == 0 ? true : false);
 }
 
+int FileSystemDescriptorBound::fileCopy(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst){
+	return (_dfsCopy(conn_src.connection()->connection, src, conn_dest.connection()->connection, dst) == 0 ? true : false);
+}
+
 } /** namespace impala */
 

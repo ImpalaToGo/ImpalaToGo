@@ -137,5 +137,12 @@ TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
 
 	EXPECT_EQ(futures.size(), CONTEXT_NUM);
 }
+
+TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
+	const char* src = "/home/test/install.sh";
+	const char* dst = "/home/elenav/src/ImpalaToGo/analysis/install.sh";
+	status::StatusInternal status = dfsCopy(m_namenodeDefault, src, m_namenodelocalFilesystem, dst);
+	ASSERT_TRUE(status == status::StatusInternal::OK);
+}
 }
 

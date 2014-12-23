@@ -208,18 +208,6 @@ public:
 	status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst);
 
 	/**
-	 * Copy file from one filesystem to another.
-	 * Is available inside single fsDescriptor(because of credentials only)
-	 *
-	 * @param src - The path of source file.
-	 * @param dst - The path of destination file.
-	 *
-	 * @return Returns 0 on success, -1 on error.
-	 */
-	status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const char* src,
-			const FileSystemDescriptor & fsDescriptor2, const char* dst);
-
-	/**
 	 * Move file from one filesystem to another.
 	 * Is available inside single fsDescriptor(because of credentials only)
 	 *
