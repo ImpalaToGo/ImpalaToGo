@@ -422,16 +422,20 @@ public class CatalogServiceCatalog extends Catalog {
       }
       previousCatalogVersion = tbl.getCatalogVersion();
       loadReq = tableLoadingMgr_.loadAsync(tableName, null);
-      LOG.info("load async is execued for table " + tblName + ".");
+      LOG.info("load async is executed for table " + tblName + ".");
     } finally {
       catalogLock_.readLock().unlock();
     }
     Preconditions.checkNotNull(loadReq);
     try {
+      LOG.info("wait for async to load the table \"" + tblName + "\".");
+      Table table = loadReq.get();
+      LOG.info("table \"" + tblName + "\" is loaded, need to check whether had changed since load start.");
       // The table may have been dropped/modified while the load was in progress, so only
       // apply the update if the existing table hasn't changed.
-      return replaceTableIfUnchanged(loadReq.get(), previousCatalogVersion);
+      return replaceTableIfUnchanged(table, previousCatalogVersion);
     } finally {
+      LOG.info("load request is near to be closed for \"" + tblName + "\".");
       loadReq.close();
     }
   }
@@ -449,13 +453,18 @@ public class CatalogServiceCatalog extends Catalog {
         throw new DatabaseNotFoundException(
             "Database does not exist: " + updatedTbl.getDb().getName());
       }
+      LOG.info("Database is located for table \"" + updatedTbl.getName() + "\"; DB = \"" + updatedTbl.getDb().getName() + "\".");
 
       Table existingTbl = db.getTable(updatedTbl.getName());
       // The existing table does not exist or has been modified. Instead of
       // adding the loaded value, return the existing table.
       if (existingTbl == null ||
-          existingTbl.getCatalogVersion() != expectedCatalogVersion) return existingTbl;
+          existingTbl.getCatalogVersion() != expectedCatalogVersion) {
+        LOG.warn("Table \"" + updatedTbl.getName() + "\" does not exist or has been modified.");
+        return existingTbl;
+      }
 
+      LOG.info("Real table is located for metatable \"" + updatedTbl.getName() + "\", updating catalog version for metatable");
       updatedTbl.setCatalogVersion(incrementAndGetCatalogVersion());
       db.addTable(updatedTbl);
       return updatedTbl;

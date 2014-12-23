@@ -64,15 +64,22 @@ public class TableLoadingMgr {
      * were encountered while loading the table an IncompleteTable will be returned.
      */
     public Table get() {
+      LOG.info("Table load is requested for \"" + tblName_ + "\".");
+
       Table tbl;
       try {
         tbl = tblTask_.get();
       } catch (Exception e) {
+        LOG.error("Exception occur while loading table \"" + tblName_ + "\" : ex = " + e.getMessage());
+        LOG.error("Incomplete table will be constructed and replied back");
+
         tbl = IncompleteTable.createFailedMetadataLoadTable(
             TableId.createInvalidId(), catalog_.getDb(tblName_.getDb_name()),
             tblName_.getTable_name(), new TableLoadingException(e.getMessage(), e));
       }
-      Preconditions.checkState(tbl.isLoaded());
+      Preconditions.checkState(tbl.isLoaded()); // throws is either table is not loaded or incomplete table is not assigned
+      // with the failure cause
+      LOG.info("Table load is finished for \"" + tblName_ + "\".");
       return tbl;
     }
 
@@ -226,6 +233,8 @@ public class TableLoadingMgr {
           "Database '" + tblName.getDb_name() + "' was not found.");
     }
 
+    LOG.info("Found parent db for table \"" + tblName.table_name + "\", scheduling the async load request.");
+
     FutureTask<Table> tableLoadTask = new FutureTask<Table>(new Callable<Table>() {
         @Override
         public Table call() throws Exception {
@@ -287,12 +296,12 @@ public class TableLoadingMgr {
     LOG.info("Loading next table. Remaining items in queue: "
         + tableLoadingDeque_.size());
     try {
-      LOG.info("going to getOrLoadTable on " + tblName.getTable_name());
+      LOG.info("going to getOrLoadTable() on table \"" + tblName.getTable_name() + "\"");
       // TODO: Instead of calling "getOrLoad" here we could call "loadAsync". We would
       // just need to add a mechanism for moving loaded tables into the Catalog.
       catalog_.getOrLoadTable(tblName.getDb_name(), tblName.getTable_name());
     } catch (CatalogException e) {
-      LOG.info("exception happens during getOrLoadTable");
+      LOG.info("exception happens during getOrLoadTable : \"" + e.getMessage() + "\"");
       // Ignore.
     }
   }
