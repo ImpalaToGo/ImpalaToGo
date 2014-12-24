@@ -263,20 +263,35 @@ public class HdfsTable extends Table {
         Path partDirPath = new Path(partitionDir);
         LOG.info("for over file descriptors \"" + name_ + "\".");
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
+          LOG.info("file descriptor to work with : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
+
           try {
+            LOG.info("going to retrieve file status for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
             FileStatus fileStatus = fs.getFileStatus(p);
+            LOG.info("file status is retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
             // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
-            LOG.info("Before get file block locations \"" + name_ + "\".");
-            BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0,
-                fileStatus.getLen());
+            LOG.info("file is approved as \"not directory\" for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
+
+            long len = fileStatus.getLen();
+            LOG.info("Before get file block locations \"" + name_ + "\". File len : \"" + len + "\"");
+
+            BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0, len);
+
+            LOG.info("block locations retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
+
             Preconditions.checkNotNull(locations);
+            LOG.info("for over file descriptors \"" + name_ + "\".");
             blockLocations.addAll(Arrays.asList(locations));
+
+            LOG.info("locations were added to block locations for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
             // Loop over all blocks in the file.
             for (BlockLocation block: locations) {
+              LOG.info("going to get block names for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
               String[] blockHostPorts = block.getNames();
+
               try {
                 blockHostPorts = block.getNames();
               } catch (IOException e) {
@@ -288,17 +303,25 @@ public class HdfsTable extends Table {
               // Now enumerate all replicas of the block, adding any unknown hosts to
               // hostIndex_ and the index for that host to replicaHostIdxs.
               List<Integer> replicaHostIdxs = new ArrayList<Integer>(blockHostPorts.length);
+              LOG.info("going to enumerate block host-port for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
               for (int i = 0; i < blockHostPorts.length; ++i) {
                 String[] ip_port = blockHostPorts[i].split(":");
                 Preconditions.checkState(ip_port.length == 2);
+                LOG.info("port len = 2 for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
                 TNetworkAddress network_address = new TNetworkAddress(ip_port[0],
                     Integer.parseInt(ip_port[1]));
+                LOG.info("constructed network address for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
                 replicaHostIdxs.add(hostIndex_.getIndex(network_address));
+                LOG.info("replica host idx added for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
               }
+              LOG.info("going to add file block to FD for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
               fileDescriptor.addFileBlock(
                   new FileBlock(block.getOffset(), block.getLength(), replicaHostIdxs));
+              LOG.info("file block is added to FD for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
             }
           } catch (IOException e) {
+            LOG.error("IO exception happens for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\". Ex : \"" +
+                e.getMessage() + "\".");
             throw new RuntimeException("couldn't determine block locations for path '"
                 + p + "':\n" + e.getMessage(), e);
           }
