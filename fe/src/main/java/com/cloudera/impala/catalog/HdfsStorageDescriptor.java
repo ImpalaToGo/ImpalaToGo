@@ -99,6 +99,8 @@ public class HdfsStorageDescriptor {
       } else {
         Byte delimByteValue = parseDelim(delimValue);
         if (delimByteValue == null) {
+          LOG.error("Invalid delimiter, must be specified as a single character or as a decimal value in the range [-128:127]. throwing...");
+
           throw new InvalidStorageDescriptorException("Invalid delimiter: '" +
               delimValue + "'. Delimiter must be specified as a single character or " +
               "as a decimal value in the range [-128:127]");
@@ -191,10 +193,13 @@ public class HdfsStorageDescriptor {
       throws InvalidStorageDescriptorException {
     Map<String, Byte> delimMap = extractDelimiters(sd.getSerdeInfo());
     if (!COMPATIBLE_SERDES.contains(sd.getSerdeInfo().getSerializationLib())) {
+      LOG.error("Invalid storage descriptor detected, throwing...");
+
       throw new InvalidStorageDescriptorException(String.format("Impala does not " +
           "support tables of this type. REASON: SerDe library '%s' is not " +
           "supported.", sd.getSerdeInfo().getSerializationLib()));
     }
+    LOG.info("Delimiters extracted for \"" + tblName + "\".");
     // Extract the blocksize and compression specification from the SerDe parameters,
     // if present.
     Map<String, String> parameters = sd.getSerdeInfo().getParameters();
@@ -215,6 +220,7 @@ public class HdfsStorageDescriptor {
           delimMap.get(serdeConstants.QUOTE_CHAR),
           blockSize);
     } catch (IllegalArgumentException ex) {
+      LOG.error("Exception happens while HdfsStorageDescriptor construction. ex : \"" + ex.getMessage() + "\"" );
       // Thrown by fromJavaClassName
       throw new InvalidStorageDescriptorException(ex);
     }

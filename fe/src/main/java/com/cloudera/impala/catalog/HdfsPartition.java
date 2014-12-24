@@ -296,6 +296,7 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
       StringBuilder errorMsg = new StringBuilder();
       if (!getInputFormatDescriptor().getFileFormat().isFileCompressionTypeSupported(
           fileDescriptor.getFileName(), errorMsg)) {
+        LOG.error("Input format descriptor compression is not supported for \"" + fileDescriptor.getFileName() + "\".");
         throw new RuntimeException(errorMsg.toString());
       }
     }

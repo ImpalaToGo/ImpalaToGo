@@ -716,15 +716,25 @@ public class HdfsTable extends Table {
       Map<String, List<FileDescriptor>> oldFileDescMap,
       Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescMap)
       throws CatalogException {
-    HdfsStorageDescriptor fileFormatDescriptor =
-        HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
-    Path partDirPath = new Path(storageDescriptor.getLocation());
+
+    HdfsStorageDescriptor fileFormatDescriptor = null;
+    Path partDirPath = null;
+
+    try{
+    HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
+    LOG.info("Created HDFS storage descriptor from storage desc for \"" + this.name_ + "\".");
+
+    partDirPath = new Path(storageDescriptor.getLocation());
+    LOG.info("Constructed Path from storage desc location for \"" + this.name_ + "\".");
+
     List<FileDescriptor> fileDescriptors = Lists.newArrayList();
     // If the partition is marked as cached, the block location metadata must be
     // reloaded, even if the file times have not changed.
     boolean isMarkedCached = isMarkedCached_;
     List<LiteralExpr> keyValues = Lists.newArrayList();
+
     if (msPartition != null) {
+      LOG.info("Partition is not null and will be processed for \"" + this.name_ + "\".");
       isMarkedCached =
           HdfsCachingUtil.getCacheDirIdFromParams(msPartition.getParameters()) != null;
       // Load key values
@@ -744,13 +754,29 @@ public class HdfsTable extends Table {
         }
       }
       try {
+        LOG.info("Going to run analysis for key values for : \"" + this.name_ + "\".");
         Expr.analyze(keyValues, null);
+        LOG.info("Analysis completed for key values for : \"" + this.name_ + "\".");
       } catch (AnalysisException e) {
-        LOG.error("Abalysis exception rise : \"" + e.getMessage() + "\".");
+        LOG.error("Analysis exception rise : \"" + e.getMessage() + "\".");
         // should never happen
         throw new IllegalStateException(e);
       }
     }
+    }
+    catch(CatalogException e){
+      LOG.error("catalog exception occur in create partition : \"" + e.getMessage() + "\"");
+      throw e;
+    }
+    catch(IllegalStateException e){
+      LOG.error("general exception occur in create partition : \"" + e.getMessage() + "\"");
+      throw e;
+    }
+    catch(Exception e){
+      LOG.error("general exception occur in create partition : \"" + e.getMessage() + "\"");
+      throw new IllegalStateException(e);
+    }
+
     try {
       // Each partition could reside on a different filesystem.
       FileSystem fs = partDirPath.getFileSystem(CONF);
@@ -813,6 +839,7 @@ public class HdfsTable extends Table {
       HdfsPartition partition = new HdfsPartition(this, msPartition, keyValues,
           fileFormatDescriptor, fileDescriptors,
           getAvailableAccessLevel(fs, partDirPath));
+
       partition.checkWellFormed();
       return partition;
     } catch (Exception e) {
