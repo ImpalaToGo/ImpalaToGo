@@ -242,8 +242,9 @@ public class HdfsTable extends Table {
    */
   private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
       throws RuntimeException {
+    try{
     Preconditions.checkNotNull(perFsFileDescs);
-    LOG.info("loading block md for \"" + name_ + "\".");
+    LOG.info("loading block md for v2 \"" + name_ + "\".");
 
     for (FsKey fsEntry: perFsFileDescs.keySet()) {
       FileSystem fs = fsEntry.filesystem;
@@ -253,14 +254,17 @@ public class HdfsTable extends Table {
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
       Preconditions.checkNotNull(partitionToFds);
       // loop over all files and record their block metadata, minus volume ids
+      LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
         Path partDirPath = new Path(partitionDir);
+         LOG.info("for over file descriptors \"" + name_ + "\".");
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
           try {
             FileStatus fileStatus = fs.getFileStatus(p);
             // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
+           LOG.info("Before get file block locations \"" + name_ + "\".");
             BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0,
                 fileStatus.getLen());
             Preconditions.checkNotNull(locations);
@@ -305,6 +309,10 @@ public class HdfsTable extends Table {
       }
     }
     LOG.info("completed load block md for \"" + name_ + "\".");
+   }catch(Exception ex)
+{
+  LOG.error("Exception in load block md", ex);
+}
   }
 
   /**
