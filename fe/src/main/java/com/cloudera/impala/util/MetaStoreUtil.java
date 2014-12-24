@@ -80,9 +80,13 @@ public class MetaStoreUtil {
     while (true) {
       try {
         // First, get all partition names that currently exist.
+        LOG.info("going to fetch partitions names for \"" + tblName + "\" for the " + retryAttempt + " time.");
         List<String> partNames = client.listPartitionNames(dbName, tblName, (short) -1);
+        LOG.info("fetched partitions names for \"" + tblName + "\". Fetching partitions by name.");
         return MetaStoreUtil.fetchPartitionsByName(client, partNames, dbName, tblName);
       } catch (MetaException e) {
+        LOG.error("fetch partitions failed for \"" + tblName + "\" for the " + retryAttempt +
+            " time due to meta ex happened : \"" + e.getMessage() + "\"");
         // Only retry for MetaExceptions, since TExceptions could indicate a broken
         // connection which we can't recover from by retrying.
         if (retryAttempt < numRetries) {
@@ -91,6 +95,7 @@ public class MetaStoreUtil {
           ++retryAttempt;
           // TODO: Sleep for a bit?
         } else {
+          LOG.error("fetch partitions - number of retries exceeded, throwing meta exception...");
           throw e;
         }
       }
