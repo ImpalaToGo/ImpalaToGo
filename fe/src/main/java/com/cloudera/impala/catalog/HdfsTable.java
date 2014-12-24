@@ -248,11 +248,15 @@ public class HdfsTable extends Table {
 
     for (FsKey fsEntry: perFsFileDescs.keySet()) {
       FileSystem fs = fsEntry.filesystem;
+
       // Store all BlockLocations so they can be reused when loading the disk IDs.
       List<BlockLocation> blockLocations = Lists.newArrayList();
       int numCachedBlocks = 0;
+      LOG.info("going to partitions -> to FileDescriptors for \"" + name_ + "\". filesystem : \"" + fsEntry.toString() + "\"");
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
+      LOG.info("partitions -> to FileDescriptors completed for \"" + name_ + "\".");
       Preconditions.checkNotNull(partitionToFds);
+      LOG.info("partitions -> to FileDescriptors gave non-null for \"" + name_ + "\".");
       // loop over all files and record their block metadata, minus volume ids
       LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
