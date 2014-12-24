@@ -720,6 +720,10 @@ public class HdfsTable extends Table {
     HdfsStorageDescriptor fileFormatDescriptor = null;
     Path partDirPath = null;
 
+    List<FileDescriptor> fileDescriptors = Lists.newArrayList();
+    List<LiteralExpr> keyValues = Lists.newArrayList();
+    boolean isMarkedCached = isMarkedCached_;
+
     try{
     HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
     LOG.info("Created HDFS storage descriptor from storage desc for \"" + this.name_ + "\".");
@@ -727,11 +731,10 @@ public class HdfsTable extends Table {
     partDirPath = new Path(storageDescriptor.getLocation());
     LOG.info("Constructed Path from storage desc location for \"" + this.name_ + "\".");
 
-    List<FileDescriptor> fileDescriptors = Lists.newArrayList();
+
     // If the partition is marked as cached, the block location metadata must be
     // reloaded, even if the file times have not changed.
-    boolean isMarkedCached = isMarkedCached_;
-    List<LiteralExpr> keyValues = Lists.newArrayList();
+
 
     if (msPartition != null) {
       LOG.info("Partition is not null and will be processed for \"" + this.name_ + "\".");
