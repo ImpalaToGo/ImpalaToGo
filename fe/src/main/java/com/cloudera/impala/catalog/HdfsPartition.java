@@ -406,6 +406,7 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
       // Validate all the partition key/values to ensure you can convert them toThrift()
       Expr.treesToThrift(getPartitionValues());
     } catch (Exception e) {
+      LOG.error("check well-formed : Exception occur : \"" + e.getMessage() + "\".");
       throw new CatalogException("Partition (" + getPartitionName() +
           ") has invalid partition column values: ", e);
     }

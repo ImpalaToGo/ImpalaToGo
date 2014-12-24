@@ -725,7 +725,7 @@ public class HdfsTable extends Table {
     boolean isMarkedCached = isMarkedCached_;
 
     try{
-    HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
+      fileFormatDescriptor = HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
     LOG.info("Created HDFS storage descriptor from storage desc for \"" + this.name_ + "\".");
 
     partDirPath = new Path(storageDescriptor.getLocation());
@@ -772,7 +772,7 @@ public class HdfsTable extends Table {
       throw e;
     }
     catch(IllegalStateException e){
-      LOG.error("general exception occur in create partition : \"" + e.getMessage() + "\"");
+      LOG.error("illegal state exception occur in create partition : \"" + e.getMessage() + "\"");
       throw e;
     }
     catch(Exception e){
@@ -839,10 +839,12 @@ public class HdfsTable extends Table {
         }
         numHdfsFiles_ += fileDescriptors.size();
       }
+      LOG.info("going to create hdfs partition for \"" + partDirPath.toString() + "\".");
+
       HdfsPartition partition = new HdfsPartition(this, msPartition, keyValues,
           fileFormatDescriptor, fileDescriptors,
           getAvailableAccessLevel(fs, partDirPath));
-
+      LOG.info("hdfs partition created for \"" + partDirPath.toString() + "\". checking well-formed");
       partition.checkWellFormed();
       return partition;
     } catch (Exception e) {
