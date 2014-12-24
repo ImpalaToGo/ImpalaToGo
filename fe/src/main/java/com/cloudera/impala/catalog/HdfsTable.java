@@ -590,13 +590,17 @@ public class HdfsTable extends Table {
 
     if (msTbl.getPartitionKeysSize() == 0) {
       LOG.info("Table \"" + msTbl.getTableName() + "\" does not have partitions keys.");
+      String partiotionsListEmpty = msPartitions.isEmpty() ? "" : "not";
+      LOG.info("List of partitions is \"" + partiotionsListEmpty + "\" empty");
       Preconditions.checkArgument(msPartitions == null || msPartitions.isEmpty());
       // This table has no partition key, which means it has no declared partitions.
       // We model partitions slightly differently to Hive - every file must exist in a
       // partition, so add a single partition with no keys which will get all the
       // files in the table's root directory.
+      LOG.info("Going to create partition for \"" + msTbl.getTableName() + "\".");
       HdfsPartition part = createPartition(msTbl.getSd(), null, oldFileDescMap,
           fileDescsToLoad);
+      LOG.info("partition created for \"" + msTbl.getTableName() + "\".");
       addPartition(part);
       if (isMarkedCached_) part.markCached();
       Path location = new Path(hdfsBaseDir_);
@@ -742,6 +746,7 @@ public class HdfsTable extends Table {
       try {
         Expr.analyze(keyValues, null);
       } catch (AnalysisException e) {
+        LOG.error("Abalysis exception rise : \"" + e.getMessage() + "\".");
         // should never happen
         throw new IllegalStateException(e);
       }
@@ -753,10 +758,14 @@ public class HdfsTable extends Table {
         // FileSystem does not have an API that takes in a timestamp and returns a list
         // of files that has been added/changed since. Therefore, we are calling
         // fs.listStatus() to list all the files.
+        LOG.info("Ask file system for directory \"" + partDirPath.toString() + "\" status.");
         for (FileStatus fileStatus: fs.listStatus(partDirPath)) {
           String fileName = fileStatus.getPath().getName().toString();
+          LOG.info("File \"" + fileName + "\" is located for partdir \"" + partDirPath.toString() + "\".");
+
           if (fileStatus.isDirectory() || FileSystemUtil.isHiddenFile(fileName) ||
               HdfsCompression.fromFileName(fileName) == HdfsCompression.LZO_INDEX) {
+            LOG.info("Ignore directory \"" + partDirPath.toString() + "\".");
             // Ignore directory, hidden file starting with . or _, and LZO index files
             // If a directory is erroneously created as a subdirectory of a partition dir
             // we should ignore it and move on. Hive will not recurse into directories.
@@ -807,6 +816,8 @@ public class HdfsTable extends Table {
       partition.checkWellFormed();
       return partition;
     } catch (Exception e) {
+      LOG.error("Failed to create partition \"" + partDirPath.toString() + "\" : ex = \"" +
+          e.getMessage() + "\".");
       throw new CatalogException("Failed to create partition: ", e);
     }
   }
