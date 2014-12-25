@@ -356,6 +356,7 @@ public class HdfsTable extends Table {
   LOG.error("Exception in load block md", ex);
 }
 >>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
+}
   }
 
   /**
