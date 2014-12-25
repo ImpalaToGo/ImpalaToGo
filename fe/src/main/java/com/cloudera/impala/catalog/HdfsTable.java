@@ -261,7 +261,7 @@ public class HdfsTable extends Table {
       LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
         Path partDirPath = new Path(partitionDir);
-        LOG.info("for over file descriptors \"" + name_ + "\".");
+         LOG.info("for over file descriptors \"" + name_ + "\".");
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
           LOG.info("file descriptor to work with : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
@@ -339,6 +339,7 @@ public class HdfsTable extends Table {
     }catch(Exception ex){
       LOG.error("Exception in load block md", ex);
     }
+}
   }
 
   /**
