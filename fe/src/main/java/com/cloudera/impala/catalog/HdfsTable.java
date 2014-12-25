@@ -261,7 +261,11 @@ public class HdfsTable extends Table {
       LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
         Path partDirPath = new Path(partitionDir);
+<<<<<<< HEAD
         LOG.info("for over file descriptors \"" + name_ + "\".");
+=======
+         LOG.info("for over file descriptors \"" + name_ + "\".");
+>>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
           LOG.info("file descriptor to work with : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
@@ -272,6 +276,7 @@ public class HdfsTable extends Table {
             LOG.info("file status is retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
             // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
+<<<<<<< HEAD
             LOG.info("file is approved as \"not directory\" for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
             long len = fileStatus.getLen();
@@ -281,6 +286,11 @@ public class HdfsTable extends Table {
 
             LOG.info("block locations retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
+=======
+           LOG.info("Before get file block locations \"" + name_ + "\".");
+            BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0,
+                fileStatus.getLen());
+>>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
             Preconditions.checkNotNull(locations);
             LOG.info("for over file descriptors \"" + name_ + "\".");
             blockLocations.addAll(Arrays.asList(locations));
@@ -336,9 +346,16 @@ public class HdfsTable extends Table {
       }
     }
     LOG.info("completed load block md for \"" + name_ + "\".");
+<<<<<<< HEAD
     }catch(Exception ex){
       LOG.error("Exception in load block md", ex);
     }
+=======
+   }catch(Exception ex)
+{
+  LOG.error("Exception in load block md", ex);
+}
+>>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
   }
 
   /**
