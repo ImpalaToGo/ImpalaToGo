@@ -1,8 +1,10 @@
 package com.cloudera.impala.catalog;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.conf.Configuration;
@@ -12,6 +14,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
 import org.apache.log4j.Logger;
 
 import com.cloudera.impala.common.ITPool;
@@ -108,15 +111,21 @@ public class HadoopFsBridge {
         temp.setStatus(BridgeOpStatus.OK);
         temp.setResult(res);
         }
-      catch (InterruptedException e) {
+      catch (TimeoutException e) {
         temp.setStatus(BridgeOpStatus.TIMEOUT);
-        LOG.error(messageExexEx + "Ex : \"" + e.getMessage() + "\"." );
-        e.printStackTrace();
+        temp.setError(e.getMessage());
+        LOG.error(messageInterruptedEx + "Ex : \"" + e.getMessage() + "\"." );
         }
       catch (ExecutionException e) {
         temp.setStatus(BridgeOpStatus.FAILURE);
-        LOG.error(messageInterruptedEx + "Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+        temp.setError(e.getMessage());
+        LOG.error(messageExexEx + "Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
         }
+      catch (InterruptedException e) {
+        temp.setStatus(BridgeOpStatus.FAILURE);
+        temp.setError(e.getMessage());
+        LOG.error(messageExexEx + "Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+      }
 
       status = temp.getStatus();
       switch(status){
@@ -190,7 +199,7 @@ public class HadoopFsBridge {
     //declaration of the anonymous class
     InterruptableCallable<FileSystem> callable = new InterruptableCallable<FileSystem>() {
       @Override
-      protected FileSystem dowork() throws IOException{
+      protected FileSystem dowork() throws IOException, InterruptedException{
         return path.getFileSystem(configuration);
       }
     };
@@ -218,7 +227,7 @@ public class HadoopFsBridge {
     //declaration of the anonymous class
     InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>() {
       @Override
-      protected FileStatus[] dowork() throws IOException{
+      protected FileStatus[] dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.listStatus(path);
       }
     };
@@ -249,7 +258,7 @@ public class HadoopFsBridge {
     //declaration of the anonymous class
     InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>() {
       @Override
-      protected FileStatus dowork() throws IOException{
+      protected FileStatus dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.getFileStatus(path);
       }
     };
@@ -284,7 +293,7 @@ public class HadoopFsBridge {
     //declaration of the anonymous class
     InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>() {
       @Override
-      protected BlockLocation[] dowork() throws IOException{
+      protected BlockLocation[] dowork() throws IOException, InterruptedException{
         return fs.getFileBlockLocations(file, start, len);
       }
     };
@@ -316,7 +325,8 @@ public class HadoopFsBridge {
     //declaration of the anonymous class
     InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>() {
       @Override
-      protected BlockStorageLocation[] dowork() throws IOException{
+      protected BlockStorageLocation[] dowork() throws IOException, UnsupportedOperationException,
+                                                       InvalidBlockTokenException, InterruptedException {
         return dfs.getFileBlockStorageLocations(blocks);
       }
     };

@@ -7,9 +7,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.log4j.Logger;
+
 /** thin executor for misc tasks */
 public class ITPool {
   private final ExecutorService _service;
+  private static final Logger LOG = Logger.getLogger(ITPool.class);
 
   /**
    * Construct the pool
@@ -27,15 +30,17 @@ public class ITPool {
    *
    * @throws InterruptedException  exception fires when task is interrupted due timeout elapsed
    * @throws ExecutionException    exception fires when underlying execution was aborted by throwing an exception
+   * @throws TimeoutException      exception fires when timeout of waiting on the scheduled task is exceeded
    */
-  public <T> T run(InterruptableCallable<T> callable, long timeout) throws InterruptedException, ExecutionException{
+  public <T> T run(InterruptableCallable<T> callable, long timeout) throws InterruptedException, ExecutionException, TimeoutException{
     Future<T> futureResult = _service.submit(callable);
     T result = null;
     try{
         result = futureResult.get(timeout, TimeUnit.MILLISECONDS);
     }catch(TimeoutException e){
-        System.out.println("No response after one second");
-        futureResult.cancel(true);
+      LOG.error("Timeout \"" + timeout + "\" exceeded, cancelling task...");
+      futureResult.cancel(true);
+      throw e;
     }
     return result;
   }

@@ -2,17 +2,22 @@ package com.cloudera.impala.common;
 
 import java.util.concurrent.Callable;
 
+import org.apache.log4j.Logger;
 
+/** Represent interruptable callable. T is the result type */
 public abstract class InterruptableCallable<T> implements Callable<T>{
 
+  private static final Logger LOG = Logger.getLogger(InterruptableCallable.class);
+
+  @Override
   public T call() throws Exception{
     try{
         return dowork();
     }catch(InterruptedException e){
-        System.out.println("Thread was interrupted");
+      LOG.error("Thread was interrupted");
     }
     catch(Exception e){
-      System.out.println("Genereic exception happens : \"" + e.getMessage() + "\".");
+      LOG.error("Generic exception happens : \"" + e.getMessage() + "\".");
     }
     return null;
   }
