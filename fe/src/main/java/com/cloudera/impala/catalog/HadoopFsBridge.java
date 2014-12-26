@@ -238,7 +238,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, RETRIES, messageInterruptedEx, messageExexEx, RETRIES);
+    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"FileSystem.listStatus\" finished with status \"" + status + "\" for Path \"" + path +
         "\" on fs \"" + fs.getUri() + "\".");
     return result.get();
@@ -269,7 +269,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, RETRIES, messageInterruptedEx, messageExexEx, RETRIES);
+    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"FileSystem.getFileStatus\" finished with status \"" + status + "\" for Path \"" + path +
         "\" on fs \"" + fs.getUri() + "\".");
     return result.get();
@@ -304,7 +304,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, RETRIES, messageInterruptedEx, messageExexEx, RETRIES);
+    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"FileSystem.getFileBlockLocations\" finished with status \"" + status + "\" for Path \"" + file.getPath() +
         "\" on fs \"" + fs.getUri() + "\".");
     return result.get();
@@ -337,7 +337,7 @@ public class HadoopFsBridge {
         + " filesystem \"" + dfs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, RETRIES, messageInterruptedEx, messageExexEx, RETRIES);
+    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"DistributedFileSystem.getFileBlockStorageLocations\" finished with status \"" + status +
         "\" for fs \"" + dfs.getUri() + "\".");
     return result.get();
