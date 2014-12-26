@@ -26,6 +26,9 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.security.UserGroupInformation;
 
+import com.cloudera.impala.catalog.HadoopFsBridge;
+import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpResult;
+import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpStatus;
 import com.google.common.base.Preconditions;
 
 /**
@@ -98,7 +101,13 @@ public class FsPermissionChecker {
   public Permissions getPermissions(FileSystem fs, Path path) throws IOException {
     Preconditions.checkNotNull(fs);
     Preconditions.checkNotNull(path);
-    return new Permissions(fs.getFileStatus(path));
+
+    BridgeOpResult<FileStatus> fileStatusRes = HadoopFsBridge.getFileStatus(fs, path);
+    if(fileStatusRes.getStatus() != BridgeOpStatus.OK){
+      throw new IOException(fileStatusRes.getError());
+    }
+
+    return new Permissions(fileStatusRes.getResult());
   }
 
   /**

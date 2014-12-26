@@ -54,6 +54,8 @@ import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.LiteralExpr;
 import com.cloudera.impala.analysis.NullLiteral;
 import com.cloudera.impala.analysis.PartitionKeyValue;
+import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpResult;
+import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpStatus;
 import com.cloudera.impala.catalog.HdfsPartition.FileBlock;
 import com.cloudera.impala.catalog.HdfsPartition.FileDescriptor;
 import com.cloudera.impala.common.AnalysisException;
@@ -251,7 +253,7 @@ public class HdfsTable extends Table {
 
       // Store all BlockLocations so they can be reused when loading the disk IDs.
       List<BlockLocation> blockLocations = Lists.newArrayList();
-      int numCachedBlocks = 0;
+
       LOG.info("going to partitions -> to FileDescriptors for \"" + name_ + "\". filesystem : \"" + fsEntry.toString() + "\"");
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
       LOG.info("partitions -> to FileDescriptors completed for \"" + name_ + "\".");
@@ -261,36 +263,40 @@ public class HdfsTable extends Table {
       LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
         Path partDirPath = new Path(partitionDir);
-<<<<<<< HEAD
+
         LOG.info("for over file descriptors \"" + name_ + "\".");
-=======
-         LOG.info("for over file descriptors \"" + name_ + "\".");
->>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
           LOG.info("file descriptor to work with : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
 
           try {
             LOG.info("going to retrieve file status for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
-            FileStatus fileStatus = fs.getFileStatus(p);
+
+            BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fs, p);
+            if(fileStatRes.getStatus() != BridgeOpStatus.OK){
+              // no way to proceed, we did not sync with remote FS, throw the exception
+              throw new IOException(fileStatRes.getError());
+            }
+            FileStatus fileStatus = fileStatRes.getResult();
+
             LOG.info("file status is retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
             // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
-<<<<<<< HEAD
             LOG.info("file is approved as \"not directory\" for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
             long len = fileStatus.getLen();
             LOG.info("Before get file block locations \"" + name_ + "\". File len : \"" + len + "\"");
 
-            BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0, len);
+            BridgeOpResult<BlockLocation[]> fileBlockLocationRes = HadoopFsBridge.getFileBlockLocations(fs, fileStatus, 0, len);
+            if(fileBlockLocationRes.getStatus() != BridgeOpStatus.OK){
+              // no way to proceed, we did not sync with remote FS, throw the exception
+              throw new IOException(fileStatRes.getError());
+            }
+
+            BlockLocation[] locations = fileBlockLocationRes.getResult();
 
             LOG.info("block locations retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
-=======
-           LOG.info("Before get file block locations \"" + name_ + "\".");
-            BlockLocation[] locations = fs.getFileBlockLocations(fileStatus, 0,
-                fileStatus.getLen());
->>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
             Preconditions.checkNotNull(locations);
             LOG.info("for over file descriptors \"" + name_ + "\".");
             blockLocations.addAll(Arrays.asList(locations));
@@ -341,21 +347,15 @@ public class HdfsTable extends Table {
       if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
         LOG.info("loading disk ids for: " + getFullName() +
             ". nodes: " + getNumNodes() + ". file system: " + fsEntry);
+
         loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
         LOG.info("completed load of disk ids for: " + getFullName());
       }
     }
     LOG.info("completed load block md for \"" + name_ + "\".");
-<<<<<<< HEAD
-    }catch(Exception ex){
-      LOG.error("Exception in load block md", ex);
-    }
-=======
-   }catch(Exception ex)
-{
-  LOG.error("Exception in load block md", ex);
-}
->>>>>>> f70d2356b21ea9edffc4d59e6561d40fc271e2a7
+   }catch(Exception ex){
+     LOG.error("Exception in load block md", ex);
+   }
   }
 
   /**
@@ -368,13 +368,15 @@ public class HdfsTable extends Table {
     // BlockStorageLocations for all the blocks
     // block described by blockMetadataList[i] is located at locations[i]
     BlockStorageLocation[] locations = null;
-    try {
-      // Get the BlockStorageLocations for all the blocks
-      locations = dfs.getFileBlockStorageLocations(blockLocations);
-    } catch (IOException e) {
-      LOG.error("Couldn't determine block storage locations:\n" + e.getMessage());
+
+    // Get the BlockStorageLocations for all the blocks
+    BridgeOpResult<BlockStorageLocation[]> result = HadoopFsBridge.getFileBlockStorageLocations(dfs, blockLocations);
+    if(result.getStatus() != BridgeOpStatus.OK){
+      LOG.error("Couldn't determine block storage locations: \"" + result.getError() + "\"");
       return;
-    }
+      }
+
+    locations = result.getResult();
 
     if (locations == null || locations.length == 0) {
       LOG.warn("Attempted to get block locations but the call returned nulls");
@@ -655,8 +657,20 @@ public class HdfsTable extends Table {
       addPartition(part);
       if (isMarkedCached_) part.markCached();
       Path location = new Path(hdfsBaseDir_);
-      FileSystem fs = location.getFileSystem(CONF);
-      if (fs.exists(location)) {
+
+      BridgeOpResult<FileSystem> fileSystemRes = HadoopFsBridge.getFilesystem(location, CONF);
+      if(fileSystemRes.getStatus() != BridgeOpStatus.OK){
+        throw new IOException(fileSystemRes.getError());
+      }
+
+      FileSystem fs = fileSystemRes.getResult();
+
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fs, location);
+      if(existsRes.getStatus() != BridgeOpStatus.OK){
+        throw new IOException(existsRes.getError());
+      }
+
+      if (existsRes.getResult()) {
         accessLevel_ = getAvailableAccessLevel(fs, location);
       }
     } else {
@@ -834,15 +848,33 @@ public class HdfsTable extends Table {
     try {
       LOG.info("Going to retrieve filesystem for directory \"" + partDirPath.toString() + "\" ; table \"" + this.name_ + "\".");
       // Each partition could reside on a different filesystem.
-      FileSystem fs = partDirPath.getFileSystem(CONF);
+
+      BridgeOpResult<FileSystem> fileSystemRes = HadoopFsBridge.getFilesystem(partDirPath, CONF);
+      if(fileSystemRes.getStatus() != BridgeOpStatus.OK){
+        throw new IOException(fileSystemRes.getError());
+      }
+
+      FileSystem fs = fileSystemRes.getResult();
       LOG.info("Filesystem is retrieved for directory \"" + partDirPath.toString() + "\" ; table \"" + this.name_ + "\".");
-      if (fs.exists(partDirPath)) {
+
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fs, partDirPath);
+      if(existsRes.getStatus() != BridgeOpStatus.OK){
+        throw new IOException(existsRes.getError());
+      }
+
+      if (existsRes.getResult()){
         LOG.info("Directory \"" + partDirPath.toString() + "\" exists within the filesystem; table \"" + this.name_ + "\".");
         // FileSystem does not have an API that takes in a timestamp and returns a list
         // of files that has been added/changed since. Therefore, we are calling
         // fs.listStatus() to list all the files.
         LOG.info("Ask file system for directory \"" + partDirPath.toString() + "\" status.");
-        for (FileStatus fileStatus: fs.listStatus(partDirPath)) {
+
+        BridgeOpResult<FileStatus[]> listStatusRes = HadoopFsBridge.listStatus(fs, partDirPath);
+        if(listStatusRes.getStatus() != BridgeOpStatus.OK){
+          throw new IOException(listStatusRes.getError());
+        }
+
+        for (FileStatus fileStatus: listStatusRes.getResult()) {
           String fileName = fileStatus.getPath().getName().toString();
           LOG.info("File \"" + fileName + "\" is located for partdir \"" + partDirPath.toString() + "\".");
 
