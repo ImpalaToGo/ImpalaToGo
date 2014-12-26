@@ -208,7 +208,7 @@ public class HadoopFsBridge {
     String messageExexEx = "Execution exception in \"Path.getFilesystem\" operation for \"" + path + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, RETRIES, messageInterruptedEx, messageExexEx, RETRIES);
+    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"Path.getFilesystem\" finished with status \"" + status + "\" for Path \"" + path + "\".");
     return result.get();
   }
