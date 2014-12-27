@@ -1860,14 +1860,16 @@ public class Analyzer {
     // This may trigger a metadata load, in which case we want to return the errors as
     // AnalysisExceptions.
     try {
-      table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
-      if (table == null) {
-        throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
+      try{
+        table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
       }
-      if (!table.isLoaded() || table instanceof IncompleteTable) {
+      catch(TableLoadingException e){
 
+        if(table == null)
+          throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
 
         Set<TableName> missingTables = new HashSet<TableName>();
+
         TableName tn = new TableName(table.getDb().getName(), table.getName());
         missingTbls_.add(tn);
         missingTables.add(tn);
@@ -1878,8 +1880,8 @@ public class Analyzer {
         try {
           // load only requested table
           status = FeSupport.PrioritizeLoad(missingTables);
-        } catch (InternalException e) {
-          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", table.getFullName(), e.getMessage()));
+        } catch (InternalException ex) {
+          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", table.getFullName(), ex.getMessage()));
         }
         if (status == null || status.getStatus_code() != TStatusCode.OK) {
           throw new AnalysisException(
@@ -1895,6 +1897,15 @@ public class Analyzer {
         else
           // remove the loaded table from missing tables
           missingTables.remove(tn);
+      }
+      if (table == null) {
+        throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
+      }
+      if (!table.isLoaded() || table instanceof IncompleteTable) {
+        TableName tn = new TableName(table.getDb().getName(), table.getName());
+        missingTbls_.add(tn);
+          throw new AnalysisException(
+              "Table/view is missing metadata: " + table.getFullName());
       }
 
       if (addAccessEvent) {
