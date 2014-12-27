@@ -184,9 +184,12 @@ public class ImpaladCatalog extends Catalog {
     if (table == null) return null;
 
     if (table.isLoaded() && table instanceof IncompleteTable) {
+      LOG.error("incomplete table meta detected for \"" + tableName + "\"");
       // If there were problems loading this table's metadata, throw an exception
       // when it is accessed.
       ImpalaException cause = ((IncompleteTable) table).getCause();
+      LOG.error("Initial cause for table \"" + tableName + "\" was : \"" + cause.getMessage() + "\".");
+
       if (cause instanceof TableLoadingException) throw (TableLoadingException) cause;
       throw new TableLoadingException("Missing metadata for table: " + tableName, cause);
     }

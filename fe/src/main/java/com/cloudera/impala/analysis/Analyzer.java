@@ -45,6 +45,7 @@ import com.cloudera.impala.catalog.Db;
 import com.cloudera.impala.catalog.HBaseTable;
 import com.cloudera.impala.catalog.HdfsTable;
 import com.cloudera.impala.catalog.ImpaladCatalog;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.TableLoadingException;
 import com.cloudera.impala.catalog.Type;
@@ -62,6 +63,8 @@ import com.cloudera.impala.thrift.TAccessEvent;
 import com.cloudera.impala.thrift.TCatalogObjectType;
 import com.cloudera.impala.thrift.TNetworkAddress;
 import com.cloudera.impala.thrift.TQueryCtx;
+import com.cloudera.impala.thrift.TStatus;
+import com.cloudera.impala.thrift.TStatusCode;
 import com.cloudera.impala.util.DisjointSet;
 import com.cloudera.impala.util.ListMap;
 import com.cloudera.impala.util.TSessionStateUtil;
@@ -112,6 +115,9 @@ public class Analyzer {
       "Data source already exists: ";
 
   private final static Logger LOG = LoggerFactory.getLogger(Analyzer.class);
+
+  // Time to wait for missing tables to be loaded before timing out.
+  private final long MAX_CATALOG_UPDATE_WAIT_TIME_MS = 2 * 60 * 1000;
 
   private final User user_;
 
@@ -1858,10 +1864,37 @@ public class Analyzer {
       if (table == null) {
         throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
       }
-      if (!table.isLoaded()) {
-        missingTbls_.add(new TableName(table.getDb().getName(), table.getName()));
-        throw new AnalysisException(
-            "Table/view is missing metadata: " + table.getFullName());
+      if (!table.isLoaded() || table instanceof IncompleteTable) {
+
+
+        Set<TableName> missingTables = new HashSet<TableName>();
+        TableName tn = new TableName(table.getDb().getName(), table.getName());
+        missingTbls_.add(tn);
+        missingTables.add(tn);
+
+        // Call into the CatalogServer and request the required tables be loaded.
+        LOG.info(String.format("Requesting prioritized load of table: %s", tn));
+        TStatus status = null;
+        try {
+          // load only requested table
+          status = FeSupport.PrioritizeLoad(missingTables);
+        } catch (InternalException e) {
+          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", table.getFullName(), e.getMessage()));
+        }
+        if (status == null || status.getStatus_code() != TStatusCode.OK) {
+          throw new AnalysisException(
+              "Unable to reload missing metadata for table/view : " + table.getFullName());
+        }
+        LOG.info(String.format("Waiting for table to complete loading: %s", tn));
+        getCatalog().waitForCatalogUpdate(MAX_CATALOG_UPDATE_WAIT_TIME_MS);
+        table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
+        if (!table.isLoaded() || table instanceof IncompleteTable){
+          throw new AnalysisException(
+              "Table/view is missing metadata: " + table.getFullName());
+        }
+        else
+          // remove the loaded table from missing tables
+          missingTables.remove(tn);
       }
 
       if (addAccessEvent) {
@@ -1879,6 +1912,7 @@ public class Analyzer {
       // We don't want to log all AnalysisExceptions as ERROR, only failures due to
       // TableLoadingExceptions.
       LOG.error(errorMsg + "\n" + e.getMessage());
+
       throw new AnalysisException(errorMsg, e);
     } catch (CatalogException e) {
       throw new AnalysisException("Error loading table: " + tableName.toString(), e);
