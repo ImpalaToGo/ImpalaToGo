@@ -252,6 +252,8 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	// if file is under finalization already or was unable to be opened, wait while it will be finalized
     	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
         if(under_finalization || (file->open() != status::StatusInternal::OK)){
+        	LOG(WARNING) << "File \"" << path << "\" is under finalization and cannot be used. "
+        		<< 	"Waiting for it to be removed before to reinvoke its preparation.\n";
 
         	// Check the active deletions list, if the file is there, do not use it and reclaim it for reload when deletion completes:
         	std::list<std::string>::iterator it;

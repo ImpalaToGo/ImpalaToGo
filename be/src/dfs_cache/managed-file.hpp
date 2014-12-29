@@ -171,6 +171,7 @@ namespace managed_file {
 	   }
 
 	   ~File(){
+		   LOG(INFO) << "Going to destruct the file \"" << fqp() << "\".\n";
 	   }
 
 	   /** restore File options representing the network identification of supplied file.

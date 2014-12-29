@@ -847,7 +847,6 @@ private:
                             	}
                             	// try next node:
                             	node = next;
-
                 		    	continue;
                 		    }
 
@@ -867,6 +866,8 @@ private:
         		}
 
         		if(!deletePermitted){
+        			// reverse the remained list of nodes under this bucket back:
+        			utilities::reverse(active);
         			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}
@@ -1077,8 +1078,12 @@ private:
          // duplicate is prevented from being added into the cache
          duplicate = (node && (*node->value() == (*item)));
          if( duplicate ){
-        	 delete item;
+        	 LOG(WARNING) << "Duplicate found within the registry.\n";
+        	 // reassign the link just in case is somebody uses it now outside
+        	 ItemType_* _item = item;
         	 item = node->value();
+        	 // delete the reference to the item requested to add
+        	 delete _item;
         	 succeed = true;
         	 return node;
          }

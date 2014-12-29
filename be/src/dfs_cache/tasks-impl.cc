@@ -432,7 +432,7 @@ void PrepareDatasetTask::reportSingleFileIsCompletedCallback(const boost::shared
 	}
 
 	if(progress->error){
-		LOG (WARNING) << "File \"" << progress->dfsPath << "\" is NOT estimated due to error : \"" << progress->errdescr << "\".\n";
+		LOG (WARNING) << "File \"" << progress->dfsPath << "\" is NOT prepared due to error : \"" << progress->errdescr << "\".\n";
 	}
 	else
 		LOG (INFO) << "File \"" << progress->dfsPath << "\" is loaded with a size : " <<
