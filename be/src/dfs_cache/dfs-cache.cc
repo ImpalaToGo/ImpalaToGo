@@ -149,7 +149,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 
     // Add the reference to new file into LRU registry
     managed_file::File* managed_file;
-    bool ret = CacheLayerRegistry::instance()->addFile(uri.FilePath.c_str(), fsDescriptor, managed_file);
+    bool ret = CacheLayerRegistry::instance()->addFile(uri.FilePath.c_str(), fsDescriptor, managed_file, managed_file::NatureFlag::FOR_WRITE);
     if(!ret){
     	LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
     			fsDescriptor.host << "\"" << "\n";
@@ -624,7 +624,7 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 
     // create new one file in the registry, renamed.
 	managed_file::File* managed_file;
-	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file)){
+	if(!CacheLayerRegistry::instance()->addFile(uriNew.FilePath.c_str(), fsDescriptor, managed_file, managed_file::NatureFlag::PHYSICAL)){
 		LOG (ERROR) << "Unable to add the file to the LRU registry for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;

@@ -231,7 +231,7 @@ bool FileSystemLRUCache::reload(const std::string& root){
 
         managed_file::File* file;
     	// and add it into the cache
-    	add(lp, file);
+    	add(lp, file, managed_file::NatureFlag::PHYSICAL);
     	// and mark the file as "idle":
     	file->state(managed_file::State::FILE_IS_IDLE);
     }
@@ -287,15 +287,16 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	return file;
     }
 
-bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
+bool FileSystemLRUCache::add(std::string path, managed_file::File*& file, managed_file::NatureFlag creationFlag){
     	bool duplicate = false;
     	bool success   = false;
 
     	// we create and destruct File objects only here, in LRU cache layer
-    	file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
+    	file = new managed_file::File(path.c_str(), m_weightChangedPredicate, creationFlag, m_getFileInfoPredicate, m_freeFileInfoPredicate);
 
     	// increase refcount to this file before being shared to outer world
     	file->open();
+
     	// when item is externally injected to the cache, it should have time "now"
     	success = LRUCache<managed_file::File>::add(file, duplicate);
     	if(duplicate){
@@ -304,6 +305,8 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file){
     		delete file;
     	}
 
+    	if(!success)
+    		LOG (WARNING) << "new file \"" << path << "\" could not be added into the cache, reason : no free space available.\n";
     	return success;
 }
 

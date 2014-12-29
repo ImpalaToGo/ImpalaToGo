@@ -95,13 +95,14 @@ bool CacheLayerRegistry::findFile(const char* path, managed_file::File*& file){
 	return file != nullptr;
 }
 
-bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file)
+bool CacheLayerRegistry::addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file,
+	managed_file::NatureFlag creationFlag)
 {
 	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
 	if(fqp.empty())
 		return false;
 
-	return m_cache->add(fqp, file);
+	return m_cache->add(fqp, file, creationFlag);
 }
 
 bool CacheLayerRegistry::deleteFile(const FileSystemDescriptor &descriptor, const char* path, bool physically){

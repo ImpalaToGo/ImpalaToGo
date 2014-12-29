@@ -145,6 +145,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
      MonotonicStopWatch sw;
 
+     // since this time, the meta file became backed with a physical one
+     managed_file->nature(managed_file::NatureFlag::PHYSICAL);
+
 	 // read from the remote file
 	 tSize last_read = 0;
 

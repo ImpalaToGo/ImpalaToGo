@@ -49,6 +49,9 @@ private:
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
     managed_file::File::WeightChangedEvent m_weightChangedPredicate; /** the callback that should be called on "item weight is changed" event */
+    managed_file::File::GetFileInfo        m_getFileInfoPredicate;   /** callback to get file info */
+    managed_file::File::FreeFileInfo       m_freeFileInfoPredicate;  /** callback to free file info */
+
 
 	/** try mark item for deletion
 	 *  @param file - file to mark for deletion
@@ -119,9 +122,8 @@ private:
      * @return constructed file object if its has correct configuration and nullptr otherwise
      */
     managed_file::File* constructNew(std::string path){
-    	// if the file is auto-created by Cache itself, so that the cache should be subscribed for updates regarding the file
-    	// size changes.
-    	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate);
+    	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate,
+    			managed_file::NatureFlag::AMORPHOUS, m_getFileInfoPredicate, m_freeFileInfoPredicate);
      	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
     		delete file;
     		file = nullptr;
@@ -148,12 +150,16 @@ public:
     /**
      * construct the File System LRU cache
      *
-     * @param capacity - initial cache capacity limit
-     * @param root     - defines root folder for local cache storage
+     * @param capacity    - initial cache capacity limit
+     * @param root        - defines root folder for local cache storage
+     * @param getfileinfo - predicate to get file info
+     * @param freefileInfo - predicate to free file info
+     *
      * @param autoload - flag, indicates whether auto-load should be performed once the file is requested from cache by its name.
      * Currently is true by default.
      */
-    FileSystemLRUCache(long long capacity, const std::string& root, bool autoload = true) :
+    FileSystemLRUCache(long long capacity, const std::string& root, managed_file::File::GetFileInfo  getfileinfo,
+    		managed_file::File::FreeFileInfo freefileInfo, bool autoload = true) :
     		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity), m_root(root){
 
     	LOG (INFO) << "LRU cache capacity limit = " << std::to_string(capacity) << "\n";
@@ -168,6 +174,8 @@ public:
     	m_itemDeletionPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::deleteFile), this, _1, _2);
 
     	m_weightChangedPredicate = boost::bind(boost::mem_fn(&FileSystemLRUCache::handleCapacityChanged), this, _1);
+    	m_getFileInfoPredicate   = getfileinfo;
+    	m_freeFileInfoPredicate  = freefileInfo;
 
     	LRUCache<managed_file::File>::GetKeyFunc<std::string> gkf = [&](managed_file::File* file)->std::string {
     				return (file != nullptr ? file->fqp() : ""); };
@@ -215,11 +223,13 @@ public:
     }
 
     /** add the file into the cache
-     * @param path - fqp
+     * @param [in]     path         - fqp
+     * @param [in/out] file         - managed file
+     * @param [in] creation flag
      *
      * @return indication of fact that file is in the registry
      */
-    bool add(std::string path, managed_file::File*& file);
+    bool add(std::string path, managed_file::File*& file, managed_file::NatureFlag creationFlag);
 
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache

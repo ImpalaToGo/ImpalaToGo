@@ -93,7 +93,8 @@ public:
      	/** get node underlying value */
      	ItemType_*  value()  { return m_item; }
 
-     	virtual void touch()   						   = 0;  /** method that marks the item as "accessed" */
+     	virtual bool touch (bool first = false)        = 0;  /** method that marks the item as "accessed", "first" flag is to know whether
+     														     the node is new */
         virtual bool remove(bool cleanup = true)       = 0;  /** remove the node. Default usage scenario is cleanup (with physical removal) */
         virtual size_t weight() 					   = 0;  /** tell weight of underlying item*/
 
@@ -477,7 +478,7 @@ private:
 			}
 
 			virtual ~Node() {
-				std::cout << "Node destructor called" << std::endl;
+				LOG (INFO) << "Node destructor called" << "\n.";
 			}
 
 			/** Updates the status of the node to prevent it from being dropped from cache.
@@ -485,8 +486,14 @@ private:
 			 * provide correct Age Bucket basing on its "timestamp". That Bucket will be the hard link host
 			 * for current Node
 			 */
-			void touch() {
+			bool touch(bool first = false) {
+				bool valid = true;
 				if( this->value() != nullptr ) {
+
+					// first check that cache is valid to accept the :
+					if(!m_mgr->checkValid() && first){
+						return false;
+					}
 					// ask the item about its timestamp:
 					boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
 					// the following operation allows the item to control the self-promotion as an item to
@@ -513,7 +520,7 @@ private:
 
 						// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
 						if(m_ageBucket == nullptr){
-							return;
+							return valid;
 						}
 
 						boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
@@ -522,7 +529,7 @@ private:
 						// and assign myself to be the first one in the current bucket
 						m_ageBucket->first = sh;
 						lock.unlock();
-                    	return;
+                    	return valid;
                     }
                     else {
                     	if(m_ageBucket == nullptr){
@@ -537,8 +544,8 @@ private:
                     	// do not reallocate myself now. This will be done on cleanup.
                     	m_ageBucket = bucket;
                     }
-                    m_mgr->checkValid();
 				}
+				return valid;
 			}
 
 			/** tell weight of underlying item  */
@@ -717,14 +724,20 @@ private:
         {
         	// wrap the item to managed Node
         	boost::shared_ptr<Node> sp(new Node(this, value));
-        	// and touch it to mark as active and move to corresponding Lifespan Manager Age bucket
-            sp->touch();
-            return sp;
+        	// and touch it to mark as active and move to corresponding Lifespan Manager Age bucket.
+        	// specify the "true" flag for touch options.
+            bool added = sp->touch(true);
+            if(added)
+            	return sp;
+            return nullPtr;
         }
 
-        /** checks to see if cache is still valid and if LifespanMgr needs to do maintenance */
-        void checkValid(){
+        /** checks to see if cache is still valid and if LifespanMgr needs to do maintenance
+         * @return validation status. True if cache is valid.
+         */
+        bool checkValid(){
         	boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+        	bool valid = true;
 
         	long long currentCapacity = m_owner->m_currentCapacity.load(std::memory_order_acquire);
 
@@ -744,7 +757,7 @@ private:
         				}
         				else{
         					lock.unlock();
-        					cleanUp(now);
+        					valid = cleanUp(now);
         				}
         			}
         		}
@@ -752,6 +765,7 @@ private:
         		now = boost::posix_time::microsec_clock::local_time();
         		m_checkTime = now + boost::posix_time::minutes(_checkOnceInMinutes);
         	}
+        	return valid;
         }
 
         /** Remove old items or items beyond capacity from LifespanMgr.
@@ -760,8 +774,10 @@ private:
          *  them to be cleared from index later.  If removed item is retrieved by index where weak references are stored, it will be re-added to LifespanMgr.
          *
          *  Note: this routine has no internal lock, therefore should be called in the guarded context
+         *
+         *  @return cleanup operation success. Cleanup is failed if required amount of space was not freed
          */
-        void cleanUp(boost::posix_time::ptime now)
+        bool cleanUp(boost::posix_time::ptime now)
         {
         	// cleanup will be called only if the cache capacity overflows and will affect the oldest Age Bucket
         	// and more buckets if needed.
@@ -774,6 +790,8 @@ private:
         			std::to_string(m_owner->m_capacityLimit) << ".\n";
 
         	boost::mutex::scoped_lock lock(*lifespan_mux());
+
+        	bool cleanupSucceed = false;
 
         	auto it = m_bucketsKeys->begin();
 
@@ -788,17 +806,29 @@ private:
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
+
         		// handle the situation when there's single node in the bucket and the bucket is the recent one,
         		// so, the cleanup was triggered by adding the node which is near to be deleted right now (suppress this).
         		// cleanup will be triggered next time and remove this node without affect of possible current usage
         		if((m_bucketsKeys->size() == 1) && node && !node->next()){
+        			LOG (WARNING) << "There's only one bucket exists with a single node added, nothing to remove for bucket with a key \""
+        					<< std::to_string(key) << "\" .\n";
+        			it++;
+        			continue;
+        		}
+        		if(!node){
+        			LOG (WARNING) << "Empty bucket detected with a key \"" << std::to_string(key) << "\" .\n";
         			it++;
         			continue;
         		}
         		// and reverse nodes under this bucket so that most recent added will be last to delete:
+        		boost::shared_ptr<Node> head = node;
         		utilities::reverse(node);
+
+    			LOG (INFO) << "Bucket content is reversed to start from oldest items for bucket with a key \"" <<
+    					std::to_string(key) << "\".\n";
                 // store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
-                boost::shared_ptr<Node> active = nullPtr;
+
 
                 while(node && (weightToRemove > 0)){
         			// note the node next to current one
@@ -817,13 +847,13 @@ private:
                             	// no approval for item removal received. Deny the age bucket removal
                             	deletePermitted = false;
 
-                            	if(!active){
-                            		active = node;
-                            		node->bucket()->first = active;
+                            	if(!head){
+                            		head = node;
+                            		node->bucket()->first = head;
                             	}
                             	else
                             	{
-                            		active->next(node);
+                            		head->next(node);
                             	}
                             	// try next node:
                             	node = next;
@@ -837,13 +867,13 @@ private:
                 		    if(!result){
                 		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
 
-                            	if(!active){
-                            		active = node;
-                            		node->bucket()->first = active;
+                            	if(!head){
+                            		head = node;
+                            		node->bucket()->first = head;
                             	}
                             	else
                             	{
-                            		active->next(node);
+                            		head->next(node);
                             	}
                             	// try next node:
                             	node = next;
@@ -866,8 +896,10 @@ private:
         		}
 
         		if(!deletePermitted){
+        			LOG (WARNING) << "Cache bucket \"" << std::to_string(key) << "\" is not deleted as its content is still in use.\n";
+
         			// reverse the remained list of nodes under this bucket back:
-        			utilities::reverse(active);
+        			utilities::reverse(head);
         			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}
@@ -879,19 +911,25 @@ private:
         		// drop the key from key list:
         		m_bucketsKeys->erase(it++);
 
+        		LOG (WARNING) << "Cache bucket \"" << std::to_string(key) << "\" is deleted from cache.\n";
+
 				if ( std::atomic_fetch_sub_explicit (&m_numberOfBuckets, 1u, std::memory_order_release) == 0u ) {
 					std::atomic_thread_fence(std::memory_order_acquire); // all buckets were cleaned up
 					break;
 				}
         	}
         	lock.unlock();
+        	if(weightToRemove <= 0)
+        		cleanupSucceed = true;
+
         	checkIndexValid();
+        	return cleanupSucceed;
         }
 
         /** Remove all items from LifespanMgr and reset */
         void clear() {
         	boost::mutex::scoped_lock lock(*lifespan_mux());
-        	std::cout << "buckets size : " << m_buckets->size() << std::endl;
+        	LOG(INFO) << "buckets size : " << std::to_string(m_buckets->size()) << std::endl;
          	for(bagsIter it = m_buckets->begin(); it != m_buckets->end(); it++){
         		boost::shared_ptr<Node> node = (*it).second->first;
         		while(node){
@@ -1089,6 +1127,13 @@ private:
          }
 
          node = m_lifeSpan->add(item);
+         if(!node){
+        	 // Unable to add new node, the cache is full, and no items could be removed to free space enough
+        	 LOG (WARNING) << "new node could not be added into the cache, reason : no free space available.\n";
+        	 succeed = false;
+        	 return node;
+         }
+
          // make sure node gets inserted into all indexes
          for(auto item : (*m_indexList)){
         	 item.second->add(node);
@@ -1195,11 +1240,13 @@ private:
     bool add(ItemType_*& item, bool& duplicate)
     {
     	// cannot add an item to the cache if the capacity limit exceeded (for example, all cache content is still in use):
+    	/*
     	if(m_currentCapacity.load(std::memory_order_acquire) > m_capacityLimit){
-    		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded.\n";
+    		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded. Capacity = " << std::to_string(m_currentCapacity) <<
+    				"; limit = " << std::to_string(m_capacityLimit) << "\n";
     		return false;
     	}
-
+    	*/
     	bool success = false;
     	duplicate    = false;
 

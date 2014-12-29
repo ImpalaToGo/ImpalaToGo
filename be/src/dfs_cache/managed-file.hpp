@@ -21,6 +21,7 @@
 #include "util/hash-util.h"
 #include "dfs_cache/common-include.hpp"
 #include "dfs_cache/utilities.hpp"
+#include "dfs_cache/filesystem-descriptor-bound.hpp"
 
 /** @namespace impala */
 namespace impala{
@@ -62,6 +63,13 @@ namespace managed_file {
       FILE_IS_UNDER_WRITE,               /**< File is being written by some scenario */
    };
 
+   /** explain the managed file origination nature */
+   enum NatureFlag{
+	   AMORPHOUS,            /** file is only metadata yet and is not backed wit ha physical fine */
+	   FOR_WRITE,            /** file is being created may change its size in the future as it is opened for write */
+	   PHYSICAL,             /** file is backed by physical and thus its size is known in advance */
+	   NON_SPECIFIED
+   };
    /**
     * stringify the File Status
     */
@@ -79,15 +87,19 @@ namespace managed_file {
 
 		/** callback to be invoked on LRU from its item to update about the item weight */
 		using WeightChangedEvent = typename boost::function<void(long long delta)>;
-
+		/** callback to get the remote file info */
+		using GetFileInfo = typename boost::function<dfsFileInfo*(const char* path, const FileSystemDescriptor& descriptor)>;
+		/** callback to free remote file info */
+        using FreeFileInfo = typename boost::function<void(dfsFileInfo*, int)>;
    private:
 	   std::atomic<State> m_state;                   /**< current file state */
 	   std::atomic<int>   m_subscribers;             /**< number of subscribers of this file (who may wait for this file to be downloaded */
 
 	   std::string        m_fqp;                     /**< fully qualified path (local) */
 	   std::string        m_fqnp;                    /**< fully qualified path (network) */
-	   boost::uintmax_t   m_size;                    /**< file size. For internal and user statistics and memory planning. */
+	   boost::uintmax_t   m_remotesize;              /**< remote file size. For internal and user statistics and memory planning. */
 	   std::size_t        m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
+	   NatureFlag         m_filenature;              /**< file nature, the initial condition of creation */
 
 	   std::size_t        m_prevsize;                /**< always contains the "previous size", initially 0 */
 
@@ -96,9 +108,9 @@ namespace managed_file {
        std::string        m_originport;       /**< origin port */
        DFS_TYPE           m_schema;           /**< origin schema */
 
-       static int         _defaultTimeSliceInMinutes;  /**< default time slice between unsuccessful attempts to sync the file.
-                                                           * this means that attempt to sync the file may be performed once in 6 minutes
-                                                           */
+       static int         _defaultTimeSliceInSeconds;  /**< default time slice between unsuccessful attempts to sync the file.
+                                                       * this means that attempt to sync the file may be performed once per 20 seconds
+                                                       */
 
        boost::posix_time::time_duration m_duration_next_attempt_to_sync; /**< min duration between attempts to sync forbidden file */
        boost::posix_time::ptime m_lastsyncattempt;    	/**< last attempt to synchronize the file locally. Is relevant for file
@@ -115,6 +127,8 @@ namespace managed_file {
 	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
 	   WeightChangedEvent m_weightIsChangedcallback;          /**< "weight is changed" event callback */
+	   GetFileInfo     m_getFielInfoCb;                       /**< "get file info" callback */
+	   FreeFileInfo    m_freeFileInfoCb;                      /**< "free file info" callback */
 
    public:
         static void initialize();
@@ -138,9 +152,11 @@ namespace managed_file {
         *
         * @param path       - full file local path
 	    */
-	   File(const char* path)
-         :  m_fqp(path), m_size(0), m_estimatedsize(0), m_prevsize(0),
-            m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0){
+	   File(const char* path, NatureFlag creationFlag,  GetFileInfo getinfo = 0, FreeFileInfo freeinfo = 0)
+         :  m_fqp(path), m_remotesize(0), m_estimatedsize(0), m_filenature(creationFlag), m_prevsize(0),
+            m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0), m_getFielInfoCb(getinfo), m_freeFileInfoCb(freeinfo){
+
+		   LOG (INFO) << "Creating new managed file on top of \"" << path << "\".\n";
 
 		   m_state.store(State::FILE_IS_AMORPHOUS, std::memory_order_release);
 
@@ -157,8 +173,22 @@ namespace managed_file {
 
            m_users.store(0);
            m_subscribers.store(0);
-           // specify that the attempt to resync the file from remote side can be performed once at 5 minutes
-           m_duration_next_attempt_to_sync = boost::posix_time::minutes(_defaultTimeSliceInMinutes);
+           // specify that the attempt to resync the file from remote side can be performed once per 20 seconds
+           m_duration_next_attempt_to_sync = boost::posix_time::seconds(_defaultTimeSliceInSeconds);
+
+		   // check creation flag. If this is amorphous file, need to ask its remote size to plan this file:
+           if(creationFlag == NatureFlag::AMORPHOUS && m_getFielInfoCb && m_freeFileInfoCb){
+        	   dfsFileInfo* info = m_getFielInfoCb(m_fqnp.c_str(), descriptor);
+        	   if(info == NULL){
+        		   LOG (ERROR) << "Unable to create new file from path \"" << path <<
+        				   "\". Unable to retrieve remote file info.\n";
+        		   m_state = State::FILE_IS_FORBIDDEN;
+        		   return;
+        	   }
+
+        	   m_remotesize = info->mSize;
+        	   m_freeFileInfoCb(info, 1);
+           }
 	   }
 
 	   /**
@@ -166,7 +196,8 @@ namespace managed_file {
 	    * Assign the "weight is changed" callback to be fired when the file detects its size is changed
 	    * (local size)
 	    */
-	   File(const char* path, const WeightChangedEvent& eve) : File(path){
+	   File(const char* path, const WeightChangedEvent& eve, NatureFlag creationFlag, GetFileInfo getinfo = 0, FreeFileInfo freeinfo = 0) :
+		   File(path, creationFlag, getinfo, freeinfo){
 		   m_weightIsChangedcallback = eve;
 	   }
 
@@ -205,6 +236,9 @@ namespace managed_file {
 		   boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
 		   return ( (now - m_lastsyncattempt) > m_duration_next_attempt_to_sync );
 	   }
+
+	   /** change the file nature */
+	   inline void nature(NatureFlag nature = NatureFlag::PHYSICAL){ m_filenature = nature; }
 
 	   /**
 	    * Try mark the file for deletion. Only few file states permit this operation to happen.
@@ -331,6 +365,14 @@ namespace managed_file {
 
 	   /** getter for File size (available locally) */
 	   inline boost::uintmax_t size() {
+		   // for amorphous file, reply the remote size instead of local as the file does not exist locally:
+		   if(m_filenature == NatureFlag::AMORPHOUS)
+			   return m_remotesize;
+
+		   if(m_filenature == NatureFlag::FOR_WRITE)
+			   return m_estimatedsize;
+
+		   // for physical file, reply its physical size from local FS:
 		   boost::system::error_code ec;
 		   boost::uintmax_t size = boost::filesystem::file_size(m_fqp, ec);
 		   // check ec, should be 0 in case of success:
@@ -351,8 +393,9 @@ namespace managed_file {
 	    */
 	   inline void estimated_size(std::size_t size) {
 		   long long delta = size - m_prevsize;
-		   // if any subscribers for size change, send the signal with a delta:
-		   if(m_weightIsChangedcallback)
+		   // if any subscribers for size change, send the signal with a delta.
+		   // In current design this is only relevant for files opened for write (as we cannot predict their final size):
+		   if(m_weightIsChangedcallback && m_filenature == NatureFlag::FOR_WRITE)
 			   m_weightIsChangedcallback(delta);
 		   m_prevsize = size;
 		   m_estimatedsize = size;

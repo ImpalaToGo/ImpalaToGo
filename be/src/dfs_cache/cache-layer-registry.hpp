@@ -98,6 +98,35 @@ private:
 	const double m_available_capacity_ratio = 0.85; /**< ratio for setting "cache capacity", percent from available
 	 	 	 	 	 	 	 	 	 	 	 	     * root storage space */
 
+    dfsFileInfo* getFileInfo(const char* path, FileSystemDescriptor descriptor){
+    	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(descriptor));
+
+    	if (fsAdaptor == nullptr) {
+    		LOG (ERROR) << "Unable to create new file from path \"" << path <<
+    				"\". No filesystem adaptor configured for FileSystem \"" << descriptor.dfs_type << ":" <<
+    				descriptor.host << "\"" << "\n";
+    		// no namenode adaptor configured
+    		return NULL;
+    	}
+
+    	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+    	if (!connection.valid()) {
+    		LOG (ERROR)<< "Unable to create new file from path \"" << path <<
+    				"\". No connection to dfs available \" on FileSystem \"" <<
+    				descriptor.dfs_type << ":" << descriptor.host << "\"" << "\n";
+    		return NULL;
+    	}
+
+    	// ask remote part about file info:
+    	dfsFileInfo* info = fsAdaptor->fileInfo(connection, path);
+    	return info;
+    }
+
+    void freeFileInfo(dfsFileInfo* info, int num){
+  	   // free file info:
+  	   FileSystemDescriptorBound::freeFileInfo(info, num);
+     }
+
 	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "") {
 		m_valid = false;
 		if(root.empty())
@@ -116,7 +145,9 @@ private:
     			<< m_localstorageRoot << "\"." << " Space limit, bytes = " << std::to_string(available) << ".\n";
 
 		// create the autoload LRU cache
-		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, true);
+    	managed_file::File::GetFileInfo getfileinfo = boost::bind(boost::mem_fn(&CacheLayerRegistry::getFileInfo), this, _1, _2);
+    	managed_file::File::FreeFileInfo freefileinfo = boost::bind(boost::mem_fn(&CacheLayerRegistry::freeFileInfo), this, _1, _2);
+		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, getfileinfo, freefileinfo, true);
 		m_valid = true;
 	}
 
@@ -214,13 +245,15 @@ public:
 	 * Insert the managed file into the set.
 	 * The key is file fully qualified local path
 	 *
-	 * @param [in]     path       - file fqp
-	 * @param [in]     descriptor - file system descriptor
-	 * @param [in/out] file       - managed file
+	 * @param [in]     path         - file fqp
+	 * @param [in]     descriptor   - file system descriptor
+	 * @param [in/out] file         - managed file
+	 * @param [in]     creationFlag - file creation option
 	 *
 	 * @return true is the file was inserted to the cache, false otherwise
 	 */
-	bool addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
+	bool addFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file,
+			managed_file::NatureFlag creationFlag);
 
 	/**
 	 * Delete file from cache and from file system

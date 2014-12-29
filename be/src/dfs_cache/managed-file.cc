@@ -35,7 +35,7 @@ std::ostream& operator<<(std::ostream& out, const managed_file::State value){
 std::string File::fileSeparator;
 std::vector<std::string> File::m_supportedFs;
 
-int File::_defaultTimeSliceInMinutes = 5;
+int File::_defaultTimeSliceInSeconds = 20;
 
 void File::initialize(){
 	  // configure platform-specific file separator:
