@@ -535,10 +535,12 @@ private:
                     	if(m_ageBucket == nullptr){
                     		// assign itself to the bucket:
                     		boost::shared_ptr<Node> sh = makeShared();
+                    		boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
                     		boost::shared_ptr<Node> next = bucket->first;
                     		bucket->first = sh;
                     		// start pointing next Node from the managed bucket
                     		m_next = next;
+                    		lock.unlock();
                     	}
                     	// bucket exists.
                     	// do not reallocate myself now. This will be done on cleanup.
@@ -560,7 +562,10 @@ private:
 
 			/** get next node */
 			void next(const boost::shared_ptr<Node>& node){
-				m_next = node;
+				if(!node)
+					m_next.reset();
+				else
+					m_next = node;
 			}
 
 			/** get age bucket */
@@ -729,6 +734,8 @@ private:
             bool added = sp->touch(true);
             if(added)
             	return sp;
+            // remove physically
+            sp->remove(true);
             return nullPtr;
         }
 
@@ -822,7 +829,9 @@ private:
         			continue;
         		}
         		// and reverse nodes under this bucket so that most recent added will be last to delete:
-        		boost::shared_ptr<Node> head = node;
+        		boost::shared_ptr<Node> active = nullPtr;
+        		boost::shared_ptr<Node> head = nullPtr;
+
         		utilities::reverse(node);
 
     			LOG (INFO) << "Bucket content is reversed to start from oldest items for bucket with a key \"" <<
@@ -831,30 +840,26 @@ private:
 
 
                 while(node && (weightToRemove > 0)){
+
         			// note the node next to current one
         			boost::shared_ptr<Node> next = node->next();
 
         			if( node->value() != nullptr && node->bucket() != nullptr ){
         				if( node->bucket() == bucket ) {
-        					// cannot remove this node as it seems just was added. Set transit exit condition
-                        	if((m_bucketsKeys->size() == 1) && node && !node->next()){
-                        		weightToRemove = 0;
-                        		break;
-                        	}
-
         					// item has not been touched since bucket was closed, so remove it from LifespanMgr if it is allowed for removal.
                             if(!m_owner->markForDeletion(node->value())){
                             	// no approval for item removal received. Deny the age bucket removal
                             	deletePermitted = false;
 
-                            	if(!head){
-                            		head = node;
-                            		node->bucket()->first = head;
+                            	if(active){
+                            		active->next(node);
+                            		active = active->next();
                             	}
-                            	else
-                            	{
-                            		head->next(node);
+                            	else {
+                            		active = node;
+                            		head = active;
                             	}
+
                             	// try next node:
                             	node = next;
                             	continue;
@@ -862,28 +867,31 @@ private:
         					// get the weight the item will release back to the cache:
         					long long toRelease = m_owner->tellWeight(node->value());
 
-        					// remove the node
+                            // remove the node
                 		    bool result = node->remove(true);
                 		    if(!result){
                 		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
+                            	if(active){
+                            		active->next(node);
+                            		active = active->next();
+                            	}
+                            	else {
+                            		active = node;
+                            		head = active;
+                            	}
 
-                            	if(!head){
-                            		head = node;
-                            		node->bucket()->first = head;
-                            	}
-                            	else
-                            	{
-                            		head->next(node);
-                            	}
-                            	// try next node:
+                		    	// try next node:
                             	node = next;
                 		    	continue;
                 		    }
 
                 		    weightToRemove -= toRelease;
                 		    LOG (INFO) << "Cleanup : to remove = " << std::to_string(weightToRemove) << std::endl;
+
                 		    // cut off it from registry
                 			node.reset();
+                			// and say active yet not point to any node
+                			active->next(nullPtr);
         				}
         				else {
         					// item has been touched and should be moved to correct age bag now
@@ -900,6 +908,7 @@ private:
 
         			// reverse the remained list of nodes under this bucket back:
         			utilities::reverse(head);
+        			node->bucket()->first = head;
         			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}
