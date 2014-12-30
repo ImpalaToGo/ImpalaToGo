@@ -796,6 +796,8 @@ private:
         			". Weight to remove = " << std::to_string(weightToRemove) << "; capacity limit = " <<
         			std::to_string(m_owner->m_capacityLimit) << ".\n";
 
+        	LOG (INFO) << "LRU Cleanup : buckets number = " << std::to_string(m_bucketsKeys->size()) << ".\n";
+
         	boost::mutex::scoped_lock lock(*lifespan_mux());
 
         	bool cleanupSucceed = false;
@@ -919,19 +921,28 @@ private:
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}
 
+        		// if bucket still has nodes but required space is freed, break the cleanup
+        		if(node && (weightToRemove <= 0)){
+        			LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" still has alive nodes. Required space is freed.\n";
+        			break;
+        		}
+
+        		LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" is cleaned up completely. Will be deleted from cache.\n";
+        		// if the bucket was cleaned up completely - remove the bucket.
         		// drop the bucket from set of buckets:
         		m_buckets->erase(key);
         		// delete the non-needed bucket:
         		delete bucket;
         		// drop the key from key list:
-        		m_bucketsKeys->erase(it++);
+        		it = m_bucketsKeys->erase(it);
 
-        		LOG (WARNING) << "Cache bucket \"" << std::to_string(key) << "\" is deleted from cache.\n";
+        		LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" is deleted from cache.\n";
 
-				if ( std::atomic_fetch_sub_explicit (&m_numberOfBuckets, 1u, std::memory_order_release) == 0u ) {
-					std::atomic_thread_fence(std::memory_order_acquire); // all buckets were cleaned up
-					break;
-				}
+        		if ( std::atomic_fetch_sub_explicit (&m_numberOfBuckets, 1u, std::memory_order_release) == 0u ) {
+        			std::atomic_thread_fence(std::memory_order_acquire); // all buckets were cleaned up
+        			break;
+        		}
+
         	}
         	lock.unlock();
         	if(weightToRemove <= 0)
