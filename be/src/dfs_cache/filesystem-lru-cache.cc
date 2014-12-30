@@ -190,6 +190,8 @@ bool FileSystemLRUCache::reload(const std::string& root){
 		return false;
 	m_root = root;
 
+	LOG (INFO) << "Going to reload the cache from configured \"" << root << "\" directory.\n";
+
 	boost::filesystem::recursive_directory_iterator end_iter;
 
 	// sort files in the root in ascending order basing on their timestamp:
@@ -228,6 +230,8 @@ bool FileSystemLRUCache::reload(const std::string& root){
         FileSystemDescriptor desciptor = managed_file::File::restoreNetworkPathFromLocal(lp, fqnp, relative);
         if(!desciptor.valid)
         	continue; // do not register this file
+
+        LOG (INFO) << "Reload : Cached file \"" << fqnp << "\" is near to be added to the cache.\n";
 
         managed_file::File* file;
     	// and add it into the cache
