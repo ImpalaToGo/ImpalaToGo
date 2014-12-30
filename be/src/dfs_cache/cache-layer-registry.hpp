@@ -101,6 +101,7 @@ private:
     dfsFileInfo* getFileInfo(const char* path, FileSystemDescriptor descriptor){
     	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(descriptor));
 
+    	LOG (INFO) << "Get file path for \"" << path << "\"\n";
     	if (fsAdaptor == nullptr) {
     		LOG (ERROR) << "Unable to create new file from path \"" << path <<
     				"\". No filesystem adaptor configured for FileSystem \"" << descriptor.dfs_type << ":" <<

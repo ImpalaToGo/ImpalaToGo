@@ -178,6 +178,7 @@ namespace managed_file {
 
 		   // check creation flag. If this is amorphous file, need to ask its remote size to plan this file:
            if(creationFlag == NatureFlag::AMORPHOUS && m_getFielInfoCb && m_freeFileInfoCb){
+        	   LOG (INFO) << "File name \"" << m_filename << "\"\n";
         	   dfsFileInfo* info = m_getFielInfoCb(m_filename.c_str(), descriptor);
         	   if(info == NULL){
         		   LOG (ERROR) << "Unable to create new file from path \"" << path <<
