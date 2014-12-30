@@ -165,18 +165,17 @@ void reverse(_Node& head) {
 	if(!head || !head->next())
 		return;
 
-	_Node pred;
-	_Node one = head;
-	_Node two = head;
+	_Node prev;
+	_Node current = head;
+	_Node next = head;
 
-	do {
-		two = two->next();
-		one->next(pred);
-		pred = one;
-		one = two;
-	}while(two->next());
-	two->next(pred);
-	head = two;
+	while(current) {
+		next = current->next();
+		current->next(prev);
+		prev = current;
+		current = next;
+	};
+	head = prev;
 }
 
 }

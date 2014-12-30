@@ -809,11 +809,16 @@ private:
 
             	// get the oldest bucket:
             	AgeBucket* bucket = (*m_buckets)[key];
+            	LOG (INFO) << "Bucket is retrieved for key \"" << std::to_string(key) << "\".\n";
                 bool deletePermitted = true;
+
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
-
+        		LOG (INFO) << "First node is retrieved for bucket with a key \"" << std::to_string(key) << "\".\n";
+        		if(node){
+        			LOG (INFO) << "First node exists for bucket with a key \"" << std::to_string(key) << "\".\n";
+        		}
         		// handle the situation when there's single node in the bucket and the bucket is the recent one,
         		// so, the cleanup was triggered by adding the node which is near to be deleted right now (suppress this).
         		// cleanup will be triggered next time and remove this node without affect of possible current usage
@@ -828,16 +833,16 @@ private:
         			it++;
         			continue;
         		}
-        		// and reverse nodes under this bucket so that most recent added will be last to delete:
+
+        		// store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
         		boost::shared_ptr<Node> active = nullPtr;
         		boost::shared_ptr<Node> head = nullPtr;
 
+        		// and reverse nodes under this bucket so that most recent added will be last to delete:
+        		LOG (INFO) << "Going to reverse nodes list under bucket with a key a key \"" << std::to_string(key) << "\".\n";
         		utilities::reverse(node);
-
     			LOG (INFO) << "Bucket content is reversed to start from oldest items for bucket with a key \"" <<
     					std::to_string(key) << "\".\n";
-                // store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
-
 
                 while(node && (weightToRemove > 0)){
 
