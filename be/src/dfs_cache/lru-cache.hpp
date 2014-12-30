@@ -908,7 +908,7 @@ private:
 
         			// reverse the remained list of nodes under this bucket back:
         			utilities::reverse(head);
-        			node->bucket()->first = head;
+        			head->bucket()->first = head;
         			it++;
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}

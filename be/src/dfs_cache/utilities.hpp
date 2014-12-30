@@ -161,9 +161,14 @@ boost::uintmax_t get_free_space_on_disk(const std::string& path);
 /** reverse the linked list */
 template<typename _Node>
 void reverse(_Node& head) {
+	// if there's 0 or 1 element in the list, do nothing:
+	if(!head || !head->next())
+		return;
+
 	_Node pred;
 	_Node one = head;
 	_Node two = head;
+
 	do {
 		two = two->next();
 		one->next(pred);
