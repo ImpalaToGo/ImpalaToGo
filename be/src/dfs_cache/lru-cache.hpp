@@ -895,8 +895,9 @@ private:
 
                 		    // cut off it from registry
                 			node.reset();
-                			// and say active yet not point to any node
-                			active->next(nullPtr);
+                			if(active)
+                				// and say active yet not point to any node
+                				active->next(nullPtr);
         				}
         				else {
         					// item has been touched and should be moved to correct age bag now
