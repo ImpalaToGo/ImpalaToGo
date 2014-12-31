@@ -152,8 +152,10 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	fqnp = schema;
 	fqnp += "://";
 	fqnp += descriptor.host;
-	fqnp += ":";
-	fqnp += std::to_string(descriptor.port);
+	if(descriptor.dfs_type != DFS_TYPE::s3n){
+		fqnp += ":";
+		fqnp += std::to_string(descriptor.port);
+	}
 	fqnp += catalog;
 	fqnp += filename;
 
