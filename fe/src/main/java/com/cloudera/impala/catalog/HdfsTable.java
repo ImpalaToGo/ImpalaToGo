@@ -296,7 +296,7 @@ public class HdfsTable extends Table {
             BlockLocation[] locations = fileBlockLocationRes.getResult();
 
             LOG.info("block locations retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
-
+            LOG.info("number of block locations : " + (locations != null ? locations.length : 0));
             Preconditions.checkNotNull(locations);
             LOG.info("for over file descriptors \"" + name_ + "\".");
             blockLocations.addAll(Arrays.asList(locations));
@@ -326,7 +326,7 @@ public class HdfsTable extends Table {
                 LOG.info("port len = 2 for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
                 TNetworkAddress network_address = new TNetworkAddress(ip_port[0],
                     Integer.parseInt(ip_port[1]));
-                LOG.info("constructed network address for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
+                LOG.info("constructed network address\"" + network_address + "\" for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
                 replicaHostIdxs.add(hostIndex_.getIndex(network_address));
                 LOG.info("replica host idx added for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
               }
