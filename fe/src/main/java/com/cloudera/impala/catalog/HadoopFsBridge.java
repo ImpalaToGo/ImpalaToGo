@@ -21,6 +21,7 @@ import org.apache.log4j.Logger;
 import com.cloudera.impala.catalog.FsObject.ObjectState;
 import com.cloudera.impala.common.ITPool;
 import com.cloudera.impala.common.InterruptableCallable;
+import com.cloudera.impala.util.FsKey;
 
 /** Hadoop FileSystem bridge.
  *  Controls FileSystem APIs invocation : handling hung invocation

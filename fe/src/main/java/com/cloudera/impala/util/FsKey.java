@@ -1,4 +1,4 @@
-package com.cloudera.impala.catalog;
+package com.cloudera.impala.util;
 
 import java.net.URI;
 
@@ -7,7 +7,7 @@ import org.apache.hadoop.fs.FileSystem;
 // Wrapper around a FileSystem object to hash based on the underlying FileSystem's
 // scheme and authority.
 public class FsKey {
-  FileSystem filesystem;
+  public FileSystem filesystem;
 
   public FsKey(FileSystem fs) { filesystem = fs; }
 

@@ -101,8 +101,8 @@ public class FsPermissionChecker {
   public Permissions getPermissions(FileSystem fs, Path path) throws IOException {
     Preconditions.checkNotNull(fs);
     Preconditions.checkNotNull(path);
-
-    BridgeOpResult<FileStatus> fileStatusRes = HadoopFsBridge.getFileStatus(fs, path);
+    FsKey fsKey = new FsKey(fs);
+    BridgeOpResult<FileStatus> fileStatusRes = HadoopFsBridge.getFileStatus(fsKey, path);
     if(fileStatusRes.getStatus() != BridgeOpStatus.OK){
       throw new IOException(fileStatusRes.getError());
     }

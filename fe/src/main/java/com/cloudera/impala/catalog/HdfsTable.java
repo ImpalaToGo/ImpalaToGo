@@ -74,6 +74,7 @@ import com.cloudera.impala.thrift.TTable;
 import com.cloudera.impala.thrift.TTableDescriptor;
 import com.cloudera.impala.thrift.TTableType;
 import com.cloudera.impala.util.AvroSchemaParser;
+import com.cloudera.impala.util.FsKey;
 import com.cloudera.impala.util.FsPermissionChecker;
 import com.cloudera.impala.util.HdfsCachingUtil;
 import com.cloudera.impala.util.ListMap;

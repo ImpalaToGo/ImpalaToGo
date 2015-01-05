@@ -6,6 +6,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import com.cloudera.impala.util.FsKey;
 import com.google.common.base.Preconditions;
 
 /** Cache for remote file systems within their state */

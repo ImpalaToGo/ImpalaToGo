@@ -5,6 +5,8 @@ import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
+import com.cloudera.impala.util.FsKey;
+
 /** Represents File System object.
  *  Designed to cache the unit of remote file system state
  */
