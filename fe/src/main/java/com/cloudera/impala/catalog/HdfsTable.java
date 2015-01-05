@@ -18,7 +18,6 @@ import static com.cloudera.impala.thrift.ImpalaInternalServiceConstants.DEFAULT_
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -176,31 +175,6 @@ public class HdfsTable extends Table {
 
   private static final boolean SUPPORTS_VOLUME_ID;
 
-  // Wrapper around a FileSystem object to hash based on the underlying FileSystem's
-  // scheme and authority.
-  private static class FsKey {
-    FileSystem filesystem;
-
-    public FsKey(FileSystem fs) { filesystem = fs; }
-
-    @Override
-    public int hashCode() { return filesystem.getUri().hashCode(); }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == this) return true;
-      if (o != null && o instanceof FsKey) {
-        URI uri = filesystem.getUri();
-        URI otherUri = ((FsKey)o).filesystem.getUri();
-        return uri.equals(otherUri);
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() { return filesystem.getUri().toString(); }
-  }
-
   static {
     SUPPORTS_VOLUME_ID =
         CONF.getBoolean(DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED,
@@ -272,7 +246,7 @@ public class HdfsTable extends Table {
           try {
             LOG.info("going to retrieve file status for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
-            BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fs, p);
+            BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fsEntry, p);
             if(fileStatRes.getStatus() != BridgeOpStatus.OK){
               // no way to proceed, we did not sync with remote FS, throw the exception
               throw new IOException(fileStatRes.getError());
@@ -664,8 +638,9 @@ public class HdfsTable extends Table {
       }
 
       FileSystem fs = fileSystemRes.getResult();
-
-      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fs, location);
+      // wrap this
+      FsKey fsKey = new FsKey(fs);
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, location);
       if(existsRes.getStatus() != BridgeOpStatus.OK){
         throw new IOException(existsRes.getError());
       }
@@ -855,9 +830,10 @@ public class HdfsTable extends Table {
       }
 
       FileSystem fs = fileSystemRes.getResult();
+      FsKey fsKey = new FsKey(fs);
       LOG.info("Filesystem is retrieved for directory \"" + partDirPath.toString() + "\" ; table \"" + this.name_ + "\".");
 
-      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fs, partDirPath);
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, partDirPath);
       if(existsRes.getStatus() != BridgeOpStatus.OK){
         throw new IOException(existsRes.getError());
       }
@@ -869,7 +845,7 @@ public class HdfsTable extends Table {
         // fs.listStatus() to list all the files.
         LOG.info("Ask file system for directory \"" + partDirPath.toString() + "\" status.");
 
-        BridgeOpResult<FileStatus[]> listStatusRes = HadoopFsBridge.listStatus(fs, partDirPath);
+        BridgeOpResult<FileStatus[]> listStatusRes = HadoopFsBridge.listStatus(fsKey, partDirPath);
         if(listStatusRes.getStatus() != BridgeOpStatus.OK){
           throw new IOException(listStatusRes.getError());
         }

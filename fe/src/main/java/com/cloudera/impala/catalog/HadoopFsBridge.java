@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.BlockStorageLocation;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -167,7 +168,7 @@ public class HadoopFsBridge {
    *
    * @return operation compound result, if OK, contain Boolean
    */
-  public static BridgeOpResult<Boolean> exists(final FileSystem fs, final Path path){
+  public static BridgeOpResult<Boolean> exists(final FsKey fs, final Path path){
 
     // check within the cache for requested result:
     Boolean flag = fsCache.getPathExistence(fs, path);
@@ -194,18 +195,19 @@ public class HadoopFsBridge {
     InterruptableCallable<Boolean> callable = new InterruptableCallable<Boolean>() {
       @Override
       protected Boolean dowork() throws IOException{
-        return fs.exists(path);
+        return fs.filesystem.exists(path);
       }
     };
 
     String messageInterruptedEx = "Timeout exception in \"FileSystem.exists\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
     String messageExexEx = "Execution exception in \"FileSystem.exists\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
     BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.exists\" finished with status \"" + status + "\" for Path \"" + path + "\" on fs \"" + fs.getUri() + "\".");
+    LOG.info("\"FileSystem.exists\" finished with status \"" + status + "\" for Path \"" + path + "\" on fs \"" +
+        fs.filesystem.getUri() + "\".");
 
     // wait for result to be ready:
     res = result.get();
@@ -239,7 +241,8 @@ public class HadoopFsBridge {
   public static BridgeOpResult<FileSystem> getFilesystem(final Path path, final Configuration configuration){
 
     // check within the cache for requested result:
-    FileSystem filesystem = fsCache.getFileSystem(configuration, path);
+    String key = configuration.get(CommonConfigurationKeys.FS_DEFAULT_NAME_KEY, CommonConfigurationKeys.FS_DEFAULT_NAME_DEFAULT);
+    FileSystem filesystem = fsCache.getFileSystem(key, path);
 
     BridgeOpResult<FileSystem> res =  new HadoopFsBridge().new BridgeOpResult<FileSystem>();
     if(filesystem != null){
@@ -276,7 +279,7 @@ public class HadoopFsBridge {
       break;
     case OK:
       filesystem = res.getResult();
-      fsCache.addFileSystem(configuration, path, filesystem);
+      fsCache.addFileSystem(key, path, filesystem);
       break;
     default:
       break;
@@ -293,7 +296,7 @@ public class HadoopFsBridge {
    *
    * @return operation compound result, if status is OK, contain list of FileStatus found on the path
    */
-  public static BridgeOpResult<FileStatus[]> listStatus(final FileSystem fs, final Path path){
+  public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
 
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getPathStat(fs, path);
@@ -312,19 +315,19 @@ public class HadoopFsBridge {
     InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>() {
       @Override
       protected FileStatus[] dowork() throws IOException, FileNotFoundException, InterruptedException{
-        return fs.listStatus(path);
+        return fs.filesystem.listStatus(path);
       }
     };
 
     String messageInterruptedEx = "Timeout exception in \"FileSystem.listStatus\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
     String messageExexEx = "Execution exception in \"FileSystem.listStatus\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
     BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"FileSystem.listStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.getUri() + "\".");
+        "\" on fs \"" + fs.filesystem.getUri() + "\".");
 
     // wait for result to be ready:
     res = result.get();
@@ -346,7 +349,7 @@ public class HadoopFsBridge {
    *
    * @return operation compound result, if status is OK, contain FileStatus
    */
-  public static BridgeOpResult<FileStatus> getFileStatus(final FileSystem fs, final Path path){
+  public static BridgeOpResult<FileStatus> getFileStatus(final FsKey fs, final Path path){
 
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getPathStat(fs, path);
@@ -365,19 +368,19 @@ public class HadoopFsBridge {
     InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>() {
       @Override
       protected FileStatus dowork() throws IOException, FileNotFoundException, InterruptedException{
-        return fs.getFileStatus(path);
+        return fs.filesystem.getFileStatus(path);
       }
     };
 
     String messageInterruptedEx = "Timeout exception in \"FileSystem.getFileStatus\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
     String messageExexEx = "Execution exception in \"FileSystem.getFileStatus\" operation for \"" + path +
-        "\" on filesystem \"" + fs.getUri() + "\". ";
+        "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
     BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     LOG.info("\"FileSystem.getFileStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.getUri() + "\".");
+        "\" on fs \"" + fs.filesystem.getUri() + "\".");
 
     // wait for result to be ready:
     res = result.get();

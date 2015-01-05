@@ -3,7 +3,6 @@ package com.cloudera.impala.catalog;
 import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 /** Represents File System object.
@@ -40,7 +39,7 @@ public class FsObject {
   private ObjectType _type;
 
   /** remote FileSystem associated with this object */
-  private final FileSystem _fileSystem;
+  private final FsKey _fileSystem;
 
   /** remote file system object path */
   private final Path _path;
@@ -49,7 +48,7 @@ public class FsObject {
   private boolean _exists;
 
   /** constructs the file system object from its path */
-  public FsObject(FileSystem filesystem, Path path) {
+  public FsObject(FsKey filesystem, Path path) {
     _fileSystem = filesystem;
     _path = path;
     // say state is "no acknowledge"
@@ -121,7 +120,7 @@ public class FsObject {
    * Getter for object origin filesystem
    * @return filesystem associated with the object
    */
-  public FileSystem getFilesystem(){
+  public FsKey getFilesystem(){
     return _fileSystem;
   }
 

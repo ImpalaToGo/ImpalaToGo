@@ -2,7 +2,6 @@ package com.cloudera.impala.catalog;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -13,12 +12,12 @@ import com.google.common.base.Preconditions;
 public class FsObjectCache {
 
   /** Registry of File System objects constructed from given Configuration and given URI */
-  private final ConcurrentHashMap<Configuration, ConcurrentHashMap<Path, FileSystem>> _filesystemsCache =
-      new ConcurrentHashMap<Configuration, ConcurrentHashMap<Path, FileSystem>>();
+  private final ConcurrentHashMap<String, ConcurrentHashMap<Path, FileSystem>> _filesystemsCache =
+      new ConcurrentHashMap<String, ConcurrentHashMap<Path, FileSystem>>();
 
   /** Registry of File System units statistics */
-  private final ConcurrentHashMap<FileSystem, ConcurrentHashMap<Path, FsObject>> _fsobjectsCache =
-      new ConcurrentHashMap<FileSystem, ConcurrentHashMap<Path, FsObject>>();
+  private final ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>> _fsobjectsCache =
+      new ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>>();
 
   /**
    * Add FileSystem into the cache if no one exist for given Configuration and a Path
@@ -29,7 +28,7 @@ public class FsObjectCache {
    *
    * @return the file system object to operate on
    */
-  public synchronized FileSystem addFileSystem(Configuration configuration, Path path, FileSystem filesystem) {
+  public synchronized FileSystem addFileSystem(String configuration, Path path, FileSystem filesystem) {
     Preconditions.checkNotNull(configuration);
     Preconditions.checkNotNull(path);
 
@@ -49,7 +48,7 @@ public class FsObjectCache {
    *
    * @return true if the filesystem is cached for given associations
    */
-  public boolean containsFileSystem(Configuration configuration, Path path) {
+  public boolean containsFileSystem(String configuration, Path path) {
     return _filesystemsCache.containsKey(configuration) && (_filesystemsCache.get(configuration) != null) &&
         _filesystemsCache.get(configuration).contains(path);
   }
@@ -63,7 +62,7 @@ public class FsObjectCache {
    *
    * @return File system object if one found, null otherwise
    */
-  public FileSystem getFileSystem(Configuration configuration, Path path) {
+  public FileSystem getFileSystem(String configuration, Path path) {
     if(_filesystemsCache.contains(configuration))
       return  _filesystemsCache.get(configuration).get(path);
     return null;
@@ -78,7 +77,7 @@ public class FsObjectCache {
    *
    * @return file system which is not under cache association more
    */
-  public synchronized FileSystem removeFileSystem(Configuration configuration, Path path) {
+  public synchronized FileSystem removeFileSystem(String configuration, Path path) {
     if(_filesystemsCache.contains(configuration))
       return _filesystemsCache.get(configuration).remove(configuration);
     return null;
@@ -94,7 +93,7 @@ public class FsObjectCache {
    *
    * @return added (or existing) list of file statuses
    */
-  public synchronized void setPathStat(FileSystem filesystem, Path path,
+  public synchronized void setPathStat(FsKey filesystem, Path path,
       FileStatus[] statistic, FsObject.ObjectState state) {
     Preconditions.checkNotNull(filesystem);
     Preconditions.checkNotNull(path);
@@ -129,7 +128,7 @@ public class FsObjectCache {
    *
    * @return path metadata if Path was cached for FileSystem, null otherwise
    */
-  public FileStatus[] getPathStat(FileSystem filesystem, Path path) {
+  public FileStatus[] getPathStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
     if(_fsobjectsCache.contains(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).get(path);
@@ -144,7 +143,7 @@ public class FsObjectCache {
    *
    * @return path metadata just removed
    */
-  public synchronized FileStatus[] removePathStat(FileSystem filesystem, Path path) {
+  public synchronized FileStatus[] removePathStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
     if(_fsobjectsCache.contains(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).remove(path);
@@ -159,7 +158,7 @@ public class FsObjectCache {
    *
    * @return file object existence, true if file system object exists within remote origin
    */
-  public Boolean getPathExistence(FileSystem filesystem, Path path) {
+  public Boolean getPathExistence(FsKey filesystem, Path path) {
     FsObject fsobject = null;
     if(_fsobjectsCache.contains(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).get(path);
