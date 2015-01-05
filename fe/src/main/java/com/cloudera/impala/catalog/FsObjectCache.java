@@ -64,7 +64,9 @@ public class FsObjectCache {
    * @return File system object if one found, null otherwise
    */
   public FileSystem getFileSystem(Configuration configuration, Path path) {
-    return  _filesystemsCache.get(configuration).get(path);
+    if(_filesystemsCache.contains(configuration))
+      return  _filesystemsCache.get(configuration).get(path);
+    return null;
   }
 
   /**
