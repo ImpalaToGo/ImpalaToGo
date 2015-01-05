@@ -98,7 +98,6 @@ public class FsObjectCache {
       FileStatus[] statistic, FsObject.ObjectState state) {
     Preconditions.checkNotNull(filesystem);
     Preconditions.checkNotNull(path);
-    Preconditions.checkNotNull(statistic);
 
     ConcurrentHashMap<Path, FsObject> objectsCache =
         _fsobjectsCache.putIfAbsent(filesystem, new ConcurrentHashMap<Path, FsObject>());
