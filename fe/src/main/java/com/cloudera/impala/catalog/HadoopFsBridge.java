@@ -299,6 +299,7 @@ public class HadoopFsBridge {
    */
   public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
 
+    LOG.info("\"FileSystem.listStatus\" : requested for filesystem \"" + fs + "\" on path \"" + path + "\".");
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getPathStat(fs, path);
 
