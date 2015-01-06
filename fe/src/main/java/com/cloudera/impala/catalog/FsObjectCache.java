@@ -41,7 +41,8 @@ public class FsObjectCache {
         "\" for configuration \"" + configuration + "\".");
     ConcurrentHashMap<Path, FileSystem> existingFsCache =
         _filesystemsCache.putIfAbsent(configuration, new ConcurrentHashMap<Path, FileSystem>());
-
+    if(existingFsCache == null)
+      LOG.info("Filesystem \"" + filesystem.getUri() + "\" was added to the cache.");
     existingFsCache = _filesystemsCache.get(configuration);
     existingFsCache.putIfAbsent(path, filesystem);
 

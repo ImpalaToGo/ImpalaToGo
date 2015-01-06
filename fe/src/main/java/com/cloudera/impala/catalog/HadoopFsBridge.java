@@ -243,6 +243,7 @@ public class HadoopFsBridge {
 
     // check within the cache for requested result:
     String key = configuration.get(CommonConfigurationKeys.FS_DEFAULT_NAME_KEY, CommonConfigurationKeys.FS_DEFAULT_NAME_DEFAULT);
+    LOG.info("\"Path.getFilesystem\" : getting file system for path \"" + path + "\"; configuration \"" + key + "\".");
     FileSystem filesystem = fsCache.getFileSystem(key, path);
 
     BridgeOpResult<FileSystem> res =  new HadoopFsBridge().new BridgeOpResult<FileSystem>();
