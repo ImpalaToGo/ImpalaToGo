@@ -72,7 +72,7 @@ public class FsObjectCache {
    * @return File system object if one found, null otherwise
    */
   public FileSystem getFileSystem(String configuration, Path path) {
-    if(_filesystemsCache.contains(configuration))
+    if(_filesystemsCache.containsKey(configuration))
       return  _filesystemsCache.get(configuration).get(path);
     return null;
   }
@@ -87,7 +87,7 @@ public class FsObjectCache {
    * @return file system which is not under cache association more
    */
   public synchronized FileSystem removeFileSystem(String configuration, Path path) {
-    if(_filesystemsCache.contains(configuration))
+    if(_filesystemsCache.containsKey(configuration))
       return _filesystemsCache.get(configuration).remove(configuration);
     return null;
   }
@@ -139,7 +139,7 @@ public class FsObjectCache {
    */
   public FileStatus[] getPathStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
-    if(_fsobjectsCache.contains(filesystem))
+    if(_fsobjectsCache.containsKey(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).get(path);
     return fsobject != null ? fsobject.getMetadata() : null;
   }
@@ -154,7 +154,7 @@ public class FsObjectCache {
    */
   public synchronized FileStatus[] removePathStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
-    if(_fsobjectsCache.contains(filesystem))
+    if(_fsobjectsCache.containsKey(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).remove(path);
     return fsobject != null ? fsobject.getMetadata() : null;
   }
@@ -169,7 +169,7 @@ public class FsObjectCache {
    */
   public Boolean getPathExistence(FsKey filesystem, Path path) {
     FsObject fsobject = null;
-    if(_fsobjectsCache.contains(filesystem))
+    if(_fsobjectsCache.containsKey(filesystem))
       fsobject = _fsobjectsCache.get(filesystem).get(path);
     return fsobject != null ? fsobject.getExistance() : null;
   }
