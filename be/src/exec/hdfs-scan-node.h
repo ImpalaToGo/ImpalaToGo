@@ -184,6 +184,9 @@ class HdfsScanNode : public ScanNode {
   DiskIoMgr::ScanRange* AllocateScanRange(const char* file, int64_t len, int64_t offset,
       int64_t partition_id, int disk_id, bool try_cache, bool expected_local);
 
+  DiskIoMgr::ScanRange* AllocateScanRange(const char* file, int64_t len, int64_t offset,
+      int64_t partition_id, int disk_id, bool try_cache);
+
   // Adds ranges to the io mgr queue and starts up new scanner threads if possible.
   Status AddDiskIoRanges(const std::vector<DiskIoMgr::ScanRange*>& ranges);
 

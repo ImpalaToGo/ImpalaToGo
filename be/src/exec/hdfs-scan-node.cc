@@ -178,6 +178,11 @@ Status HdfsScanNode::GetNextInternal(
 }
 
 DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t len,
+    int64_t offset, int64_t partition_id, int disk_id, bool try_cache) {
+  AllocateScanRange(file, len, offset, partition_id, disk_id, try_cache, false);
+}
+
+DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t len,
     int64_t offset, int64_t partition_id, int disk_id, bool try_cache,
     bool expected_local) {
   DCHECK_GE(disk_id, -1);
