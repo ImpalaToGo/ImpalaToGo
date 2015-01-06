@@ -32,7 +32,7 @@ import com.google.common.collect.Lists;
  * Internal representation of db-related metadata. Owned by Catalog instance.
  * Not thread safe.
  *
- * The static initialisation method loadDb is the only way to construct a Db
+ * The static initialization method loadDb is the only way to construct a Db
  * object.
  *
  * Tables are stored in a map from the table name to the table object. They may
