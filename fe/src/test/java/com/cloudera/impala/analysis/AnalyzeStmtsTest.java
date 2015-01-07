@@ -260,11 +260,16 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
 
   @Test
   public void TestOrdinals() throws AnalysisException {
-    // can't group or order on *
     AnalysisError("select * from functional.alltypes group by 1",
         "cannot combine '*' in select list with GROUP BY");
-    AnalysisError("select * from functional.alltypes order by 1",
-        "ORDER BY: ordinal refers to '*' in select list");
+    AnalysisError("select * from functional.alltypes order by 14",
+        "ORDER BY: ordinal exceeds number of items in select list: 14");
+    AnalyzesOk("select t.* from functional.alltypes t order by 1");
+    AnalyzesOk("select t2.* from functional.alltypes t1, " +
+        "functional.alltypes t2 order by 1");
+    AnalyzesOk("select * from (select max(id) from functional.testtbl) t1 order by 1");
+    AnalysisError("select * from (select max(id) from functional.testtbl) t1 order by 2",
+        "ORDER BY: ordinal exceeds number of items in select list: 2");
   }
 
   @Test
@@ -442,6 +447,12 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
            "SUM(t1.d2) IS NULL " +
           "FROM functional.decimal_tbl AS t1) AS t3 " +
         "ON t3.double_col_3 = t1.d3");
+
+    // Test that InlineViewRef.makeOutputNullable() preserves expr signatures when
+    // substituting NULL literals for SlotRefs (IMPALA-1468).
+    AnalyzesOk("select 1 from functional.alltypes a left outer join " +
+        "(select id, upper(decode(string_col, NULL, date_string_col)) " +
+        "from functional.alltypes) v on (a.id = v.id)");
 
     // Inline view with a subquery
     AnalyzesOk("select y x from " +
@@ -912,6 +923,12 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalyzesOk("select year(timestamp_col), count(*) " +
         "from functional.alltypes group by year(timestamp_col)");
 
+    // Check abs() retains type, originally abs() would return double,
+    // which is incompatible with interval, see IMPALA-1424
+    AnalyzesOk("select now() + interval abs(cast(1 as int)) days");
+    AnalyzesOk("select now() + interval abs(cast(1 as smallint)) days");
+    AnalyzesOk("select now() + interval abs(cast(1 as tinyint)) days");
+
     AnalyzesOk("select round(c1) from functional.decimal_tiny");
     AnalyzesOk("select round(c1, 2) from functional.decimal_tiny");
     AnalysisError("select round(c1, cast(c3 as int)) from functional.decimal_tiny",
@@ -1212,7 +1229,7 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalyzesOk("select zip, count(*) from functional.testtbl group by 1");
     AnalyzesOk("select count(*), zip from functional.testtbl group by 2");
     AnalysisError("select zip, count(*) from functional.testtbl group by 3",
-        "GROUP BY: ordinal exceeds number of items in select list");
+        "GROUP BY: ordinal exceeds number of items in select list: 3");
     AnalysisError("select * from functional.alltypes group by 1",
         "cannot combine '*' in select list with GROUP BY");
     // picks up select item alias
@@ -1272,10 +1289,8 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalysisError("select zip, id from functional.testtbl order by 0",
         "ORDER BY: ordinal must be >= 1");
     AnalysisError("select zip, id from functional.testtbl order by 3",
-        "ORDER BY: ordinal exceeds number of items in select list");
-    // can't order by '*'
-    AnalysisError("select * from functional.alltypes order by 1",
-        "ORDER BY: ordinal refers to '*' in select list");
+        "ORDER BY: ordinal exceeds number of items in select list: 3");
+    AnalyzesOk("select * from functional.alltypes order by 1");
     // picks up select item alias
     AnalyzesOk("select zip z, id C, id D from functional.testtbl order by z, C, d");
 
@@ -1686,6 +1701,17 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     AnalyzesOk("with t as (select int_col + 2, !bool_col from functional.alltypes) " +
         "select `int_col + 2`, `NOT bool_col` from t");
 
+    // Test analysis of WITH clause after subquery rewrite does not pollute
+    // global state (IMPALA-1357).
+    AnalyzesOk("select 1 from (with w as (select 1 from functional.alltypes " +
+        "where exists (select 1 from functional.alltypes)) select 1 from w) tt");
+    AnalyzesOk("create table test_with as select 1 from (with w as " +
+        "(select 1 from functional.alltypes where exists " +
+        "(select 1 from functional.alltypes)) select 1 from w) tt");
+    AnalyzesOk("insert into functional.alltypesnopart (id) select 1 from " +
+        "(with w as (select 1 from functional.alltypes where exists " +
+        "(select 1 from functional.alltypes)) select 1 from w) tt");
+
     // Conflicting table aliases in WITH clause.
     AnalysisError("with t1 as (select 1), t1 as (select 2) select * from t1",
         "Duplicate table alias: 't1'");
@@ -1770,6 +1796,24 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
         "as (select 1 as int_col_1 from (with with_4 as (select 1 as int_col_1 " +
         "from with_1) select 1 as int_col_1 from with_4) as t1) select 1 as " +
         "int_col_1 from with_3) select 1 as int_col_1 from with_2");
+
+    // WITH clasue with a between predicate
+    AnalyzesOk("with with_1 as (select int_col from functional.alltypestiny " +
+        "where int_col between 0 and 10) select * from with_1");
+    // WITH clause with a between predicate in the select list
+    AnalyzesOk("with with_1 as (select int_col between 0 and 10 " +
+        "from functional.alltypestiny) select * from with_1");
+    // WITH clause with a between predicate in the select list that
+    // uses casting
+    AnalyzesOk("with with_1 as (select timestamp_col between " +
+        "cast('2001-01-01' as timestamp) and " +
+        "(cast('2001-01-01' as timestamp) + interval 10 days) " +
+        "from functional.alltypestiny) select * from with_1");
+    // WITH clause with a between predicate that uses explicit casting
+    AnalyzesOk("with with_1 as (select * from functional.alltypestiny " +
+        "where timestamp_col between cast('2001-01-01' as timestamp) and " +
+        "(cast('2001-01-01' as timestamp) + interval 10 days)) " +
+        "select * from with_1");
   }
 
   @Test
@@ -2438,7 +2482,7 @@ public class AnalyzeStmtsTest extends AnalyzerTest {
     // Also check TableRefs.
     testNumberOfMembers(TableRef.class, 12);
     testNumberOfMembers(BaseTableRef.class, 1);
-    testNumberOfMembers(InlineViewRef.class, 7);
+    testNumberOfMembers(InlineViewRef.class, 8);
   }
 
   @SuppressWarnings("rawtypes")

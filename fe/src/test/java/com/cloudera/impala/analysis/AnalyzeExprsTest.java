@@ -689,12 +689,15 @@ public class AnalyzeExprsTest extends AnalyzerTest {
             + "UNBOUNDED and the other CURRENT ROW.");
 
     // Min/max do not support start bounds with offsets
-    AnalysisError("select min(int_col) over (partition by id order by tinyint_col "
-        + "rows between 2 preceding and unbounded following) from functional.alltypes",
-        "'min(int_col)' is only supported with an UNBOUNDED PRECEDING start bound.");
     AnalysisError("select max(int_col) over (partition by id order by tinyint_col "
         + "rows 2 preceding) from functional.alltypes",
         "'max(int_col)' is only supported with an UNBOUNDED PRECEDING start bound.");
+    // If the query can be re-written so that the start is unbounded, it should
+    // be supported (IMPALA-1433).
+    AnalyzesOk("select max(id) over (order by id rows between current row and "
+        + "unbounded following) from functional.alltypes");
+    AnalyzesOk("select min(int_col) over (partition by id order by tinyint_col "
+        + "rows between 2 preceding and unbounded following) from functional.alltypes");
     // TODO: Enable after RANGE windows with offset boundaries are supported
     //AnalysisError("select max(int_col) over (partition by id order by tinyint_col "
     //    + "range 2 preceding) from functional.alltypes",
@@ -1110,6 +1113,77 @@ public class AnalyzeExprsTest extends AnalyzerTest {
       Assert.assertTrue("opType= " + opType + " child2Type=" + child2Type,
           opType.equals(child2Type) || opType.isNull() || child2Type.isNull());
     }
+  }
+
+  private void checkReturnType(String stmt, Type resultType) {
+    SelectStmt select = (SelectStmt) AnalyzesOk(stmt);
+    ArrayList<Expr> selectListExprs = select.getResultExprs();
+    assertNotNull(selectListExprs);
+    assertEquals(selectListExprs.size(), 1);
+    // check the first expr in select list
+    Expr expr = selectListExprs.get(0);
+    assertEquals("Expected: " + resultType + " != " + expr.getType(),
+        resultType, expr.getType());
+  }
+
+  @Test
+  public void TestNumericLiteralTypeResolution() throws AnalysisException {
+    checkReturnType("select 1", Type.TINYINT);
+    checkReturnType("select 1.1", ScalarType.createDecimalType(2,1));
+    checkReturnType("select 01.1", ScalarType.createDecimalType(2,1));
+    checkReturnType("select 1 + 1.1", Type.DOUBLE);
+    checkReturnType("select 0.23 + 1.1", ScalarType.createDecimalType(4,2));
+
+    checkReturnType("select float_col + float_col from functional.alltypestiny",
+        Type.DOUBLE);
+    checkReturnType("select int_col + int_col from functional.alltypestiny",
+        Type.BIGINT);
+
+    // floating point + numeric literal = floating point
+    checkReturnType("select float_col + 1.1 from functional.alltypestiny",
+        Type.DOUBLE);
+    // decimal + numeric literal = decimal
+    checkReturnType("select d1 + 1.1 from functional.decimal_tbl",
+        ScalarType.createDecimalType(11,1));
+    // int + numeric literal = floating point
+    checkReturnType("select int_col + 1.1 from functional.alltypestiny",
+        Type.DOUBLE);
+
+    // Explicitly casting the literal to a decimal will override the behavior
+    checkReturnType("select int_col + cast(1.1 as decimal(2,1)) from "
+        + " functional.alltypestiny", ScalarType.createDecimalType(12,1));
+    checkReturnType("select float_col + cast(1.1 as decimal(2,1)) from "
+        + " functional.alltypestiny", ScalarType.createDecimalType(38,9));
+    checkReturnType("select float_col + cast(1.1*1.2+1.3 as decimal(2,1)) from "
+        + " functional.alltypestiny", ScalarType.createDecimalType(38,9));
+
+    // The location and complexity of the expr should not matter.
+    checkReturnType("select 1.0 + float_col + 1.1 from functional.alltypestiny",
+        Type.DOUBLE);
+    checkReturnType("select 1.0 + 2.0 + float_col from functional.alltypestiny",
+        Type.DOUBLE);
+    checkReturnType("select 1.0 + 2.0 + pi() * float_col from functional.alltypestiny",
+        Type.DOUBLE);
+    checkReturnType("select 1.0 + d1 + 1.1 from functional.decimal_tbl",
+        ScalarType.createDecimalType(12,1));
+    checkReturnType("select 1.0 + 2.0 + d1 from functional.decimal_tbl",
+        ScalarType.createDecimalType(11,1));
+    checkReturnType("select 1.0 + 2.0 + pi()*d1 from functional.decimal_tbl",
+        ScalarType.createDecimalType(38,17));
+
+    // Test with multiple cols
+    checkReturnType("select double_col + 1.23 + float_col + 1.0 " +
+        " from functional.alltypestiny", Type.DOUBLE);
+    checkReturnType("select double_col + 1.23 + float_col + 1.0 + int_col " +
+        " + bigint_col from functional.alltypestiny", Type.DOUBLE);
+    checkReturnType("select d1 + 1.23 + d2 + 1.0 " +
+        " from functional.decimal_tbl", ScalarType.createDecimalType(14,2));
+
+    // Test with slot of both decimal and non-decimal
+    checkReturnType("select t1.int_col + t2.c1 from functional.alltypestiny t1 " +
+        " cross join functional.decimal_tiny t2", ScalarType.createDecimalType(15,4));
+    checkReturnType("select 1.1 + t1.int_col + t2.c1 from functional.alltypestiny t1 " +
+        " cross join functional.decimal_tiny t2", ScalarType.createDecimalType(38,17));
   }
 
   private void checkReturnType(String stmt, Type resultType) {

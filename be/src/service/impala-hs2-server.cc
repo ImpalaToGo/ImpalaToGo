@@ -89,36 +89,27 @@ static int64_t ByteSize(const thrift::TRow& row) {
 
 // Returns the size, in bytes, of a Hive TColumn structure, only taking into account those
 // values in the range [start_idx, end_idx).
-static int64_t TColumnByteSize(const thrift::TColumn& col, int start_idx, int end_idx) {
-  int64_t bytes = sizeof(col);
-  int64_t num_rows = end_idx - start_idx;
-  if (col.__isset.boolVal) {
-    // Last num_rows term here and below is for one bit per row for nullity.
-    return bytes + (num_rows * sizeof(bool)) + (num_rows / 8) + 1;
-  }
-  if (col.__isset.byteVal) {
-    return bytes + num_rows + col.byteVal.nulls.size();
-  }
-  if (col.__isset.i16Val) {
-    return bytes + (num_rows * sizeof(int16_t)) + (num_rows / 8) + 1;
-  }
-  if (col.__isset.i32Val) {
-    return bytes + (num_rows * sizeof(int32_t)) + (num_rows / 8) + 1;
-  }
-  if (col.__isset.i64Val) {
-    return bytes + (num_rows * sizeof(int64_t)) + (num_rows / 8) + 1;
-  }
+static uint32_t TColumnByteSize(const thrift::TColumn& col, uint32_t start_idx,
+    uint32_t end_idx) {
+  DCHECK_LE(start_idx, end_idx);
+  uint32_t num_rows = end_idx - start_idx;
+  if (num_rows == 0) return 0L;
+
+  if (col.__isset.boolVal) return (num_rows * sizeof(bool)) + col.boolVal.nulls.size();
+  if (col.__isset.byteVal) return num_rows + col.byteVal.nulls.size();
+  if (col.__isset.i16Val) return (num_rows * sizeof(int16_t)) + col.i16Val.nulls.size();
+  if (col.__isset.i32Val) return (num_rows * sizeof(int32_t)) + col.i32Val.nulls.size();
+  if (col.__isset.i64Val) return (num_rows * sizeof(int64_t)) + col.i64Val.nulls.size();
   if (col.__isset.doubleVal) {
-    return bytes + (num_rows * sizeof(double)) + (num_rows / 8) + 1;
+    return (num_rows * sizeof(double)) + col.doubleVal.nulls.size();
   }
   if (col.__isset.stringVal) {
-    for (int i = start_idx; i < end_idx; ++i) {
-      bytes += col.stringVal.values[i].size();
-    }
-    return bytes + (num_rows / 8);
+    uint32_t bytes = 0;
+    for (int i = start_idx; i < end_idx; ++i) bytes += col.stringVal.values[i].size();
+    return bytes + col.stringVal.nulls.size();
   }
 
-  return bytes;
+  return 0;
 }
 
 // Helper function to translate between Beeswax and HiveServer2 type
@@ -176,79 +167,66 @@ class ImpalaServer::HS2ColumnarResultSet : public ImpalaServer::QueryResultSet {
       thrift::TColumn* from = &o->result_set_->columns[j];
       thrift::TColumn* to = &result_set_->columns[j];
       switch (metadata_.columns[j].columnType.types[0].scalar_type.type) {
+        case TPrimitiveType::NULL_TYPE:
         case TPrimitiveType::BOOLEAN:
+          StitchNulls(num_rows_, rows_added, start_idx, from->boolVal.nulls,
+              &(to->boolVal.nulls));
           to->boolVal.values.insert(
               to->boolVal.values.end(),
               from->boolVal.values.begin() + start_idx,
               from->boolVal.values.begin() + start_idx + rows_added);
-          to->boolVal.nulls.insert(
-              to->boolVal.nulls.end(),
-              from->boolVal.nulls.begin() + start_idx,
-              from->boolVal.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::TINYINT:
+          StitchNulls(num_rows_, rows_added, start_idx, from->byteVal.nulls,
+              &(to->byteVal.nulls));
           to->byteVal.values.insert(
               to->byteVal.values.end(),
               from->byteVal.values.begin() + start_idx,
               from->byteVal.values.begin() + start_idx + rows_added);
-          to->byteVal.nulls.insert(
-              to->byteVal.nulls.end(),
-              from->byteVal.nulls.begin() + start_idx,
-              from->byteVal.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::SMALLINT:
+          StitchNulls(num_rows_, rows_added, start_idx, from->i16Val.nulls,
+              &(to->i16Val.nulls));
           to->i16Val.values.insert(
               to->i16Val.values.end(),
               from->i16Val.values.begin() + start_idx,
               from->i16Val.values.begin() + start_idx + rows_added);
-          to->i16Val.nulls.insert(
-              to->i16Val.nulls.end(),
-              from->i16Val.nulls.begin() + start_idx,
-              from->i16Val.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::INT:
+          StitchNulls(num_rows_, rows_added, start_idx, from->i32Val.nulls,
+              &(to->i32Val.nulls));
           to->i32Val.values.insert(
               to->i32Val.values.end(),
               from->i32Val.values.begin() + start_idx,
               from->i32Val.values.begin() + start_idx + rows_added);
-          to->i32Val.nulls.insert(
-              to->i32Val.nulls.end(),
-              from->i32Val.nulls.begin() + start_idx,
-              from->i32Val.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::BIGINT:
+          StitchNulls(num_rows_, rows_added, start_idx, from->i64Val.nulls,
+              &(to->i64Val.nulls));
           to->i64Val.values.insert(
               to->i64Val.values.end(),
               from->i64Val.values.begin() + start_idx,
               from->i64Val.values.begin() + start_idx + rows_added);
-          to->i64Val.nulls.insert(
-              to->i64Val.nulls.end(),
-              from->i64Val.nulls.begin() + start_idx,
-              from->i64Val.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::FLOAT:
         case TPrimitiveType::DOUBLE:
+          StitchNulls(num_rows_, rows_added, start_idx, from->doubleVal.nulls,
+              &(to->doubleVal.nulls));
           to->doubleVal.values.insert(
               to->doubleVal.values.end(),
               from->doubleVal.values.begin() + start_idx,
               from->doubleVal.values.begin() + start_idx + rows_added);
-          to->doubleVal.nulls.insert(
-              to->doubleVal.nulls.end(),
-              from->doubleVal.nulls.begin() + start_idx,
-              from->doubleVal.nulls.begin() + start_idx + rows_added);
           break;
         case TPrimitiveType::TIMESTAMP:
-        case TPrimitiveType::NULL_TYPE:
         case TPrimitiveType::DECIMAL:
         case TPrimitiveType::STRING:
         case TPrimitiveType::VARCHAR:
         case TPrimitiveType::CHAR:
+          StitchNulls(num_rows_, rows_added, start_idx, from->stringVal.nulls,
+              &(to->stringVal.nulls));
           to->stringVal.values.insert(to->stringVal.values.end(),
               from->stringVal.values.begin() + start_idx,
               from->stringVal.values.begin() + start_idx + rows_added);
-          to->stringVal.nulls.insert(to->stringVal.nulls.end(),
-              from->stringVal.nulls.begin() + start_idx,
-              from->stringVal.nulls.begin() + start_idx + rows_added);
           break;
         default:
           DCHECK(false) << "Unsupported type: " << TypeToString(ThriftToType(
@@ -256,12 +234,12 @@ class ImpalaServer::HS2ColumnarResultSet : public ImpalaServer::QueryResultSet {
           break;
       }
     }
-
+    num_rows_ += rows_added;
     return rows_added;
   }
 
   virtual int64_t ByteSize(int start_idx, int num_rows) {
-    const int end = min(num_rows, num_rows - start_idx);
+    const int end = min(start_idx + num_rows, (int)size());
     int64_t bytes = 0L;
     BOOST_FOREACH(const thrift::TColumn& c, result_set_->columns) {
       bytes += TColumnByteSize(c, start_idx, end);
@@ -291,6 +269,7 @@ class ImpalaServer::HS2ColumnarResultSet : public ImpalaServer::QueryResultSet {
           "Structured columns unsupported in HS2 interface";
       thrift::TColumn column;
       switch (col.columnType.types[0].scalar_type.type) {
+        case TPrimitiveType::NULL_TYPE:
         case TPrimitiveType::BOOLEAN:
           column.__isset.boolVal = true;
           break;
@@ -311,7 +290,6 @@ class ImpalaServer::HS2ColumnarResultSet : public ImpalaServer::QueryResultSet {
           column.__isset.doubleVal = true;
           break;
         case TPrimitiveType::TIMESTAMP:
-        case TPrimitiveType::NULL_TYPE:
         case TPrimitiveType::DECIMAL:
         case TPrimitiveType::VARCHAR:
         case TPrimitiveType::CHAR:
@@ -391,7 +369,7 @@ class ImpalaServer::HS2RowOrientedResultSet : public ImpalaServer::QueryResultSe
     return bytes;
   }
 
-  virtual size_t size() { return 0; }
+  virtual size_t size() { return result_set_->rows.size(); }
 
  private:
   // Metadata of the result set
@@ -524,7 +502,13 @@ Status ImpalaServer::FetchInternal(const TUniqueId& query_id, int32_t fetch_size
   if (fetch_first) RETURN_IF_ERROR(exec_state->RestartFetch());
 
   fetch_results->results.__set_startRowOffset(exec_state->num_rows_fetched());
-  scoped_ptr<QueryResultSet> result_set(CreateHS2ResultSet(session->hs2_version,
+
+  // Child queries should always return their results in row-major format, rather than
+  // inheriting the parent session's setting.
+  bool is_child_query = exec_state->parent_query_id() != TUniqueId();
+  TProtocolVersion::type version = is_child_query ?
+      TProtocolVersion::HIVE_CLI_SERVICE_PROTOCOL_V1 : session->hs2_version;
+  scoped_ptr<QueryResultSet> result_set(CreateHS2ResultSet(version,
       *(exec_state->result_metadata()), &(fetch_results->results)));
   RETURN_IF_ERROR(exec_state->FetchRows(fetch_size, result_set.get()));
   fetch_results->__isset.results = true;
@@ -553,6 +537,12 @@ Status ImpalaServer::TExecuteStatementReqToTQueryContext(
     map<string, string>::const_iterator conf_itr = execute_request.confOverlay.begin();
     for (; conf_itr != execute_request.confOverlay.end(); ++conf_itr) {
       if (conf_itr->first == IMPALA_RESULT_CACHING_OPT) continue;
+      if (conf_itr->first == ChildQuery::PARENT_QUERY_OPT) {
+        if (ParseId(conf_itr->second, &query_ctx->parent_query_id)) {
+          query_ctx->__isset.parent_query_id = true;
+        }
+        continue;
+      }
       RETURN_IF_ERROR(SetQueryOptions(conf_itr->first, conf_itr->second,
           &query_ctx->request.query_options));
     }
@@ -1005,10 +995,8 @@ void ImpalaServer::GetResultSetMetadata(TGetResultSetMetadataResp& return_val,
             result_set_md->columns[i].columnName);
         return_val.schema.columns[i].position = i;
         return_val.schema.columns[i].typeDesc.types.resize(1);
-        return_val.schema.columns[i].typeDesc.types[0].__isset.primitiveEntry = true;
-        ColumnType col_type(result_set_md->columns[i].columnType);
-        return_val.schema.columns[i].typeDesc.types[0].primitiveEntry.__set_type(
-            TypeToHiveServer2Type(col_type.type));
+        ColumnType t(result_set_md->columns[i].columnType);
+        return_val.schema.columns[i].typeDesc.types[0] = t.ToHs2Type();
       }
     }
   }

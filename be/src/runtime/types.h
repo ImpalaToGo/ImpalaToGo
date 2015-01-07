@@ -52,7 +52,6 @@ PrimitiveType ThriftToType(TPrimitiveType::type ttype);
 TPrimitiveType::type ToThrift(PrimitiveType ptype);
 std::string TypeToString(PrimitiveType t);
 std::string TypeToOdbcString(PrimitiveType t);
-apache::hive::service::cli::thrift::TTypeId::type TypeToHiveServer2Type(PrimitiveType t);
 
 // Wrapper struct to describe a type. Includes the enum and, optionally,
 // size information.
@@ -225,6 +224,7 @@ struct ColumnType {
     return 16;
   }
 
+  apache::hive::service::cli::thrift::TTypeEntry ToHs2Type() const;
   std::string DebugString() const;
 };
 

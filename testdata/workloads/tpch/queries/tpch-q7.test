@@ -1,12 +1,11 @@
 ====
 ---- QUERY: TPCH-Q7
 # Q7 - Volume Shipping Query
-# Modifications: Added round() calls
 select
   supp_nation,
   cust_nation,
   l_year,
-  round(sum(volume), 5) as revenue
+  sum(volume) as revenue
 from (
   select
     n1.n_name as supp_nation,
@@ -41,10 +40,10 @@ order by
   cust_nation,
   l_year
 ---- RESULTS
-'FRANCE','GERMANY',1995,54639732.73360
-'FRANCE','GERMANY',1996,54633083.30760
-'GERMANY','FRANCE',1995,52531746.66970
-'GERMANY','FRANCE',1996,52520549.02240
+'FRANCE','GERMANY',1995,54639732.7336
+'FRANCE','GERMANY',1996,54633083.3076
+'GERMANY','FRANCE',1995,52531746.6697
+'GERMANY','FRANCE',1996,52520549.0224
 ---- TYPES
-STRING, STRING, INT, DOUBLE
+STRING, STRING, INT, DECIMAL
 ====

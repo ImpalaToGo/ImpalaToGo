@@ -49,7 +49,7 @@ class DiskIoMgrTest : public testing::Test {
     if (status.ok()) {
       DiskIoMgr::ScanRange* scan_range = pool_->Add(new DiskIoMgr::ScanRange());
       scan_range->Reset((*written_range)->file(), (*written_range)->len(),
-          (*written_range)->offset(), 0, false);
+          (*written_range)->offset(), 0, false, false);
       ValidateSyncRead(io_mgr, reader, scan_range, reinterpret_cast<const char*>(data),
           sizeof(int32_t));
     }
@@ -788,6 +788,155 @@ TEST_F(DiskIoMgrTest, MultipleReaderWriter) {
         // Elena : the connection is now to nullable type
         for (int file_index = 0; file_index < num_contexts; ++file_index) {
           status = io_mgr.RegisterContext(FileSystemDescriptor::getNull(), &contexts[file_index]);
+          ASSERT_TRUE(status.ok());
+        }
+        pool_.reset(new ObjectPool);
+        int read_offset = 0;
+        int write_offset = 0;
+        while (read_offset < file_size) {
+          for (int context_index = 0; context_index < num_contexts; ++context_index) {
+            if (++iters % 5000 == 0) LOG(ERROR) << "Starting iteration " << iters;
+            AtomicInt<int> num_ranges_processed;
+            thread_group threads;
+            vector<DiskIoMgr::ScanRange*> ranges;
+            int num_scan_ranges = min<int>(num_reads_queued, write_offset - read_offset);
+            for (int i = 0; i < num_scan_ranges; ++i) {
+              ranges.push_back(InitRange(1, file_name.c_str(), read_offset, 1,
+                  i % num_disks));
+              threads.add_thread(new thread(ScanRangeThread, &io_mgr,
+                  contexts[context_index],
+                  reinterpret_cast<const char*>(data + (read_offset % strlen(data))), 1,
+                  Status::OK, num_scan_ranges, &num_ranges_processed));
+              ++read_offset;
+            }
+
+            num_ranges_written_ = 0;
+            int num_write_ranges = min<int>(num_writes_queued, file_size - write_offset);
+            for (int i = 0; i < num_write_ranges; ++i) {
+              DiskIoMgr::WriteRange::WriteDoneCallback callback =
+                  bind(mem_fn(&DiskIoMgrTest::WriteCompleteCallback),
+                      this, num_write_ranges, _1);
+              DiskIoMgr::WriteRange* new_range = pool_->Add(
+                  new DiskIoMgr::WriteRange(file_name,
+                      write_offset, i % num_disks, callback));
+              new_range->SetData(reinterpret_cast<const uint8_t*>
+                  (data + (write_offset % strlen(data))), 1);
+              status = io_mgr.AddWriteRange(contexts[context_index], new_range);
+              ++write_offset;
+            }
+
+            {
+              unique_lock<mutex> lock(written_mutex_);
+              while (num_ranges_written_ < num_write_ranges) writes_done_.wait(lock);
+            }
+
+            threads.join_all();
+          } // for (int context_index
+        } // while (read_offset < file_size)
+
+
+        for (int file_index = 0; file_index < num_contexts; ++file_index) {
+          io_mgr.UnregisterContext(contexts[file_index]);
+        }
+      } // for (int num_disks
+    } // for (int threads_per_disk
+  } // for (int iteration
+}
+
+// Test when some scan ranges are marked as being cached.
+// Since these files are not in HDFS, the cached path always fails so this
+// only tests the fallback mechanism.
+// TODO: we can fake the cached read path without HDFS
+TEST_F(DiskIoMgrTest, CachedReads) {
+  MemTracker mem_tracker(LARGE_MEM_LIMIT);
+  const char* tmp_file = "/tmp/disk_io_mgr_test.txt";
+  const char* data = "abcdefghijklm";
+  int len = strlen(data);
+  CreateTempFile(tmp_file, data);
+
+  const int num_disks = 2;
+  const int num_buffers = 3;
+
+  int64_t iters = 0;
+  {
+    pool_.reset(new ObjectPool);
+    if (++iters % 5000 == 0) LOG(ERROR) << "Starting iteration " << iters;
+    DiskIoMgr io_mgr(num_disks, 1, MIN_BUFFER_SIZE, MAX_BUFFER_SIZE);
+
+    Status status = io_mgr.Init(&mem_tracker);
+    ASSERT_TRUE(status.ok());
+    MemTracker reader_mem_tracker;
+    DiskIoMgr::RequestContext* reader;
+    status = io_mgr.RegisterContext(NULL, &reader, &reader_mem_tracker);
+    ASSERT_TRUE(status.ok());
+
+    DiskIoMgr::ScanRange* complete_range =
+        InitRange(1, tmp_file, 0, strlen(data), 0, NULL, true);
+
+    // Issue some reads before the async ones are issued
+    ValidateSyncRead(&io_mgr, reader, complete_range, data);
+    ValidateSyncRead(&io_mgr, reader, complete_range, data);
+
+    vector<DiskIoMgr::ScanRange*> ranges;
+    for (int i = 0; i < len; ++i) {
+      int disk_id = i % num_disks;
+      ranges.push_back(InitRange(num_buffers, tmp_file, 0, len, disk_id, NULL, true));
+    }
+    status = io_mgr.AddScanRanges(reader, ranges);
+    ASSERT_TRUE(status.ok());
+
+    AtomicInt<int> num_ranges_processed;
+    thread_group threads;
+    for (int i = 0; i < 5; ++i) {
+      threads.add_thread(new thread(ScanRangeThread, &io_mgr, reader, data,
+          strlen(data), Status::OK, 0, &num_ranges_processed));
+    }
+
+    // Issue some more sync ranges
+    for (int i = 0; i < 5; ++i) {
+      sched_yield();
+      ValidateSyncRead(&io_mgr, reader, complete_range, data);
+    }
+
+    threads.join_all();
+
+    ValidateSyncRead(&io_mgr, reader, complete_range, data);
+    ValidateSyncRead(&io_mgr, reader, complete_range, data);
+
+    EXPECT_EQ(num_ranges_processed, ranges.size());
+    io_mgr.UnregisterContext(reader);
+    EXPECT_EQ(reader_mem_tracker.consumption(), 0);
+  }
+  EXPECT_EQ(mem_tracker.consumption(), 0);
+}
+
+TEST_F(DiskIoMgrTest, MultipleReaderWriter) {
+  MemTracker mem_tracker(LARGE_MEM_LIMIT);
+  const int ITERATIONS = 1;
+  const char* data = "abcdefghijklmnopqrstuvwxyz";
+  const int num_contexts = 5;
+  const int file_size = 4 * 1024;
+  const int num_writes_queued = 5;
+  const int num_reads_queued = 5;
+
+  string file_name = "/tmp/disk_io_mgr_test.txt";
+  int success = CreateTempFile(file_name.c_str(), file_size);
+  if (success != 0) {
+    LOG(ERROR) << "Error creating temp file " << file_name.c_str() << " of size " <<
+        file_size;
+    ASSERT_TRUE(false);
+  }
+
+  int64_t iters = 0;
+  vector<DiskIoMgr::RequestContext*> contexts(num_contexts);
+  Status status;
+  for (int iteration = 0; iteration < ITERATIONS; ++iteration) {
+    for (int threads_per_disk = 1; threads_per_disk <= 5; ++threads_per_disk) {
+      for (int num_disks = 1; num_disks <= 5; num_disks += 2) {
+        DiskIoMgr io_mgr(num_disks, threads_per_disk, MIN_BUFFER_SIZE, MAX_BUFFER_SIZE);
+        io_mgr.Init(&mem_tracker);
+        for (int file_index = 0; file_index < num_contexts; ++file_index) {
+          status = io_mgr.RegisterContext(NULL, &contexts[file_index]);
           ASSERT_TRUE(status.ok());
         }
         pool_.reset(new ObjectPool);

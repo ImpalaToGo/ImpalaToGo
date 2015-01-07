@@ -14,8 +14,9 @@
 
 package com.cloudera.impala.authorization;
 
-import org.apache.sentry.provider.file.HadoopGroupResourceAuthorizationProvider;
-import org.apache.sentry.provider.file.ResourceAuthorizationProvider;
+
+import org.apache.sentry.provider.common.HadoopGroupResourceAuthorizationProvider;
+import org.apache.sentry.provider.common.ResourceAuthorizationProvider;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;

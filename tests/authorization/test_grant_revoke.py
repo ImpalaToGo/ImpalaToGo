@@ -18,7 +18,6 @@
 import pytest
 import logging
 import grp
-import os
 from getpass import getuser
 from os import getenv
 
@@ -29,8 +28,6 @@ from tests.util.test_file_parser import QueryTestSectionReader
 
 SENTRY_CONFIG_FILE = getenv('IMPALA_HOME') + '/fe/src/test/resources/sentry-site.xml'
 
-@pytest.mark.skipif(int(os.environ['CDH_MAJOR_VERSION']) < 5,
-    reason='Sentry Service is not supported on CDH4')
 class TestGrantRevoke(CustomClusterTestSuite, ImpalaTestSuite):
   @classmethod
   def add_test_dimensions(cls):
@@ -50,14 +47,21 @@ class TestGrantRevoke(CustomClusterTestSuite, ImpalaTestSuite):
     super(TestGrantRevoke, self).teardown_method(method)
 
   def __test_cleanup(self):
-    # Clean up any old roles for this test
+    # Clean up any old roles created by this test
     for role_name in self.client.execute("show roles").data:
       if 'grant_revoke_test' in role_name:
         self.client.execute("drop role %s" % role_name)
 
+    # Cleanup any other roles that were granted to this user.
+    # TODO: Update Sentry Service config and authorization tests to use LocalGroupMapping
+    # for resolving users -> groups. This way we can specify custom test users that don't
+    # actually exist in the system.
+    group_name = grp.getgrnam(getuser()).gr_name
+    for role_name in self.client.execute("show role grant group `%s`" % group_name).data:
+      self.client.execute("drop role %s" % role_name)
+
     # Create a temporary admin user so we can actually view/clean up the test
     # db.
-    group_name = grp.getgrnam(getuser()).gr_name
     self.client.execute("create role grant_revoke_test_admin")
     try:
       self.client.execute("grant all on server to grant_revoke_test_admin")

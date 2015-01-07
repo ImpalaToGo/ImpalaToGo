@@ -63,6 +63,12 @@ public class InlineViewRef extends TableRef {
   // makeOutputNullable() if this inline view is a nullable side of an outer join.
   protected final ExprSubstitutionMap baseTblSmap_ = new ExprSubstitutionMap();
 
+  // If not null, these will serve as the column labels for the inline view. This provides
+  // a layer of separation between column labels visible from outside the inline view
+  // and column labels used in the query definition. Either all or none of the column
+  // labels must be overridden.
+  private List<String> explicitColLabels_;
+
   /**
    * C'tor for creating inline views parsed directly from the a query string.
    */
@@ -71,6 +77,11 @@ public class InlineViewRef extends TableRef {
     Preconditions.checkNotNull(queryStmt);
     queryStmt_ = queryStmt;
     view_ = null;
+  }
+
+  public InlineViewRef(String alias, QueryStmt queryStmt, List<String> colLabels) {
+    this(alias, queryStmt);
+    explicitColLabels_ = Lists.newArrayList(colLabels);
   }
 
   /**
@@ -91,21 +102,7 @@ public class InlineViewRef extends TableRef {
     Preconditions.checkNotNull(other.queryStmt_);
     queryStmt_ = other.queryStmt_.clone();
     view_ = other.view_;
-  }
-
-  /**
-   * Rewrite all subqueries contained within the inline view. The inline view is
-   * modified in place and the rewrite should not alter its select list.
-   */
-  public void rewrite() throws AnalysisException {
-    if (!(queryStmt_ instanceof SelectStmt)) return;
-    int oldSelectListItemCnt =
-        ((SelectStmt)queryStmt_).getSelectList().getItems().size();
-    StmtRewriter.rewriteStatement((SelectStmt)queryStmt_, inlineViewAnalyzer_);
-    queryStmt_ = queryStmt_.clone();
-    int newSelectListItemCnt =
-        ((SelectStmt)queryStmt_).getSelectList().getItems().size();
-    Preconditions.checkState(oldSelectListItemCnt == newSelectListItemCnt);
+    explicitColLabels_ = other.explicitColLabels_;
   }
 
   /**
@@ -139,6 +136,10 @@ public class InlineViewRef extends TableRef {
     inlineViewAnalyzer_.setUseHiveColLabels(
         isCatalogView ? true : analyzer.useHiveColLabels());
     queryStmt_.analyze(inlineViewAnalyzer_);
+    if (explicitColLabels_ != null) {
+      Preconditions.checkState(
+          explicitColLabels_.size() == queryStmt_.getColLabels().size());
+    }
 
     inlineViewAnalyzer_.setHasLimitOffsetClause(
         queryStmt_.hasLimit() || queryStmt_.hasOffset());
@@ -166,8 +167,8 @@ public class InlineViewRef extends TableRef {
     // not into it)
     boolean createAuxPredicates = !(queryStmt_ instanceof SelectStmt)
         || !(((SelectStmt) queryStmt_).hasAnalyticInfo());
-    for (int i = 0; i < queryStmt_.getColLabels().size(); ++i) {
-      String colName = queryStmt_.getColLabels().get(i);
+    for (int i = 0; i < getColLabels().size(); ++i) {
+      String colName = getColLabels().get(i);
       Expr colExpr = queryStmt_.getResultExprs().get(i);
       SlotDescriptor slotDesc = analyzer.registerColumnRef(getAliasAsName(), colName);
       slotDesc.setStats(ColumnStats.fromExpr(colExpr));
@@ -196,10 +197,10 @@ public class InlineViewRef extends TableRef {
       throws AnalysisException {
     InlineView inlineView =
         (view_ != null) ? new InlineView(view_) : new InlineView(alias_);
-    for (int i = 0; i < queryStmt_.getColLabels().size(); ++i) {
+    for (int i = 0; i < getColLabels().size(); ++i) {
       // inline view select statement has been analyzed. Col label should be filled.
       Expr selectItemExpr = queryStmt_.getResultExprs().get(i);
-      String colAlias = queryStmt_.getColLabels().get(i);
+      String colAlias = getColLabels().get(i);
 
       // inline view col cannot have duplicate name
       if (inlineView.getColumn(colAlias) != null) {
@@ -241,16 +242,16 @@ public class InlineViewRef extends TableRef {
   }
 
   protected void makeOutputNullableHelper(Analyzer analyzer, ExprSubstitutionMap smap)
-      throws InternalException, AnalysisException {
+      throws InternalException {
     // Gather all unique rhs SlotRefs into rhsSlotRefs
     List<SlotRef> rhsSlotRefs = Lists.newArrayList();
     TreeNode.collect(smap.getRhs(), Predicates.instanceOf(SlotRef.class), rhsSlotRefs);
     // Map for substituting SlotRefs with NullLiterals.
     ExprSubstitutionMap nullSMap = new ExprSubstitutionMap();
-    NullLiteral nullLiteral = new NullLiteral();
-    nullLiteral.analyze(analyzer);
     for (SlotRef rhsSlotRef: rhsSlotRefs) {
-      nullSMap.put(rhsSlotRef.clone(), nullLiteral.clone());
+      // The rhs null literal should have the same type as the lhs SlotRef to ensure
+      // exprs resolve to the same signature after applying this smap.
+      nullSMap.put(rhsSlotRef.clone(), NullLiteral.create(rhsSlotRef.getType()));
     }
 
     // Make rhs exprs nullable if necessary.
@@ -261,7 +262,7 @@ public class InlineViewRef extends TableRef {
       params.add(new NullLiteral());
       params.add(smap.getRhs().get(i));
       Expr ifExpr = new FunctionCallExpr("if", params);
-      ifExpr.analyze(analyzer);
+      ifExpr.analyzeNoThrow(analyzer);
       smap.getRhs().set(i, ifExpr);
     }
   }
@@ -272,7 +273,7 @@ public class InlineViewRef extends TableRef {
    * false otherwise.
    */
   private boolean requiresNullWrapping(Analyzer analyzer, Expr expr,
-      ExprSubstitutionMap nullSMap) throws InternalException, AnalysisException {
+      ExprSubstitutionMap nullSMap) throws InternalException {
     // If the expr is already wrapped in an IF(TupleIsNull(), NULL, expr)
     // then do not try to execute it.
     // TODO: return true in this case?
@@ -284,7 +285,7 @@ public class InlineViewRef extends TableRef {
         new IsNullPredicate(expr.substitute(nullSMap, analyzer, false), true);
     Preconditions.checkState(isNotNullLiteralPred.isConstant());
     // analyze to insert casts, etc.
-    isNotNullLiteralPred.analyze(analyzer);
+    isNotNullLiteralPred.analyzeNoThrow(analyzer);
     return FeSupport.EvalPredicate(isNotNullLiteralPred, analyzer.getQueryCtx());
   }
 
@@ -311,6 +312,19 @@ public class InlineViewRef extends TableRef {
   }
 
   public QueryStmt getViewStmt() { return queryStmt_; }
+  public void setRewrittenViewStmt(QueryStmt stmt) {
+    Preconditions.checkState(getAnalyzer().containsSubquery());
+    queryStmt_ = stmt;
+  }
+
+  public List<String> getExplicitColLabels() { return explicitColLabels_; }
+
+  public List<String> getColLabels() {
+    if (explicitColLabels_ != null) {
+      return explicitColLabels_;
+    }
+    return queryStmt_.getColLabels();
+  }
 
   @Override
   public TableRef clone() { return new InlineViewRef(this); }
@@ -324,6 +338,20 @@ public class InlineViewRef extends TableRef {
       return view_.getTableName().toSql() + (aliasSql == null ? "" : " " + aliasSql);
     }
     Preconditions.checkNotNull(aliasSql);
-    return "(" + queryStmt_.toSql() + ") " + aliasSql;
+    StringBuilder sql = new StringBuilder()
+        .append("(")
+        .append(queryStmt_.toSql())
+        .append(") ")
+        .append(aliasSql);
+    // Add explicit col labels for debugging even though this syntax isn't supported.
+    if (explicitColLabels_ != null) {
+      sql.append(" (");
+      for (int i = 0; i < getExplicitColLabels().size(); i++) {
+        if (i > 0) sql.append(", ");
+        sql.append(ToSqlUtils.getIdentSql(getExplicitColLabels().get(i)));
+      }
+      sql.append(")");
+    }
+    return sql.toString();
   }
 }

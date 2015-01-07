@@ -54,7 +54,7 @@
 #include "util/container-util.h"
 #include "util/network-util.h"
 #include "util/llama-util.h"
-#include "util/table-printer.h"
+#include "util/summary-util.h"
 #include "gen-cpp/ImpalaInternalService.h"
 #include "gen-cpp/ImpalaInternalService_types.h"
 #include "gen-cpp/Frontend_types.h"
@@ -107,6 +107,9 @@ class Coordinator::BackendExecState {
   // Fragment idx for this ExecState
   int fragment_idx;
 
+  // The 0-based instance idx.
+  int instance_idx;
+
   // protects fields below
   // lock ordering: Coordinator::lock_ can only get obtained *prior*
   // to lock
@@ -137,6 +140,7 @@ class Coordinator::BackendExecState {
       backend_address(params.hosts[instance_idx]),
       total_split_size(0),
       fragment_idx(fragment_idx),
+      instance_idx(instance_idx),
       initiated(false),
       done(false),
       profile_created(false),
@@ -291,7 +295,8 @@ static void ProcessQueryOptions(
       << "because nodes cannot be cancelled in Close()";
 }
 
-Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_expr_ctxs) {
+Status Coordinator::Exec(QuerySchedule& schedule,
+    vector<ExprContext*>* output_expr_ctxs) {
   const TQueryExecRequest& request = schedule.request();
   DCHECK_GT(request.fragments.size(), 0);
   needs_finalization_ = request.__isset.finalize_params;
@@ -340,8 +345,12 @@ Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_e
     // coordinator fragment have been prepared in executor_->Prepare().
     DCHECK(output_expr_ctxs != NULL);
     RETURN_IF_ERROR(Expr::CreateExprTrees(
-        runtime_state()->obj_pool(), request.fragments[0].output_exprs, output_expr_ctxs));
-    RETURN_IF_ERROR(Expr::Prepare(*output_expr_ctxs, runtime_state(), row_desc()));
+        runtime_state()->obj_pool(), request.fragments[0].output_exprs,
+        output_expr_ctxs));
+    MemTracker* output_expr_tracker = runtime_state()->obj_pool()->Add(new MemTracker(
+        -1, -1, "Output exprs", runtime_state()->instance_mem_tracker(), false));
+    RETURN_IF_ERROR(Expr::Prepare(
+        *output_expr_ctxs, runtime_state(), row_desc(), output_expr_tracker));
   } else {
     // The coordinator instance may require a query mem tracker even if there is no
     // coordinator fragment. For example, result-caching tracks memory via the query mem
@@ -474,7 +483,43 @@ Status Coordinator::UpdateStatus(const Status& status, const TUniqueId* instance
   return query_status_;
 }
 
-void Coordinator::PopulatePathPermissionCache(dfsFS fs, const string& path_str,
+
+  return Status::OK;
+}
+
+Status Coordinator::GetStatus() {
+  lock_guard<mutex> l(lock_);
+  return query_status_;
+}
+
+Status Coordinator::UpdateStatus(const Status& status, const TUniqueId* instance_id) {
+  {
+    lock_guard<mutex> l(lock_);
+
+    // The query is done and we are just waiting for remote fragments to clean up.
+    // Ignore their cancelled updates.
+    if (returned_all_results_ && status.IsCancelled()) return query_status_;
+
+    // nothing to update
+    if (status.ok()) return query_status_;
+
+    // don't override an error status; also, cancellation has already started
+    if (!query_status_.ok()) return query_status_;
+
+    query_status_ = status;
+    CancelInternal();
+  }
+
+  // Log the id of the fragment that first failed so we can track it down easier.
+  if (instance_id != NULL) {
+    VLOG_QUERY << "Query id=" << query_id_ << " failed because fragment id="
+               << *instance_id << " failed.";
+  }
+
+  return query_status_;
+}
+
+void Coordinator::PopulatePathPermissionCache(hdfsFS fs, const string& path_str,
     PermissionCache* permissions_cache) {
   // Find out if the path begins with a hdfs:// -style prefix, and remove it and the
   // location (e.g. host:port) if so.
@@ -536,8 +581,13 @@ void Coordinator::PopulatePathPermissionCache(dfsFS fs, const string& path_str,
 }
 
 Status Coordinator::FinalizeSuccessfulInsert() {
-  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   PermissionCache permissions_cache;
+  dfsFS hdfs_connection;
+  // InsertStmt ensures that all partitions are on the same filesystem as the table's
+  // base directory, so opening a single connection is okay.
+  // TODO: modify this code so that restriction can be lifted.
+  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(
+      finalize_params_.hdfs_base_dir, &hdfs_connection));
 
   // INSERT finalization happens in the five following steps
   // 1. If OVERWRITE, remove all the files in the target directory
@@ -715,11 +765,13 @@ Status Coordinator::FinalizeQuery() {
     return_status = FinalizeSuccessfulInsert();
   }
 
-  DCHECK(finalize_params_.__isset.staging_dir);
-
   dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   stringstream staging_dir;
+  DCHECK(finalize_params_.__isset.staging_dir);
   staging_dir << finalize_params_.staging_dir << "/" << PrintId(query_id_,"_") << "/";
+
+  hdfsFS hdfs_conn;
+  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(staging_dir.str(), &hdfs_conn));
   VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
   dfsDelete(hdfs_connection, staging_dir.str().c_str(), 1);
 
@@ -937,6 +989,7 @@ void Coordinator::InitExecProfile(const TQueryExecRequest& request) {
     // instance of this profile so the average is just the coordinator profile.
     if (i == 0 && has_coordinator_fragment) {
       fragment_profiles_[i].averaged_profile = executor_->profile();
+      fragment_profiles_[i].num_instances = 1;
       continue;
     }
     fragment_profiles_[i].averaged_profile =
@@ -1220,6 +1273,8 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
       // Update the average profile for the fragment corresponding to this instance.
       exec_state->profile->ComputeTimeInProfile();
       UpdateAverageProfile(exec_state);
+      UpdateExecSummary(exec_state->fragment_idx, exec_state->instance_idx,
+          exec_state->profile);
     }
     if (!exec_state->profile_created) {
       CollectScanNodeCounters(exec_state->profile, &exec_state->aggregate_counters);
@@ -1368,31 +1423,35 @@ void Coordinator::ComputeFragmentSummaryStats(BackendExecState* backend_exec_sta
   data.root_profile->AddChild(backend_exec_state->profile);
 }
 
-void Coordinator::UpdateExecSummary(RuntimeProfile* profile) {
+void Coordinator::UpdateExecSummary(int fragment_idx, int instance_idx,
+    RuntimeProfile* profile) {
   vector<RuntimeProfile*> children;
   profile->GetAllChildren(&children);
 
-  for (int j = 0; j < children.size(); ++j) {
-    int id = ExecNode::GetNodeIdFromProfile(children[j]);
+  ScopedSpinLock l(&exec_summary_lock_);
+  for (int i = 0; i < children.size(); ++i) {
+    int id = ExecNode::GetNodeIdFromProfile(children[i]);
     if (id == -1) continue;
 
     TPlanNodeExecSummary& exec_summary =
         exec_summary_.nodes[plan_node_id_to_summary_map_[id]];
-    TExecStats stats;
+    if (exec_summary.exec_stats.empty()) {
+      // First time, make an exec_stats for each instance this plan node is running on.
+      DCHECK_LT(fragment_idx, fragment_profiles_.size());
+      exec_summary.exec_stats.resize(fragment_profiles_[fragment_idx].num_instances);
+    }
+    DCHECK_LT(instance_idx, exec_summary.exec_stats.size());
+    TExecStats& stats = exec_summary.exec_stats[instance_idx];
 
-    RuntimeProfile::Counter* rows_counter = children[j]->GetCounter("RowsReturned");
-    RuntimeProfile::Counter* mem_counter = children[j]->GetCounter("PeakMemoryUsage");
+    RuntimeProfile::Counter* rows_counter = children[i]->GetCounter("RowsReturned");
+    RuntimeProfile::Counter* mem_counter = children[i]->GetCounter("PeakMemoryUsage");
     if (rows_counter != NULL) stats.__set_cardinality(rows_counter->value());
     if (mem_counter != NULL) stats.__set_memory_used(mem_counter->value());
-    stats.__set_latency_ns(children[j]->local_time());
+    stats.__set_latency_ns(children[i]->local_time());
     // TODO: we don't track cpu time per node now. Do that.
     exec_summary.__isset.exec_stats = true;
-
-    // TODO: we can't call UpdateExecSummary until the query is complete because
-    // we just keep appending to exec_summary.exec_stats. We already maintain
-    // fragment instance so this shouldn't be hard to fix.
-    exec_summary.exec_stats.push_back(stats);
   }
+  VLOG(2) << PrintExecSummary(exec_summary_);
 }
 
 // This function appends summary information to the query_profile_ before
@@ -1411,7 +1470,7 @@ void Coordinator::ReportQuerySummary() {
   // fraction of time spent in each node.
   if (executor_.get() != NULL) {
     executor_->profile()->ComputeTimeInProfile();
-    UpdateExecSummary(executor_->profile());
+    UpdateExecSummary(0, 0, executor_->profile());
   }
 
   if (!backend_exec_states_.empty()) {
@@ -1420,7 +1479,8 @@ void Coordinator::ReportQuerySummary() {
       backend_exec_states_[i]->profile->ComputeTimeInProfile();
       UpdateAverageProfile(backend_exec_states_[i]);
       ComputeFragmentSummaryStats(backend_exec_states_[i]);
-      UpdateExecSummary(backend_exec_states_[i]->profile);
+      UpdateExecSummary(backend_exec_states_[i]->fragment_idx,
+          backend_exec_states_[i]->instance_idx, backend_exec_states_[i]->profile);
     }
 
     InstanceComparator comparator;

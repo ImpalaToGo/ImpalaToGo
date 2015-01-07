@@ -87,7 +87,7 @@ add_library(loggingsupport SHARED
   logging-support.cc
 )
 
-target_link_libraries(Webserver pthread dl Util ssl crypto ${IMPALA_LINK_LIBS})
+target_link_libraries(Webserver pthread dl Util ssl crypto)
 
 add_executable(network-perf-benchmark network-perf-benchmark.cc)
 add_executable(parquet-reader parquet-reader.cc)

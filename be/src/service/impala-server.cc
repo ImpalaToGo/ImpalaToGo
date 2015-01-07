@@ -51,6 +51,7 @@
 #include "runtime/tmp-file-mgr.h"
 #include "service/fragment-exec-state.h"
 #include "service/query-exec-state.h"
+#include "service/impala-internal-service.h"
 #include "statestore/simple-scheduler.h"
 #include "util/bit-util.h"
 #include "util/cgroups-mgr.h"
@@ -104,9 +105,6 @@ DEFINE_int64(max_result_cache_size, 100000L, "Maximum number of query results a 
     "option guards against unreasonably large result caches requested by clients. "
     "Requests exceeding this maximum will be rejected.");
 
-// TODO: this logging should go into a per query log.
-DEFINE_int32(log_mem_usage_interval, 0, "If non-zero, impalad will output memory usage "
-    "every log_mem_usage_interval'th fragment completion.");
 
 DEFINE_int32(max_audit_event_log_file_size, 5000, "The maximum size (in queries) of the "
     "audit event log file before a new one is created (if event logging is enabled)");
@@ -454,8 +452,20 @@ Status ImpalaServer::GetRuntimeProfileStr(const TUniqueId& query_id,
 }
 
 Status ImpalaServer::GetExecSummary(const TUniqueId& query_id, TExecSummary* result) {
-  // TODO: this is only populated when the query is done currently so only look
-  // in the log. We'll have to make it thread safe for in flight queries.
+  // Search for the query id in the active query map
+  {
+    shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+    if (exec_state != NULL) {
+      lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
+      if (exec_state->coord() != NULL) {
+        ScopedSpinLock lock;
+        *result = exec_state->coord()->exec_summary(&lock);
+        return Status::OK;
+      }
+    }
+  }
+
+  // Look for the query in completed query log.
   {
     lock_guard<mutex> l(query_log_lock_);
     QueryLogIndex::const_iterator query_record = query_log_index_.find(query_id);
@@ -513,7 +523,8 @@ void ImpalaServer::ArchiveQuery(const QueryExecState& query) {
   if (FLAGS_query_log_size == 0) return;
   QueryStateRecord record(query, true, encoded_profile_str);
   if (query.coord() != NULL) {
-    record.exec_summary = query.coord()->exec_summary();
+    ScopedSpinLock lock;
+    record.exec_summary = query.coord()->exec_summary(&lock);
   }
   {
     lock_guard<mutex> l(query_log_lock_);
@@ -715,7 +726,12 @@ Status ImpalaServer::UnregisterQuery(const TUniqueId& query_id, bool check_infli
   }
 
   if (exec_state->coord() != NULL) {
-    const string& exec_summary = PrintExecSummary(exec_state->coord()->exec_summary());
+    string exec_summary;
+    {
+      ScopedSpinLock lock;
+      const TExecSummary& summary = exec_state->coord()->exec_summary(&lock);
+      exec_summary = PrintExecSummary(summary);
+    }
     exec_state->summary_profile()->AddInfoString("ExecSummary", exec_summary);
 
     const unordered_set<TNetworkAddress>& unique_hosts =
@@ -921,6 +937,18 @@ Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
       case TImpalaQueryOptions::DEBUG_ACTION:
         query_options->__set_debug_action(value.c_str());
         break;
+      case TImpalaQueryOptions::SEQ_COMPRESSION_MODE: {
+        if (iequals(value, "block")) {
+          query_options->__set_seq_compression_mode(THdfsSeqCompressionMode::BLOCK);
+        } else if (iequals(value, "record")) {
+          query_options->__set_seq_compression_mode(THdfsSeqCompressionMode::RECORD);
+        } else {
+          stringstream ss;
+          ss << "Invalid sequence file compression mode: " << value;
+          return Status(ss.str());
+        }
+        break;
+      }
       case TImpalaQueryOptions::COMPRESSION_CODEC: {
         if (value.empty()) break;
         if (iequals(value, "none")) {
@@ -1019,6 +1047,9 @@ Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
             iequals(value, "true") || iequals(value, "1"));
         break;
       }
+      case TImpalaQueryOptions::EXEC_SINGLE_NODE_ROWS_THRESHOLD:
+        query_options->__set_exec_single_node_rows_threshold(atoi(value.c_str()));
+        break;
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
         // when we add a new query option.
@@ -1028,26 +1059,6 @@ Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
     }
   }
   return Status::OK;
-}
-
-inline shared_ptr<ImpalaServer::FragmentExecState> ImpalaServer::GetFragmentExecState(
-    const TUniqueId& fragment_instance_id) {
-  lock_guard<mutex> l(fragment_exec_state_map_lock_);
-  FragmentExecStateMap::iterator i = fragment_exec_state_map_.find(fragment_instance_id);
-  if (i == fragment_exec_state_map_.end()) {
-    return shared_ptr<FragmentExecState>();
-  } else {
-    return i->second;
-  }
-}
-
-void ImpalaServer::ExecPlanFragment(
-    TExecPlanFragmentResult& return_val, const TExecPlanFragmentParams& params) {
-  VLOG_QUERY << "ExecPlanFragment() instance_id="
-             << params.fragment_instance_ctx.fragment_instance_id
-             << " coord=" << params.fragment_instance_ctx.query_ctx.coord_address
-             << " backend#=" << params.fragment_instance_ctx.backend_num;
-  StartPlanFragmentExecution(params).SetTStatus(&return_val);
 }
 
 void ImpalaServer::ReportExecStatus(
@@ -1072,28 +1083,10 @@ void ImpalaServer::ReportExecStatus(
         " $2 done: $3)", PrintId(params.query_id), params.backend_num,
         PrintId(params.fragment_instance_id), params.done);
     return_val.status.error_msgs.push_back(err);
-    LOG(INFO) << err;
+    VLOG_QUERY << err;
     return;
   }
   exec_state->coord()->UpdateFragmentExecStatus(params).SetTStatus(&return_val);
-}
-
-void ImpalaServer::CancelPlanFragment(
-    TCancelPlanFragmentResult& return_val, const TCancelPlanFragmentParams& params) {
-  VLOG_QUERY << "CancelPlanFragment(): instance_id=" << params.fragment_instance_id;
-  shared_ptr<FragmentExecState> exec_state =
-      GetFragmentExecState(params.fragment_instance_id);
-  if (exec_state.get() == NULL) {
-    stringstream str;
-    str << "unknown fragment id: " << params.fragment_instance_id;
-    Status status(TStatusCode::INTERNAL_ERROR, str.str());
-    status.SetTStatus(&return_val);
-    return;
-  }
-  // we only initiate cancellation here, the map entry as well as the exec state
-  // are removed when fragment execution terminates (which is at present still
-  // running in exec_state->exec_thread_)
-  exec_state->Cancel().SetTStatus(&return_val);
 }
 
 void ImpalaServer::TransmitData(
@@ -1121,66 +1114,6 @@ void ImpalaServer::TransmitData(
         params.dest_fragment_instance_id, params.dest_node_id,
         params.sender_id).SetTStatus(&return_val);
   }
-}
-
-Status ImpalaServer::StartPlanFragmentExecution(
-    const TExecPlanFragmentParams& exec_params) {
-  if (!exec_params.fragment.__isset.output_sink) {
-    return Status("missing sink in plan fragment");
-  }
-
-  shared_ptr<FragmentExecState> exec_state(
-      new FragmentExecState(exec_params.fragment_instance_ctx, exec_env_));
-  // Call Prepare() now, before registering the exec state, to avoid calling
-  // exec_state->Cancel().
-  // We might get an async cancellation, and the executor requires that Cancel() not
-  // be called before Prepare() returns.
-  RETURN_IF_ERROR(exec_state->Prepare(exec_params));
-
-  {
-    lock_guard<mutex> l(fragment_exec_state_map_lock_);
-    // register exec_state before starting exec thread
-    fragment_exec_state_map_.insert(
-        make_pair(exec_params.fragment_instance_ctx.fragment_instance_id, exec_state));
-  }
-
-  // execute plan fragment in new thread
-  // TODO: manage threads via global thread pool
-  exec_state->set_exec_thread(new Thread("impala-server", "exec-plan-fragment",
-      &ImpalaServer::RunExecPlanFragment, this, exec_state.get()));
-
-  return Status::OK;
-}
-
-void ImpalaServer::RunExecPlanFragment(FragmentExecState* exec_state) {
-  ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->Increment(1L);
-  exec_state->Exec();
-
-  // we're done with this plan fragment
-  {
-    lock_guard<mutex> l(fragment_exec_state_map_lock_);
-    FragmentExecStateMap::iterator i =
-        fragment_exec_state_map_.find(exec_state->fragment_instance_id());
-    if (i != fragment_exec_state_map_.end()) {
-      // ends up calling the d'tor, if there are no async cancellations
-      fragment_exec_state_map_.erase(i);
-    } else {
-      LOG(ERROR) << "missing entry in fragment exec state map: instance_id="
-                 << exec_state->fragment_instance_id();
-    }
-  }
-#ifndef ADDRESS_SANITIZER
-  // tcmalloc and address sanitizer can not be used together
-  if (FLAGS_log_mem_usage_interval > 0) {
-    uint64_t num_complete = ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->value();
-    if (num_complete % FLAGS_log_mem_usage_interval == 0) {
-      char buf[2048];
-      // This outputs how much memory is currently being used by this impalad
-      MallocExtension::instance()->GetStats(buf, 2048);
-      LOG(INFO) << buf;
-    }
-  }
-#endif
 }
 
 int ImpalaServer::GetQueryOption(const string& key) {
@@ -1268,6 +1201,9 @@ void ImpalaServer::TQueryOptionsToMap(const TQueryOptions& query_option,
       case TImpalaQueryOptions::COMPRESSION_CODEC:
         val << query_option.compression_codec;
         break;
+      case TImpalaQueryOptions::SEQ_COMPRESSION_MODE:
+        val << query_option.seq_compression_mode;
+        break;
       case TImpalaQueryOptions::HBASE_CACHING:
         val << query_option.hbase_caching;
         break;
@@ -1312,6 +1248,9 @@ void ImpalaServer::TQueryOptionsToMap(const TQueryOptions& query_option,
         break;
       case TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS:
         val << query_option.disable_unsafe_spills;
+        break;
+      case TImpalaQueryOptions::EXEC_SINGLE_NODE_ROWS_THRESHOLD:
+        val << query_option.exec_single_node_rows_threshold;
         break;
       default:
         // We hit this DCHECK(false) if we forgot to add the corresponding entry here
@@ -1942,7 +1881,10 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
   }
 
   if (be_port != 0 && be_server != NULL) {
-    shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(handler));
+    shared_ptr<FragmentMgr> fragment_mgr(new FragmentMgr());
+    shared_ptr<ImpalaInternalService> thrift_if(
+        new ImpalaInternalService(handler, fragment_mgr));
+    shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(thrift_if));
     shared_ptr<TProcessorEventHandler> event_handler(
         new RpcEventHandler("backend", exec_env->metrics()));
     be_processor->setEventHandler(event_handler);

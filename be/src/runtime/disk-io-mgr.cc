@@ -285,6 +285,8 @@ DiskIoMgr::~DiskIoMgr() {
   for (int i = 0; i < disk_queues_.size(); ++i) {
     delete disk_queues_[i];
   }
+
+  if (cached_read_options_ != NULL) hadoopRzOptionsFree(cached_read_options_);
 }
 
 Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
@@ -312,6 +314,16 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
     }
   }
   request_context_cache_.reset(new RequestContextCache(this));
+
+  cached_read_options_ = hadoopRzOptionsAlloc();
+  DCHECK(cached_read_options_ != NULL);
+  // Disable checksumming for cached reads.
+  int ret = hadoopRzOptionsSetSkipChecksum(cached_read_options_, true);
+  DCHECK_EQ(ret, 0);
+  // Disable automatic fallback for cached reads.
+  ret = hadoopRzOptionsSetByteBufferPool(cached_read_options_, NULL);
+  DCHECK_EQ(ret, 0);
+
   return Status::OK;
 }
 
@@ -408,6 +420,14 @@ int64_t DiskIoMgr::bytes_read_short_circuit(RequestContext* reader) const {
 
 int64_t DiskIoMgr::bytes_read_dn_cache(RequestContext* reader) const {
   return reader->bytes_read_dn_cache_;
+}
+
+int DiskIoMgr::num_remote_ranges(RequestContext* reader) const {
+  return reader->num_remote_ranges_;
+}
+
+int64_t DiskIoMgr::unexpected_remote_bytes(RequestContext* reader) const {
+  return reader->unexpected_remote_bytes_;
 }
 
 int64_t DiskIoMgr::GetReadThroughput() {
@@ -783,6 +803,17 @@ bool DiskIoMgr::GetNextRequestRange(DiskQueue* disk_queue, RequestRange** range,
       } else {
         (*request_context)->ready_to_start_ranges_cv_.notify_one();
       }
+    }
+
+    // Always enqueue a WriteRange to be processed into in_flight_ranges_.
+    // This is done so in_flight_ranges_ does not exclusively contain ScanRanges.
+    // For now, enqueuing a WriteRange on each invocation of GetNextRequestRange()
+    // does not flood in_flight_ranges() with WriteRanges because the entire
+    // WriteRange is processed and removed from the queue after GetNextRequestRange()
+    // returns. (A DCHECK is used to ensure that writes do not exceed 8MB).
+    if (!request_disk_state->unstarted_write_ranges()->empty()) {
+      WriteRange* write_range = request_disk_state->unstarted_write_ranges()->Dequeue();
+      request_disk_state->in_flight_ranges()->Enqueue(write_range);
     }
 
     // Always enqueue a WriteRange to be processed into in_flight_ranges_.

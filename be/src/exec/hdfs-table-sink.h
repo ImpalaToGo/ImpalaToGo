@@ -242,7 +242,7 @@ class HdfsTableSink : public DataSink {
   bool overwrite_;
 
   // The directory in which to write intermediate results. Set to
-  // <hdfs_table_base_dir>/.impala_insert_staging/ during Prepare()
+  // <hdfs_table_base_dir>/_impala_insert_staging/ during Prepare()
   std::string staging_dir_;
 
   // string representation of the unique fragment instance id. Used for per-partition
@@ -272,6 +272,8 @@ class HdfsTableSink : public DataSink {
 
   // Allocated from runtime state's pool.
   RuntimeProfile* runtime_profile_;
+  RuntimeProfile::Counter* partitions_created_counter_;
+  RuntimeProfile::Counter* files_created_counter_;
   RuntimeProfile::Counter* rows_inserted_counter_;
   RuntimeProfile::Counter* bytes_written_counter_;
 

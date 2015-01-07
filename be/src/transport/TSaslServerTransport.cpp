@@ -24,17 +24,18 @@
 #include <sstream>
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
-#include <boost/thread.hpp>
+#include <boost/thread/thread.hpp>
 
 #include <thrift/transport/TBufferTransports.h>
 #include "transport/TSaslTransport.h"
 #include "transport/TSaslServerTransport.h"
 
 using namespace std;
+using namespace boost;
 using namespace sasl;
 
 namespace apache { namespace thrift { namespace transport {
-TSaslServerTransport::TSaslServerTransport(boost::shared_ptr<TTransport> transport)
+TSaslServerTransport::TSaslServerTransport(shared_ptr<TTransport> transport)
    : TSaslTransport(transport) {
 }
 
@@ -107,14 +108,15 @@ void TSaslServerTransport::handleSaslStartMessage() {
 
 }
 
-boost::shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
+shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
     boost::shared_ptr<TTransport> trans) {
-  boost::shared_ptr<TSaslServerTransport> retTransport;
+  shared_ptr<TBufferedTransport> retTransport;
   boost::lock_guard<boost::mutex> l (transportMap_mutex_);
-  map<boost::shared_ptr<TTransport>, boost::shared_ptr<TSaslServerTransport> >::iterator transMap =
+  map<shared_ptr<TTransport>, shared_ptr<TBufferedTransport> >::iterator transMap =
       transportMap_.find(trans);
   if (transMap == transportMap_.end()) {
-    retTransport.reset(new TSaslServerTransport(serverDefinitionMap_, trans));
+    shared_ptr<TTransport> wrapped(new TSaslServerTransport(serverDefinitionMap_, trans));
+    retTransport.reset(new TBufferedTransport(wrapped));
     retTransport.get()->open();
     transportMap_[trans] = retTransport;
   } else {

@@ -6,17 +6,14 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
-import org.apache.hadoop.fs.BlockStorageLocation;
-import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
-import org.apache.log4j.Logger;
 
 import com.cloudera.impala.catalog.FsObject.ObjectState;
 import com.cloudera.impala.common.ITPool;
@@ -179,13 +176,13 @@ public class HadoopFsBridge {
       res.setStatus(BridgeOpStatus.OK);
 
       if(flag){
-        res.setResult(false);
-        LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"false\"");
+        res.setResult(true);
+        LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"true\"");
         return res;
       }
 
-      res.setResult(true);
-      LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"true\"");
+      res.setResult(false);
+      LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"false\"");
       return res;
     }
 

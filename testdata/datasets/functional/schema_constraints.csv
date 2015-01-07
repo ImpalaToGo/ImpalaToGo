@@ -33,6 +33,7 @@ table_name:insert_string_partitioned, constraint:restrict_to, table_format:parqu
 
 table_name:old_rcfile_table, constraint:restrict_to, table_format:rc/none/none
 table_name:bad_text_lzo, constraint:restrict_to, table_format:text/lzo/block
+table_name:bad_text_gzip, constraint:restrict_to, table_format:text/gzip/block
 table_name:bad_seq_snap, constraint:restrict_to, table_format:seq/snap/block
 table_name:bad_parquet, constraint:restrict_to, table_format:parquet/none/none
 
@@ -102,6 +103,8 @@ table_name:decimal_tiny, constraint:restrict_to, table_format:text/none/none
 table_name:decimal_tbl, constraint:restrict_to, table_format:parquet/none/none
 table_name:decimal_tiny, constraint:restrict_to, table_format:parquet/none/none
 
+table_name:avro_decimal_tbl, constraint:restrict_to, table_format:avro/snap/block
+
 # TODO first set of tests are for text/none/none
 table_name:chars_tiny, constraint:restrict_to, table_format:text/none/none
 
@@ -112,8 +115,3 @@ table_name:invalid_decimal_part_tbl2, constraint:restrict_to, table_format:text/
 table_name:invalid_decimal_part_tbl3, constraint:restrict_to, table_format:text/none/none
 
 table_name:avro_decimal_tbl, constraint:restrict_to, table_format:avro/snap/block
-
-# hbase doesn't seem to like very wide tables
-table_name:widetable_250_cols, constraint:exclude, table_format:hbase/none/none
-table_name:widetable_500_cols, constraint:exclude, table_format:hbase/none/none
-table_name:widetable_1000_cols, constraint:exclude, table_format:hbase/none/none

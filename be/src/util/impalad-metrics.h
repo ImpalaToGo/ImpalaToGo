@@ -83,6 +83,9 @@ class ImpaladMetricKeys {
   // Total number of short-circuit bytes read by the io mgr
   static const char* IO_MGR_SHORT_CIRCUIT_BYTES_READ;
 
+  // Total number of cached bytes read by the io mgr
+  static const char* IO_MGR_CACHED_BYTES_READ;
+
   // Total number of bytes written to disk by the io mgr (for spilling)
   static const char* IO_MGR_BYTES_WRITTEN;
 
@@ -142,6 +145,7 @@ class ImpaladMetrics {
   static Metrics::BytesMetric* IO_MGR_BYTES_READ;
   static Metrics::BytesMetric* IO_MGR_LOCAL_BYTES_READ;
   static Metrics::BytesMetric* IO_MGR_SHORT_CIRCUIT_BYTES_READ;
+  static Metrics::BytesMetric* IO_MGR_CACHED_BYTES_READ;
   static Metrics::BytesMetric* IO_MGR_BYTES_WRITTEN;
   static Metrics::IntMetric* CATALOG_NUM_DBS;
   static Metrics::IntMetric* CATALOG_NUM_TABLES;

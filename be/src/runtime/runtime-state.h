@@ -146,6 +146,7 @@ class RuntimeState {
 
   FileMoveMap* hdfs_files_to_move() { return &hdfs_files_to_move_; }
   std::vector<DiskIoMgr::RequestContext*>* reader_contexts() { return &reader_contexts_; }
+
   void set_fragment_root_id(PlanNodeId id) {
     DCHECK_EQ(root_node_id_, -1) << "Should not set this twice.";
     root_node_id_ = id;
@@ -354,9 +355,6 @@ class RuntimeState {
   // will not necessarily be set in all error cases.
   boost::mutex query_status_lock_;
   Status query_status_;
-
-  // Memory tracker for UDFs
-  boost::scoped_ptr<MemTracker> udf_mem_tracker_;
 
   // Query-wide resource manager for resource expansion etc. Not owned by us; owned by the
   // ResourceBroker instead.

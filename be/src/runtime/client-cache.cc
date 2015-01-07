@@ -43,8 +43,9 @@ Status ClientCacheHelper::GetClient(const TNetworkAddress& address,
   boost::shared_ptr<PerHostCache> host_cache;
   {
     lock_guard<mutex> lock(cache_lock_);
-    VLOG_RPC << "GetClient(" << address << ")";
     boost::shared_ptr<PerHostCache>* ptr = &per_host_caches_[address];
+    VLOG(2) << "GetClient(" << address << ")";
+
     if (ptr->get() == NULL) ptr->reset(new PerHostCache());
     host_cache = *ptr;
   }
@@ -53,7 +54,7 @@ Status ClientCacheHelper::GetClient(const TNetworkAddress& address,
     lock_guard<mutex> lock(host_cache->lock);
     if (!host_cache->clients.empty()) {
       *client_key = host_cache->clients.front();
-      VLOG_RPC << "GetClient(): returning cached client for " << address;
+      VLOG(2) << "GetClient(): returning cached client for " << address;
       host_cache->clients.pop_front();
       if (metrics_enabled_) clients_in_use_metric_->Increment(1);
       return Status::OK;
@@ -78,6 +79,7 @@ Status ClientCacheHelper::ReopenClient(ClientFactory factory_method,
     DCHECK(client != client_map_.end());
     client_impl = client->second;
   }
+  VLOG(1) << "ReopenClient(): re-creating client for " << client_impl->address();
 
   client_impl->Close();
 
@@ -104,7 +106,7 @@ Status ClientCacheHelper::ReopenClient(ClientFactory factory_method,
 Status ClientCacheHelper::CreateClient(const TNetworkAddress& address,
     ClientFactory factory_method, ClientKey* client_key) {
   boost::shared_ptr<ThriftClientImpl> client_impl(factory_method(address, client_key));
-  VLOG_CONNECTION << "CreateClient(): creating new client for " << client_impl->address();
+  VLOG(2) << "CreateClient(): creating new client for " << client_impl->address();
   Status status = client_impl->OpenWithRetry(num_tries_, wait_ms_);
   if (!status.ok()) {
     *client_key = NULL;
@@ -133,7 +135,7 @@ void ClientCacheHelper::ReleaseClient(ClientKey* client_key) {
     DCHECK(client != client_map_.end());
     client_impl = client->second;
   }
-  VLOG_RPC << "Releasing client for " << client_impl->address() << " back to cache";
+  VLOG(2) << "Releasing client for " << client_impl->address() << " back to cache";
   {
     lock_guard<mutex> lock(cache_lock_);
     PerHostCacheMap::iterator cache = per_host_caches_.find(client_impl->address());
@@ -155,8 +157,8 @@ void ClientCacheHelper::CloseConnections(const TNetworkAddress& address) {
   }
 
   {
-    VLOG_RPC << "Invalidating all " << cache->clients.size() << " clients for: "
-             << address;
+    VLOG(2) << "Invalidating all " << cache->clients.size() << " clients for: "
+            << address;
     lock_guard<mutex> entry_lock(cache->lock);
     lock_guard<mutex> map_lock(client_map_lock_);
     BOOST_FOREACH(ClientKey client_key, cache->clients) {

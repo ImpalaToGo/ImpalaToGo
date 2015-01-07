@@ -56,6 +56,8 @@ const char* ImpaladMetricKeys::IO_MGR_LOCAL_BYTES_READ =
     "impala-server.io-mgr.local-bytes-read";
 const char* ImpaladMetricKeys::IO_MGR_SHORT_CIRCUIT_BYTES_READ =
     "impala-server.io-mgr.short-circuit-bytes-read";
+const char* ImpaladMetricKeys::IO_MGR_CACHED_BYTES_READ =
+    "impala-server.io-mgr.cached-bytes-read";
 const char* ImpaladMetricKeys::IO_MGR_BYTES_WRITTEN =
     "impala-server.io-mgr.bytes-written";
 const char* ImpaladMetricKeys::CATALOG_NUM_DBS =
@@ -101,6 +103,7 @@ Metrics::IntMetric* ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS = NULL;
 Metrics::BytesMetric* ImpaladMetrics::IO_MGR_BYTES_READ = NULL;
 Metrics::BytesMetric* ImpaladMetrics::IO_MGR_LOCAL_BYTES_READ = NULL;
 Metrics::BytesMetric* ImpaladMetrics::IO_MGR_SHORT_CIRCUIT_BYTES_READ = NULL;
+Metrics::BytesMetric* ImpaladMetrics::IO_MGR_CACHED_BYTES_READ = NULL;
 Metrics::BytesMetric* ImpaladMetrics::IO_MGR_BYTES_WRITTEN = NULL;
 Metrics::IntMetric* ImpaladMetrics::CATALOG_NUM_DBS = NULL;
 Metrics::IntMetric* ImpaladMetrics::CATALOG_NUM_TABLES = NULL;
@@ -172,6 +175,8 @@ void ImpaladMetrics::CreateMetrics(Metrics* m) {
       new Metrics::BytesMetric(ImpaladMetricKeys::IO_MGR_LOCAL_BYTES_READ, 0L));
   IO_MGR_SHORT_CIRCUIT_BYTES_READ = m->RegisterMetric(
       new Metrics::BytesMetric(ImpaladMetricKeys::IO_MGR_SHORT_CIRCUIT_BYTES_READ, 0L));
+  IO_MGR_CACHED_BYTES_READ = m->RegisterMetric(
+      new Metrics::BytesMetric(ImpaladMetricKeys::IO_MGR_CACHED_BYTES_READ, 0L));
   IO_MGR_BYTES_WRITTEN = m->RegisterMetric(
       new Metrics::BytesMetric(ImpaladMetricKeys::IO_MGR_BYTES_WRITTEN, 0L));
 

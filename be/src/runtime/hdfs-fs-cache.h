@@ -20,25 +20,20 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/thread/mutex.hpp>
-// Elena : 08.10.2014 Remove hdfs dependency (1)
-// #include <hdfs.h>
 #include "dfs_cache/dfs-cache.h"
+
+#include "common/status.h"
 
 namespace impala {
 
-// Elena : 08.10.2014 Remove hdfs dependency (0)
-// This class will not be needed when the cache laye rwill be present.
-// All remote connections will be stored in Cache layer.
-// As for connection details, e.g. host/port, this is stored in Configuration.
-
-// A (process-wide) cache of hdfsFS objects.
+// A (process-wide) cache of dfsFS objects.
 // These connections are shared across all threads and kept open until the process
 // terminates.
 //
-// These connections are leaked, i.e. we never call hdfsDisconnect(). Calls to
-// hdfsDisconnect() by individual threads would terminate all other connections handed
-// out via hdfsConnect() to the same URI, and there is no simple, safe way to call
-// hdfsDisconnect() when process terminates (the proper solution is likely to create a
+// These connections are leaked, i.e. we never call dfsDisconnect(). Calls to
+// dfsDisconnect() by individual threads would terminate all other connections handed
+// out via dfsConnect() to the same URI, and there is no simple, safe way to call
+// dfsDisconnect() when process terminates (the proper solution is likely to create a
 // signal handler to detect when the process is killed, but we would still leak when
 // impalad crashes).
 class HdfsFsCache {
@@ -48,22 +43,21 @@ class HdfsFsCache {
   // Initializes the cache. Must be called before any other APIs.
   static void Init();
 
-  // Get connection to default fs.
-  dfsFS GetDefaultConnection();
+  // Initializes the cache. Must be called before any other APIs.
+  static void Init();
 
-  // Get connection the local filesystem.
-  dfsFS GetLocalConnection();
+  // Get connection to the local filesystem.
+  Status GetLocalConnection(dfsFS* fs );
 
-  // Get connection to specific fs by specifying the name node's
-  // ipaddress or hostname and port.
-  dfsFS GetConnection(const std::string& host, int port);
+  // Get connection to specific fs by specifying a path.
+  Status GetConnection(const std::string& path, dfsFS* fs);
 
  private:
   // Singleton instance. Instantiated in Init().
   static boost::scoped_ptr<HdfsFsCache> instance_;
 
   boost::mutex lock_;  // protects fs_map_
-  typedef boost::unordered_map<std::pair<std::string, int>, dfsFS> HdfsFsMap;
+  typedef boost::unordered_map<std::string, dfsFS> HdfsFsMap;
   HdfsFsMap fs_map_;
 
   HdfsFsCache() { };

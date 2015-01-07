@@ -188,10 +188,6 @@ class TestHS2(HS2TestSuite):
 
   @needs_session()
   def test_get_log(self):
-    # Test query that generates analysis warnings
-    log = self.get_log("compute stats functional.decimal_tbl")
-    assert "Decimal column stats not yet supported" in log
-
     # Test query that generates BE warnings
     log = self.get_log("select * from functional.alltypeserror")
     assert "Error converting column" in log
@@ -199,18 +195,6 @@ class TestHS2(HS2TestSuite):
     # Test overflow warning
     log = self.get_log("select cast(1000 as decimal(2, 1))")
     assert "Expression overflowed, returning NULL" in log
-
-    # Test CDH4 decimal warnings
-    TEST_TABLE = "%s.get_log_test" % self.TEST_DB
-    LOG_MSG = "DECIMAL columns are not supported by every component of CDH4"
-    try:
-      log = self.get_log("create table %s(a decimal)" % TEST_TABLE)
-      assert LOG_MSG in log
-      log = self.get_log("alter table %s add columns (b int, c decimal)" % TEST_TABLE)
-      assert LOG_MSG in log
-      log = self.get_log("alter table %s change b b decimal(2,1)" % TEST_TABLE)
-    finally:
-      self.client.execute("drop table if exists %s.get_log_test" % self.TEST_DB)
 
   @needs_session()
   def test_get_exec_summary(self):
@@ -225,8 +209,10 @@ class TestHS2(HS2TestSuite):
     exec_summary_req.sessionHandle = self.session_handle
     exec_summary_resp = self.hs2_client.GetExecSummary(exec_summary_req)
 
-    # GetExecSummary() only works for closed queries
-    TestHS2.check_response(exec_summary_resp, TCLIService.TStatusCode.ERROR_STATUS)
+    # Test getting the summary while query is running. We can't verify anything
+    # about the summary (depends how much progress query has made) but the call
+    # should work.
+    TestHS2.check_response(exec_summary_resp)
 
     close_operation_req = TCLIService.TCloseOperationReq()
     close_operation_req.operationHandle = execute_statement_resp.operationHandle

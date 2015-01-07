@@ -40,7 +40,7 @@ DEFINE_string(authorization_policy_file, "", "HDFS path to the authorization pol
     "file. If set, authorization will be enabled and the authorization policy will be "
     "read from a file.");
 DEFINE_string(authorization_policy_provider_class,
-    "org.apache.sentry.provider.file.HadoopGroupResourceAuthorizationProvider",
+    "org.apache.sentry.provider.common.HadoopGroupResourceAuthorizationProvider",
     "Advanced: The authorization policy provider class name.");
 DEFINE_string(authorized_proxy_user_config, "",
     "Specifies the set of authorized proxy users (users who can delegate to other "

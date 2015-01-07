@@ -14,6 +14,8 @@
 
 package com.cloudera.impala.catalog;
 
+import org.apache.hadoop.hdfs.protocol.CachePoolInfo;
+
 import com.cloudera.impala.thrift.TCatalogObjectType;
 import com.cloudera.impala.thrift.THdfsCachePool;
 import com.google.common.base.Preconditions;
@@ -26,6 +28,10 @@ import com.google.common.base.Preconditions;
 public class HdfsCachePool implements CatalogObject {
   private long catalogVersion_;
   private final THdfsCachePool cachePool_;
+
+  public HdfsCachePool(CachePoolInfo cachePoolInfo) {
+    cachePool_ = new THdfsCachePool(cachePoolInfo.getPoolName());
+  }
 
   public HdfsCachePool(THdfsCachePool cachePool) {
     Preconditions.checkNotNull(cachePool);

@@ -33,6 +33,7 @@ import com.cloudera.impala.analysis.Analyzer;
 import com.cloudera.impala.analysis.BaseTableRef;
 import com.cloudera.impala.analysis.BinaryPredicate;
 import com.cloudera.impala.analysis.Expr;
+import com.cloudera.impala.analysis.ExprId;
 import com.cloudera.impala.analysis.ExprSubstitutionMap;
 import com.cloudera.impala.analysis.InlineViewRef;
 import com.cloudera.impala.analysis.InsertStmt;
@@ -64,8 +65,11 @@ import com.cloudera.impala.thrift.TPartitionType;
 import com.cloudera.impala.thrift.TQueryExecRequest;
 import com.cloudera.impala.thrift.TQueryOptions;
 import com.cloudera.impala.thrift.TTableName;
+import com.cloudera.impala.util.MaxRowsProcessedVisitor;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -133,8 +137,23 @@ public class Planner {
         queryOptions.isDisable_outermost_topn());
     Preconditions.checkNotNull(singleNodePlan);
 
+    // Determine the maximum number of rows processed of all nodes in the plan tree
+    MaxRowsProcessedVisitor visitor = new MaxRowsProcessedVisitor();
+    singleNodePlan.accept(visitor);
+    long maxRowsProcessed = visitor.get() == -1 ? Long.MAX_VALUE : visitor.get();
+    boolean isSmallQuery = maxRowsProcessed < queryOptions.exec_single_node_rows_threshold;
+
     ArrayList<PlanFragment> fragments = Lists.newArrayList();
-    if (queryOptions.num_nodes == 1) {
+    if (queryOptions.num_nodes == 1 || isSmallQuery) {
+      if(isSmallQuery) {
+        // Disabling codegen for small results
+        queryOptions.setDisable_codegen(true);
+        if (maxRowsProcessed < queryOptions.batch_size ||
+            maxRowsProcessed < 1024 && queryOptions.batch_size == 0) {
+          // Only one scanner thread for small queries
+          queryOptions.setNum_scanner_threads(1);
+        }
+      }
       // single-node execution; we're almost done
       fragments.add(new PlanFragment(
           fragmentIdGenerator_.getNextId(), singleNodePlan, DataPartition.UNPARTITIONED));
@@ -144,7 +163,8 @@ public class Planner {
       // fragment, so we can pass it back to the client.
       boolean isPartitioned = false;
       if ((analysisResult.isInsertStmt() || analysisResult.isCreateTableAsSelectStmt())
-          && !queryStmt.hasLimit() && !queryStmt.hasOffset()) {
+          && !singleNodePlan.hasLimit()) {
+        Preconditions.checkState(!queryStmt.hasOffset());
         isPartitioned = true;
       }
       LOG.debug("create plan fragments");
@@ -168,13 +188,16 @@ public class Planner {
       rootFragment.setSink(insertStmt.createDataSink());
     }
 
+    List<Expr> resultExprs = null;
     if (analysisResult.isInsertStmt()) {
-      rootFragment.setOutputExprs(analysisResult.getInsertStmt().getResultExprs());
+      resultExprs = analysisResult.getInsertStmt().getResultExprs();
     } else {
-      List<Expr> resultExprs = Expr.substituteList(queryStmt.getBaseTblResultExprs(),
-          rootFragment.getPlanRoot().getOutputSmap(), analyzer, false);
-      rootFragment.setOutputExprs(resultExprs);
+      resultExprs = queryStmt.getBaseTblResultExprs();
     }
+    resultExprs = Expr.substituteList(resultExprs,
+        rootFragment.getPlanRoot().getOutputSmap(), analyzer, true);
+    rootFragment.setOutputExprs(resultExprs);
+
     LOG.debug("desctbl: " + analyzer.getDescTbl().debugString());
     LOG.debug("resultexprs: " + Expr.debugString(rootFragment.getOutputExprs()));
 
@@ -1079,13 +1102,6 @@ public class Planner {
       throws InternalException {
     ArrayList<TupleId> tupleIds = Lists.newArrayList();
     stmt.getMaterializedTupleIds(tupleIds);
-
-    // If the physical output tuple produced by an AnalyticEvalNode wasn't created
-    // the logical output tuple is returned by getMaterializedTupleIds(). It needs
-    // to be set as materialized (even though it isn't) to avoid failing precondition
-    // checks generating the thrift for slot refs that may reference this tuple.
-    for (TupleId id: tupleIds) analyzer.getTupleDesc(id).setIsMaterialized(true);
-
     EmptySetNode node = new EmptySetNode(nodeIdGenerator_.getNextId(), tupleIds);
     node.init(analyzer);
     return node;
@@ -1353,12 +1369,13 @@ public class Planner {
         PlanNode candidate = null;
         if (invertJoin) {
           ref.setJoinOp(ref.getJoinOp().invert());
-          candidate = createJoinNode(analyzer, rhsPlan, root, ref, null, false);
+          candidate = createJoinNode(analyzer, rhsPlan, root, ref, null);
           planHasInvertedJoin = true;
         } else {
-          candidate = createJoinNode(analyzer, root, rhsPlan, null, ref, false);
+          candidate = createJoinNode(analyzer, root, rhsPlan, null, ref);
         }
         if (candidate == null) continue;
+
         LOG.trace("cardinality=" + Long.toString(candidate.getCardinality()));
 
         // Use 'candidate' as the new root; don't consider any other table refs at this
@@ -1369,7 +1386,10 @@ public class Planner {
           break;
         }
 
-        if (newRoot == null || candidate.getCardinality() < newRoot.getCardinality()) {
+        // Always prefer Hash Join over Cross Join due to limited costing infrastructure
+        if (newRoot == null || (candidate.getClass().equals(newRoot.getClass()) &&
+            candidate.getCardinality() < newRoot.getCardinality())
+            || (candidate instanceof HashJoinNode && newRoot instanceof CrossJoinNode)) {
           newRoot = candidate;
           minEntry = entry;
         }
@@ -1420,7 +1440,7 @@ public class Planner {
     for (int i = 1; i < refPlans.size(); ++i) {
       TableRef innerRef = refPlans.get(i).first;
       PlanNode innerPlan = refPlans.get(i).second;
-      root = createJoinNode(analyzer, root, innerPlan, null, innerRef, true);
+      root = createJoinNode(analyzer, root, innerPlan, null, innerRef);
       root.setId(nodeIdGenerator_.getNextId());
     }
     return root;
@@ -1481,7 +1501,9 @@ public class Planner {
 
     PlanNode root = null;
     if (!selectStmt.getSelectList().isStraightJoin()) {
+      Set<ExprId> assignedConjuncts = analyzer.getAssignedConjuncts();
       root = createCheapestJoinPlan(analyzer, refPlans);
+      if (root == null) analyzer.setAssignedConjuncts(assignedConjuncts);
     }
     if (selectStmt.getSelectList().isStraightJoin() || root == null) {
       // we didn't have enough stats to do a cost-based join plan, or the STRAIGHT_JOIN
@@ -1668,6 +1690,28 @@ public class Planner {
       List<Expr> viewPredicates =
           Expr.substituteList(preds, inlineViewRef.getSmap(), analyzer, false);
 
+      // Remove unregistered predicates that reference the same slot on
+      // both sides (e.g. a = a). Such predicates have been generated from slot
+      // equivalences and may incorrectly reject rows with nulls (IMPALA-1412).
+      Predicate<Expr> isIdentityPredicate = new Predicate<Expr>() {
+        @Override
+        public boolean apply(Expr expr) {
+          if (!(expr instanceof BinaryPredicate)
+              || ((BinaryPredicate) expr).getOp() != BinaryPredicate.Operator.EQ) {
+            return false;
+          }
+          if (!expr.isRegisteredPredicate()
+              && expr.getChild(0) instanceof SlotRef
+              && expr.getChild(1) instanceof SlotRef
+              && (((SlotRef) expr.getChild(0)).getSlotId() ==
+                 ((SlotRef) expr.getChild(1)).getSlotId())) {
+            return true;
+          }
+          return false;
+        }
+      };
+      Iterables.removeIf(viewPredicates, isIdentityPredicate);
+
       // "migrate" conjuncts_ by marking them as assigned and re-registering them with
       // new ids.
       // Mark pre-substitution conjuncts as assigned, since the ids of the new exprs may
@@ -1803,16 +1847,12 @@ public class Planner {
     joinPredicates.clear();
     TupleId tblRefId = joinedTblRef.getId();
     List<TupleId> tblRefIds = tblRefId.asList();
-    List<Expr> candidates;
-    if (joinedTblRef.getJoinOp().isOuterJoin()) {
-      // TODO: create test for this
-      Preconditions.checkState(joinedTblRef.getOnClause() != null);
-      candidates = analyzer.getEqJoinConjuncts(tblRefId, joinedTblRef);
-    } else {
-      candidates = analyzer.getEqJoinConjuncts(tblRefId, null);
-    }
+    List<Expr> candidates = analyzer.getEqJoinConjuncts(planIds, joinedTblRef);
     if (candidates == null) return;
 
+    List<TupleId> joinTupleIds = Lists.newArrayList();
+    joinTupleIds.addAll(planIds);
+    joinTupleIds.add(tblRefId);
     for (Expr e: candidates) {
       // Ignore predicate if one of its children is a constant.
       if (e.getChild(0).isConstant() || e.getChild(1).isConstant()) continue;
@@ -1867,15 +1907,9 @@ public class Planner {
    */
   private PlanNode createJoinNode(
       Analyzer analyzer, PlanNode outer, PlanNode inner, TableRef outerRef,
-      TableRef innerRef, boolean throwOnError) throws ImpalaException {
+      TableRef innerRef) throws ImpalaException {
     Preconditions.checkState(innerRef != null ^ outerRef != null);
     TableRef tblRef = (innerRef != null) ? innerRef : outerRef;
-    if (tblRef.getJoinOp() == JoinOperator.CROSS_JOIN) {
-      // TODO If there are eq join predicates then we should construct a hash join
-      CrossJoinNode result = new CrossJoinNode(outer, inner);
-      result.init(analyzer);
-      return result;
-    }
 
     List<BinaryPredicate> eqJoinConjuncts = Lists.newArrayList();
     List<Expr> eqJoinPredicates = Lists.newArrayList();
@@ -1904,14 +1938,31 @@ public class Planner {
         eqJoinConjunct.setChild(1, swapTmp);
       }
     }
+
+    // Handle implicit cross joins
     if (eqJoinConjuncts.isEmpty()) {
-      if (!throwOnError) return null;
-      throw new NotImplementedException(
-          String.format(
-            "Join with '%s' requires at least one conjunctive equality predicate. To " +
-            "perform a Cartesian product between two tables, use a CROSS JOIN.",
+      // Since our only implementation of semi and outer joins is hash-based, and we do
+      // not re-order semi and outer joins, we must have eqJoinConjuncts here to execute
+      // this query.
+      // TODO Revisit when we add more semi/join implementations.
+      if (tblRef.getJoinOp().isOuterJoin() ||
+          tblRef.getJoinOp().isSemiJoin()) {
+        throw new NotImplementedException(
+            String.format("%s join with '%s' without equi-join " +
+            "conjuncts is not supported.",
+            tblRef.getJoinOp().isOuterJoin() ? "Outer" : "Semi",
             innerRef.getAliasAsName()));
+      }
+      CrossJoinNode result = new CrossJoinNode(outer, inner);
+      result.init(analyzer);
+      return result;
     }
+
+    // Handle explicit cross joins with equi join conditions
+    if (tblRef.getJoinOp() == JoinOperator.CROSS_JOIN) {
+      tblRef.setJoinOp(JoinOperator.INNER_JOIN);
+    }
+
     analyzer.markConjunctsAssigned(eqJoinPredicates);
 
     List<Expr> otherJoinConjuncts = Lists.newArrayList();
@@ -1971,9 +2022,13 @@ public class Planner {
   /**
    * Create a plan tree corresponding to 'unionOperands' for the given unionStmt.
    * The individual operands' plan trees are attached to a single UnionNode.
+   * If unionDistinctPlan is not null, it is expected to contain the plan for the
+   * distinct portion of the given unionStmt. The unionDistinctPlan is then added
+   * as a child of the returned UnionNode.
    */
   private UnionNode createUnionPlan(
-      Analyzer analyzer, UnionStmt unionStmt, List<UnionOperand> unionOperands)
+      Analyzer analyzer, UnionStmt unionStmt, List<UnionOperand> unionOperands,
+      PlanNode unionDistinctPlan)
       throws ImpalaException {
     UnionNode unionNode =
         new UnionNode(nodeIdGenerator_.getNextId(), unionStmt.getTupleId());
@@ -1990,6 +2045,12 @@ public class Planner {
       PlanNode opPlan = createQueryPlan(queryStmt, analyzer, false);
       if (opPlan instanceof EmptySetNode) continue;
       unionNode.addChild(opPlan, op.getQueryStmt().getBaseTblResultExprs());
+    }
+    if (unionDistinctPlan != null) {
+      Preconditions.checkState(unionStmt.hasDistinctOps());
+      Preconditions.checkState(unionDistinctPlan instanceof AggregationNode);
+      unionNode.addChild(unionDistinctPlan,
+          unionStmt.getDistinctAggInfo().getGroupingExprs());
     }
     unionNode.init(analyzer);
     return unionNode;
@@ -2033,30 +2094,25 @@ public class Planner {
     // mark slots after predicate propagation but prior to plan tree generation
     unionStmt.materializeRequiredSlots(analyzer);
 
-
     PlanNode result = null;
     // create DISTINCT tree
     if (unionStmt.hasDistinctOps()) {
       result = createUnionPlan(
-          analyzer, unionStmt, unionStmt.getDistinctOperands());
+          analyzer, unionStmt, unionStmt.getDistinctOperands(), null);
       result = new AggregationNode(
           nodeIdGenerator_.getNextId(), result, unionStmt.getDistinctAggInfo());
       result.init(analyzer);
     }
     // create ALL tree
     if (unionStmt.hasAllOps()) {
-      UnionNode allMerge =
-          createUnionPlan(analyzer, unionStmt, unionStmt.getAllOperands());
-      // for unionStmt, baseTblResultExprs = resultExprs
-      if (result != null) allMerge.addChild(result,
-          unionStmt.getDistinctAggInfo().getGroupingExprs());
-      result = allMerge;
+      result = createUnionPlan(analyzer, unionStmt, unionStmt.getAllOperands(), result);
     }
 
     if (unionStmt.hasAnalyticExprs()) {
       result = addUnassignedConjuncts(
           analyzer, unionStmt.getTupleId().asList(), result);
     }
+
     return result;
   }
 

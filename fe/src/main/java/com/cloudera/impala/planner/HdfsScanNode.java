@@ -97,6 +97,9 @@ public class HdfsScanNode extends ScanNode {
   // Partitions that are filtered in for scanning by the key ranges
   private final ArrayList<HdfsPartition> partitions_ = Lists.newArrayList();
 
+  // Total number of files from partitions_
+  private long totalFiles_ = 0;
+
   // Total number of bytes from partitions_
   private long totalBytes_ = 0;
 
@@ -184,6 +187,7 @@ public class HdfsScanNode extends ScanNode {
 
             location.setHost_idx(globalHostIdx);
             location.setVolume_id(block.getDiskId(i));
+            location.setIs_cached(block.isCached(i));
             locations.add(location);
           }
           // create scan ranges, taking into account maxScanRangeLength
@@ -575,12 +579,12 @@ public class HdfsScanNode extends ScanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
-
     LOG.debug("collecting partitions for table " + tbl_.getName());
     if (tbl_.getPartitions().isEmpty()) {
       cardinality_ = tbl_.getNumRows();
     } else {
       cardinality_ = 0;
+      totalFiles_ = 0;
       totalBytes_ = 0;
       boolean hasValidPartitionCardinality = false;
       for (HdfsPartition p: partitions_) {
@@ -589,7 +593,10 @@ public class HdfsScanNode extends ScanNode {
         if (p.getNumRows() > 0) {
           cardinality_ = addCardinalities(cardinality_, p.getNumRows());
           hasValidPartitionCardinality = true;
+        } else {
+          ++numPartitionsMissingStats_;
         }
+        totalFiles_ += p.getFileDescriptors().size();
         totalBytes_ += p.getSize();
       }
 
@@ -599,7 +606,7 @@ public class HdfsScanNode extends ScanNode {
         cardinality_ = tbl_.getNumRows();
       }
     }
-
+    inputCardinality_ = cardinality_;
     Preconditions.checkState(cardinality_ >= 0 || cardinality_ == -1,
         "Internal error: invalid scan node cardinality: " + cardinality_);
     if (cardinality_ > 0) {
@@ -648,8 +655,8 @@ public class HdfsScanNode extends ScanNode {
     if (detailLevel.ordinal() >= TExplainLevel.STANDARD.ordinal()) {
       int numPartitions = partitions_.size();
       if (tbl_.getNumClusteringCols() == 0) numPartitions = 1;
-      output.append(String.format("%spartitions=%s/%s size=%s", detailPrefix,
-          numPartitions, table.getPartitions().size() - 1,
+      output.append(String.format("%spartitions=%s/%s files=%s size=%s", detailPrefix,
+          numPartitions, table.getPartitions().size() - 1, totalFiles_,
           PrintUtils.printBytes(totalBytes_)));
       output.append("\n");
       if (!conjuncts_.isEmpty()) {

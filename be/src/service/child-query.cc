@@ -24,6 +24,8 @@ using namespace apache::hive::service::cli::thrift;
 
 namespace impala {
 
+const string ChildQuery::PARENT_QUERY_OPT = "impala.parent_query_id";
+
 // To detect cancellation of the parent query this function checks IsCancelled() before
 // any HS2 "RPC" into the impala server. It is important not to hold any locks (in
 // particular the parent query's lock_) while invoking HS2 functions to avoid deadlock.
@@ -40,6 +42,7 @@ Status ChildQuery::ExecAndFetch() {
       &exec_stmt_req.sessionHandle.sessionId);
   exec_stmt_req.__set_statement(query_);
   SetQueryOptions(parent_exec_state_->exec_request().query_options, &exec_stmt_req);
+  exec_stmt_req.confOverlay[PARENT_QUERY_OPT] = PrintId(parent_exec_state_->query_id());
 
   // Starting executing of the child query and setting is_running are not made atomic
   // because holding a lock while calling into the parent_server_ may result in deadlock.
@@ -117,7 +120,7 @@ void ChildQuery::SetQueryOptions(const TQueryOptions& parent_options,
     TExecuteStatementReq* exec_stmt_req) {
   // If this DCHECK is hit then handle the missing query option below.
   DCHECK_EQ(_TImpalaQueryOptions_VALUES_TO_NAMES.size(),
-      TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS + 1);
+      TImpalaQueryOptions::EXEC_SINGLE_NODE_ROWS_THRESHOLD + 1);
   SET_QUERY_OPTION(abort_on_default_limit_exceeded, ABORT_ON_DEFAULT_LIMIT_EXCEEDED);
   SET_QUERY_OPTION(abort_on_error, ABORT_ON_ERROR);
   SET_QUERY_OPTION(allow_unsupported_formats, ALLOW_UNSUPPORTED_FORMATS);
@@ -147,6 +150,9 @@ void ChildQuery::SetQueryOptions(const TQueryOptions& parent_options,
   SET_QUERY_OPTION(max_block_mgr_memory, MAX_BLOCK_MGR_MEMORY);
   SET_QUERY_OPTION(appx_count_distinct, APPX_COUNT_DISTINCT);
   SET_QUERY_OPTION(disable_unsafe_spills, DISABLE_UNSAFE_SPILLS);
+  SET_QUERY_OPTION(seq_compression_mode, SEQ_COMPRESSION_MODE);
+  SET_QUERY_OPTION(exec_single_node_rows_threshold,
+      EXEC_SINGLE_NODE_ROWS_THRESHOLD);
 }
 
 void ChildQuery::Cancel() {

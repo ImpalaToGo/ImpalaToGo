@@ -27,6 +27,9 @@
 . ${IMPALA_HOME}/bin/impala-config.sh
 set -ex
 
+# Setup for HDFS caching
+${IMPALA_HOME}/testdata/bin/setup-hdfs-caching.sh
+
 # If the user has specified a command line argument, treat it as the test-warehouse
 # snapshot file and pass it to the load-test-warehouse-snapshot.sh script for processing.
 if [[ $1 ]]; then
@@ -45,6 +48,21 @@ mkdir -p ${DATA_LOADING_LOG_DIR}
 
 # Copy the test data source library into HDFS
 ${IMPALA_HOME}/testdata/bin/copy-data-sources.sh
+
+# If a schema change is detected, force load the data.
+set +e
+LOAD_DATA_ARGS=""
+${IMPALA_HOME}/testdata/bin/check-schema-diff.sh
+if [[ $? -eq 1 ]]; then
+  LOAD_DATA_ARGS="--force"
+fi
+
+# For kerberized clusters, use kerberos
+if ${CLUSTER_DIR}/admin is_kerberized; then
+  LOAD_DATA_ARGS="${LOAD_DATA_ARGS} --use_kerberos --principal=${MINIKDC_PRINC_HIVE}"
+fi
+
+set -e
 
 # Load schemas
 hadoop fs -rm -r -f /test-warehouse/schemas
@@ -77,15 +95,6 @@ hadoop fs -mkdir -p /test-warehouse/chars_formats_text/
 hadoop fs -put -f ${IMPALA_HOME}/testdata/data/chars-formats.txt \
   /test-warehouse/chars_formats_text
 
-# If a schema change is detected, force load the data.
-set +e
-LOAD_DATA_ARGS=""
-${IMPALA_HOME}/testdata/bin/check-schema-diff.sh
-if [[ $? -eq 1 ]]; then
-  LOAD_DATA_ARGS="--force"
-fi
-set -e
-
 # Load the data set
 pushd ${IMPALA_HOME}/bin
 ./start-impala-cluster.py -s 3 --wait_for_cluster --log_dir=${DATA_LOADING_LOG_DIR}
@@ -105,12 +114,17 @@ load-data "functional-query" "exhaustive"
 load-data "tpch" "core"
 load-data "tpcds" "core"
 
+# Cache test tables
+./impala-shell.sh -q "alter table tpch.nation set cached in 'testPool'"
+./impala-shell.sh -q "alter table functional.alltypestiny set cached in 'testPool'"
+
 # Load the test data source and table
 ./impala-shell.sh -f ${IMPALA_HOME}/testdata/bin/create-data-source-table.sql
 # Load all the auxiliary workloads (if any exist)
 if [ -d ${IMPALA_AUX_WORKLOAD_DIR} ] && [ -d ${IMPALA_AUX_DATASET_DIR} ]; then
   python -u ./load-data.py --workloads all --workload_dir=${IMPALA_AUX_WORKLOAD_DIR}\
-      --dataset_dir=${IMPALA_AUX_DATASET_DIR} --exploration_strategy core
+      --dataset_dir=${IMPALA_AUX_DATASET_DIR} --exploration_strategy core \
+      ${LOAD_DATA_ARGS}
 else
   echo "Skipping load of auxilary workloads because directories do not exist"
 fi
@@ -197,8 +211,13 @@ hadoop fs -put -f ${IMPALA_HOME}/testdata/data/repeated_values.parquet \
 hadoop fs -put -f ${IMPALA_HOME}/testdata/data/multiple_rowgroups.parquet \
                   /test-warehouse/bad_parquet_parquet
 
+# IMPALA-1401: data file produced by Hive 13 containing page statistics with long min/max
+# string values
+hadoop fs -put -f ${IMPALA_HOME}/testdata/data/long_page_header.parquet \
+                  /test-warehouse/bad_parquet_parquet
+
 # Remove an index file so we test an un-indexed LZO file
-hadoop fs -rm /test-warehouse/alltypes_text_lzo/year=2009/month=1/000013_0.lzo.index
+hadoop fs -rm /test-warehouse/alltypes_text_lzo/year=2009/month=1/000000_0.lzo.index
 
 # Add a sequence file that only contains a header (see IMPALA-362)
 hadoop fs -put -f ${IMPALA_HOME}/testdata/tinytable_seq_snap/tinytable_seq_snap_header_only \

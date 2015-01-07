@@ -108,7 +108,8 @@ AggFnEvaluator::AggFnEvaluator(const TExprNode& desc, bool is_analytic_fn)
     agg_op_ = SUM;
   } else if (fn_.name.function_name == "avg") {
     agg_op_ = AVG;
-  } else if (fn_.name.function_name == "ndv") {
+  } else if (fn_.name.function_name == "ndv" ||
+      fn_.name.function_name == "ndv_no_finalize") {
     agg_op_ = NDV;
   } else {
     agg_op_ = OTHER;
@@ -124,13 +125,18 @@ Status AggFnEvaluator::Prepare(RuntimeState* state, const RowDescriptor& desc,
       const SlotDescriptor* output_slot_desc,
       MemPool* agg_fn_pool, FunctionContext** agg_fn_ctx) {
   DCHECK(intermediate_slot_desc != NULL);
+  DCHECK_EQ(intermediate_slot_desc->type().type,
+      ColumnType(fn_.aggregate_fn.intermediate_type).type);
   DCHECK(intermediate_slot_desc_ == NULL);
   intermediate_slot_desc_ = intermediate_slot_desc;
+
   DCHECK(output_slot_desc != NULL);
+  DCHECK_EQ(output_slot_desc->type().type, ColumnType(fn_.ret_type).type);
   DCHECK(output_slot_desc_ == NULL);
   output_slot_desc_ = output_slot_desc;
 
-  RETURN_IF_ERROR(Expr::Prepare(input_expr_ctxs_, state, desc));
+  RETURN_IF_ERROR(
+      Expr::Prepare(input_expr_ctxs_, state, desc, agg_fn_pool->mem_tracker()));
 
   ObjectPool* obj_pool = state->obj_pool();
   for (int i = 0; i < input_expr_ctxs_.size(); ++i) {

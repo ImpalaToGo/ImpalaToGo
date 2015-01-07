@@ -14,11 +14,12 @@
 
 package com.cloudera.impala.analysis;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,8 +32,8 @@ import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.planner.DataSink;
-import com.cloudera.impala.thrift.THdfsFileFormat;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -44,10 +45,6 @@ import com.google.common.collect.Sets;
  */
 public class InsertStmt extends StatementBase {
   private final static Logger LOG = LoggerFactory.getLogger(InsertStmt.class);
-
-  // Insert formats currently supported by Impala.
-  private final static EnumSet<THdfsFileFormat> SUPPORTED_INSERT_FORMATS =
-      EnumSet.of(THdfsFileFormat.PARQUET, THdfsFileFormat.TEXT);
 
   // List of inline views that may be referenced in queryStmt.
   private final WithClause withClause_;
@@ -167,8 +164,7 @@ public class InsertStmt extends StatementBase {
         queryStmt_.analyze(queryStmtAnalyzer);
 
         if (analyzer.containsSubquery()) {
-          Preconditions.checkState(queryStmt_ instanceof SelectStmt);
-          StmtRewriter.rewriteStatement((SelectStmt)queryStmt_, queryStmtAnalyzer);
+          StmtRewriter.rewriteQueryStatement(queryStmt_, queryStmtAnalyzer);
           queryStmt_ = queryStmt_.clone();
           queryStmtAnalyzer = new Analyzer(analyzer);
           queryStmt_.analyze(queryStmtAnalyzer);
@@ -347,7 +343,20 @@ public class InsertStmt extends StatementBase {
             "(%s) because Impala does not have WRITE access to at least one HDFS path" +
             ": %s", targetTableName_, hdfsTable.getFirstLocationWithoutWriteAccess()));
       }
-
+      if (hdfsTable.spansMultipleFileSystems()) {
+        throw new AnalysisException(String.format("Unable to INSERT into target table " +
+            "(%s) because the table spans multiple file-systems.", targetTableName_));
+      }
+      try {
+        if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
+          throw new AnalysisException(String.format("Unable to INSERT into target " +
+              "table (%s) because %s is not an HDFS file-system.", targetTableName_,
+               hdfsTable.getLocation()));
+        }
+      } catch (IOException e) {
+        throw new AnalysisException(String.format("Unable to INSERT into target " +
+            "table (%s): %s.", targetTableName_, e.getMessage()), e);
+      }
       for (int colIdx = 0; colIdx < numClusteringCols; ++colIdx) {
         Column col = hdfsTable.getColumns().get(colIdx);
         // Hive has a number of issues handling BOOLEAN partition columns (see HIVE-6590).

@@ -115,7 +115,7 @@ BIGINT
 SELECT COUNT(*) FROM functional.alltypesagg t1 LEFT ANTI JOIN functional.alltypes t2
 ON t2.tinyint_col = t1.tinyint_col and t1.day = 1;
 ---- RESULTS
-100
+10100
 ---- TYPES
 BIGINT
 ====
@@ -244,6 +244,16 @@ RIGHT ANTI JOIN functional.SemiJoinTblB b on v.b = b.b
 3,NULL,50
 ---- TYPES
 INT, INT, INT
+====
+---- QUERY
+# Regression test for IMPALA-1488. Right joins should not spill any partitions
+# with hash tables with matches.
+SELECT COUNT(*) FROM tpch.lineitem l1 RIGHT OUTER JOIN tpch.lineitem l2
+ON l1.l_orderkey = l2.l_orderkey
+---- RESULTS
+30012985
+---- TYPES
+BIGINT
 ====
 -- ---- QUERY
 -- # Regression test for IMPALA-1351: PHJ::GetNext() returns -1 in NAAJ w/o error.

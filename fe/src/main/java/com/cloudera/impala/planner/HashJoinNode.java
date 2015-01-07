@@ -111,6 +111,15 @@ public class HashJoinNode extends PlanNode {
       }
       default: {
         tupleIds_.addAll(outer.getTupleIds());
+        break;
+      }
+      case RIGHT_ANTI_JOIN:
+      case RIGHT_SEMI_JOIN: {
+        tupleIds_.addAll(inner.getTupleIds());
+        break;
+      }
+      default: {
+        tupleIds_.addAll(outer.getTupleIds());
         tupleIds_.addAll(inner.getTupleIds());
         break;
       }
@@ -359,11 +368,10 @@ public class HashJoinNode extends PlanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
-    if (joinOp_ == JoinOperator.INNER_JOIN || joinOp_.isOuterJoin()) {
-      cardinality_ = getJoinCardinality();
-    } else {
-      Preconditions.checkState(joinOp_.isSemiJoin());
+    if (joinOp_.isSemiJoin()) {
       cardinality_ = getSemiJoinCardinality();
+    } else {
+      cardinality_ = getJoinCardinality();
     }
 
     // Impose lower/upper bounds on the cardinality based on the join type.

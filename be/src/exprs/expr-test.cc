@@ -1294,6 +1294,10 @@ TEST_F(ExprTest, InPredicate) {
   TestValue("'ab' not in ('ab', 'cd', 'efg')", TYPE_BOOLEAN, false);
   TestValue("'ab' not in ('cd', 'efg', 'h')", TYPE_BOOLEAN, true);
 
+  // test chars
+  TestValue("cast('ab' as char(2)) in (cast('ab' as char(2)), cast('cd' as char(2)))",
+            TYPE_BOOLEAN, true);
+
   // Test timestamps.
   TestValue(default_timestamp_str_ + " "
       "in (cast('2011-11-23 09:10:11' as timestamp), "
@@ -1620,6 +1624,10 @@ TEST_F(ExprTest, StringFunctions) {
       "                                                                             "
       "                        ", ColumnType::CreateCharType(255));
 
+  TestStringValue("CASE cast('1.1' as char(3)) when cast('1.1' as char(3)) then "
+      "cast('1' as char(1)) when cast('2.22' as char(4)) then "
+      "cast('2' as char(1)) else cast('3' as char(1)) end", "1");
+
   // Test maximum VARCHAR value
   char query[ColumnType::MAX_VARCHAR_LENGTH + 1024];
   char big_str[ColumnType::MAX_VARCHAR_LENGTH+1];
@@ -1668,6 +1676,17 @@ TEST_F(ExprTest, StringRegexpFunctions) {
   TestIsNull("regexp_extract('abxcy1234a', NULL, 2)", TYPE_STRING);
   TestIsNull("regexp_extract('abxcy1234a', 'a.x', NULL)", TYPE_STRING);
   TestIsNull("regexp_extract(NULL, NULL, NULL)", TYPE_STRING);
+  // Character classes.
+  TestStringValue("regexp_extract('abxcy1234a', '[[:lower:]]*', 0)", "abxcy");
+  TestStringValue("regexp_extract('abxcy1234a', '[[:digit:]]+', 0)", "1234");
+  TestStringValue("regexp_extract('abxcy1234a', '[[:lower:]][[:digit:]]', 0)", "y1");
+  TestStringValue("regexp_extract('aBcDeF', '[[:upper:]][[:lower:]]', 0)", "Bc");
+  // "Single character" character classes.
+  TestStringValue("regexp_extract('abxcy1234a', '\\\\w*', 0)", "abxcy1234a");
+  TestStringValue("regexp_extract('abxcy1234a', '\\\\d+', 0)", "1234");
+  TestStringValue("regexp_extract('abxcy1234a', '\\\\d\\\\D', 0)", "4a");
+  // Leftmost longest match.
+  TestStringValue("regexp_extract('abcabcd', '(a|ab|abc|abcd)', 0)", "abc");
 
   TestStringValue("regexp_replace('axcaycazc', 'a.c', 'a')", "aaa");
   TestStringValue("regexp_replace('axcaycazc', 'a.c', '')", "");
@@ -2424,7 +2443,7 @@ TEST_F(ExprTest, MathFunctions) {
   TestStringValue("greatest('apples', 'app\rles')", "apples");
 
   // NULL arguments.
-  TestIsNull("abs(NULL)", TYPE_DOUBLE);
+  TestIsNull("abs(NULL)", TYPE_BIGINT);
   TestIsNull("sign(NULL)", TYPE_FLOAT);
   TestIsNull("exp(NULL)", TYPE_DOUBLE);
   TestIsNull("ln(NULL)", TYPE_DOUBLE);
@@ -2569,6 +2588,11 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestStringValue("cast(date_sub(cast('2012-01-01 09:10:11.123456789' "
       "as timestamp), interval cast(10 as bigint) years) as string)",
       "2002-01-01 09:10:11.123456789");
+  // These return NULL because year is out of range (IMPALA-1493)
+  TestIsNull(
+      "CAST('2005-10-11 00:00:00' AS TIMESTAMP) - INTERVAL 718 YEAR", TYPE_TIMESTAMP);
+  TestIsNull(
+      "CAST('2005-10-11 00:00:00' AS TIMESTAMP) + INTERVAL -718 YEAR", TYPE_TIMESTAMP);
   // Add/sub months.
   TestStringValue("cast(date_add(cast('2012-01-01 09:10:11.123456789' "
       "as timestamp), interval 13 months) as string)",

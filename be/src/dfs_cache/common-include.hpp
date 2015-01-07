@@ -144,6 +144,13 @@ struct FileSystemDescriptor{
 		descriptor.valid = false;
 		return descriptor;
 	}
+	FileSystemDescriptor() : dfs_type(DFS_TYPE::NON_SPECIFIED), host(""), port(0), valid(false){}
+
+	FileSystemDescriptor(const std::string& path) : dfs_type(DFS_TYPE::NON_SPECIFIED), valid(false){
+		Uri uri = Uri::Parse(path);
+		host = uri.Host;
+		port = std::stoul(uri.Port);
+	}
 };
 
 /** Impala client code is aware of remote FileSystem mapping only */

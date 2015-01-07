@@ -157,7 +157,10 @@ public class AggregationNode extends PlanNode {
     // of that table (so that when we're grouping by the primary key col plus
     // some others, the estimate doesn't overshoot dramatically)
     // cardinality: product of # of distinct values produced by grouping exprs
-    cardinality_ = Expr.getNumDistinctValues(aggInfo_.getGroupingExprs());
+
+    // Any non-grouping aggregation has at least one distinct value
+    cardinality_ = aggInfo_.getGroupingExprs().isEmpty() ? 1 :
+      Expr.getNumDistinctValues(aggInfo_.getGroupingExprs());
     // take HAVING predicate into account
     LOG.trace("Agg: cardinality=" + Long.toString(cardinality_));
     if (cardinality_ > 0) {

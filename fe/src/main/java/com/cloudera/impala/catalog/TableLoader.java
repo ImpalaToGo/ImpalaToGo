@@ -63,12 +63,10 @@ public class TableLoader {
     // turn all exceptions into TableLoadingException
     try {
       msClient = catalog_.getMetaStoreClient();
-      LOG.info("Got metastore client for : " + tblName);
       org.apache.hadoop.hive.metastore.api.Table msTbl = null;
       // All calls to getTable() need to be serialized due to HIVE-5457.
       synchronized (metastoreAccessLock_) {
         msTbl = msClient.getHiveClient().getTable(db.getName(), tblName);
-        LOG.info("Got table from metastore : " + tblName);
       }
       // Check that the Hive TableType is supported
       TableType tableType = TableType.valueOf(msTbl.getTableType());
@@ -79,7 +77,6 @@ public class TableLoader {
 
       // Create a table of appropriate type and have it load itself
       table = Table.fromMetastoreTable(catalog_.getNextTableId(), db, msTbl);
-      LOG.info("Table constructed for : " + tblName);
       if (table == null) {
         throw new TableLoadingException(
             "Unrecognized table type for table: " + fullTblName);

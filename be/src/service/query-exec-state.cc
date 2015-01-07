@@ -162,7 +162,7 @@ Status ImpalaServer::QueryExecState::Exec(TExecRequest* exec_request) {
       reset_req.reset_metadata_params.__set_table_name(
           exec_request_.load_data_request.table_name);
       catalog_op_executor_.reset(
-          new CatalogOpExecutor(exec_env_, frontend_));
+          new CatalogOpExecutor(exec_env_, frontend_, &server_profile_));
       RETURN_IF_ERROR(catalog_op_executor_->Exec(reset_req));
       RETURN_IF_ERROR(parent_server_->ProcessCatalogUpdateResult(
           *catalog_op_executor_->update_catalog_result(),
@@ -265,9 +265,10 @@ Status ImpalaServer::QueryExecState::ExecLocalCatalogOp(
     case TCatalogOpType::SHOW_ROLES: {
       const TShowRolesParams& params = catalog_op.show_roles_params;
       if (params.is_admin_op) {
-        // Verify the user has privileges to perform this operation by checking against the
-        // Sentry Service (via the Catalog Server).
-        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+        // Verify the user has privileges to perform this operation by checking against
+        // the Sentry Service (via the Catalog Server).
+        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_,
+            &server_profile_));
 
         TSentryAdminCheckRequest req;
         req.__set_header(TCatalogServiceRequestHeader());
@@ -285,9 +286,10 @@ Status ImpalaServer::QueryExecState::ExecLocalCatalogOp(
     case TCatalogOpType::SHOW_GRANT_ROLE: {
       const TShowGrantRoleParams& params = catalog_op.show_grant_role_params;
       if (params.is_admin_op) {
-        // Verify the user has privileges to perform this operation by checking against the
-        // Sentry Service (via the Catalog Server).
-        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+        // Verify the user has privileges to perform this operation by checking against
+        // the Sentry Service (via the Catalog Server).
+        catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_,
+            &server_profile_));
 
         TSentryAdminCheckRequest req;
         req.__set_header(TCatalogServiceRequestHeader());
@@ -424,17 +426,20 @@ Status ImpalaServer::QueryExecState::ExecDdlRequest() {
     TComputeStatsParams& compute_stats_params =
         exec_request_.catalog_op_request.ddl_params.compute_stats_params;
     // Add child queries for computing table and column stats.
-    child_queries_.push_back(
-        ChildQuery(compute_stats_params.tbl_stats_query, this, parent_server_));
+    if (compute_stats_params.__isset.tbl_stats_query) {
+      child_queries_.push_back(
+          ChildQuery(compute_stats_params.tbl_stats_query, this, parent_server_));
+    }
     if (compute_stats_params.__isset.col_stats_query) {
       child_queries_.push_back(
           ChildQuery(compute_stats_params.col_stats_query, this, parent_server_));
     }
-    ExecChildQueriesAsync();
+    if (child_queries_.size() > 0) ExecChildQueriesAsync();
     return Status::OK;
   }
 
-  catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+  catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_,
+      &server_profile_));
   Status status = catalog_op_executor_->Exec(exec_request_.catalog_op_request);
   {
     lock_guard<mutex> l(lock_);
@@ -548,7 +553,7 @@ Status ImpalaServer::QueryExecState::WaitInternal() {
     RETURN_IF_ERROR(UpdateCatalog());
   }
 
-  if (ddl_type() == TDdlType::COMPUTE_STATS) {
+  if (ddl_type() == TDdlType::COMPUTE_STATS && child_queries_.size() > 0) {
     RETURN_IF_ERROR(UpdateTableAndColumnStats());
   }
 
@@ -700,6 +705,19 @@ Status ImpalaServer::QueryExecState::FetchRowsInternal(const int32_t max_rows,
       ClearResultCache();
       return Status::OK;
     }
+
+    // We guess the size of the cache after adding fetched_rows by looking at the size of
+    // fetched_rows itself, and using this estimate to confirm that the memtracker will
+    // allow us to use this much extra memory. In fact, this might be an overestimate, as
+    // the size of two result sets combined into one is not always the size of both result
+    // sets added together (the best example is the null bitset for each column: it might
+    // have only one entry in each result set, and as a result consume two bytes, but when
+    // the result sets are combined, only one byte is needed). Therefore after we add the
+    // new result set into the cache, we need to fix up the memory consumption to the
+    // actual levels to ensure we don't 'leak' bytes that we aren't using.
+    int64_t before = result_cache_->ByteSize();
+
+    // Upper-bound on memory required to add fetched_rows to the cache.
     int64_t delta_bytes =
         fetched_rows->ByteSize(num_rows_fetched_from_cache, fetched_rows->size());
     MemTracker* query_mem_tracker = coord_->query_mem_tracker();
@@ -711,6 +729,21 @@ Status ImpalaServer::QueryExecState::FetchRowsInternal(const int32_t max_rows,
     // Append all rows fetched from the coordinator into the cache.
     int num_rows_added = result_cache_->AddRows(
         fetched_rows, num_rows_fetched_from_cache, fetched_rows->size());
+
+    int64_t after = result_cache_->ByteSize();
+
+    // Confirm that this was not an underestimate of the memory required.
+    DCHECK_GE(before + delta_bytes, after)
+        << "Combined result sets consume more memory than both individually "
+        << Substitute("(before: $0, delta_bytes: $1, after: $2)",
+            before, delta_bytes, after);
+
+    // Fix up the tracked values
+    if (before + delta_bytes > after) {
+      query_mem_tracker->Release(before + delta_bytes - after);
+      delta_bytes = after - before;
+    }
+
     // Update result set cache metrics.
     ImpaladMetrics::RESULTSET_CACHE_TOTAL_NUM_ROWS->Increment(num_rows_added);
     ImpaladMetrics::RESULTSET_CACHE_TOTAL_BYTES->Increment(delta_bytes);
@@ -873,7 +906,8 @@ void ImpalaServer::QueryExecState::SetCreateTableAsSelectResultSet() {
   // operation.
   if (catalog_op_executor_->ddl_exec_response()->new_table_created) {
     DCHECK(coord_.get());
-    BOOST_FOREACH(const PartitionStatusMap::value_type& p, coord_->per_partition_status()) {
+    BOOST_FOREACH(
+        const PartitionStatusMap::value_type& p, coord_->per_partition_status()) {
       total_num_rows_inserted += p.second.num_appended_rows;
     }
   }
@@ -903,7 +937,8 @@ void ImpalaServer::QueryExecState::MarkActive() {
 Status ImpalaServer::QueryExecState::UpdateTableAndColumnStats() {
   DCHECK_GE(child_queries_.size(), 1);
   DCHECK_LE(child_queries_.size(), 2);
-  catalog_op_executor_.reset(new CatalogOpExecutor(exec_env_, frontend_));
+  catalog_op_executor_.reset(
+      new CatalogOpExecutor(exec_env_, frontend_, &server_profile_));
 
   // If there was no column stats query, pass in empty thrift structures to
   // ExecComputeStats(). Otherwise pass in the column stats result.

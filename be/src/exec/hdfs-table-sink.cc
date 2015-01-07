@@ -73,8 +73,10 @@ Status HdfsTableSink::PrepareExprs(RuntimeState* state) {
   // Prepare select list expressions.
   // Disable codegen for these - they would be unused anyway.
   // TODO: codegen table sink
-  RETURN_IF_ERROR(Expr::Prepare(output_expr_ctxs_, state, row_desc_));
-  RETURN_IF_ERROR(Expr::Prepare(partition_key_expr_ctxs_, state, row_desc_));
+  RETURN_IF_ERROR(
+      Expr::Prepare(output_expr_ctxs_, state, row_desc_, expr_mem_tracker_.get()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(partition_key_expr_ctxs_, state, row_desc_, expr_mem_tracker_.get()));
 
   // Prepare partition key exprs and gather dynamic partition key exprs.
   for (size_t i = 0; i < partition_key_expr_ctxs_.size(); ++i) {
@@ -103,6 +105,7 @@ Status HdfsTableSink::PrepareExprs(RuntimeState* state) {
 }
 
 Status HdfsTableSink::Prepare(RuntimeState* state) {
+  RETURN_IF_ERROR(DataSink::Prepare(state));
   unique_id_str_ = PrintId(state->fragment_instance_id(), "-");
   runtime_profile_ = state->obj_pool()->Add(
       new RuntimeProfile(state->obj_pool(), "HdfsTableSink"));
@@ -130,7 +133,7 @@ Status HdfsTableSink::Prepare(RuntimeState* state) {
     return Status(error_msg.str());
   }
 
-  staging_dir_ = Substitute("$0/impala_insert_staging/$1", table_desc_->hdfs_base_dir(),
+  staging_dir_ = Substitute("$0/_impala_insert_staging/$1/", table_desc_->hdfs_base_dir(),
       PrintId(state->query_id(), "_"));
 
   RETURN_IF_ERROR(PrepareExprs(state));
@@ -139,19 +142,23 @@ Status HdfsTableSink::Prepare(RuntimeState* state) {
   if (!hdfs_connection_.valid) {
     return Status(GetHdfsErrorMsg("Failed to connect to HDFS."));
   }
-
-  mem_tracker_.reset(new MemTracker(profile(), -1, -1, profile()->name(),
+  
+    mem_tracker_.reset(new MemTracker(profile(), -1, -1, profile()->name(),
       state->instance_mem_tracker()));
-
-  rows_inserted_counter_ =
+    
+    partitions_created_counter_ =
+      ADD_COUNTER(profile(), "PartitionsCreated", TCounterType::UNIT);
+   files_created_counter_ =
+      ADD_COUNTER(profile(), "FilesCreated", TCounterType::UNIT);
+   rows_inserted_counter_ =
       ADD_COUNTER(profile(), "RowsInserted", TCounterType::UNIT);
-  bytes_written_counter_ =
+   bytes_written_counter_ =
       ADD_COUNTER(profile(), "BytesWritten", TCounterType::BYTES);
-  encode_timer_ = ADD_TIMER(profile(), "EncodeTimer");
-  hdfs_write_timer_ = ADD_TIMER(profile(), "HdfsWriteTimer");
-  compress_timer_ = ADD_TIMER(profile(), "CompressTimer");
+   encode_timer_ = ADD_TIMER(profile(), "EncodeTimer");
+   hdfs_write_timer_ = ADD_TIMER(profile(), "HdfsWriteTimer");
+   compress_timer_ = ADD_TIMER(profile(), "CompressTimer");
 
-  return Status::OK;
+   return Status::OK;
 }
 
 Status HdfsTableSink::Open(RuntimeState* state) {
@@ -242,7 +249,7 @@ void HdfsTableSink::BuildHdfsFileNames(
   // Path: <hdfs_base_dir>/<partition_values>/<unique_id_str>
 
   // Temporary files are written under the following path which is unique to this sink:
-  // <table_dir>/impala_insert_staging/<query_id>/<per_fragment_unique_id>_dir/
+  // <table_dir>/_impala_insert_staging/<query_id>/<per_fragment_unique_id>_dir/
   // Both the temporary directory and the file name, when moved to the real partition
   // directory must be unique.
   // Prefix the directory name with "." to make it hidden and append "_dir" at the end
@@ -254,7 +261,7 @@ void HdfsTableSink::BuildHdfsFileNames(
   const string& query_suffix = Substitute("$0_$1_data", unique_id_str_, rand());
 
   output_partition->tmp_hdfs_dir_name =
-      Substitute("$0/$1_$2_dir/", staging_dir_, unique_id_str_, rand());
+      Substitute("$0/.$1_$2_dir/", staging_dir_, unique_id_str_, rand());
   output_partition->tmp_hdfs_file_name_prefix = Substitute("$0$1$2",
       output_partition->tmp_hdfs_dir_name, output_partition->partition_name,
       query_suffix);
@@ -298,9 +305,10 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   if (output_partition->tmp_hdfs_file == NULL || !available) {
     return Status(GetHdfsErrorMsg("Failed to open HDFS file for writing: ",
         output_partition->current_file_name));
-  } else {
-    ImpaladMetrics::NUM_FILES_OPEN_FOR_INSERT->Increment(1);
   }
+
+  ImpaladMetrics::NUM_FILES_OPEN_FOR_INSERT->Increment(1);
+  COUNTER_ADD(files_created_counter_, 1);
 
   // Save the ultimate destination for this file (it will be moved by the coordinator)
   stringstream dest;
@@ -422,6 +430,7 @@ Status HdfsTableSink::InitOutputPartition(RuntimeState* state,
   }
   RETURN_IF_ERROR(output_partition->writer->Init());
   output_partition->partition_descriptor = &partition_descriptor;
+  COUNTER_ADD(partitions_created_counter_, 1);
   return CreateNewTmpFile(state, output_partition);
 }
 

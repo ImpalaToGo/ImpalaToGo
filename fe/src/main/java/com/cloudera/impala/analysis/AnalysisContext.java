@@ -263,7 +263,9 @@ public class AnalysisContext {
     public StatementBase getStmt() { return stmt_; }
     public Analyzer getAnalyzer() { return analyzer_; }
     public List<TAccessEvent> getAccessEvents() { return analyzer_.getAccessEvents(); }
-    public boolean requiresRewrite() { return analyzer_.containsSubquery(); }
+    public boolean requiresRewrite() {
+      return analyzer_.containsSubquery() && !(stmt_ instanceof CreateViewStmt);
+    }
   }
 
   /**
@@ -319,6 +321,7 @@ public class AnalysisContext {
         analysisResult_.stmt_.analyze(analysisResult_.analyzer_);
         LOG.trace("rewrittenStmt: " + rewrittenStmt.toSql());
         if (isExplain) analysisResult_.stmt_.setIsExplain();
+        Preconditions.checkState(!analysisResult_.requiresRewrite());
       }
     } catch (AnalysisException e) {
       // Don't wrap AnalysisExceptions in another AnalysisException

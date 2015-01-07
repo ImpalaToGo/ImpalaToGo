@@ -1250,6 +1250,16 @@ LOAD DATA LOCAL INPATH '${{env:IMPALA_HOME}}/testdata/bad_text_lzo/bad_text.lzo'
 ---- DATASET
 functional
 ---- BASE_TABLE_NAME
+bad_text_gzip
+---- COLUMNS
+s STRING
+i INT
+---- DEPENDENT_LOAD
+LOAD DATA LOCAL INPATH '${{env:IMPALA_HOME}}/testdata/bad_text_gzip/file_not_finished.gz' OVERWRITE INTO TABLE {db_name}{db_suffix}.{table_name};
+====
+---- DATASET
+functional
+---- BASE_TABLE_NAME
 bad_seq_snap
 ---- COLUMNS
 field STRING
@@ -1311,42 +1321,6 @@ ${IMPALA_HOME}/testdata/data/decimal_tbl.txt /test-warehouse/decimal_tbl/d6=1/
 ---- DEPENDENT_LOAD
 INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name} partition(d6)
 select * from functional.{table_name};
-====
----- DATASET
-functional
----- BASE_TABLE_NAME
-invalid_decimal_part_tbl1
----- COLUMNS
-c1 INT
----- PARTITION_COLUMNS
-d1 DECIMAL(4,2)
----- LOAD
--- To test reading from a partitioned table with invalid decimal partition values (see IMPALA-1040).
-INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name} PARTITION(d1="str_value") select int_col from functional.alltypestiny;
-====
----- DATASET
-functional
----- BASE_TABLE_NAME
-invalid_decimal_part_tbl2
----- COLUMNS
-c1 INT
----- PARTITION_COLUMNS
-d1 DECIMAL(4,2)
----- LOAD
--- To test reading from a partitioned table with invalid decimal partition values (see IMPALA-1040).
-INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name} PARTITION(d1=3.141) select int_col from functional.alltypestiny;
-====
----- DATASET
-functional
----- BASE_TABLE_NAME
-invalid_decimal_part_tbl3
----- COLUMNS
-c1 INT
----- PARTITION_COLUMNS
-d1 DECIMAL(4,2)
----- LOAD
--- To test reading from a partitioned table with invalid decimal partition values (see IMPALA-1040).
-INSERT OVERWRITE TABLE {db_name}{db_suffix}.{table_name} PARTITION(d1=314.1) select int_col from functional.alltypestiny;
 ====
 ---- DATASET
 functional

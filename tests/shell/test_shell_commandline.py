@@ -16,6 +16,7 @@
 
 import os
 import pytest
+import re
 import shlex
 import signal
 
@@ -116,6 +117,13 @@ class TestImpalaShell(object):
   @pytest.mark.execute_serially
   def test_kerberos_option(self):
     args = "-k"
+
+    # If you have a valid kerberos ticket in your cache, this test fails - so
+    # here we set a bogus KRB5CCNAME in the environment so that klist (and other
+    # kerberos commands) won't find the normal ticket cache.
+    # KERBEROS TODO: add kerberized cluster test case
+    os.environ["KRB5CCNAME"] = "/tmp/this/file/hopefully/does/not/exist"
+
     # The command will fail because we're trying to connect to a kerberized impalad.
     results = run_impala_shell_cmd(args, expect_success=False)
     # Check that impala is using the right service name.
@@ -241,8 +249,11 @@ class TestImpalaShell(object):
     # -p option and the one printed by the profile command
     args = "-p -q 'select 1; profile;'"
     result_set = run_impala_shell_cmd(args)
-    summary = 'Operator   #Hosts  Avg Time'
-    assert result_set.stdout.count(summary) == 2
+    # This regex helps us uniquely identify a profile.
+    regex = re.compile("Operator\s+#Hosts\s+Avg\s+Time")
+    # We expect two query profiles.
+    assert len(re.findall(regex, result_set.stdout)) == 2, \
+        "Could not detect two profiles, stdout: %s" % result_set.stdout
 
   @pytest.mark.execute_serially
   def test_summary(self):
@@ -326,6 +337,7 @@ class TestImpalaShell(object):
     args = """-B -q "select '%s'" """ % RUSSIAN_CHARS
     result = run_impala_shell_cmd(args.encode('utf-8'))
     assert 'UnicodeDecodeError' not in result.stderr
+    #print result.stdout.encode('utf-8')
     assert RUSSIAN_CHARS.encode('utf-8') in result.stdout
 
   @pytest.mark.execute_serially

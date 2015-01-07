@@ -39,7 +39,7 @@ import com.cloudera.impala.analysis.SlotRef;
 import com.cloudera.impala.analysis.SortInfo;
 import com.cloudera.impala.analysis.TupleDescriptor;
 import com.cloudera.impala.analysis.TupleId;
-import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.analysis.TupleIsNullPredicate;
 import com.cloudera.impala.common.IdGenerator;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.thrift.TPartitionType;
@@ -127,6 +127,7 @@ public class AnalyticPlanner {
           partitionGroups, groupingExprs, root.getNumNodes(), inputPartitionExprs);
     }
 
+    PlanNode analyticInputNode = root;
     for (PartitionGroup partitionGroup: partitionGroups) {
       for (int i = 0; i < partitionGroup.sortGroups.size(); ++i) {
         root = createSortGroupPlan(root, partitionGroup.sortGroups.get(i),
@@ -137,6 +138,16 @@ public class AnalyticPlanner {
     // create equiv classes for newly added slots
     analyzer_.createIdentityEquivClasses();
 
+    // Add expr mapping to substitute TupleIsNullPredicates referring to the logical
+    // analytic output with TupleIsNullPredicates referring to the physical output.
+    List<TupleId> oldTupleIds = Lists.newArrayList(analyticInputNode.getTupleIds());
+    oldTupleIds.add(analyticInfo_.getOutputTupleId());
+    TupleIsNullPredicate lhs = new TupleIsNullPredicate(oldTupleIds);
+    lhs.analyze(analyzer_);
+    TupleIsNullPredicate rhs = new TupleIsNullPredicate(root.tupleIds_);
+    rhs.analyze(analyzer_);
+    if (root.outputSmap_ == null) root.outputSmap_ = new ExprSubstitutionMap();
+    root.outputSmap_.put(lhs, rhs);
     return root;
   }
 
@@ -414,11 +425,7 @@ public class AnalyticPlanner {
       ExprSubstitutionMap bufferedSmap) {
     Preconditions.checkState(!exprs.isEmpty());
     Expr result = createNullMatchingEqualsAux(exprs, 0, inputTid, bufferedSmap);
-    try {
-      result.analyze(analyzer_);
-    } catch (AnalysisException e) {
-      throw new IllegalStateException(e);
-    }
+    result.analyzeNoThrow(analyzer_);
     return result;
   }
 

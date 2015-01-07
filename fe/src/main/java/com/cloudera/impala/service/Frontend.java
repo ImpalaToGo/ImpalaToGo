@@ -76,6 +76,7 @@ import com.cloudera.impala.catalog.Db;
 import com.cloudera.impala.catalog.Function;
 import com.cloudera.impala.catalog.HBaseTable;
 import com.cloudera.impala.catalog.HdfsTable;
+import com.cloudera.impala.catalog.HdfsPartition;
 import com.cloudera.impala.catalog.ImpaladCatalog;
 import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.Type;
@@ -956,7 +957,7 @@ public class Frontend {
         HdfsTable hdfsTable = (HdfsTable) insertStmt.getTargetTable();
         finalizeParams.setHdfs_base_dir(hdfsTable.getHdfsBaseDir());
         finalizeParams.setStaging_dir(
-            hdfsTable.getHdfsBaseDir() + "/impala_insert_staging");
+            hdfsTable.getHdfsBaseDir() + "/_impala_insert_staging");
         queryExecRequest.setFinalize_params(finalizeParams);
       }
     }

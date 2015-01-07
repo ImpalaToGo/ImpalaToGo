@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
-import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
+import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.stats.StatsSetupConst;
 import org.apache.log4j.Logger;
 
 import com.cloudera.impala.analysis.TableName;
@@ -131,16 +131,14 @@ public abstract class Table implements CatalogObject {
 
   /**
    * Loads the column stats for col from the Hive Metastore.
+   * TODO: Load column stats in bulk using new getTableColumnStatistics API.
    */
   protected void loadColumnStats(Column col, HiveMetaStoreClient client) {
-    ColumnStatistics colStats = null;
+    List<ColumnStatisticsObj> colStats = Lists.newArrayList();
     try {
       // Elena : 16.12.2014
       LOG.info("Going to load column stats for " + col.getName());
-      colStats = client.getTableColumnStatistics(db_.getName(), name_, col.getName());
     } catch (Exception e) {
-      // Elena : 16.12.2014
-      LOG.warn("Exception occur while loading column stats for " + col.getName() + "; ex :" + e.getMessage());
       // don't try to load stats for this column
       return;
     }
@@ -148,7 +146,7 @@ public abstract class Table implements CatalogObject {
     LOG.info("Column stats loaded for " + col.getName());
 
     // we should never see more than one ColumnStatisticsObj here
-    if (colStats.getStatsObj().size() > 1) return;
+    if (colStats.size() != 1) return;
 
     if (!ColumnStats.isSupportedColType(col.getType())) {
       LOG.warn(String.format("Column stats are available for table %s / " +
@@ -159,7 +157,7 @@ public abstract class Table implements CatalogObject {
     // Elena : 16.12.2014
     LOG.info("Going to update column stats for " + col.getName());
     // Update the column stats data
-    if (!col.updateStats(colStats.getStatsObj().get(0).getStatsData())) {
+    if (!col.updateStats(colStats.get(0).getStatsData())) {
       LOG.warn(String.format("Applying the column stats update to table %s / " +
           "column '%s' did not succeed because column type (%s) was not compatible " +
           "with the column stats data. Performance may suffer until column stats are" +
@@ -196,7 +194,7 @@ public abstract class Table implements CatalogObject {
     Table table = null;
     if (TableType.valueOf(msTbl.getTableType()) == TableType.VIRTUAL_VIEW) {
       table = new View(id, msTbl, db, msTbl.getTableName(), msTbl.getOwner());
-    } else if (msTbl.getSd().getInputFormat().equals(HBaseTable.getInputFormat())) {
+    } else if (HBaseTable.isHBaseTable(msTbl)) {
       table = new HBaseTable(id, msTbl, db, msTbl.getTableName(), msTbl.getOwner());
     } else if (DataSourceTable.isDataSourceTable(msTbl)) {
       // It's important to check if this is a DataSourceTable before HdfsTable because
@@ -360,15 +358,19 @@ public abstract class Table implements CatalogObject {
    * which Hive enumerates columns.
    */
   public ArrayList<Column> getColumnsInHiveOrder() {
-    ArrayList<Column> columns = Lists.newArrayList();
-    for (Column column: colsByPos_.subList(numClusteringCols_, colsByPos_.size())) {
-      columns.add(column);
-    }
+    ArrayList<Column> columns = Lists.newArrayList(getNonClusteringColumns());
 
     for (Column column: colsByPos_.subList(0, numClusteringCols_)) {
       columns.add(column);
     }
     return columns;
+  }
+
+  /**
+   * Returns the list of all columns excluding any partition columns.
+   */
+  public List<Column> getNonClusteringColumns() {
+    return colsByPos_.subList(numClusteringCols_, colsByPos_.size());
   }
 
   /**

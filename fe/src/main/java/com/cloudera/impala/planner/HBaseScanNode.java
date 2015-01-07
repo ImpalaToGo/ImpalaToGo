@@ -116,13 +116,15 @@ public class HBaseScanNode extends ScanNode {
   public void init(Analyzer analyzer) throws InternalException {
     assignConjuncts(analyzer);
     setStartStopKey(analyzer);
-    computeStats(analyzer);
     // Convert predicates to HBase filters_.
     createHBaseFilters(analyzer);
 
     // materialize slots in remaining conjuncts_
     analyzer.materializeSlots(conjuncts_);
     computeMemLayout(analyzer);
+    computeScanRangeLocations(analyzer);
+
+    // Call computeStats() after materializing slots and computing the mem layout.
     computeStats(analyzer);
 
     computeScanRangeLocations(analyzer);
@@ -197,8 +199,8 @@ public class HBaseScanNode extends ScanNode {
     } else if (rowRange != null && rowRange.isEqRange()) {
       cardinality_ = 1;
     } else {
-     // Set maxCaching so that each fetch from hbase won't return a batch of more than
-     // MAX_HBASE_FETCH_BATCH_SIZE bytes.
+      // Set maxCaching so that each fetch from hbase won't return a batch of more than
+      // MAX_HBASE_FETCH_BATCH_SIZE bytes.
       Pair<Long, Long> estimate = tbl.getEstimatedRowStats(startKey_, stopKey_);
       cardinality_ = estimate.first.longValue();
       if (estimate.second.longValue() > 0) {
@@ -206,6 +208,7 @@ public class HBaseScanNode extends ScanNode {
             Math.max(MAX_HBASE_FETCH_BATCH_SIZE / estimate.second.longValue(), 1);
       }
     }
+    inputCardinality_ = cardinality_;
 
     cardinality_ *= computeSelectivity();
     cardinality_ = Math.max(0, cardinality_);
@@ -293,7 +296,7 @@ public class HBaseScanNode extends ScanNode {
     HTable hbaseTbl = null;
     List<HRegionLocation> regionsLoc;
     try {
-      hbaseTbl   = new HTable(hbaseConf_, tbl.getHBaseTableName());
+      hbaseTbl = new HTable(hbaseConf_, tbl.getHBaseTableName());
       regionsLoc = HBaseTable.getRegionsInRange(hbaseTbl, startKey_, stopKey_);
     } catch (IOException e) {
       throw new RuntimeException(

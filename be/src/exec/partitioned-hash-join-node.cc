@@ -105,8 +105,10 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
 
   // build and probe exprs are evaluated in the context of the rows produced by our
   // right and left children, respectively
-  RETURN_IF_ERROR(Expr::Prepare(build_expr_ctxs_, state, child(1)->row_desc()));
-  RETURN_IF_ERROR(Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(build_expr_ctxs_, state, child(1)->row_desc(), expr_mem_tracker()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc(), expr_mem_tracker()));
   // Although ConstructBuildSide() maybe be run in a separate thread, it is safe to free
   // local allocations in QueryMaintenance() since the build thread is not run
   // concurrently with other expr evaluation in this join node.
@@ -117,7 +119,8 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
   // build and probe tuples; full_row_desc is not necessarily the same as the output row
   // desc, e.g., because semi joins only return the build xor probe tuples
   RowDescriptor full_row_desc(child(0)->row_desc(), child(1)->row_desc());
-  RETURN_IF_ERROR(Expr::Prepare(other_join_conjunct_ctxs_, state, full_row_desc));
+  RETURN_IF_ERROR(
+      Expr::Prepare(other_join_conjunct_ctxs_, state, full_row_desc, expr_mem_tracker()));
   AddExprCtxsToFree(other_join_conjunct_ctxs_);
 
   RETURN_IF_ERROR(state->block_mgr()->RegisterClient(
@@ -440,6 +443,9 @@ Status PartitionedHashJoinNode::SpillPartition(Partition** spilled_partition) {
     if (hash_partitions_[i]->is_spilled()) continue;
     int64_t mem = hash_partitions_[i]->build_rows()->bytes_in_mem(false);
     if (hash_partitions_[i]->hash_tbl() != NULL) {
+      // IMPALA-1488: Do not spill partitions that already had matches, because we
+      // are going to lose information and return wrong results.
+      if (hash_partitions_[i]->hash_tbl()->HasMatches()) continue;
       mem += hash_partitions_[i]->hash_tbl()->byte_size();
     }
     if (mem > max_freed_mem) {
@@ -828,7 +834,7 @@ Status PartitionedHashJoinNode::OutputUnmatchedBuild(RowBatch* out_batch) {
          num_rows_added < max_rows) {
     // Output remaining unmatched build rows.
     if (!hash_tbl_iterator_.matched()) {
-      hash_tbl_iterator_.set_matched(true);
+      hash_tbl_iterator_.set_matched();
       TupleRow* build_row = hash_tbl_iterator_.GetRow();
       DCHECK(build_row != NULL);
       if (join_op_ == TJoinOp::RIGHT_ANTI_JOIN) {
@@ -1078,7 +1084,7 @@ Status PartitionedHashJoinNode::BuildHashTables(RuntimeState* state) {
 
     while (true) {
       bool got_buffer;
-      RETURN_IF_ERROR(partition->probe_rows()->InitIoBuffer(&got_buffer));
+      RETURN_IF_ERROR(partition->probe_rows()->SwitchToIoBuffers(&got_buffer));
       if (got_buffer) break;
       Partition* spilled_partition;
       RETURN_IF_ERROR(SpillPartition(&spilled_partition));
@@ -1170,9 +1176,9 @@ Status PartitionedHashJoinNode::ReserveTupleStreamBlocks() {
     DCHECK(hash_partitions_[i]->build_rows()->using_small_buffers());
     DCHECK(hash_partitions_[i]->probe_rows()->using_small_buffers());
     bool got_buffer;
-    RETURN_IF_ERROR(hash_partitions_[i]->build_rows()->InitIoBuffer(&got_buffer));
+    RETURN_IF_ERROR(hash_partitions_[i]->build_rows()->SwitchToIoBuffers(&got_buffer));
     if (got_buffer) {
-      RETURN_IF_ERROR(hash_partitions_[i]->probe_rows()->InitIoBuffer(&got_buffer));
+      RETURN_IF_ERROR(hash_partitions_[i]->probe_rows()->SwitchToIoBuffers(&got_buffer));
     }
     if (!got_buffer) {
       Status status = Status::MEM_LIMIT_EXCEEDED;

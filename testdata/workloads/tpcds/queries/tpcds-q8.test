@@ -70,5 +70,5 @@ order by
 limit 100
 ---- RESULTS
 ---- TYPES
-STRING, DOUBLE
+STRING, DECIMAL
 ====
