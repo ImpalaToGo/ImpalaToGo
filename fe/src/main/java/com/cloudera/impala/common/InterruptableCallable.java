@@ -16,6 +16,11 @@ public abstract class InterruptableCallable<T> implements Callable<T>{
     _name = name;
   }
 
+  /** getter for callable name, for logging identification */
+  public String getName(){
+    return _name;
+  }
+
   @Override
   public T call() throws Exception{
     long startTime = System.nanoTime();

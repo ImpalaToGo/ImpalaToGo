@@ -180,12 +180,9 @@ public class HadoopFsBridge {
 
       if(flag){
         res.setResult(true);
-        LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"true\"");
         return res;
       }
-
       res.setResult(false);
-      LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"false\"");
       return res;
     }
 
@@ -207,8 +204,6 @@ public class HadoopFsBridge {
 
     // run specified task with retries (we only make retries on timed out tasks):
     BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.exists\" finished with status \"" + status + "\" for Path \"" + path + "\" on fs \"" +
-        fs.filesystem.getUri() + "\".");
 
     // wait for result to be ready:
     res = result.get();
@@ -243,12 +238,10 @@ public class HadoopFsBridge {
 
     // check within the cache for requested result:
     String key = configuration.get(CommonConfigurationKeys.FS_DEFAULT_NAME_KEY, CommonConfigurationKeys.FS_DEFAULT_NAME_DEFAULT);
-    LOG.info("\"Path.getFilesystem\" : getting file system for path \"" + path + "\"; configuration \"" + key + "\".");
     FileSystem filesystem = fsCache.getFileSystem(key, path);
 
     BridgeOpResult<FileSystem> res =  new HadoopFsBridge().new BridgeOpResult<FileSystem>();
     if(filesystem != null){
-      LOG.info("\"Path.getFilesystem\" : requested filesystem is cached for Path \"" + path + "\".");
       res.setResult(filesystem);
       res.setStatus(BridgeOpStatus.OK);
       return res;
@@ -268,8 +261,7 @@ public class HadoopFsBridge {
     String messageExexEx = "Execution exception in \"Path.getFilesystem\" operation for \"" + path + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"Path.getFilesystem\" finished with status \"" + status + "\" for Path \"" + path + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
@@ -299,14 +291,11 @@ public class HadoopFsBridge {
    * @return operation compound result, if status is OK, contain list of FileStatus found on the path
    */
   public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
-
-    LOG.info("\"FileSystem.listStatus\" : requested for filesystem \"" + fs + "\" on path \"" + path + "\".");
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getDirStat(fs, path);
 
     BridgeOpResult<FileStatus[]> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus[]>();
     if(statistic != null){
-      LOG.info("\"FileSystem.listStatus\" : requested statistics are cached for Path \"" + path + "\".");
       res.setResult(statistic);
       res.setStatus(BridgeOpStatus.OK);
       return res;
@@ -328,9 +317,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.listStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.filesystem.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
@@ -359,7 +346,6 @@ public class HadoopFsBridge {
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
-      LOG.info("\"FileSystem.getFileStatus\" : requested statistic is cached for Path \"" + path + "\".");
       res.setResult(statistic);
       res.setStatus(BridgeOpStatus.OK);
       return res;
@@ -384,17 +370,14 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.getFileStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.filesystem.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
 
     // update the cache on success:
-    if(res.getStatus().equals(BridgeOpStatus.OK)){
+    if(res.getStatus().equals(BridgeOpStatus.OK))
       fsCache.setPathStat(fs, path.getParent(), new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
-      }
 
     return res;
   }
@@ -428,9 +411,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.getFileBlockLocations\" finished with status \"" + status + "\" for Path \"" + file.getPath() +
-        "\" on fs \"" + fs.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     return result.get();
   }
 
@@ -461,9 +442,7 @@ public class HadoopFsBridge {
         + " filesystem \"" + dfs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"DistributedFileSystem.getFileBlockStorageLocations\" finished with status \"" + status +
-        "\" for fs \"" + dfs.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     return result.get();
   }
 }

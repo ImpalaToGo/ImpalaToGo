@@ -5,7 +5,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Logger;
 
 import com.cloudera.impala.util.FsKey;
 import com.google.common.base.Preconditions;
@@ -21,9 +20,6 @@ public class FsObjectCache {
   private final ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>> _fsobjectsCache =
       new ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>>();
 
-  /** Logging mechanism */
-  private static final Logger LOG = Logger.getLogger(FsObjectCache.class);
-
   /**
    * Add FileSystem into the cache if no one exist for given Configuration and a Path
    *
@@ -37,12 +33,9 @@ public class FsObjectCache {
     Preconditions.checkNotNull(configuration);
     Preconditions.checkNotNull(path);
 
-    LOG.info("Going to add file system \"" + filesystem.getUri() + "\" with path \"" + path +
-        "\" for configuration \"" + configuration + "\".");
     ConcurrentHashMap<Path, FileSystem> existingFsCache =
         _filesystemsCache.putIfAbsent(configuration, new ConcurrentHashMap<Path, FileSystem>());
-    if(existingFsCache == null)
-      LOG.info("Filesystem \"" + filesystem.getUri() + "\" was added to the cache.");
+
     existingFsCache = _filesystemsCache.get(configuration);
     existingFsCache.putIfAbsent(path, filesystem);
 
