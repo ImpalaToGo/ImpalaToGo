@@ -338,7 +338,7 @@ public class HadoopFsBridge {
     // update the cache on success:
     if(res.getStatus().equals(ObjectState.SYNC_OK)){
       statistic = res.getResult();
-      fsCache.setPathStat(fs, path, statistic, ObjectState.SYNC_OK);
+      fsCache.setPathStat(fs, path, statistic, null);
       }
 
     return res;

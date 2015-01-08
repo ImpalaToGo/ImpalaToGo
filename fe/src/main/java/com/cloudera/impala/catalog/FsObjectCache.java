@@ -121,11 +121,19 @@ public class FsObjectCache {
     renewed = objectsCache.putIfAbsent(path, renewed);
     // if object was present within the cache, it should be updated with the state and file status
     if(renewed != null){
+      LOG.info("Path statistic object exists for \"" + filesystem.filesystem.getUri() + "\" with path \"" + path +
+          "\".");
       // set those statistics that were provided:
-      if(state != null)
+      if(state != null){
+        LOG.info("Updating state of existing Path object for \"" + filesystem.filesystem.getUri() + "\" with path \"" + path +
+            "\".");
         renewed.setState(state);
-      if(statistic != null)
+      }
+      if(statistic != null){
+        LOG.info("Updating metadata of existing Path object for \"" + filesystem.filesystem.getUri() + "\" with path \"" + path +
+            "\".");
         renewed.setMetadata(statistic);
+      }
     }
   }
 
