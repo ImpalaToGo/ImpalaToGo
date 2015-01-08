@@ -193,7 +193,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<Boolean>> result = new AtomicReference<BridgeOpResult<Boolean>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<Boolean> callable = new InterruptableCallable<Boolean>() {
+    InterruptableCallable<Boolean> callable = new InterruptableCallable<Boolean>("FileSystem.exists") {
       @Override
       protected Boolean dowork() throws IOException{
         return fs.filesystem.exists(path);
@@ -257,7 +257,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<FileSystem>> result = new AtomicReference<BridgeOpResult<FileSystem>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileSystem> callable = new InterruptableCallable<FileSystem>() {
+    InterruptableCallable<FileSystem> callable = new InterruptableCallable<FileSystem>("Path.getFilesystem") {
       @Override
       protected FileSystem dowork() throws IOException, InterruptedException{
         return path.getFileSystem(configuration);
@@ -315,7 +315,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<FileStatus[]>> result = new AtomicReference<BridgeOpResult<FileStatus[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>() {
+    InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>("FileSystem.listStatus") {
       @Override
       protected FileStatus[] dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.filesystem.listStatus(path);
@@ -368,7 +368,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>() {
+    InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>("FileSystem.getFileStatus") {
       @Override
       protected FileStatus dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.filesystem.getFileStatus(path);
@@ -412,7 +412,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<BlockLocation[]>> result = new AtomicReference<BridgeOpResult<BlockLocation[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>() {
+    InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>("FileSystem.getFileBlockLocations") {
       @Override
       protected BlockLocation[] dowork() throws IOException, InterruptedException{
         return fs.getFileBlockLocations(file, start, len);
@@ -444,7 +444,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<BlockStorageLocation[]>> result = new AtomicReference<BridgeOpResult<BlockStorageLocation[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>() {
+    InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>("DistributedFileSystem.getFileBlockStorageLocations") {
       @Override
       protected BlockStorageLocation[] dowork() throws IOException, UnsupportedOperationException,
                                                        InvalidBlockTokenException, InterruptedException {
