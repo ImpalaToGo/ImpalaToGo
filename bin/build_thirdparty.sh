@@ -91,11 +91,7 @@ do
     -pprof)
       BUILD_ALL=0
       BUILD_PPROF=1
-      ;;
-    -cdh4extras)
-      BUILD_ALL=0
-      BUILD_CDH4EXTRAS=1
-      ;;
+      ;;    
     -*)
       echo "Usage: build_thirdparty.sh [-noclean] \
 [-avro -glog -thrift -gflags -gtest -re2 -sasl -ldap -snappy -pprof -cdh4extras]"
@@ -238,10 +234,4 @@ if [ $BUILD_ALL -eq 1 ] || [ $BUILD_AVRO -eq 1 ]; then
   build_preamble $IMPALA_HOME/thirdparty/avro-c-${IMPALA_AVRO_VERSION} Avro
   cmake .
   make -j4
-fi
-
-# Build cdh4-extras
-if [ $BUILD_ALL -eq 1 ] || [ $BUILD_CDH4EXTRAS -eq 1 ]; then
-  build_preamble $IMPALA_HOME/thirdparty/cdh4-extras cdh4-extras
-  mvn package -DskipTests
 fi
