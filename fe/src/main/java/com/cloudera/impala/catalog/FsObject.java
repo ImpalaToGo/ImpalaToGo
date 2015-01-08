@@ -1,5 +1,7 @@
 package com.cloudera.impala.catalog;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hadoop.fs.FileStatus;
@@ -11,7 +13,8 @@ import com.cloudera.impala.util.FsKey;
  *  Designed to cache the unit of remote file system state
  */
 public class FsObject {
-  /** Describe the file system object state from cache perspective */
+
+ /** Describe the file system object state from cache perspective */
   public enum ObjectState{
     /** was not synchronized for state with origin */
     NA,
@@ -31,8 +34,12 @@ public class FsObject {
     DIRECTORY
   }
 
+  /** represents the directory tree node */
+  private final ConcurrentHashMap<String, FsObject> _children =
+      new ConcurrentHashMap<String, FsObject>();
+
   /** represents Path metadata, for file or for directory */
-  private FileStatus[] _metadata;
+  private FileStatus _metadata;
 
   /** file system object state - from cache perspective */
   private ObjectState _state;
@@ -49,8 +56,24 @@ public class FsObject {
   /** flag, indicates that remote object exists */
   private boolean _exists;
 
-  /** constructs the file system object from its path */
-  public FsObject(FsKey filesystem, Path path) {
+  /**
+   * constructs the file system object from its path within the given filesystem, the object of known type
+   *
+   * @param filesystem - origin filesystem
+   * @param path       - path within the filesystem
+   * @param type       - object type, directory or file
+   */
+  public FsObject(FsKey filesystem, Path path, ObjectType type) {
+    this(filesystem, path);
+    _type = type;
+  }
+
+  /** constructs the file system object from its path within the given filesystem
+   *
+   * @param filesystem - origin filesystem
+   * @param path       - path within the filesystem
+   */
+  public FsObject(FsKey filesystem, Path path){
     _fileSystem = filesystem;
     _path = path;
     // say state is "no acknowledge"
@@ -78,18 +101,52 @@ public class FsObject {
 
   /**
    * Getter for file system object metadata
-   * @return return directory metadata
+   * @return return file system object metadata
    */
-  public FileStatus[] getMetadata(){
+  public FileStatus getMetadata(){
     return _metadata;
   }
 
   /**
-   * Setter for file system object metadata (directory)
+   * Retrieves all children metadata, result of list operation
+   *
+   * @return directory's children files metadata if this is directory, null otherwise
+   */
+  public FileStatus[] getChildrenMetadata(){
+    int size = _children.size();
+    FileStatus[] statistics = size > 0 ? new FileStatus[_children.size()] : null;
+    int i = 0;
+    for (FsObject obj : _children.values()) {
+         statistics[i++] = obj.getMetadata();
+    }
+    return statistics;
+  }
+
+  /**
+   * get single child metadata using the path as a key to specify the child
+   *
+   * @param path - path to use to distinguish the child required
+   * @return statistics for child whether one found, null otherwise
+   */
+  public FileStatus getChildMetadata(String path){
+    if(_children.containsKey(path))
+      return _children.get(path).getMetadata();
+    return null;
+  }
+
+  /**
+   * Setter for directory metadata (children metadata)
    * @param listStatus - result of list operation to associate with the cached DIRECTORY file system object
    */
   public void setMetadata(FileStatus[] listStatus){
-    _metadata = listStatus;
+    for(int i = 0; i < listStatus.length; i++){
+      // assign own filesystem as origin for siblings
+      FsObject obj = new FsObject(_fileSystem, listStatus[i].getPath(),
+          listStatus[i].isDirectory() ? ObjectType.DIRECTORY : ObjectType.FILE);
+      obj.setMetadata(listStatus[i]);
+      obj.setState(ObjectState.SYNC_OK);
+      _children.putIfAbsent(obj.getPath().toString(), obj);
+    }
     _type = ObjectType.DIRECTORY;
   }
 
@@ -98,7 +155,7 @@ public class FsObject {
    * @param fileStatus - result of "get file status" operation to associate with the cached FILE file system object
    */
   public void setMetadata(FileStatus fileStatus){
-    _metadata = new FileStatus[]{fileStatus};
+    _metadata = fileStatus;
     _type = ObjectType.FILE;
   }
 

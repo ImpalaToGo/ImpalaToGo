@@ -302,7 +302,7 @@ public class HadoopFsBridge {
 
     LOG.info("\"FileSystem.listStatus\" : requested for filesystem \"" + fs + "\" on path \"" + path + "\".");
     // check within the cache for requested result:
-    FileStatus[] statistic = fsCache.getPathStat(fs, path);
+    FileStatus[] statistic = fsCache.getDirStat(fs, path);
 
     BridgeOpResult<FileStatus[]> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus[]>();
     if(statistic != null){
@@ -355,15 +355,18 @@ public class HadoopFsBridge {
   public static BridgeOpResult<FileStatus> getFileStatus(final FsKey fs, final Path path){
 
     // check within the cache for requested result:
-    FileStatus[] statistic = fsCache.getPathStat(fs, path);
+    FileStatus statistic = fsCache.getFileStat(fs, path);
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
       LOG.info("\"FileSystem.getFileStatus\" : requested statistic is cached for Path \"" + path + "\".");
-      res.setResult(statistic.length > 0 ? statistic[0] : null);
+      res.setResult(statistic);
       res.setStatus(BridgeOpStatus.OK);
       return res;
     }
+
+    // if no cached result so far, this is bug in the outer flow:
+    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path.getParent() + "\"");
 
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
@@ -390,7 +393,7 @@ public class HadoopFsBridge {
 
     // update the cache on success:
     if(res.getStatus().equals(BridgeOpStatus.OK)){
-      fsCache.setPathStat(fs, path, new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
+      fsCache.setPathStat(fs, path.getParent(), new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
       }
 
     return res;
