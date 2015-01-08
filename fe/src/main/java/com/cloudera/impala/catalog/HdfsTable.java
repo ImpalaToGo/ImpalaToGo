@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.BlockStorageLocation;
@@ -45,7 +46,6 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeUtils;
-import org.apache.hadoop.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -219,7 +219,7 @@ public class HdfsTable extends Table {
    */
   private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
       throws RuntimeException {
-
+  
     Preconditions.checkNotNull(perFsFileDescs);
     LOG.info("loading block md for v2 \"" + name_ + "\".");
 
@@ -328,6 +328,7 @@ public class HdfsTable extends Table {
       }
     }
     LOG.info("completed load block md for \"" + name_ + "\".");
+   
   }
   /**
    * Populates disk/volume ID metadata inside FileDescriptors given a list of
