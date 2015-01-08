@@ -158,6 +158,14 @@ struct insensitive_compare: public std::unary_function<std::string, bool> {
  */
 boost::uintmax_t get_free_space_on_disk(const std::string& path);
 
+/**
+ * get busy space on disk
+ * @param path - path to get busy space for
+ *
+ * @return covered space for path specified
+ */
+boost::uintmax_t get_dir_busy_space(const std::string& path);
+
 /** reverse the linked list */
 template<typename _Node>
 void reverse(_Node& head) {

@@ -137,8 +137,11 @@ private:
 
 		double percent = ( (mem_limit_percent > 0 ) && ( mem_limit_percent <= 85) ) ? mem_limit_percent / 100.0 : m_available_capacity_ratio;
 
-		// Get the max 85% of available space on the path specified:
+		// Get the max 85% of available space on the path specified + space covered already by cache root content:
+		uintmax_t covered = utilities::get_dir_busy_space(m_localstorageRoot);
 		uintmax_t available = utilities::get_free_space_on_disk(m_localstorageRoot) * percent;
+
+		available = covered + available;
         if(available == 0)
         	return;
 
