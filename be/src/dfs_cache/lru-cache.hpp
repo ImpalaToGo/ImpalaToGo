@@ -485,19 +485,22 @@ private:
 			 * If touch() is invoked on the Node creation, it should ask the Lifespan Manager to
 			 * provide correct Age Bucket basing on its "timestamp". That Bucket will be the hard link host
 			 * for current Node
+			 *
+			 * @param first - flag, indicates that node is being touched for the first time:
 			 */
 			bool touch(bool first = false) {
 				bool valid = true;
 				if( this->value() != nullptr ) {
 
-					// first check that cache is valid to accept the :
-					if(!m_mgr->checkValid() && first){
+					// first check that cache is valid to proceed with the node.
+					// we do not handle touch for newly created node as well (flag "first" is set):
+					if(!m_mgr->checkValid() || first){
 						return false;
 					}
 					// ask the item about its timestamp:
 					boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
 					// the following operation allows the item to control the self-promotion as an item to
-					// be of a relevance, so the item itself decides how relevant should it be basing on internal conditions
+					// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
 					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
 					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
@@ -507,6 +510,9 @@ private:
                     }
                     // no bucket exist, create new one:
                     if(bucket == nullptr){ // no bucket exist for specified timestamp, create one to be managed by Lifespan Mgr:
+
+                    	LOG (INFO) << "No bucket exists for item timestamp \"" <<
+                    			std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
 						// share myself with Lifespan Manager:
 						boost::shared_ptr<Node> sh = makeShared();
 
@@ -515,11 +521,14 @@ private:
 						boost::posix_time::ptime initial_timestamp = timestamp;
 						m_ageBucket = m_mgr->openBucket(timestamp);
                         // if timestamp was changed by Lifespan Manager, update the bound item about that:
-						if(initial_timestamp != timestamp)
+						if(initial_timestamp != timestamp){
+							LOG (INFO) << "Timestamp was changed by Manager, updated : \"" <<
+									std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
 							m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
-
+						}
 						// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
 						if(m_ageBucket == nullptr){
+							LOG (WARN) << "No bucket was acquired for node, touch is cancelled.\n";
 							return valid;
 						}
 
@@ -533,6 +542,7 @@ private:
                     }
                     else {
                     	if(m_ageBucket == nullptr){
+                    		LOG (INFO) << "Bucket was acquired from Manager and will be used as the node bucket.\n";
                     		// assign itself to the bucket:
                     		boost::shared_ptr<Node> sh = makeShared();
                     		boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
@@ -814,6 +824,10 @@ private:
             	LOG (INFO) << "Bucket is retrieved for key \"" << std::to_string(key) << "\".\n";
                 bool deletePermitted = true;
 
+                if(bucket == nullptr){
+                	LOG (ERROR) << "No bucket with a key \"" << std::to_string(key) << "\" within buckets collection while key exists.\n";
+                	break;
+                }
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
@@ -841,7 +855,7 @@ private:
         		boost::shared_ptr<Node> head = nullPtr;
 
         		// and reverse nodes under this bucket so that most recent added will be last to delete:
-        		LOG (INFO) << "Going to reverse nodes list under bucket with a key a key \"" << std::to_string(key) << "\".\n";
+        		LOG (INFO) << "Going to reverse nodes list under bucket with a key \"" << std::to_string(key) << "\".\n";
         		utilities::reverse(node);
     			LOG (INFO) << "Bucket content is reversed to start from oldest items for bucket with a key \"" <<
     					std::to_string(key) << "\".\n";
@@ -996,6 +1010,7 @@ private:
 
         	// create the key for this bucket
         	long long idx = timestamp_to_key(start);
+        	LOG (INFO) << "New bucket is requested with a key \"" << std::to_string(idx) << "\".\n";
         	// check for overflow and do not proceed if broken timestamp was received as we rely on it to be correct
         	if(idx < 0){
         		// assign the timestamp to the node explicitly to "now":
@@ -1010,8 +1025,11 @@ private:
         	m_buckets->insert(bucket_pair);
         	m_bucketsKeys->push_back(idx);
 
+        	LOG (INFO) << "Bucket keys size : \"" << std::to_string(m_bucketsKeys->size()) << "\". Number of buckets = \"" <<
+        			m_buckets->size() << "\"\n";
+
         	newBucket->startTime = start;
-        	newBucket->first.reset();
+        	newBucket->first = nullPtr;
 
             // increment number of buckets:
             std::atomic_fetch_add_explicit (&m_numberOfBuckets, 1u, std::memory_order_relaxed);

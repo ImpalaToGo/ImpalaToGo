@@ -205,6 +205,8 @@ bool FileSystemLRUCache::reload(const std::string& root){
 	  for( boost::filesystem::recursive_directory_iterator dir_iter(m_root) ; dir_iter != end_iter ; ++dir_iter){
 	    if (boost::filesystem::is_regular_file(dir_iter->status()) ){
 	    	result_set.insert(last_access_multi::value_type(boost::filesystem::last_write_time(dir_iter->path()), *dir_iter));
+	    	LOG (INFO) << "Reload : file \"" << dir_iter->path() << "\" with write time \"" <<
+	    			std::to_string(boost::filesystem::last_write_time(dir_iter->path())) << "\n";
 	    }
 	  }
 	}
@@ -219,6 +221,7 @@ bool FileSystemLRUCache::reload(const std::string& root){
 
 	// reload most old timestamp:
 	m_startTime = boost::posix_time::from_time_t((*it).first);
+    LOG (INFO) << "Reload : start time : \"" << std::to_string((*it).first) << "\"n";
 
 	// and populate sorted root content:
     for(; it != result_set.end(); it++){
