@@ -721,16 +721,13 @@ private:
          * @param startFrom - start timestamp, the oldest allowed timestamp within the manager registry
          */
         void reload(boost::posix_time::ptime startFrom){
-        	clear();
+
         	m_startTimestamp = startFrom;
         	// calculate oldest index in the cache
         	boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
          	boost::posix_time::time_duration const diff = m_startTimestamp - epoch;
 
          	m_oldestIdx = diff.hours();
-
-         	m_buckets = new std::unordered_map<long long, AgeBucket*>();
-         	m_bucketsKeys = new std::vector<long long>();
 
          	openBucket(startFrom);
         }
@@ -998,7 +995,7 @@ private:
         	boost::mutex::scoped_lock lock(*lifespan_mux());
         	LOG(INFO) << "buckets size : " << std::to_string(m_buckets->size()) << std::endl;
          	for(bagsIter it = m_buckets->begin(); it != m_buckets->end(); it++){
-        		boost::shared_ptr<Node> node = (*it).second->first;
+        		boost::shared_ptr<Node> node = it->second->first;
         		while(node){
         			boost::shared_ptr<Node> next = node->next();
         			// remove the node, specify the scenario is reload so that the item will not be removed externally
@@ -1006,7 +1003,7 @@ private:
         			node.reset();
         			node = next;
         		}
-        		delete (*it).second;
+        		delete it->second;
         	}
          	// clear buckets collection:
          	m_buckets->clear();
@@ -1045,7 +1042,7 @@ private:
         		start = boost::posix_time::microsec_clock::local_time();
         		idx = timestamp_to_key(start);
         	}
-
+        	LOG (INFO) << "Going to construct new bucket with a key \"" << std::to_string(idx) << "\".\n";
         	// open new age bag for next time slice
         	AgeBucket* newBucket = new AgeBucket();
 
