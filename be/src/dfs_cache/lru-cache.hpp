@@ -712,7 +712,7 @@ private:
          	m_buckets = new std::unordered_map<long long, AgeBucket*>();
          	m_bucketsKeys = new std::vector<long long>();
 
-             openBucket(startFrom);
+         	openBucket(startFrom);
          }
 
         /** lookup for Age Bucket to fit specified timestamp
@@ -722,16 +722,23 @@ private:
          */
         AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp){
         	// if there's ancient timestamp specified, reply no bucket exists:
-        	if(timestamp < m_startTimestamp)
+        	if(timestamp < m_startTimestamp){
+        		LOG (INFO) << "Timestamp is too old to get the bucket for : \"" <<
+        				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
         		return nullptr;
+        	}
 
         	// calculate index in array of buckets that fit requested timestamp:
         	long long idx = timestamp_to_key(timestamp);
+    		LOG (INFO) << "Getting bucket with a key \"" << std::to_string(idx) << "\" for timestamp \"" <<
+    				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
             auto it = std::find(m_bucketsKeys->begin(), m_bucketsKeys->end(), idx);
             if(it == m_bucketsKeys->end())
             	return nullptr;
 
-            // key was found
+            LOG (INFO) << "Key \"" << std::to_string(idx) << "\" exists for for timestamp \"" <<
+                				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
+            // key was found, get the bucket for it:
             return (*m_buckets)[(*it)];
         }
 
