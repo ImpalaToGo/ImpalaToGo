@@ -693,7 +693,7 @@ private:
          */
         LifespanMgr(LRUCache<ItemType_>* owner, boost::posix_time::ptime startFrom, boost::posix_time::time_duration timeSlice = boost::posix_time::hours(-1)) :
         			m_numberOfBuckets(0), m_startTimestamp(startFrom), m_currentBucket(nullptr) {
-        	LOG (INFO) << "Lifespan manager : start timestamp : \"" << std::to_string(utilities::posix_time_to_time_t(m_startTime)) <<
+        	LOG (INFO) << "Lifespan manager : start timestamp : \"" << std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) <<
         			"\"\n";
         	m_owner = owner;
         	if(timeSlice.is_negative())
