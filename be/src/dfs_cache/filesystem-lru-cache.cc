@@ -222,6 +222,8 @@ bool FileSystemLRUCache::reload(const std::string& root){
 	// reload most old timestamp:
 	m_startTime = boost::posix_time::from_time_t((*it).first);
     LOG (INFO) << "Reload : start time : \"" << std::to_string((*it).first) << "\"n";
+    // reset the start time, the minimum time is required for cache item to have to be the part of the current cache
+    resetStartTime(m_startTime);
 
 	// and populate sorted root content:
     for(; it != result_set.end(); it++){

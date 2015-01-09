@@ -693,6 +693,8 @@ private:
          */
         LifespanMgr(LRUCache<ItemType_>* owner, boost::posix_time::ptime startFrom, boost::posix_time::time_duration timeSlice = boost::posix_time::hours(-1)) :
         			m_numberOfBuckets(0), m_startTimestamp(startFrom), m_currentBucket(nullptr) {
+        	LOG (INFO) << "Lifespan manager : start timestamp : \"" << std::to_string(utilities::posix_time_to_time_t(m_startTime)) <<
+        			"\"\n";
         	m_owner = owner;
         	if(timeSlice.is_negative())
         		m_timeSlice = boost::posix_time::hours(_defaultTimeSliceInHours);
@@ -715,6 +717,23 @@ private:
          	openBucket(startFrom);
          }
 
+        /** reload the lifespan manager with a given start time
+         * @param startFrom - start timestamp, the oldest allowed timestamp within the manager registry
+         */
+        void reload(boost::posix_time::ptime startFrom){
+        	clear();
+        	m_startTimestamp = startFrom;
+        	// calculate oldest index in the cache
+        	boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+         	boost::posix_time::time_duration const diff = m_startTimestamp - epoch;
+
+         	m_oldestIdx = diff.hours();
+
+         	m_buckets = new std::unordered_map<long long, AgeBucket*>();
+         	m_bucketsKeys = new std::vector<long long>();
+
+         	openBucket(startFrom);
+        }
         /** lookup for Age Bucket to fit specified timestamp
          * @param timestamp - timestamp to get the Bucket for
          *
@@ -724,7 +743,8 @@ private:
         	// if there's ancient timestamp specified, reply no bucket exists:
         	if(timestamp < m_startTimestamp){
         		LOG (INFO) << "Timestamp is too old to get the bucket for : \"" <<
-        				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
+        				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". Min timestamp : \"" <<
+        				std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) << "\".\n";
         		return nullptr;
         	}
 
@@ -1322,6 +1342,18 @@ private:
        	}
     	// cleanup lifespan manager registry
     	m_lifeSpan->clear();
+    }
+
+    /** reset start time and reload lifespan manager accordingly,
+     *  to avoid the situation when lifespan manager contains nodes older than
+     *  new start time
+     *
+     *  @param start - new start time, minimum timestamp required for cache item to be
+     *  the part of the current cache
+     */
+    void resetStartTime(boost::posix_time::ptime start){
+    	m_startTime = start;
+    	m_lifeSpan->reload(start);
     }
 };
 }
