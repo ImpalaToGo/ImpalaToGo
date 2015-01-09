@@ -1008,12 +1008,13 @@ private:
         		}
         		delete (*it).second;
         	}
-         	// clean buckets collection:
+         	// clear buckets collection:
          	m_buckets->clear();
 
          	// clear keys collection:
          	m_bucketsKeys->clear();
 
+         	m_currentBucket = nullptr;
         	lock.unlock();
         	// reset item counters
             std::atomic_exchange_explicit(&m_owner->m_currentCapacity, 0ll, std::memory_order_relaxed);
@@ -1048,8 +1049,12 @@ private:
         	// open new age bag for next time slice
         	AgeBucket* newBucket = new AgeBucket();
 
+        	LOG (INFO) << "New bucket is constructed for key \"" << std::to_string(idx) << "\".\n";
+
         	std::pair<long long, AgeBucket*> bucket_pair (idx, newBucket);
+        	LOG (INFO) << "New bucket is going to be added to registry for key \"" << std::to_string(idx) << "\".\n";
         	m_buckets->insert(bucket_pair);
+        	LOG (INFO) << "New bucket key \"" << std::to_string(idx) << "\" is going to be stored.\n";
         	m_bucketsKeys->push_back(idx);
 
         	LOG (INFO) << "Bucket keys size : \"" << std::to_string(m_bucketsKeys->size()) << "\". Number of buckets = \"" <<
