@@ -494,7 +494,7 @@ private:
 
 					// first check that cache is valid to proceed with the node.
 					// we do not handle touch for newly created node as well (flag "first" is set):
-					if(!m_mgr->checkValid() || first){
+					if(!m_mgr->checkValid() && first){
 						return false;
 					}
 					// ask the item about its timestamp:

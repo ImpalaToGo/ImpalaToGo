@@ -205,7 +205,7 @@ bool FileSystemLRUCache::reload(const std::string& root){
 	  for( boost::filesystem::recursive_directory_iterator dir_iter(m_root) ; dir_iter != end_iter ; ++dir_iter){
 	    if (boost::filesystem::is_regular_file(dir_iter->status()) ){
 	    	result_set.insert(last_access_multi::value_type(boost::filesystem::last_write_time(dir_iter->path()), *dir_iter));
-	    	LOG (INFO) << "Reload : file \"" << dir_iter->path() << "\" with write time \"" <<
+	    	LOG (INFO) << "Reload : file found within the cache \"" << dir_iter->path() << "\" with write time \"" <<
 	    			std::to_string(boost::filesystem::last_write_time(dir_iter->path())) << "\n";
 	    }
 	  }
