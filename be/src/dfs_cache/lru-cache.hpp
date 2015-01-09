@@ -528,7 +528,7 @@ private:
 						}
 						// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
 						if(m_ageBucket == nullptr){
-							LOG (WARN) << "No bucket was acquired for node, touch is cancelled.\n";
+							LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
 							return valid;
 						}
 
