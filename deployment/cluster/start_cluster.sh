@@ -20,7 +20,6 @@ fi
 #TODO: Create profile with keys
 #TODO: Fixup logging
 BATCH_ID=$(uuidgen)
-AWS_CMD="aws --profile=cluster ec2"
 . resize.config
 take_lock
 echo creating security group if required
@@ -28,15 +27,15 @@ echo creating security group if required
 SECURITY_GROUP_IDS=$(get_or_create_security_group ${SECURITY_GROUP})
 
 echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
-$AWS_CMD run-instances $DRY_RUN --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" |tee -a $LOG
+$AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" |tee -a $LOG
 
 echo run-instances request sent, waiting for all instances to run
 
-$AWS_CMD wait instance-running $DRY_RUN --filters Name=client-token,Values=$BATCH_ID |tee -a $LOG
+$AWS_CMD wait instance-running --filters Name=client-token,Values=$BATCH_ID |tee -a $LOG
 
 echo all instances running querying instance details 
 TMP_FILE=/tmp/${BATCH_ID}.info
-$AWS_CMD describe-instances $DRY_RUN --filters Name=client-token,Values=$BATCH_ID >$TMP_FILE
+$AWS_CMD describe-instances --filters Name=client-token,Values=$BATCH_ID >$TMP_FILE
 echo getting DNS names
 DNS_NAMES=$(grep $BATCH_ID <${TMP_FILE}|cut -f 14|tee ${CLUSTER_VAR_DIR}/hosts)
 
