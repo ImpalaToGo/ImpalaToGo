@@ -23,8 +23,11 @@ BATCH_ID=$(uuidgen)
 AWS_CMD="aws --profile=cluster ec2"
 . resize.config
 take_lock
-echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
+echo creating security group if required
+. create_impala_security_group.sh
+SECURITY_GROUP_IDS=$(get_or_create_security_group ${SECURITY_GROUP})
 
+echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
 $AWS_CMD run-instances $DRY_RUN --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" |tee -a $LOG
 
 echo run-instances request sent, waiting for all instances to run
