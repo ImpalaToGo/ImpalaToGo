@@ -10,11 +10,17 @@ COUNT=$1
 ACCESS_KEY=$2
 SECRET_KEY=$3
 MASTER_NODE=$4
-
+S3_BUCKET=$5
+if [ -z $S3_BUCKET ];
+then
+	echo usage:
+	echo "$0 <COUNT> <ACCESS_KEY> <SECRET_KEY> <MASTER_NODE_DNS> <S3_BUCKET>"
+	exit 2
+fi
 #TODO: Create profile with keys
 #TODO: Fixup logging
 BATCH_ID=$(uuidgen)
-AWS_CMD="aws --profile=olya ec2"
+AWS_CMD="aws --profile=cluster ec2"
 . resize.config
 take_lock
 echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
@@ -54,7 +60,7 @@ for host in $DNS_NAMES; do
 	echo connecting to $host in background
 	#TODO: You cannot simply run sudo as non-interractive user. Need to discover a way to run it
 	ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
-	ssh $SSH_PARAMS ec2-user@$host "/usr/bin/impala2go-config.sh $MASTER_NODE" &
+	ssh $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &
 done
 echo waiting for all configuration commands to complete
 wait
