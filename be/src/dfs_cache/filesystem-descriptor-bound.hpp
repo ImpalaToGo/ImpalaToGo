@@ -229,6 +229,12 @@ public:
 	 */
 	bool pathExists(raiiDfsConnection& conn, const char* path);
 
+	/**
+	 * Retrieve default block size within the filesystem
+	 *
+	 * @return default block size
+	 */
+	int64_t getDefaultBlockSize(raiiDfsConnection& conn);
 };
 }
 

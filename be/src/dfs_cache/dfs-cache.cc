@@ -633,6 +633,8 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 }
 
 status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path) {
+	LOG (INFO) << "dfsCreateDirectory() for path \"" << path << "\" within the filesystem \"" <<
+			fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"n";
 	return filemgmt::FileSystemManager::instance()->dfsCreateDirectory(fsDescriptor, path);
 }
 
@@ -708,6 +710,26 @@ int64_t dfsReadStatisticsGetRemoteBytesRead(const struct dfsReadStatistics *stat
 }
 
 void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct dfsReadStatistics *stats){
+}
+
+int64_t getDefaultBlockSize(const FileSystemDescriptor& fsDescriptor){
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+
+	if (fsAdaptor == nullptr) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+				fsDescriptor.host << "\"" << "\n";
+		// no remote fs adaptor configured
+		return -2;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable get default block size for FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return -3;
+	}
+
+	return fsAdaptor->getDefaultBlockSize(connection);
 }
 
 }

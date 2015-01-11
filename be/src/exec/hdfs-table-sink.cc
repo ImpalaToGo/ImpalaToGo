@@ -601,17 +601,23 @@ void HdfsTableSink::Close(RuntimeState* state) {
 }
 
 Status HdfsTableSink::GetFileBlockSize(OutputPartition* output_partition, int64_t* size) {
+
+	/*
   dfsFileInfo* info = dfsGetPathInfo(output_partition->hdfs_connection,
       output_partition->current_file_name.c_str());
-
   if (info == NULL) {
     return Status(GetHdfsErrorMsg("Failed to get info on temporary HDFS file: ",
         output_partition->current_file_name));
   }
-
   *size = info->mBlockSize;
   dfsFreeFileInfo(output_partition->hdfs_connection, info, 1);
-
+  */
+  int64_t res = getDefaultBlockSize(output_partition->hdfs_connection);
+  if(res < 0){
+	  return Status(GetHdfsErrorMsg("Failed to get info on temporary HDFS file: ",
+	          output_partition->current_file_name));
+  }
+  *size = res;
   return Status::OK;
 }
 
