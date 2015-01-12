@@ -157,6 +157,7 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 		fqnp += std::to_string(descriptor.port);
 	}
 	fqnp += catalog;
+	fqnp += fileSeparator;
 	fqnp += filename;
 
 	// validate descriptor:

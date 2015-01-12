@@ -138,7 +138,6 @@ public class CatalogServiceCatalog extends Catalog {
   public void prioritizeLoad(List<TCatalogObject> objectDescs) {
     for (TCatalogObject catalogObject: objectDescs) {
       Preconditions.checkState(catalogObject.isSetTable());
-      LOG.info("Construct the table.");
       TTable table = catalogObject.getTable();
       tableLoadingMgr_.prioritizeLoad(new TTableName(table.getDb_name().toLowerCase(),
           table.getTbl_name().toLowerCase()));
@@ -422,7 +421,6 @@ public class CatalogServiceCatalog extends Catalog {
       }
       previousCatalogVersion = tbl.getCatalogVersion();
       loadReq = tableLoadingMgr_.loadAsync(tableName, null);
-      LOG.info("load async is executed for table " + tblName + ".");
     } finally {
       catalogLock_.readLock().unlock();
     }
@@ -453,7 +451,6 @@ public class CatalogServiceCatalog extends Catalog {
         throw new DatabaseNotFoundException(
             "Database does not exist: " + updatedTbl.getDb().getName());
       }
-      LOG.info("Database is located for table \"" + updatedTbl.getName() + "\"; DB = \"" + updatedTbl.getDb().getName() + "\".");
 
       Table existingTbl = db.getTable(updatedTbl.getName());
       // The existing table does not exist or has been modified. Instead of

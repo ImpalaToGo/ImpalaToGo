@@ -54,6 +54,14 @@ boost::uintmax_t get_free_space_on_disk(const std::string& path){
 	return 0;
 }
 
+boost::uintmax_t get_dir_busy_space(const std::string& path){
+	boost::uintmax_t size = 0;
+	for(boost::filesystem::recursive_directory_iterator it(path); it != boost::filesystem::recursive_directory_iterator(); ++it){
+		if(!boost::filesystem::is_directory(*it))
+			size += boost::filesystem::file_size(*it);
+	}
+	return size;
+}
 }
 }
 
