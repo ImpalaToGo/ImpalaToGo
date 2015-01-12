@@ -22,6 +22,7 @@ fi
 BATCH_ID=$(uuidgen)
 . resize.config
 take_lock
+store_cluster_id $BATCH_ID
 echo creating security group if required
 . create_impala_security_group.sh
 SECURITY_GROUP_IDS=$(get_or_create_security_group ${SECURITY_GROUP})
