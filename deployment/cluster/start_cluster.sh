@@ -22,11 +22,19 @@ fi
 BATCH_ID=$(uuidgen)
 . resize.config
 take_lock
+echo trying to start cluster $BATCH_ID
 store_cluster_id $BATCH_ID
 echo creating security group if required
 . create_impala_security_group.sh
 SECURITY_GROUP_IDS=$(get_or_create_security_group ${SECURITY_GROUP})
-
+echo checking if requested AMI: $IMAGE_ID available
+IMAGE_AVAILABLE=$($AWS_CMD describe-images --image-ids $IMAGE_ID|grep -o $IMAGE_ID)
+if [ -z "$IMAGE_AVAILABLE" ];
+then
+	echo Image: $IMAGE_ID is not available
+	echo please check configuration.
+	exit 1
+fi
 echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
 $AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" |tee -a $LOG
 
