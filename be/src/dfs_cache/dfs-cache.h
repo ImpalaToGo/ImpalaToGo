@@ -503,6 +503,14 @@ int64_t dfsReadStatisticsGetRemoteBytesRead(const struct dfsReadStatistics *stat
  * @param stats        - the HDFS read statistics to free.
  */
 void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct dfsReadStatistics *stats);
-}
 
+/**
+ * Retrieves default block size for filesystem with a given descriptor
+ *
+ * @param [in]  sDescriptor - configured fs
+ * @return blocksize   - retrieved block size.
+ */
+int64_t getDefaultBlockSize(const FileSystemDescriptor& descriptor);
+
+}
 #endif /* LIBDFS_CACHE_H_ */

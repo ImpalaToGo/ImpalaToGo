@@ -184,5 +184,9 @@ int FileSystemDescriptorBound::fileCopy(raiiDfsConnection& conn_src, const char*
 	return (_dfsCopy(conn_src.connection()->connection, src, conn_dest.connection()->connection, dst) == 0 ? true : false);
 }
 
+int64_t FileSystemDescriptorBound::getDefaultBlockSize(raiiDfsConnection& conn){
+	return _dfsGetDefaultBlockSize(conn.connection()->connection);
+}
+
 } /** namespace impala */
 

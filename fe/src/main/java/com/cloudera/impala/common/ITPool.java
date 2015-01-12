@@ -38,7 +38,7 @@ public class ITPool {
     try{
         result = futureResult.get(timeout, TimeUnit.MILLISECONDS);
     }catch(TimeoutException e){
-      LOG.error("Timeout \"" + timeout + "\" exceeded, cancelling task...");
+      LOG.error("Timeout \"" + timeout + "\" exceeded, cancelling task \"" + callable.getName() + "\"...");
       futureResult.cancel(true);
       throw e;
     }

@@ -177,12 +177,9 @@ public class HadoopFsBridge {
 
       if(flag){
         res.setResult(true);
-        LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"true\"");
         return res;
       }
-
       res.setResult(false);
-      LOG.info("\"FileSystem.exists\" : requested path is cached for Path \"" + path + "\" with the existance stat = \"false\"");
       return res;
     }
 
@@ -190,7 +187,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<Boolean>> result = new AtomicReference<BridgeOpResult<Boolean>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<Boolean> callable = new InterruptableCallable<Boolean>() {
+    InterruptableCallable<Boolean> callable = new InterruptableCallable<Boolean>("FileSystem.exists") {
       @Override
       protected Boolean dowork() throws IOException{
         return fs.filesystem.exists(path);
@@ -204,8 +201,6 @@ public class HadoopFsBridge {
 
     // run specified task with retries (we only make retries on timed out tasks):
     BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.exists\" finished with status \"" + status + "\" for Path \"" + path + "\" on fs \"" +
-        fs.filesystem.getUri() + "\".");
 
     // wait for result to be ready:
     res = result.get();
@@ -240,12 +235,10 @@ public class HadoopFsBridge {
 
     // check within the cache for requested result:
     String key = configuration.get(CommonConfigurationKeys.FS_DEFAULT_NAME_KEY, CommonConfigurationKeys.FS_DEFAULT_NAME_DEFAULT);
-    LOG.info("\"Path.getFilesystem\" : getting file system for path \"" + path + "\"; configuration \"" + key + "\".");
     FileSystem filesystem = fsCache.getFileSystem(key, path);
 
     BridgeOpResult<FileSystem> res =  new HadoopFsBridge().new BridgeOpResult<FileSystem>();
     if(filesystem != null){
-      LOG.info("\"Path.getFilesystem\" : requested filesystem is cached for Path \"" + path + "\".");
       res.setResult(filesystem);
       res.setStatus(BridgeOpStatus.OK);
       return res;
@@ -254,7 +247,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<FileSystem>> result = new AtomicReference<BridgeOpResult<FileSystem>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileSystem> callable = new InterruptableCallable<FileSystem>() {
+    InterruptableCallable<FileSystem> callable = new InterruptableCallable<FileSystem>("Path.getFilesystem") {
       @Override
       protected FileSystem dowork() throws IOException, InterruptedException{
         return path.getFileSystem(configuration);
@@ -265,8 +258,7 @@ public class HadoopFsBridge {
     String messageExexEx = "Execution exception in \"Path.getFilesystem\" operation for \"" + path + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"Path.getFilesystem\" finished with status \"" + status + "\" for Path \"" + path + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
@@ -296,14 +288,11 @@ public class HadoopFsBridge {
    * @return operation compound result, if status is OK, contain list of FileStatus found on the path
    */
   public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
-
-    LOG.info("\"FileSystem.listStatus\" : requested for filesystem \"" + fs + "\" on path \"" + path + "\".");
     // check within the cache for requested result:
-    FileStatus[] statistic = fsCache.getPathStat(fs, path);
+    FileStatus[] statistic = fsCache.getDirStat(fs, path);
 
     BridgeOpResult<FileStatus[]> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus[]>();
     if(statistic != null){
-      LOG.info("\"FileSystem.listStatus\" : requested statistics are cached for Path \"" + path + "\".");
       res.setResult(statistic);
       res.setStatus(BridgeOpStatus.OK);
       return res;
@@ -312,7 +301,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<FileStatus[]>> result = new AtomicReference<BridgeOpResult<FileStatus[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>() {
+    InterruptableCallable<FileStatus[]> callable = new InterruptableCallable<FileStatus[]>("FileSystem.listStatus") {
       @Override
       protected FileStatus[] dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.filesystem.listStatus(path);
@@ -325,17 +314,15 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.listStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.filesystem.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
 
     // update the cache on success:
-    if(res.getStatus().equals(ObjectState.SYNC_OK)){
+    if(res.getStatus().equals(BridgeOpStatus.OK)){
       statistic = res.getResult();
-      fsCache.setPathStat(fs, path, statistic, ObjectState.SYNC_OK);
+      fsCache.setPathStat(fs, path, statistic, null);
       }
 
     return res;
@@ -352,20 +339,22 @@ public class HadoopFsBridge {
   public static BridgeOpResult<FileStatus> getFileStatus(final FsKey fs, final Path path){
 
     // check within the cache for requested result:
-    FileStatus[] statistic = fsCache.getPathStat(fs, path);
+    FileStatus statistic = fsCache.getFileStat(fs, path);
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
-      LOG.info("\"FileSystem.getFileStatus\" : requested statistic is cached for Path \"" + path + "\".");
-      res.setResult(statistic.length > 0 ? statistic[0] : null);
+      res.setResult(statistic);
       res.setStatus(BridgeOpStatus.OK);
       return res;
     }
 
+    // if no cached result so far, this is bug in the outer flow:
+    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path.getParent() + "\"");
+
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>() {
+    InterruptableCallable<FileStatus> callable = new InterruptableCallable<FileStatus>("FileSystem.getFileStatus") {
       @Override
       protected FileStatus dowork() throws IOException, FileNotFoundException, InterruptedException{
         return fs.filesystem.getFileStatus(path);
@@ -378,17 +367,14 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.getFileStatus\" finished with status \"" + status + "\" for Path \"" + path +
-        "\" on fs \"" + fs.filesystem.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
 
     // update the cache on success:
-    if(res.getStatus().equals(ObjectState.SYNC_OK)){
-      fsCache.setPathStat(fs, path, new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
-      }
+    if(res.getStatus().equals(BridgeOpStatus.OK))
+      fsCache.setPathStat(fs, path.getParent(), new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
 
     return res;
   }
@@ -409,7 +395,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<BlockLocation[]>> result = new AtomicReference<BridgeOpResult<BlockLocation[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>() {
+    InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>("FileSystem.getFileBlockLocations") {
       @Override
       protected BlockLocation[] dowork() throws IOException, InterruptedException{
         return fs.getFileBlockLocations(file, start, len);
@@ -422,9 +408,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"FileSystem.getFileBlockLocations\" finished with status \"" + status + "\" for Path \"" + file.getPath() +
-        "\" on fs \"" + fs.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     return result.get();
   }
 
@@ -441,7 +425,7 @@ public class HadoopFsBridge {
     AtomicReference<BridgeOpResult<BlockStorageLocation[]>> result = new AtomicReference<BridgeOpResult<BlockStorageLocation[]>>();
 
     //declaration of the anonymous class
-    InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>() {
+    InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>("DistributedFileSystem.getFileBlockStorageLocations") {
       @Override
       protected BlockStorageLocation[] dowork() throws IOException, UnsupportedOperationException,
                                                        InvalidBlockTokenException, InterruptedException {
@@ -455,9 +439,7 @@ public class HadoopFsBridge {
         + " filesystem \"" + dfs.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
-    LOG.info("\"DistributedFileSystem.getFileBlockStorageLocations\" finished with status \"" + status +
-        "\" for fs \"" + dfs.getUri() + "\".");
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
     return result.get();
   }
 }

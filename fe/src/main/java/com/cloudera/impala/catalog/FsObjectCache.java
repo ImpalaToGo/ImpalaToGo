@@ -5,7 +5,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Logger;
 
 import com.cloudera.impala.util.FsKey;
 import com.google.common.base.Preconditions;
@@ -21,9 +20,6 @@ public class FsObjectCache {
   private final ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>> _fsobjectsCache =
       new ConcurrentHashMap<FsKey, ConcurrentHashMap<Path, FsObject>>();
 
-  /** Logging mechanism */
-  private static final Logger LOG = Logger.getLogger(FsObjectCache.class);
-
   /**
    * Add FileSystem into the cache if no one exist for given Configuration and a Path
    *
@@ -37,12 +33,9 @@ public class FsObjectCache {
     Preconditions.checkNotNull(configuration);
     Preconditions.checkNotNull(path);
 
-    LOG.info("Going to add file system \"" + filesystem.getUri() + "\" with path \"" + path +
-        "\" for configuration \"" + configuration + "\".");
     ConcurrentHashMap<Path, FileSystem> existingFsCache =
         _filesystemsCache.putIfAbsent(configuration, new ConcurrentHashMap<Path, FileSystem>());
-    if(existingFsCache == null)
-      LOG.info("Filesystem \"" + filesystem.getUri() + "\" was added to the cache.");
+
     existingFsCache = _filesystemsCache.get(configuration);
     existingFsCache.putIfAbsent(path, filesystem);
 
@@ -133,30 +126,33 @@ public class FsObjectCache {
    * Get given path metadata within the given file system
    *
    * @param filesystem - file system to get metadata within
-   * @param path       - Path to get metafata for
+   * @param path       - Path to get metafata for (FILE)
    *
    * @return path metadata if Path was cached for FileSystem, null otherwise
    */
-  public FileStatus[] getPathStat(FsKey filesystem, Path path) {
+  public FileStatus getFileStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
+    // we hold the statistic for file within its parent directory,
+    // look for parent location within the given filesystem:
     if(_fsobjectsCache.containsKey(filesystem))
-      fsobject = _fsobjectsCache.get(filesystem).get(path);
-    return fsobject != null ? fsobject.getMetadata() : null;
+      fsobject = _fsobjectsCache.get(filesystem).get(path.getParent());
+    // ask parent about its file stats:
+    return fsobject != null ? fsobject.getChildMetadata(path.toString()) : null;
   }
 
   /**
-   * Remove the path metadata association from the cache
+   * Get given directory content metadata within the given file system
    *
-   * @param filesystem - file system to remove the metadata for given path within
-   * @param path       - path to remove the metadata for
+   * @param filesystem - file system to get metadata within
+   * @param path       - Path to get metadata for (DIRECTORY)
    *
-   * @return path metadata just removed
+   * @return path metadata if Path was cached for FileSystem, null otherwise
    */
-  public synchronized FileStatus[] removePathStat(FsKey filesystem, Path path) {
+  public FileStatus[] getDirStat(FsKey filesystem, Path path) {
     FsObject fsobject = null;
     if(_fsobjectsCache.containsKey(filesystem))
-      fsobject = _fsobjectsCache.get(filesystem).remove(path);
-    return fsobject != null ? fsobject.getMetadata() : null;
+      fsobject = _fsobjectsCache.get(filesystem).get(path);
+    return fsobject != null ? fsobject.getChildrenMetadata() : null;
   }
 
   /**

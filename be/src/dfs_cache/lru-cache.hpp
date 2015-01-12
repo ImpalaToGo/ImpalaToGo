@@ -485,19 +485,22 @@ private:
 			 * If touch() is invoked on the Node creation, it should ask the Lifespan Manager to
 			 * provide correct Age Bucket basing on its "timestamp". That Bucket will be the hard link host
 			 * for current Node
+			 *
+			 * @param first - flag, indicates that node is being touched for the first time:
 			 */
 			bool touch(bool first = false) {
 				bool valid = true;
 				if( this->value() != nullptr ) {
 
-					// first check that cache is valid to accept the :
+					// first check that cache is valid to proceed with the node.
+					// we do not handle touch for newly created node as well (flag "first" is set):
 					if(!m_mgr->checkValid() && first){
 						return false;
 					}
 					// ask the item about its timestamp:
 					boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
 					// the following operation allows the item to control the self-promotion as an item to
-					// be of a relevance, so the item itself decides how relevant should it be basing on internal conditions
+					// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
 					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
 					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
@@ -507,6 +510,9 @@ private:
                     }
                     // no bucket exist, create new one:
                     if(bucket == nullptr){ // no bucket exist for specified timestamp, create one to be managed by Lifespan Mgr:
+
+                    	LOG (INFO) << "No bucket exists for item timestamp \"" <<
+                    			std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
 						// share myself with Lifespan Manager:
 						boost::shared_ptr<Node> sh = makeShared();
 
@@ -515,11 +521,14 @@ private:
 						boost::posix_time::ptime initial_timestamp = timestamp;
 						m_ageBucket = m_mgr->openBucket(timestamp);
                         // if timestamp was changed by Lifespan Manager, update the bound item about that:
-						if(initial_timestamp != timestamp)
+						if(initial_timestamp != timestamp){
+							LOG (INFO) << "Timestamp was changed by Manager, updated : \"" <<
+									std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
 							m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
-
+						}
 						// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
 						if(m_ageBucket == nullptr){
+							LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
 							return valid;
 						}
 
@@ -533,6 +542,7 @@ private:
                     }
                     else {
                     	if(m_ageBucket == nullptr){
+                    		LOG (INFO) << "Bucket was acquired from Manager and will be used as the node bucket.\n";
                     		// assign itself to the bucket:
                     		boost::shared_ptr<Node> sh = makeShared();
                     		boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
@@ -683,6 +693,8 @@ private:
          */
         LifespanMgr(LRUCache<ItemType_>* owner, boost::posix_time::ptime startFrom, boost::posix_time::time_duration timeSlice = boost::posix_time::hours(-1)) :
         			m_numberOfBuckets(0), m_startTimestamp(startFrom), m_currentBucket(nullptr) {
+        	LOG (INFO) << "Lifespan manager : start timestamp : \"" << std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) <<
+        			"\"\n";
         	m_owner = owner;
         	if(timeSlice.is_negative())
         		m_timeSlice = boost::posix_time::hours(_defaultTimeSliceInHours);
@@ -702,9 +714,23 @@ private:
          	m_buckets = new std::unordered_map<long long, AgeBucket*>();
          	m_bucketsKeys = new std::vector<long long>();
 
-             openBucket(startFrom);
+         	openBucket(startFrom);
          }
 
+        /** reload the lifespan manager with a given start time
+         * @param startFrom - start timestamp, the oldest allowed timestamp within the manager registry
+         */
+        void reload(boost::posix_time::ptime startFrom){
+
+        	m_startTimestamp = startFrom;
+        	// calculate oldest index in the cache
+        	boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+         	boost::posix_time::time_duration const diff = m_startTimestamp - epoch;
+
+         	m_oldestIdx = diff.hours();
+
+         	openBucket(startFrom);
+        }
         /** lookup for Age Bucket to fit specified timestamp
          * @param timestamp - timestamp to get the Bucket for
          *
@@ -712,16 +738,24 @@ private:
          */
         AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp){
         	// if there's ancient timestamp specified, reply no bucket exists:
-        	if(timestamp < m_startTimestamp)
+        	if(timestamp < m_startTimestamp){
+        		LOG (INFO) << "Timestamp is too old to get the bucket for : \"" <<
+        				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". Min timestamp : \"" <<
+        				std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) << "\".\n";
         		return nullptr;
+        	}
 
         	// calculate index in array of buckets that fit requested timestamp:
         	long long idx = timestamp_to_key(timestamp);
+    		LOG (INFO) << "Getting bucket with a key \"" << std::to_string(idx) << "\" for timestamp \"" <<
+    				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
             auto it = std::find(m_bucketsKeys->begin(), m_bucketsKeys->end(), idx);
             if(it == m_bucketsKeys->end())
             	return nullptr;
 
-            // key was found
+            LOG (INFO) << "Key \"" << std::to_string(idx) << "\" exists for for timestamp \"" <<
+                				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". \n";
+            // key was found, get the bucket for it:
             return (*m_buckets)[(*it)];
         }
 
@@ -814,6 +848,10 @@ private:
             	LOG (INFO) << "Bucket is retrieved for key \"" << std::to_string(key) << "\".\n";
                 bool deletePermitted = true;
 
+                if(bucket == nullptr){
+                	LOG (ERROR) << "No bucket with a key \"" << std::to_string(key) << "\" within buckets collection while key exists.\n";
+                	break;
+                }
 
                 // go over nodes under this bucket:
         		boost::shared_ptr<Node> node = bucket->first;
@@ -841,7 +879,7 @@ private:
         		boost::shared_ptr<Node> head = nullPtr;
 
         		// and reverse nodes under this bucket so that most recent added will be last to delete:
-        		LOG (INFO) << "Going to reverse nodes list under bucket with a key a key \"" << std::to_string(key) << "\".\n";
+        		LOG (INFO) << "Going to reverse nodes list under bucket with a key \"" << std::to_string(key) << "\".\n";
         		utilities::reverse(node);
     			LOG (INFO) << "Bucket content is reversed to start from oldest items for bucket with a key \"" <<
     					std::to_string(key) << "\".\n";
@@ -957,7 +995,7 @@ private:
         	boost::mutex::scoped_lock lock(*lifespan_mux());
         	LOG(INFO) << "buckets size : " << std::to_string(m_buckets->size()) << std::endl;
          	for(bagsIter it = m_buckets->begin(); it != m_buckets->end(); it++){
-        		boost::shared_ptr<Node> node = (*it).second->first;
+        		boost::shared_ptr<Node> node = it->second->first;
         		while(node){
         			boost::shared_ptr<Node> next = node->next();
         			// remove the node, specify the scenario is reload so that the item will not be removed externally
@@ -965,14 +1003,15 @@ private:
         			node.reset();
         			node = next;
         		}
-        		delete (*it).second;
+        		delete it->second;
         	}
-         	// clean buckets collection:
+         	// clear buckets collection:
          	m_buckets->clear();
 
          	// clear keys collection:
          	m_bucketsKeys->clear();
 
+         	m_currentBucket = nullptr;
         	lock.unlock();
         	// reset item counters
             std::atomic_exchange_explicit(&m_owner->m_currentCapacity, 0ll, std::memory_order_relaxed);
@@ -996,22 +1035,30 @@ private:
 
         	// create the key for this bucket
         	long long idx = timestamp_to_key(start);
+        	LOG (INFO) << "New bucket is requested with a key \"" << std::to_string(idx) << "\".\n";
         	// check for overflow and do not proceed if broken timestamp was received as we rely on it to be correct
         	if(idx < 0){
         		// assign the timestamp to the node explicitly to "now":
         		start = boost::posix_time::microsec_clock::local_time();
         		idx = timestamp_to_key(start);
         	}
-
+        	LOG (INFO) << "Going to construct new bucket with a key \"" << std::to_string(idx) << "\".\n";
         	// open new age bag for next time slice
         	AgeBucket* newBucket = new AgeBucket();
 
+        	LOG (INFO) << "New bucket is constructed for key \"" << std::to_string(idx) << "\".\n";
+
         	std::pair<long long, AgeBucket*> bucket_pair (idx, newBucket);
+        	LOG (INFO) << "New bucket is going to be added to registry for key \"" << std::to_string(idx) << "\".\n";
         	m_buckets->insert(bucket_pair);
+        	LOG (INFO) << "New bucket key \"" << std::to_string(idx) << "\" is going to be stored.\n";
         	m_bucketsKeys->push_back(idx);
 
+        	LOG (INFO) << "Bucket keys size : \"" << std::to_string(m_bucketsKeys->size()) << "\". Number of buckets = \"" <<
+        			m_buckets->size() << "\"\n";
+
         	newBucket->startTime = start;
-        	newBucket->first.reset();
+        	newBucket->first = nullPtr;
 
             // increment number of buckets:
             std::atomic_fetch_add_explicit (&m_numberOfBuckets, 1u, std::memory_order_relaxed);
@@ -1297,6 +1344,18 @@ private:
        	}
     	// cleanup lifespan manager registry
     	m_lifeSpan->clear();
+    }
+
+    /** reset start time and reload lifespan manager accordingly,
+     *  to avoid the situation when lifespan manager contains nodes older than
+     *  new start time
+     *
+     *  @param start - new start time, minimum timestamp required for cache item to be
+     *  the part of the current cache
+     */
+    void resetStartTime(boost::posix_time::ptime start){
+    	m_startTime = start;
+    	m_lifeSpan->reload(start);
     }
 };
 }

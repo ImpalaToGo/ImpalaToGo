@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -226,9 +227,8 @@ public class HdfsTable extends Table {
    */
   private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
       throws RuntimeException {
-    try{
+
     Preconditions.checkNotNull(perFsFileDescs);
-    LOG.info("loading block md for v2 \"" + name_ + "\".");
 
     for (FsKey fsEntry: perFsFileDescs.keySet()) {
       FileSystem fs = fsEntry.filesystem;
@@ -236,24 +236,15 @@ public class HdfsTable extends Table {
       // Store all BlockLocations so they can be reused when loading the disk IDs.
       List<BlockLocation> blockLocations = Lists.newArrayList();
 
-      LOG.info("going to partitions -> to FileDescriptors for \"" + name_ + "\". filesystem : \"" + fsEntry.toString() + "\"");
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
-      LOG.info("partitions -> to FileDescriptors completed for \"" + name_ + "\".");
       Preconditions.checkNotNull(partitionToFds);
-      LOG.info("partitions -> to FileDescriptors gave non-null for \"" + name_ + "\".");
       // loop over all files and record their block metadata, minus volume ids
-      LOG.info("For over partitions \"" + name_ + "\".");
       for (String partitionDir: partitionToFds.keySet()) {
         Path partDirPath = new Path(partitionDir);
-
-        LOG.info("for over file descriptors \"" + name_ + "\".");
         for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
-          LOG.info("file descriptor to work with : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
 
           try {
-            LOG.info("going to retrieve file status for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
-
             BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fsEntry, p);
             if(fileStatRes.getStatus() != BridgeOpStatus.OK){
               // no way to proceed, we did not sync with remote FS, throw the exception
@@ -261,13 +252,9 @@ public class HdfsTable extends Table {
             }
             FileStatus fileStatus = fileStatRes.getResult();
 
-            LOG.info("file status is retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
-            // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
-            LOG.info("file is approved as \"not directory\" for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
 
             long len = fileStatus.getLen();
-            LOG.info("Before get file block locations \"" + name_ + "\". File len : \"" + len + "\"");
 
             BridgeOpResult<BlockLocation[]> fileBlockLocationRes = HadoopFsBridge.getFileBlockLocations(fs, fileStatus, 0, len);
             if(fileBlockLocationRes.getStatus() != BridgeOpStatus.OK){
@@ -276,11 +263,7 @@ public class HdfsTable extends Table {
             }
 
             BlockLocation[] locations = fileBlockLocationRes.getResult();
-
-            LOG.info("block locations retrieved for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\".");
-            LOG.info("number of block locations : " + (locations != null ? locations.length : 0));
             Preconditions.checkNotNull(locations);
-            LOG.info("for over file descriptors \"" + name_ + "\".");
             blockLocations.addAll(Arrays.asList(locations));
 
             // Loop over all blocks in the file.
@@ -288,7 +271,6 @@ public class HdfsTable extends Table {
               Preconditions.checkNotNull(block);
               // Get the location of all block replicas in ip:port format.
               String[] blockHostPorts = block.getNames();
-
               // Get the hostnames for all block replicas. Used to resolve which hosts
               // contain cached data. The results are returned in the same order as
               // block.getNames() so it allows us to match a host specified as ip:port
@@ -330,20 +312,11 @@ public class HdfsTable extends Table {
       LOG.trace("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
           numCachedBlocks + "/" + blockLocations.size() + " cached blocks.");
 
-      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
-        LOG.info("loading disk ids for: " + getFullName() +
-            ". nodes: " + getNumNodes() + ". file system: " + fsEntry);
-
+      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem)
         loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
-        LOG.info("completed load of disk ids for: " + getFullName());
-      }
     }
-    LOG.info("completed load block md for \"" + name_ + "\".");
-   }catch(Exception ex){
-     LOG.error("Exception in load block md", ex);
-   }
-  }
 
+  }
   /**
    * Populates disk/volume ID metadata inside FileDescriptors given a list of
    * BlockLocations. The FileDescriptors are passed as a Map of parent directory
@@ -1182,9 +1155,7 @@ public class HdfsTable extends Table {
       fieldSchemas.addAll(tblFields);
       // The number of clustering columns is the number of partition keys.
       numClusteringCols_ = partKeys.size();
-      LOG.info("Going to load columns for \"" + name_ + "\".");
       loadColumns(fieldSchemas, client);
-      LOG.info("Load columns completed for \"" + name_ + "\".");
 
       // Collect the list of partitions to use for the table. Partitions may be reused
       // from the existing cached table entry (if one exists), read from the metastore,
@@ -1194,10 +1165,8 @@ public class HdfsTable extends Table {
           Lists.newArrayList();
       if (cachedEntry == null || !(cachedEntry instanceof HdfsTable) ||
           cachedEntry.lastDdlTime_ != lastDdlTime_) {
-        LOG.info("going to fetch partitions for non-cached entry or non-hdfs table \"" + name_ + "\".");
         msPartitions.addAll(MetaStoreUtil.fetchAllPartitions(
             client, db_.getName(), name_, NUM_PARTITION_FETCH_RETRIES));
-        LOG.info("partitions fetched for non-cached entry or non-hdfs table \"" + name_ + "\".");
       } else {
         // The table was already in the metadata cache and it has not been modified.
         Preconditions.checkArgument(cachedEntry instanceof HdfsTable);
@@ -1214,10 +1183,8 @@ public class HdfsTable extends Table {
           // old partition metadata if the individual partitions have not been modified.
           // First get a list of all the partition names for this table from the
           // metastore, this is much faster than listing all the Partition objects.
-          LOG.info("going to ask metastore about partitions names for \"" + name_ + "\".");
           modifiedPartitionNames.addAll(
               client.listPartitionNames(db_.getName(), name_, (short) -1));
-          LOG.info("partitions names retrieved for \"" + name_ + "\".");
         }
 
         int totalPartitions = modifiedPartitionNames.size();
@@ -1228,8 +1195,7 @@ public class HdfsTable extends Table {
               cachedPart.getId() == DEFAULT_PARTITION_ID) {
             continue;
           }
-          LOG.info("getting metastore partition for cached part of \"" + name_ + "\". Partition name : \"" +
-              cachedPart.getPartitionName() + "\".");
+
           org.apache.hadoop.hive.metastore.api.Partition cachedMsPart =
               cachedPart.getMetaStorePartition();
 
@@ -1243,16 +1209,14 @@ public class HdfsTable extends Table {
             modifiedPartitionNames.remove(cachedPartName);
           }
         }
-        LOG.info(String.format("Incrementally refreshing %d/%d partitions.",
+        LOG.trace(String.format("Incrementally refreshing %d/%d partitions.",
             modifiedPartitionNames.size(), totalPartitions));
 
         // No need to make the metastore call if no partitions are to be updated.
         if (modifiedPartitionNames.size() > 0) {
           // Now reload the the remaining partitions.
-          LOG.info("reloading non-cached partitions from metastore for \"" + name_ + "\".");
           msPartitions.addAll(MetaStoreUtil.fetchPartitionsByName(client,
               Lists.newArrayList(modifiedPartitionNames), db_.getName(), name_));
-          LOG.info("reloading from metastore completed for non-cached partitions for \"" + name_ + "\".");
         }
       }
 

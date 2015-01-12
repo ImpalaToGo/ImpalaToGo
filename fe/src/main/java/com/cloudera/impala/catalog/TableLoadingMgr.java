@@ -64,7 +64,6 @@ public class TableLoadingMgr {
      * were encountered while loading the table an IncompleteTable will be returned.
      */
     public Table get() {
-      LOG.info("Table load is requested for \"" + tblName_ + "\".");
 
       Table tbl;
       try {
@@ -233,7 +232,7 @@ public class TableLoadingMgr {
           "Database '" + tblName.getDb_name() + "' was not found.");
     }
 
-    LOG.info("Found parent db for table \"" + tblName.table_name + "\", scheduling the async load request.");
+    LOG.trace("Found parent db for table \"" + tblName.table_name + "\", scheduling the async load request.");
 
     FutureTask<Table> tableLoadTask = new FutureTask<Table>(new Callable<Table>() {
         @Override
@@ -244,7 +243,6 @@ public class TableLoadingMgr {
 
     FutureTask<Table> existingValue = loadingTables_.putIfAbsent(tblName, tableLoadTask);
     if (existingValue == null) {
-      LOG.info("no existing value for loading table task, new one is enqueued. ");
       // There was no existing value, submit a new load request.
       tblLoadingPool_.execute(tableLoadTask);
     } else {
@@ -287,21 +285,17 @@ public class TableLoadingMgr {
    */
   private void loadNextTable() throws InterruptedException {
     // Always get the next table from the head of the deque.
-
-    LOG.info("loadNextTable() - before to get first");
-
     final TTableName tblName = tableLoadingDeque_.takeFirst();
-    LOG.info("loadNextTable() - after get first, before to remove");
     tableLoadingSet_.remove(tblName);
     LOG.info("Loading next table. Remaining items in queue: "
         + tableLoadingDeque_.size());
     try {
-      LOG.info("going to getOrLoadTable() on table \"" + tblName.getTable_name() + "\"");
+      LOG.trace("going to getOrLoadTable() on table \"" + tblName.getTable_name() + "\"");
       // TODO: Instead of calling "getOrLoad" here we could call "loadAsync". We would
       // just need to add a mechanism for moving loaded tables into the Catalog.
       catalog_.getOrLoadTable(tblName.getDb_name(), tblName.getTable_name());
     } catch (CatalogException e) {
-      LOG.info("exception happens during getOrLoadTable : \"" + e.getMessage() + "\"");
+      LOG.error("exception happens during getOrLoadTable : \"" + e.getMessage() + "\"");
       // Ignore.
     }
   }
