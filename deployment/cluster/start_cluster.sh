@@ -37,7 +37,7 @@ then
 	exit 1
 fi
 echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
-$AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" |tee -a $LOG
+$AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" --block-device-mappings '[{"DeviceName": "/dev/xvda","VirtualName":"/","Ebs": {"VolumeSize": 31}},{ "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0"},{ "DeviceName": "/dev/xvde", "VirtualName": "ephemeral1"}]' >> $LOG
 
 echo run-instances request sent, waiting for all instances to run
 
