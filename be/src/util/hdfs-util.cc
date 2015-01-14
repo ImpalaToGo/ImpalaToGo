@@ -69,4 +69,5 @@ bool IsDfsPath(const char* path) {
   // should fix this to not assume unqualified paths are DFS.
   return strncmp(path, "hdfs://", 7) == 0 || strstr(path, ":/") == NULL;
 }
+
 }

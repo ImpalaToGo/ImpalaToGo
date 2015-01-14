@@ -86,8 +86,8 @@ void HdfsScanner::Close() {
 
 Status HdfsScanner::InitializeWriteTuplesFn(HdfsPartitionDescriptor* partition,
     THdfsFileFormat::type type, const string& scanner_name) {
-	if (!scan_node_->tuple_desc()->string_slots().empty()
-	      && partition->escape_char() != '\0') {
+  if (!scan_node_->tuple_desc()->string_slots().empty()
+      && partition->escape_char() != '\0') {
     // Cannot use codegen if there are strings slots and we need to
     // compact (i.e. copy) the data.
     scan_node_->IncNumScannersCodegenDisabled();

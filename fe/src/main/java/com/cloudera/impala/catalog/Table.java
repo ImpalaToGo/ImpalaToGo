@@ -35,6 +35,7 @@ import com.cloudera.impala.thrift.TColumn;
 import com.cloudera.impala.thrift.TTable;
 import com.cloudera.impala.thrift.TTableDescriptor;
 import com.cloudera.impala.thrift.TTableStats;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -376,6 +377,13 @@ public abstract class Table implements CatalogObject {
       columns.add(column);
     }
     return columns;
+  }
+
+  /**
+   * Returns the list of all columns excluding any partition columns.
+   */
+  public List<Column> getNonClusteringColumns() {
+    return colsByPos_.subList(numClusteringCols_, colsByPos_.size());
   }
 
   /**

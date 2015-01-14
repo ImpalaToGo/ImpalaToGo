@@ -515,9 +515,9 @@ Status HdfsRCFileScanner::ProcessRange() {
               reinterpret_cast<const char*>(row_group_buffer_ + row_group_length_));
 
           if (!text_converter_->WriteSlot(slot_desc, tuple, col_start, field_len,
-                        false, false, pool)) {
-                      ReportColumnParseError(slot_desc, col_start, field_len);
-                      error_in_row = true;
+              false, false, pool)) {
+            ReportColumnParseError(slot_desc, col_start, field_len);
+            error_in_row = true;
           }
         }
 

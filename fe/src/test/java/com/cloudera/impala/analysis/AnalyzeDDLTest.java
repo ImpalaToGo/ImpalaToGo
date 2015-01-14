@@ -16,10 +16,16 @@ package com.cloudera.impala.analysis;
 
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.UUID;
 
 import junit.framework.Assert;
 
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
@@ -30,6 +36,7 @@ import com.cloudera.impala.catalog.PrimitiveType;
 import com.cloudera.impala.catalog.ScalarType;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.common.FileSystemUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
@@ -150,6 +157,29 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     AnalysisError("alter table functional.alltypes add " +
         "partition(year=2050, month=10) cached in 'badPool'",
         "The specified cache pool does not exist: badPool");
+
+    // Valid URIs.
+    AnalyzesOk("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location " +
+        "'/test-warehouse/alltypes/year=2010/month=10'");
+    AnalyzesOk("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location " +
+        "'hdfs://localhost:20500/test-warehouse/alltypes/year=2010/month=10'");
+    AnalyzesOk("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location " +
+        "'s3n://bucket/test-warehouse/alltypes/year=2010/month=10'");
+    AnalyzesOk("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location " +
+        "'file:///test-warehouse/alltypes/year=2010/month=10'");
+
+    // Invalid URIs.
+    AnalysisError("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location " +
+        "'foofs://bar/test-warehouse/alltypes/year=2010/month=10'",
+        "No FileSystem for scheme: foofs");
+    AnalysisError("alter table functional.alltypes add " +
+        " partition(year=2050, month=10) location '  '",
+        "URI path cannot be empty.");
   }
 
   @Test
@@ -377,6 +407,14 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     AnalysisError("alter table no_db.alltypes partition(i=1) set fileformat textfile",
         "Database does not exist: no_db");
 
+    // Valid location
+    AnalyzesOk("alter table functional.alltypes set location " +
+        "'hdfs://localhost:20500/test-warehouse/a/b'");
+    AnalyzesOk("alter table functional.alltypes set location " +
+        "'s3n://bucket/test-warehouse/a/b'");
+    AnalyzesOk("alter table functional.alltypes set location " +
+        "'file:///test-warehouse/a/b'");
+
     // Invalid location
     AnalysisError("alter table functional.alltypes set location 'test/warehouse'",
         "URI path must be absolute: test/warehouse");
@@ -577,13 +615,6 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     // Test that complex-typed columns are ignored.
     checkComputeStatsStmt("compute stats functional.allcomplextypes");
 
-    // Test that complex-typed columns are ignored.
-    parseNode = AnalyzesOk("compute stats functional.allcomplextypes");
-    assertTrue(parseNode instanceof ComputeStatsStmt);
-    stmt = (ComputeStatsStmt) parseNode;
-    AnalyzesOk(stmt.getTblStatsQuery());
-    AnalyzesOk(stmt.getColStatsQuery());
-
     // Cannot compute stats on a database.
     AnalysisError("compute stats tbl_does_not_exist",
         "Table does not exist: default.tbl_does_not_exist");
@@ -748,7 +779,12 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "CLASS 'com.bar.Foo' API_VERSION 'V1'");
     AnalyzesOk("CREATE DATA SOURCE foo LOCATION 'hdfs://localhost:20500/a/b/foo.jar' " +
         "CLASS 'com.bar.Foo' API_VERSION 'V1'");
+    AnalyzesOk("CREATE DATA SOURCE foo LOCATION 's3n://bucket/a/b/foo.jar' " +
+        "CLASS 'com.bar.Foo' API_VERSION 'V1'");
 
+    AnalysisError("CREATE DATA SOURCE foo LOCATION 'blah://localhost:20500/foo.jar' " +
+        "CLASS 'com.bar.Foo' API_VERSION 'V1'",
+        "No FileSystem for scheme: blah");
     AnalysisError("CREATE DATA SOURCE " + DATA_SOURCE_NAME + " LOCATION '/foo.jar' " +
         "CLASS 'foo.Bar' API_VERSION 'V1'",
         "Data source already exists: " + DATA_SOURCE_NAME.toLowerCase());
@@ -763,6 +799,18 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     AnalyzesOk("create database if not exists functional");
     // Invalid database name,
     AnalysisError("create database `%^&`", "Invalid database name: %^&");
+
+    // Valid URIs.
+    AnalyzesOk("create database new_db location " +
+        "'/test-warehouse/new_db'");
+    AnalyzesOk("create database new_db location " +
+        "'hdfs://localhost:50200/test-warehouse/new_db'");
+    AnalyzesOk("create database new_db location " +
+        "'s3n://bucket/test-warehouse/new_db'");
+    // Invalid URI.
+    AnalysisError("create database new_db location " +
+        "'blah://bucket/test-warehouse/new_db'",
+        "No FileSystem for scheme: blah");
   }
 
   @Test
@@ -803,8 +851,8 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "Cannot infer schema, path is not a file: "
         + "hdfs://localhost:20500/not/a/file/path");
     AnalysisError("create table if not exists functional.zipcode_incomes like parquet "
-        + "'file://tmp/foobar'",
-        "URI location 'file://tmp/foobar' must point to an HDFS file system.");
+        + "'file:///tmp/foobar'",
+        "Cannot infer schema, path is not a file: file:/tmp/foobar");
 
     // check valid paths with bad file contents
     AnalysisError("create table database_DNE.newtbl_DNE like parquet "
@@ -889,9 +937,7 @@ public class AnalyzeDDLTest extends AnalyzerTest {
   }
 
   @Test
-  public void TestCreateTable() throws AnalysisException {
-    AnalyzesOk("create table functional.new_table (i int)");
-    AnalyzesOk("create table if not exists functional.alltypes (i int)");
+  public void TestCreateTableLike() throws AnalysisException {
     AnalyzesOk("create table if not exists functional.new_tbl like functional.alltypes");
     AnalyzesOk("create table functional.like_view like functional.view_view");
     AnalyzesOk(
@@ -902,6 +948,46 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "Table does not exist: functional.tbl_does_not_exist");
     AnalysisError("create table functional.new_table like db_does_not_exist.alltypes",
         "Database does not exist: db_does_not_exist");
+    // Invalid database name.
+    AnalysisError("create table `???`.new_table like functional.alltypes",
+        "Invalid database name: ???");
+    // Invalid table/view name.
+    AnalysisError("create table functional.`^&*` like functional.alltypes",
+        "Invalid table/view name: ^&*");
+    // Invalid source database/table name reports non-existence instead of invalidity.
+    AnalysisError("create table functional.foo like `???`.alltypes",
+        "Database does not exist: ???");
+    AnalysisError("create table functional.foo like functional.`%^&`",
+        "Table does not exist: functional.%^&");
+    // Valid URI values.
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'/test-warehouse/new_table'");
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'hdfs://localhost:20500/test-warehouse/new_table'");
+    // 'file' scheme does not take an authority, so file:/// is equivalent to file://
+    // and file:/.
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'file:///test-warehouse/new_table'");
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'file://test-warehouse/new_table'");
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'file:/test-warehouse/new_table'");
+    AnalyzesOk("create table tbl like functional.alltypes location " +
+        "'s3n://bucket/test-warehouse/new_table'");
+    // Invalid URI values.
+    AnalysisError("create table tbl like functional.alltypes location " +
+        "'foofs://test-warehouse/new_table'",
+        "No FileSystem for scheme: foofs");
+    AnalysisError("create table functional.baz like functional.alltypes location '  '",
+        "URI path cannot be empty.");
+  }
+
+  @Test
+  public void TestCreateTable() throws AnalysisException {
+    AnalyzesOk("create table functional.new_table (i int)");
+    AnalyzesOk("create table if not exists functional.alltypes (i int)");
+    AnalysisError("create table functional.alltypes",
+        "Table already exists: functional.alltypes");
     AnalysisError("create table functional.alltypes (i int)",
         "Table already exists: functional.alltypes");
     AnalyzesOk("create table functional.new_table (i int) row format delimited fields " +
@@ -1006,16 +1092,27 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "Invalid column/field name: ???");
     AnalysisError("create table new_table (i int) PARTITIONED BY (`^&*` int)",
         "Invalid column/field name: ^&*");
-    // Invalid source database/table name reports non-existence instead of invalidity.
-    AnalysisError("create table functional.foo like `???`.alltypes",
-        "Database does not exist: ???");
-    AnalysisError("create table functional.foo like functional.`%^&`",
-        "Table does not exist: functional.%^&");
+
+    // Valid URI values.
+    AnalyzesOk("create table tbl (i int) location '/test-warehouse/new_table'");
+    AnalyzesOk("create table tbl (i int) location " +
+        "'hdfs://localhost:20500/test-warehouse/new_table'");
+    AnalyzesOk("create table tbl (i int) location " +
+        "'file:///test-warehouse/new_table'");
+    AnalyzesOk("create table tbl (i int) location " +
+        "'s3n://bucket/test-warehouse/new_table'");
+    AnalyzesOk("ALTER TABLE functional_seq_snap.alltypes SET LOCATION " +
+        "'file://test-warehouse/new_table'");
 
     // Invalid URI values.
+    AnalysisError("create table functional.foo (x int) location " +
+        "'foofs://test-warehouse/new_table'",
+        "No FileSystem for scheme: foofs");
+    AnalysisError("create table functional.foo (x int) location " +
+        "'  '", "URI path cannot be empty.");
     AnalysisError("ALTER TABLE functional_seq_snap.alltypes SET LOCATION " +
-        "'file://test-warehouse/new_table'", "URI location " +
-        "'file://test-warehouse/new_table' must point to an HDFS file system.");
+        "'foofs://test-warehouse/new_table'",
+        "No FileSystem for scheme: foofs");
     AnalysisError("ALTER TABLE functional_seq_snap.alltypes SET LOCATION " +
         "'  '", "URI path cannot be empty.");
 
@@ -1428,6 +1525,12 @@ public class AnalyzeDDLTest extends AnalyzerTest {
     // Try to create with a bad location
     AnalysisError("create function foo() RETURNS int LOCATION 'bad-location' SYMBOL='c'",
         "URI path must be absolute: bad-location");
+    AnalysisError("create function foo() RETURNS int LOCATION " +
+        "'blah://localhost:50200/bad-location' SYMBOL='c'",
+        "No FileSystem for scheme: blah");
+    AnalysisError("create function foo() RETURNS int LOCATION " +
+        "'file:///foo.jar' SYMBOL='c'",
+        "Could not load binary: file:///foo.jar");
 
     // Try creating udfs with unknown extensions
     AnalysisError("create function foo() RETURNS int LOCATION '/binary' SYMBOL='a'",
@@ -1905,5 +2008,93 @@ public class AnalyzeDDLTest extends AnalyzerTest {
         "SHOW PARTITIONS not applicable to a view: functional.view_view");
     AnalysisError("show partitions functional_hbase.alltypes",
         "SHOW PARTITIONS must target an HDFS table: functional_hbase.alltypes");
+  }
+
+  /**
+   * Validate if location path analysis issues proper warnings when directory
+   * permissions/existence checks fail.
+   */
+  @Test
+  public void TestPermissionValidation() throws AnalysisException {
+    String location = "/test-warehouse/.tmp_" + UUID.randomUUID().toString();
+    Path parentPath = FileSystemUtil.createFullyQualifiedPath(new Path(location));
+    FileSystem fs = null;
+    try {
+      fs = parentPath.getFileSystem(FileSystemUtil.getConfiguration());
+
+      // Test location doesn't exist
+      AnalyzesOk(String.format("create table new_table (col INT) location '%s/new_table'",
+          location),
+          String.format("Path '%s' cannot be reached: Path does not exist.",
+              parentPath));
+
+      // Test localtion path with trailing slash.
+      AnalyzesOk(String.format("create table new_table (col INT) location " +
+          "'%s/new_table/'", location),
+          String.format("Path '%s' cannot be reached: Path does not exist.",
+              parentPath));
+
+      AnalyzesOk(String.format("create table new_table location '%s/new_table' " +
+          "as select 1, 1", location),
+          String.format("Path '%s' cannot be reached: Path does not exist.",
+              parentPath));
+
+      AnalyzesOk(String.format("create table new_table like functional.alltypes " +
+          "location '%s/new_table'", location),
+          String.format("Path '%s' cannot be reached: Path does not exist.",
+              parentPath));
+
+      AnalyzesOk(String.format("create database new_db location '%s/new_db'",
+          location),
+          String.format("Path '%s' cannot be reached: Path does not exist.",
+              parentPath));
+
+      fs.mkdirs(parentPath);
+      // Create a test data file for load data test
+      FSDataOutputStream out =
+          fs.create(new Path(parentPath, "test_loaddata/testdata.txt"));
+      out.close();
+
+      fs.setPermission(parentPath,
+          new FsPermission(FsAction.NONE, FsAction.NONE, FsAction.NONE));
+
+      // Test location exists but Impala doesn't have sufficient permission
+      AnalyzesOk(String.format("create data Source serverlog location " +
+          "'%s/foo.jar' class 'foo.Bar' API_VERSION 'V1'", location),
+          String.format("Impala does not have READ access to path '%s'", parentPath));
+
+      AnalyzesOk(String.format("create external table new_table (col INT) location " +
+          "'%s/new_table'", location),
+          String.format("Impala does not have READ_WRITE access to path '%s'",
+              parentPath));
+
+      AnalyzesOk(String.format("alter table functional.insert_string_partitioned " +
+          "add partition (s2='hello') location '%s/new_partition'", location),
+          String.format("Impala does not have READ_WRITE access to path '%s'",
+              parentPath));
+
+      AnalyzesOk(String.format("alter table functional.insert_string_partitioned " +
+          "partition(s2=NULL) set location '%s/new_part_loc'", location),
+          String.format("Impala does not have READ_WRITE access to path '%s'",
+              parentPath));
+
+      // Test location exists and Impala does have sufficient permission
+      fs.setPermission(parentPath,
+          new FsPermission(FsAction.READ_WRITE, FsAction.NONE, FsAction.NONE));
+
+      AnalyzesOk(String.format("create external table new_table (col INT) location " +
+          "'%s/new_table'", location));
+    } catch (IOException e) {
+      throw new AnalysisException(e.getMessage(), e);
+    } finally {
+      // Clean up
+      try {
+        if (fs != null && fs.exists(parentPath)) {
+          fs.delete(parentPath, true);
+        }
+      } catch (IOException e) {
+        // Ignore
+      }
+    }
   }
 }

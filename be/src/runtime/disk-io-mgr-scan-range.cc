@@ -285,6 +285,8 @@ Status DiskIoMgr::ScanRange::Open() {
       return Status(ss.str());
     }
     if (fseek(local_file_, offset_, SEEK_SET) == -1) {
+      fclose(local_file_);
+      local_file_ = NULL;
       string error_msg = GetStrErrMsg();
       fclose(local_file_);
       local_file_ = NULL;
@@ -315,20 +317,20 @@ void DiskIoMgr::ScanRange::Close() {
       reader_->bytes_read_dn_cache_ += read_statistics->totalZeroCopyBytesRead;
       
       if (read_statistics->totalLocalBytesRead != read_statistics->totalBytesRead) {
-        ++reader_->num_remote_ranges_;
-        if (expected_local_) {
+          ++reader_->num_remote_ranges_;
+          if (expected_local_) {
           int remote_bytes = read_statistics->totalBytesRead - read_statistics->totalLocalBytesRead;
-          reader_->unexpected_remote_bytes_ += remote_bytes;
-          VLOG_FILE << "Unexpected remote HDFS read of "
-                    << PrettyPrinter::Print(remote_bytes, TCounterType::BYTES)
-                    << " for file '" << file_ << "'";
+            reader_->unexpected_remote_bytes_ += remote_bytes;
+            VLOG_FILE << "Unexpected remote HDFS read of "
+                      << PrettyPrinter::Print(remote_bytes, TCounterType::BYTES)
+                      << " for file '" << file_ << "'";
 
+          }
         }
-      }
     }
     dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
+      }
     }
-
     if (cached_buffer_ != NULL) {
       hadoopRzBufferFree(hdfs_file_, cached_buffer_);
       cached_buffer_ = NULL;

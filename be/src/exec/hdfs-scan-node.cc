@@ -121,7 +121,7 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
     RETURN_IF_ERROR(BaseSequenceScanner::IssueInitialRanges(this,
         per_type_files_[THdfsFileFormat::AVRO]));
     RETURN_IF_ERROR(HdfsParquetScanner::IssueInitialRanges(this,
-          per_type_files_[THdfsFileFormat::PARQUET]));
+        per_type_files_[THdfsFileFormat::PARQUET]));
     if (progress_.done()) SetDone();
   }
 
@@ -144,7 +144,6 @@ Status HdfsScanNode::GetNextInternal(
     return Status::OK;
   }
   *eos = false;
-
   RowBatch* materialized_batch = materialized_row_batches_->GetBatch();
   if (materialized_batch != NULL) {
     num_owned_io_buffers_ -= materialized_batch->num_io_buffers();
@@ -152,7 +151,7 @@ Status HdfsScanNode::GetNextInternal(
     // Update the number of materialized rows now instead of when they are materialized.
     // This means that scanners might process and queue up more rows than are necessary
     // for the limit case but we want to avoid the synchronized writes to
-    // num_rows_returned_
+    // num_rows_returned_.
     num_rows_returned_ += row_batch->num_rows();
     COUNTER_SET(rows_returned_counter_, num_rows_returned_);
 
@@ -181,13 +180,13 @@ DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t 
     bool expected_local) {
   DCHECK_GE(disk_id, -1);
   // Require that the scan range is within [0, file_length). While this cannot be used
-   // to guarantee safety (file_length metadata may be stale), it avoids different
-   // behavior between Hadoop FileSystems (e.g. s3n hdfsSeek() returns error when seeking
-   // beyond the end of the file).
-   DCHECK_GE(offset, 0);
-   DCHECK_GE(len, 0);
-   DCHECK_LE(offset + len, GetFileDesc(file)->file_length)
-       << "Scan range beyond end of file (offset=" << offset << ", len=" << len << ")";
+  // to guarantee safety (file_length metadata may be stale), it avoids different
+  // behavior between Hadoop FileSystems (e.g. s3n hdfsSeek() returns error when seeking
+  // beyond the end of the file).
+  DCHECK_GE(offset, 0);
+  DCHECK_GE(len, 0);
+  DCHECK_LE(offset + len, GetFileDesc(file)->file_length)
+      << "Scan range beyond end of file (offset=" << offset << ", len=" << len << ")";
   if (disk_id == -1) {
     // disk id is unknown, assign it a random one.
     static int next_disk_id = 0;
@@ -351,7 +350,7 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
     if (hdfs_table_->IsClusteringCol(slot_desc)) {
       partition_key_slots_.push_back(slot_desc);
     } else {
-    	DCHECK_GE(i, num_partition_keys);
+      DCHECK_GE(i, num_partition_keys);
     	column_idx_to_materialized_slot_idx_[i] = materialized_slots_.size();
     	materialized_slots_.push_back(slot_desc);
     }

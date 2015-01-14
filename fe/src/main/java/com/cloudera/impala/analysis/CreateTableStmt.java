@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.hadoop.fs.permission.FsAction;
 
 import org.apache.hadoop.fs.permission.FsAction;
 

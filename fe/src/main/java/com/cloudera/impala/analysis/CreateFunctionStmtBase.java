@@ -30,6 +30,7 @@ import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.TCreateFunctionParams;
 import com.cloudera.impala.thrift.TFunctionBinaryType;
 import com.google.common.collect.Lists;
+import org.apache.hadoop.fs.permission.FsAction;
 
 /**
  * Base class for CREATE [] FUNCTION.

@@ -745,4 +745,28 @@ public class HBaseTable extends Table {
     }
     return false;
   }
+
+  /**
+   * Returns true if the given Metastore Table represents an HBase table.
+   * Versions of Hive/HBase are inconsistent which HBase related fields are set
+   * (e.g., HIVE-6548 changed the input format to null).
+   * For maximum compatibility consider all known fields that indicate an HBase table.
+   */
+  public static boolean isHBaseTable(
+      org.apache.hadoop.hive.metastore.api.Table msTbl) {
+    if (msTbl.getParameters() != null &&
+        msTbl.getParameters().containsKey(HBASE_STORAGE_HANDLER)) {
+      return true;
+    }
+    StorageDescriptor sd = msTbl.getSd();
+    if (sd == null) return false;
+    if (sd.getInputFormat() != null && sd.getInputFormat().equals(HBASE_INPUT_FORMAT)) {
+      return true;
+    } else if (sd.getSerdeInfo() != null &&
+        sd.getSerdeInfo().getSerializationLib() != null &&
+        sd.getSerdeInfo().getSerializationLib().equals(HBASE_SERIALIZATION_LIB)) {
+      return true;
+    }
+    return false;
+  }
 }

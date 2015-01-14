@@ -434,7 +434,6 @@ Status HdfsTableSink::InitOutputPartition(RuntimeState* state,
       return Status(error_msg.str());
   }
   RETURN_IF_ERROR(output_partition->writer->Init());
-
   COUNTER_ADD(partitions_created_counter_, 1);
   return CreateNewTmpFile(state, output_partition);
 }
@@ -484,7 +483,8 @@ inline Status HdfsTableSink::GetOutputPartition(
     state->per_partition_status()->insert(
         make_pair(partition->partition_name, partition_status));
 
-    // Indicate that temporary directory is to be deleted after execution
+    if (!has_empty_input_batch_) {
+      // Indicate that temporary directory is to be deleted after execution
     if (!has_empty_input_batch_) {
       // Indicate that temporary directory is to be deleted after execution
       (*state->hdfs_files_to_move())[partition->tmp_hdfs_dir_name] = "";
@@ -504,6 +504,8 @@ Status HdfsTableSink::Send(RuntimeState* state, RowBatch* batch, bool eos) {
   ExprContext::FreeLocalAllocations(output_expr_ctxs_);
   ExprContext::FreeLocalAllocations(partition_key_expr_ctxs_);
   RETURN_IF_ERROR(state->CheckQueryState());
+  DCHECK(eos || batch->num_rows() > 0);
+  has_empty_input_batch_ = batch->num_rows() == 0 && eos;
 
   DCHECK(eos || batch->num_rows() > 0);
   has_empty_input_batch_ = batch->num_rows() == 0 && eos;
@@ -548,7 +550,7 @@ Status HdfsTableSink::Send(RuntimeState* state, RowBatch* batch, bool eos) {
       bool new_file;
       do {
         RETURN_IF_ERROR(output_partition->writer->AppendRowBatch(
-                batch, partition->second.second, &new_file));
+            batch, partition->second.second, &new_file));
         if (new_file) {
           RETURN_IF_ERROR(FinalizePartitionFile(state, output_partition));
           RETURN_IF_ERROR(CreateNewTmpFile(state, output_partition));
@@ -613,9 +615,9 @@ void HdfsTableSink::Close(RuntimeState* state) {
           partition_keys_to_output_partitions_.begin();
       cur_partition != partition_keys_to_output_partitions_.end();
       ++cur_partition) {
-	    if (cur_partition->second.first->writer.get() != NULL) {
-	      cur_partition->second.first->writer->Close();
-	    }
+    if (cur_partition->second.first->writer.get() != NULL) {
+      cur_partition->second.first->writer->Close();
+    }
     ClosePartitionFile(state, cur_partition->second.first);
   }
   partition_keys_to_output_partitions_.clear();

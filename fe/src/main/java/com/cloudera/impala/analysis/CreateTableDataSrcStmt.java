@@ -35,6 +35,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.apache.hadoop.fs.permission.FsAction;
 
 /**
  * Represents a CREATE TABLE statement for external data sources. Such tables

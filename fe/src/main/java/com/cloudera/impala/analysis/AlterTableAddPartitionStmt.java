@@ -22,6 +22,7 @@ import com.cloudera.impala.thrift.TAlterTableAddPartitionParams;
 import com.cloudera.impala.thrift.TAlterTableParams;
 import com.cloudera.impala.thrift.TAlterTableType;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.permission.FsAction;
 
 /**
  * Represents an ALTER TABLE ADD PARTITION statement.
