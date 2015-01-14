@@ -288,8 +288,6 @@ Status DiskIoMgr::ScanRange::Open() {
       fclose(local_file_);
       local_file_ = NULL;
       string error_msg = GetStrErrMsg();
-      fclose(local_file_);
-      local_file_ = NULL;
 
       stringstream ss;
       ss << "Could not seek to " << offset_ << " for file: " << file_
@@ -327,8 +325,7 @@ void DiskIoMgr::ScanRange::Close() {
 
           }
         }
-    }
-    dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
+      dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
       }
     }
     if (cached_buffer_ != NULL) {

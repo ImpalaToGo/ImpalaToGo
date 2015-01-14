@@ -151,6 +151,4 @@ public class BetweenPredicate extends Predicate {
     return this;
   }
 
-  @Override
-  public Expr clone() { return new BetweenPredicate(this); }
 }

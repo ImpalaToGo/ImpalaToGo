@@ -64,18 +64,6 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
 
   @Test
   public void AnalyzeShowGrantRole() {
-
-    Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
-    AnalysisError("SHOW ROLES", authDisabledAnalyzer,
-        "Authorization is not enabled.");
-    AnalysisError("SHOW ROLE GRANT GROUP myGroup", authDisabledAnalyzer,
-        "Authorization is not enabled.");
-    AnalysisError("SHOW CURRENT ROLES", authDisabledAnalyzer,
-        "Authorization is not enabled.");
-  }
-
-  @Test
-  public void AnalyzeShowGrantRole() {
     AnalyzesOk("SHOW GRANT ROLE myRole");
     AnalyzesOk("SHOW GRANT ROLE myRole ON SERVER");
     AnalyzesOk("SHOW GRANT ROLE myRole ON DATABASE functional");

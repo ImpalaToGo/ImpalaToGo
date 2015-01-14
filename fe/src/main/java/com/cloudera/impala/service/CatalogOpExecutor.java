@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hadoop.hive.common.StatsSetupConst;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BooleanColumnStatsData;
@@ -35,15 +34,6 @@ import org.apache.hadoop.hive.metastore.api.ColumnStatisticsData;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.DecimalColumnStatsData;
-import org.apache.hadoop.hive.metastore.api.DoubleColumnStatsData;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.LongColumnStatsData;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
-import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.SerDeInfo;
-import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
-import org.apache.hadoop.hive.metastore.api.StringColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.DoubleColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.LongColumnStatsData;
@@ -126,8 +116,8 @@ import com.cloudera.impala.thrift.TGrantRevokeRoleParams;
 import com.cloudera.impala.thrift.THdfsCachingOp;
 import com.cloudera.impala.thrift.THdfsFileFormat;
 import com.cloudera.impala.thrift.TPartitionKeyValue;
-import com.cloudera.impala.thrift.TPrivilege;
 import com.cloudera.impala.thrift.TPartitionStats;
+import com.cloudera.impala.thrift.TPrivilege;
 import com.cloudera.impala.thrift.TResetMetadataRequest;
 import com.cloudera.impala.thrift.TResetMetadataResponse;
 import com.cloudera.impala.thrift.TResultRow;
@@ -141,7 +131,6 @@ import com.cloudera.impala.thrift.TTableStats;
 import com.cloudera.impala.thrift.TUpdateCatalogRequest;
 import com.cloudera.impala.thrift.TUpdateCatalogResponse;
 import com.cloudera.impala.util.HdfsCachingUtil;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -1237,10 +1226,12 @@ public class CatalogOpExecutor {
 
     // Submit the cache request and update the table metadata.
     if (cacheOp != null && cacheOp.isSet_cached()) {
+
       long id = HdfsCachingUtil.submitCacheTblDirective(newTable,
           cacheOp.getCache_pool_name());
-      catalog_.watchCacheDirs(Lists.<Long>newArrayList(id),
-          new TTableName(newTable.getDbName(), newTable.getTableName()));
+      if(id != -1)
+        catalog_.watchCacheDirs(Lists.<Long>newArrayList(id),
+            new TTableName(newTable.getDbName(), newTable.getTableName()));
       applyAlterTable(newTable);
     }
 
@@ -1385,8 +1376,11 @@ public class CatalogOpExecutor {
         if (cachePoolName != null) {
           long id = HdfsCachingUtil.submitCachePartitionDirective(partition,
               cachePoolName);
-          catalog_.watchCacheDirs(
-              Lists.<Long>newArrayList(id), tableName.toThrift());
+          // if we have deal with non distributed FS, just return
+          if(id != -1){
+            catalog_.watchCacheDirs(
+                Lists.<Long>newArrayList(id), tableName.toThrift());
+          }
           // Update the partition metadata to include the cache directive id.
           msClient.getHiveClient().alter_partition(partition.getDbName(),
               partition.getTableName(), partition);
@@ -1681,9 +1675,11 @@ public class CatalogOpExecutor {
       // ALTER TABLE operation.
       List<Long> cacheDirIds = Lists.newArrayList();
       if (cacheDirId == null) {
-        // Table was not already cached.
-        cacheDirIds.add(HdfsCachingUtil.submitCacheTblDirective(msTbl,
-            cacheOp.getCache_pool_name()));
+        long id = HdfsCachingUtil.submitCacheTblDirective(msTbl,
+            cacheOp.getCache_pool_name());
+        if(id != -1)
+          // Table was not already cached.
+          cacheDirIds.add(id);
       } else {
         // Table is already cached, verify the pool name doesn't conflict.
         String pool = HdfsCachingUtil.getCachePool(cacheDirId);
@@ -1710,8 +1706,12 @@ public class CatalogOpExecutor {
           Preconditions.checkNotNull(msPart);
           if (!partition.isMarkedCached()) {
             try {
-              cacheDirIds.add(HdfsCachingUtil.submitCachePartitionDirective(
-                  msPart, cacheOp.getCache_pool_name()));
+              long id = HdfsCachingUtil.submitCachePartitionDirective(
+                  msPart, cacheOp.getCache_pool_name());
+              // if we have deal with non distributed FS, just return
+              if(id != -1){
+              cacheDirIds.add(id);
+              }
             } catch (ImpalaRuntimeException e) {
               LOG.error("Unable to cache partition: " + partition.getPartitionName(), e);
             }
@@ -1797,6 +1797,9 @@ public class CatalogOpExecutor {
         }
         long id = HdfsCachingUtil.submitCachePartitionDirective(msPartition,
             cacheOp.getCache_pool_name());
+        // if we have deal with non distributed FS, just return
+        if(id == -1)
+          return;
         catalog_.watchCacheDirs(Lists.<Long>newArrayList(id), tableName.toThrift());
       } else {
         // Partition is not cached, just return.

@@ -26,8 +26,16 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.HRegionInfo;
+import org.apache.hadoop.hbase.HRegionLocation;
+import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hive.hbase.HBaseSerDe;
@@ -720,30 +728,6 @@ public class HBaseTable extends Table {
       throw new RuntimeException(e);
     }
     return result;
-  }
-
-  /**
-   * Returns true if the given Metastore Table represents an HBase table.
-   * Versions of Hive/HBase are inconsistent which HBase related fields are set
-   * (e.g., HIVE-6548 changed the input format to null).
-   * For maximum compatibility consider all known fields that indicate an HBase table.
-   */
-  public static boolean isHBaseTable(
-      org.apache.hadoop.hive.metastore.api.Table msTbl) {
-    if (msTbl.getParameters() != null &&
-        msTbl.getParameters().containsKey(HBASE_STORAGE_HANDLER)) {
-      return true;
-    }
-    StorageDescriptor sd = msTbl.getSd();
-    if (sd == null) return false;
-    if (sd.getInputFormat() != null && sd.getInputFormat().equals(HBASE_INPUT_FORMAT)) {
-      return true;
-    } else if (sd.getSerdeInfo() != null &&
-        sd.getSerdeInfo().getSerializationLib() != null &&
-        sd.getSerdeInfo().getSerializationLib().equals(HBASE_SERIALIZATION_LIB)) {
-      return true;
-    }
-    return false;
   }
 
   /**

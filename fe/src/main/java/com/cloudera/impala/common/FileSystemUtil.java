@@ -214,10 +214,19 @@ public class FileSystemUtil {
     return (DistributedFileSystem) fs;
   }
 
+  public static FileSystem getFileSystem(Path path)
+      throws IOException {
+    FileSystem fs = path.getFileSystem(CONF);
+    return fs;
+  }
+
   public static DistributedFileSystem getDistributedFileSystem() throws IOException {
     return getDistributedFileSystem(new Path(FileSystem.getDefaultUri(CONF)));
   }
 
+  public static FileSystem getFileSystem() throws IOException{
+    return getFileSystem(new Path(FileSystem.getDefaultUri(CONF)));
+  }
   /**
    * Fully-qualifies the given path based on the FileSystem configuration.
    */

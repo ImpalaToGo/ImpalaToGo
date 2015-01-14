@@ -87,10 +87,6 @@ public class StmtRewriter {
    * are currently supported in FROM and WHERE clauses. The rewrite is performed in
    * place and not in a clone of SelectStmt because it requires the stmt to be analyzed.
    */
-   * Rewrite all the subqueries of a SelectStmt in place. Subqueries
-   * are currently supported in FROM and WHERE clauses. The rewrite is performed in
-   * place and not in a clone of SelectStmt because it requires the stmt to be analyzed.
-   */
   private static void rewriteSelectStatement(SelectStmt stmt, Analyzer analyzer)
       throws AnalysisException {
     // Rewrite all the subqueries in the FROM clause.

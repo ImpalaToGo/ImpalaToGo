@@ -485,8 +485,6 @@ inline Status HdfsTableSink::GetOutputPartition(
 
     if (!has_empty_input_batch_) {
       // Indicate that temporary directory is to be deleted after execution
-    if (!has_empty_input_batch_) {
-      // Indicate that temporary directory is to be deleted after execution
       (*state->hdfs_files_to_move())[partition->tmp_hdfs_dir_name] = "";
     }
 
@@ -504,9 +502,6 @@ Status HdfsTableSink::Send(RuntimeState* state, RowBatch* batch, bool eos) {
   ExprContext::FreeLocalAllocations(output_expr_ctxs_);
   ExprContext::FreeLocalAllocations(partition_key_expr_ctxs_);
   RETURN_IF_ERROR(state->CheckQueryState());
-  DCHECK(eos || batch->num_rows() > 0);
-  has_empty_input_batch_ = batch->num_rows() == 0 && eos;
-
   DCHECK(eos || batch->num_rows() > 0);
   has_empty_input_batch_ = batch->num_rows() == 0 && eos;
 

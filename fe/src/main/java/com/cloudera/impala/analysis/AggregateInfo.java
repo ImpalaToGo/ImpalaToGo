@@ -319,7 +319,7 @@ public class AggregateInfo extends AggregateInfoBase {
    * The returned AggregateInfo shares its descriptor and smap with the input info;
    * createAggTupleDesc() must not be called on it.
    */
-  private void createMergeAggInfo(Analyzer analyzer) throws InternalException {
+  private void createMergeAggInfo(Analyzer analyzer) {
     Preconditions.checkState(mergeAggInfo_ == null);
     TupleDescriptor inputDesc = intermediateTupleDesc_;
     // construct grouping exprs

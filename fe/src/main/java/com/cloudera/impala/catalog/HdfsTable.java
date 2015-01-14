@@ -225,8 +225,8 @@ public class HdfsTable extends Table {
    */
   private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
       throws RuntimeException {
-
     Preconditions.checkNotNull(perFsFileDescs);
+    LOG.debug("load block md for " + name_);
 
     for (FsKey fsEntry: perFsFileDescs.keySet()) {
       FileSystem fs = fsEntry.filesystem;
@@ -251,6 +251,7 @@ public class HdfsTable extends Table {
             }
             FileStatus fileStatus = fileStatRes.getResult();
 
+            // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
 
             long len = fileStatus.getLen();
@@ -270,6 +271,7 @@ public class HdfsTable extends Table {
               Preconditions.checkNotNull(block);
               // Get the location of all block replicas in ip:port format.
               String[] blockHostPorts = block.getNames();
+
               // Get the hostnames for all block replicas. Used to resolve which hosts
               // contain cached data. The results are returned in the same order as
               // block.getNames() so it allows us to match a host specified as ip:port
@@ -311,12 +313,15 @@ public class HdfsTable extends Table {
       LOG.trace("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
           numCachedBlocks + "/" + blockLocations.size() + " cached blocks.");
 
-      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem)
+      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
+        LOG.trace("loading disk ids for: " + getFullName() +
             ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
         loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
+        LOG.trace("completed load of disk ids for: " + getFullName());
+      }
     }
-
   }
+
   /**
    * Populates disk/volume ID metadata inside FileDescriptors given a list of
    * BlockLocations. The FileDescriptors are passed as a Map of parent directory
@@ -600,9 +605,7 @@ public class HdfsTable extends Table {
     isMarkedCached_ = cacheDirectiveId != null;
 
     if (msTbl.getPartitionKeysSize() == 0) {
-      LOG.info("Table \"" + msTbl.getTableName() + "\" does not have partitions keys.");
       String partiotionsListEmpty = msPartitions.isEmpty() ? "" : "not";
-      LOG.info("List of partitions is \"" + partiotionsListEmpty + "\" empty");
       Preconditions.checkArgument(msPartitions == null || msPartitions.isEmpty());
       // This table has no partition key, which means it has no declared partitions.
       // We model partitions slightly differently to Hive - every file must exist in a
@@ -1037,7 +1040,7 @@ public class HdfsTable extends Table {
       org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
     numHdfsFiles_ = 0;
     totalHdfsBytes_ = 0;
-    LOG.info("load table: " + db_.getName() + "." + name_);
+    LOG.debug("load table: " + db_.getName() + "." + name_);
 
     // turn all exceptions into TableLoadingException
     try {
@@ -1158,7 +1161,7 @@ public class HdfsTable extends Table {
             modifiedPartitionNames.remove(cachedPartName);
           }
         }
-        LOG.trace(String.format("Incrementally refreshing %d/%d partitions.",
+        LOG.info(String.format("Incrementally refreshing %d/%d partitions.",
             modifiedPartitionNames.size(), totalPartitions));
 
         // No need to make the metastore call if no partitions are to be updated.
@@ -1179,7 +1182,7 @@ public class HdfsTable extends Table {
 
       // load table stats
       numRows_ = getRowCount(msTbl.getParameters());
-      LOG.info("table #rows=" + Long.toString(numRows_));
+      LOG.debug("table #rows=" + Long.toString(numRows_));
 
       // For unpartitioned tables set the numRows in its partitions
       // to the table's numRows.

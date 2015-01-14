@@ -59,14 +59,6 @@ public class TupleIsNullPredicate extends Predicate {
     analyzer_ = analyzer;
   }
 
-  /**
-   * Copy c'tor used in clone().
-   */
-  protected TupleIsNullPredicate(TupleIsNullPredicate other) {
-    super(other);
-    tupleIds_ = Lists.newArrayList(other.tupleIds_);
-  }
-
   @Override
   protected void toThrift(TExprNode msg) {
     msg.node_type = TExprNodeType.TUPLE_IS_NULL_PRED;

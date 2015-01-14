@@ -17,6 +17,7 @@ package com.cloudera.impala.util;
 import java.io.IOException;
 import java.util.Map;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
@@ -46,16 +47,16 @@ public class HdfsCachingUtil {
 
   // Elena: remove dfs currently
   // private final static DistributedFileSystem dfs;
-  /*private final static FileSystem dfs;
+  private final static FileSystem dfs;
   static {
     try {
-      dfs = FileSystemUtil.getDistributedFileSystem();
+      dfs = FileSystemUtil.getFileSystem();
     } catch (IOException e) {
       throw new RuntimeException("HdfsCachingUtil failed to initialize the " +
           "DistributedFileSystem: ", e);
     }
   }
-*/
+
   /**
    * Caches the location of the given Hive Metastore Table and updates the
    * table's properties with the submitted cache directive ID.
@@ -71,7 +72,8 @@ public class HdfsCachingUtil {
     }
     long id = HdfsCachingUtil.submitDirective(new Path(table.getSd().getLocation()),
         poolName);
-    table.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
+    if(id != -1)
+      table.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
     return id;
   }
 
@@ -91,7 +93,8 @@ public class HdfsCachingUtil {
     }
     long id = HdfsCachingUtil.submitDirective(new Path(part.getSd().getLocation()),
         poolName);
-    part.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
+    if(id != -1)
+      part.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
     return id;
   }
 
@@ -172,7 +175,7 @@ public class HdfsCachingUtil {
 
     // The refresh interval is how often HDFS will update cache directive stats. We use
     // this value to determine how frequently we should poll for changes.
-    long hdfsRefreshIntervalMs = dfs.getConf().getLong(
+    long hdfsRefreshIntervalMs = FileSystemUtil.getConfiguration().getLong(
         DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS,
         DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS_DEFAULT);
     Preconditions.checkState(hdfsRefreshIntervalMs > 0);
@@ -225,7 +228,10 @@ public class HdfsCachingUtil {
         .setPath(path).build();
     LOG.debug("Submitting cache directive: " + info.toString());
     try {
-      return dfs.addCacheDirective(info);
+      if (dfs instanceof DistributedFileSystem){
+        return ((DistributedFileSystem)dfs).addCacheDirective(info);
+      }
+      else return -1; // for non-distributed fs, return the -1
     } catch (IOException e) {
       throw new ImpalaRuntimeException(e.getMessage(), e);
     }
@@ -240,7 +246,9 @@ public class HdfsCachingUtil {
   private static void removeDirective(long directiveId) throws ImpalaRuntimeException {
     LOG.debug("Removing cache directive id: " + directiveId);
     try {
-      dfs.removeCacheDirective(directiveId);
+      if (dfs instanceof DistributedFileSystem){
+        ((DistributedFileSystem)dfs).removeCacheDirective(directiveId);
+      }
     } catch (IOException e) {
       // There is no special exception type for the case where a directive ID does not
       // exist so we must inspect the error message.
@@ -256,11 +264,15 @@ public class HdfsCachingUtil {
   private static CacheDirectiveEntry getDirective(long directiveId)
       throws ImpalaRuntimeException {
     LOG.trace("Getting cache directive id: " + directiveId);
+    if (!(dfs instanceof DistributedFileSystem)){
+      LOG.trace("Filesystem instance is not the distibuted fs - for directive id \"" + directiveId + "\".");
+      return null;
+    }
     CacheDirectiveInfo filter = new CacheDirectiveInfo.Builder()
         .setId(directiveId)
         .build();
     try {
-      RemoteIterator<CacheDirectiveEntry> itr = dfs.listCacheDirectives(filter);
+      RemoteIterator<CacheDirectiveEntry> itr = ((DistributedFileSystem)dfs).listCacheDirectives(filter);
       while (itr.hasNext()) {
         CacheDirectiveEntry entry = itr.next();
         if (entry.getInfo().getId() == directiveId) return entry;

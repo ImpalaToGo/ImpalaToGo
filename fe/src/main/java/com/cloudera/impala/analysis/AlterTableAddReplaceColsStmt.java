@@ -88,7 +88,6 @@ public class AlterTableAddReplaceColsStmt extends AlterTableStmt {
     Set<String> colNames = Sets.newHashSet();
     for (ColumnDesc c: columnDefs_) {
       c.analyze();
-      analyzer.warnIfUnsupportedType(c.getType());
       String colName = c.getColName().toLowerCase();
       if (existingPartitionKeys.contains(colName)) {
         throw new AnalysisException(
