@@ -143,13 +143,14 @@ class CatalogServiceThriftIf : public CatalogServiceIf {
   CatalogServer* catalog_server_;
 };
 
-CatalogServer::CatalogServer(Metrics* metrics)
+CatalogServer::CatalogServer(MetricGroup* metrics)
   : thrift_iface_(new CatalogServiceThriftIf(this)),
     thrift_serializer_(FLAGS_compact_catalog_topic), metrics_(metrics),
     topic_updates_ready_(false), last_sent_catalog_version_(0L),
     catalog_objects_min_version_(0L), catalog_objects_max_version_(0L) {
   topic_processing_time_metric_ = metrics_->RegisterMetric(
-      new StatsMetric<double>(CATALOG_SERVER_TOPIC_PROCESSING_TIMES));
+      new StatsMetric<double>(CATALOG_SERVER_TOPIC_PROCESSING_TIMES,
+          TCounterType::TIME_S));
 }
 
 
@@ -168,8 +169,8 @@ Status CatalogServer::Start() {
       &CatalogServer::GatherCatalogUpdatesThread, this));
 
   statestore_subscriber_.reset(new StatestoreSubscriber(
-     TNetworkAddressToString(server_address), subscriber_address, statestore_address,
-     metrics_));
+     Substitute("catalog-server@$0", TNetworkAddressToString(server_address)),
+     subscriber_address, statestore_address, metrics_));
 
   StatestoreSubscriber::UpdateCallback cb =
       bind<void>(mem_fn(&CatalogServer::UpdateCatalogTopicCallback), this, _1, _2);

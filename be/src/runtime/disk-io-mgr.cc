@@ -286,7 +286,7 @@ DiskIoMgr::~DiskIoMgr() {
     delete disk_queues_[i];
   }
 
-  if (cached_read_options_ != NULL) hadoopRzOptionsFree(cached_read_options_);
+  if (cached_read_options_ != NULL) _hadoopRzOptionsFree(cached_read_options_);
 }
 
 Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
@@ -315,13 +315,13 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
   }
   request_context_cache_.reset(new RequestContextCache(this));
 
-  cached_read_options_ = hadoopRzOptionsAlloc();
+  cached_read_options_ = _hadoopRzOptionsAlloc();
   DCHECK(cached_read_options_ != NULL);
   // Disable checksumming for cached reads.
-  int ret = hadoopRzOptionsSetSkipChecksum(cached_read_options_, true);
+  int ret = _hadoopRzOptionsSetSkipChecksum(cached_read_options_, true);
   DCHECK_EQ(ret, 0);
   // Disable automatic fallback for cached reads.
-  ret = hadoopRzOptionsSetByteBufferPool(cached_read_options_, NULL);
+  ret = _hadoopRzOptionsSetByteBufferPool(cached_read_options_, NULL);
   DCHECK_EQ(ret, 0);
 
   return Status::OK;
@@ -680,7 +680,7 @@ void DiskIoMgr::GcIoBuffers() {
     ImpaladMetrics::IO_MGR_TOTAL_BYTES->Increment(-bytes_freed);
   }
   if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
-    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Update(0);
+    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->set_value(0);
   }
 }
 
@@ -816,17 +816,6 @@ bool DiskIoMgr::GetNextRequestRange(DiskQueue* disk_queue, RequestRange** range,
       request_disk_state->in_flight_ranges()->Enqueue(write_range);
     }
 
-    // Always enqueue a WriteRange to be processed into in_flight_ranges_.
-    // This is done so in_flight_ranges_ does not exclusively contain ScanRanges.
-    // For now, enqueuing a WriteRange on each invocation of GetNextRequestRange()
-    // does not flood in_flight_ranges() with WriteRanges because the entire
-    // WriteRange is processed and removed from the queue after GetNextRequestRange()
-    // returns. (A DCHECK is used to ensure that writes do not exceed 8MB).
-    if (!request_disk_state->unstarted_write_ranges()->empty()) {
-      WriteRange* write_range = request_disk_state->unstarted_write_ranges()->Dequeue();
-      request_disk_state->in_flight_ranges()->Enqueue(write_range);
-    }
-
     // Get the next scan range to work on from the reader. Only in_flight_ranges
     // are eligible since the disk threads do not start new ranges on their own.
 
@@ -905,7 +894,13 @@ void DiskIoMgr::HandleReadFinished(DiskQueue* disk_queue, RequestContext* reader
   }
 
   bool queue_full = buffer->scan_range_->EnqueueBuffer(buffer);
-  if (!buffer->eosr_) {
+  if (buffer->eosr_) {
+    // For cached buffers, we can't close the range until the cached buffer is returned.
+    // Close() is called from DiskIoMgr::ReturnBuffer().
+    if (buffer->scan_range_->cached_buffer_ == NULL) {
+      buffer->scan_range_->Close();
+    }
+  } else {
     if (queue_full) {
       reader->blocked_ranges_.Enqueue(buffer->scan_range_);
     } else {

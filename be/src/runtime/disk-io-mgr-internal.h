@@ -194,7 +194,7 @@ class DiskIoMgr::RequestContext {
    // Parent object
   DiskIoMgr* parent_;
 
-  // hdfsFS connection handle.  This is set once and never changed for the duration
+  // dfsFS connection handle.  This is set once and never changed for the duration
   // of the reader.  NULL if this is a local reader.
   dfsFS hdfs_connection_;
 

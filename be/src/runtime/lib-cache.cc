@@ -325,14 +325,14 @@ Status LibCache::GetCacheEntryInternal(const string& hdfs_lib_file, LibType type
       // cached entry and create a new one.
       (*entry)->check_needs_refresh = false;
       time_t last_mod_time;
-      hdfsFS hdfs_conn;
-      Status status = HdfsFsCache::instance()->GetConnection(hdfs_lib_file, &hdfs_conn);
-      if (!status.ok()) {
+      dfsFS dfs_conn;
+      Status status = HdfsFsCache::instance()->GetConnection(hdfs_lib_file, &dfs_conn);
+      if (!status.ok() || !dfs_conn.valid) {
         RemoveEntryInternal(hdfs_lib_file, it);
         *entry = NULL;
         return status;
       }
-      status = GetLastModificationTime(hdfs_conn, hdfs_lib_file.c_str(), &last_mod_time);
+      status = GetLastModificationTime(dfs_conn, hdfs_lib_file.c_str(), &last_mod_time);
       if (!status.ok() || (*entry)->last_mod_time < last_mod_time) {
         RemoveEntryInternal(hdfs_lib_file, it);
         *entry = NULL;
@@ -375,19 +375,19 @@ Status LibCache::GetCacheEntryInternal(const string& hdfs_lib_file, LibType type
   VLOG(1) << "Adding lib cache entry: " << hdfs_lib_file
           << ", local path: " << (*entry)->local_path;
 
-  hdfsFS hdfs_conn, local_conn;
-  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(hdfs_lib_file, &hdfs_conn));
+  dfsFS dfs_conn, local_conn;
+  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(hdfs_lib_file, &dfs_conn));
   RETURN_IF_ERROR(HdfsFsCache::instance()->GetLocalConnection(&local_conn));
 
   // Note: the file can be updated between getting last_mod_time and copying the file to
   // local_path. This can only result in the file unnecessarily being refreshed, and does
   // not affect correctness.
   (*entry)->copy_file_status = GetLastModificationTime(
-      hdfs_conn, hdfs_lib_file.c_str(), &(*entry)->last_mod_time);
+      dfs_conn, hdfs_lib_file.c_str(), &(*entry)->last_mod_time);
   RETURN_IF_ERROR((*entry)->copy_file_status);
 
   (*entry)->copy_file_status = CopyHdfsFile(
-      hdfs_conn, hdfs_lib_file, local_conn, (*entry)->local_path);
+      dfs_conn, hdfs_lib_file, local_conn, (*entry)->local_path);
   RETURN_IF_ERROR((*entry)->copy_file_status);
 
   if (type == TYPE_SO) {

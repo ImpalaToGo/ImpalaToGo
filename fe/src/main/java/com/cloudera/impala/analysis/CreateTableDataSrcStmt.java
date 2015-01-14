@@ -23,6 +23,8 @@ import static com.cloudera.impala.catalog.DataSourceTable.TBL_PROP_LOCATION;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.fs.permission.FsAction;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.DataSourceTable;
@@ -85,7 +87,7 @@ public class CreateTableDataSrcStmt extends CreateTableStmt {
     getTblProperties().put(TBL_PROP_LOCATION, location);
     getTblProperties().put(TBL_PROP_CLASS, dataSource.getClassName());
     getTblProperties().put(TBL_PROP_API_VER, dataSource.getApiVersion());
-    new HdfsUri(location).analyze(analyzer, Privilege.ALL);
+    new HdfsUri(location).analyze(analyzer, Privilege.ALL, FsAction.READ);
     // TODO: check class exists and implements API version
   }
 }

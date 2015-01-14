@@ -14,6 +14,8 @@
 
 package com.cloudera.impala.analysis;
 
+import org.apache.hadoop.fs.permission.FsAction;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.HdfsPartition;
 import com.cloudera.impala.catalog.HdfsTable;
@@ -55,7 +57,7 @@ public class AlterTableSetLocationStmt extends AlterTableSetStmt {
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     super.analyze(analyzer);
-    location_.analyze(analyzer, Privilege.ALL);
+    location_.analyze(analyzer, Privilege.ALL, FsAction.READ_WRITE);
 
     Table table = getTargetTable();
     Preconditions.checkNotNull(table);

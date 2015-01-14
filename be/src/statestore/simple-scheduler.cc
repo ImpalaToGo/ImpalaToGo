@@ -84,9 +84,9 @@ static const string ERROR_USER_NOT_SPECIFIED("User must be specified because "
 
 SimpleScheduler::SimpleScheduler(StatestoreSubscriber* subscriber,
     const string& backend_id, const TNetworkAddress& backend_address,
-    Metrics* metrics, Webserver* webserver, ResourceBroker* resource_broker,
+    MetricGroup* metrics, Webserver* webserver, ResourceBroker* resource_broker,
     RequestPoolService* request_pool_service)
-  : metrics_(metrics),
+  : metrics_(metrics->GetChildGroup("scheduler")),
     webserver_(webserver),
     statestore_subscriber_(subscriber),
     backend_id_(backend_id),
@@ -127,7 +127,7 @@ SimpleScheduler::SimpleScheduler(StatestoreSubscriber* subscriber,
 }
 
 SimpleScheduler::SimpleScheduler(const vector<TNetworkAddress>& backends,
-    Metrics* metrics, Webserver* webserver, ResourceBroker* resource_broker,
+    MetricGroup* metrics, Webserver* webserver, ResourceBroker* resource_broker,
     RequestPoolService* request_pool_service)
   : metrics_(metrics),
     webserver_(webserver),
@@ -200,13 +200,10 @@ Status SimpleScheduler::Init() {
     }
   }
   if (metrics_ != NULL) {
-    total_assignments_ =
-        metrics_->CreateAndRegisterPrimitiveMetric(ASSIGNMENTS_KEY, 0L);
-    total_local_assignments_ =
-        metrics_->CreateAndRegisterPrimitiveMetric(LOCAL_ASSIGNMENTS_KEY, 0L);
-    initialised_ =
-        metrics_->CreateAndRegisterPrimitiveMetric(SCHEDULER_INIT_KEY, true);
-    num_backends_metric_ = metrics_->CreateAndRegisterPrimitiveMetric<int64_t>(
+    total_assignments_ = metrics_->AddCounter(ASSIGNMENTS_KEY, 0L);
+    total_local_assignments_ = metrics_->AddCounter(LOCAL_ASSIGNMENTS_KEY, 0L);
+    initialised_ = metrics_->AddProperty(SCHEDULER_INIT_KEY, true);
+    num_backends_metric_ = metrics_->AddGauge<int64_t>(
         NUM_BACKENDS_KEY, backend_map_.size());
   }
 
@@ -360,7 +357,7 @@ void SimpleScheduler::UpdateMembership(
       update.topic_name = IMPALA_MEMBERSHIP_TOPIC;
       update.topic_deletions.push_back(backend_id_);
     }
-    if (metrics_ != NULL) num_backends_metric_->Update(current_membership_.size());
+    if (metrics_ != NULL) num_backends_metric_->set_value(current_membership_.size());
   }
 }
 
@@ -485,34 +482,48 @@ Status SimpleScheduler::ComputeScanRangeAssignment(
     const TNetworkAddress* data_host = NULL;  // data server; not necessarily backend
     int volume_id = -1;
     bool is_cached = false;
-    BOOST_FOREACH(const TScanRangeLocation& location, scan_range_locations.locations) {
-      DCHECK_LT(location.host_idx, host_list.size());
-      const TNetworkAddress& replica_host = host_list[location.host_idx];
-      // Deprioritize non-collocated datanodes by assigning a very high initial bytes
-      uint64_t initial_bytes =
-          !HasLocalBackend(replica_host) ? numeric_limits<int64_t>::max() : 0L;
-      uint64_t* assigned_bytes =
-          FindOrInsert(&assigned_bytes_per_host, replica_host, initial_bytes);
 
-      // Adjust whether or not this replica should count as being cached based on
-      // the query option and whether it is collocated. If the DN is not collocated
-      // treat the replica as not cached (network transfer dominates anyway in this
-      // case).
-      // TODO: measure this in a cluster setup. Are remote reads better with caching?
-      bool is_replica_cached = location.is_cached && schedule_with_caching;
-      if (initial_bytes != 0) is_replica_cached = false;
-
-      // We've found a cached replica and this one is not, skip this replica.
-      if (is_cached && !is_replica_cached) continue;
-
-      // Update the assignment if this is the first cached replica or if this is
-      // a less busy host.
-      if ((is_replica_cached && !is_cached) || *assigned_bytes < min_assigned_bytes) {
-        min_assigned_bytes = *assigned_bytes;
-        data_host = &replica_host;
-        volume_id = location.volume_id;
-        is_cached = is_replica_cached;
+    // Separate cached replicas from non-cached replicas
+    vector<const TScanRangeLocation*> cached_locations;
+    if (schedule_with_caching) {
+      BOOST_FOREACH(const TScanRangeLocation& location, scan_range_locations.locations) {
+        // Adjust whether or not this replica should count as being cached based on
+        // the query option and whether it is collocated. If the DN is not collocated
+        // treat the replica as not cached (network transfer dominates anyway in this
+        // case).
+        // TODO: measure this in a cluster setup. Are remote reads better with caching?
+        if (location.is_cached && HasLocalBackend(host_list[location.host_idx])) {
+          cached_locations.push_back(&location);
+        }
       }
+    }
+    // If no replicas are cached find the ones based on assigned bytes
+    if (cached_locations.size() == 0) {
+      BOOST_FOREACH(const TScanRangeLocation& location, scan_range_locations.locations) {
+        DCHECK_LT(location.host_idx, host_list.size());
+        const TNetworkAddress& replica_host = host_list[location.host_idx];
+        // Deprioritize non-collocated datanodes by assigning a very high initial bytes
+        uint64_t initial_bytes =
+            HasLocalBackend(replica_host) ? 0L : numeric_limits<int64_t>::max();
+        uint64_t* assigned_bytes =
+            FindOrInsert(&assigned_bytes_per_host, replica_host, initial_bytes);
+        // Update the assignment if this is a less busy host.
+        if (*assigned_bytes < min_assigned_bytes) {
+          min_assigned_bytes = *assigned_bytes;
+          data_host = &replica_host;
+          volume_id = location.volume_id;
+          is_cached = false;
+        }
+      }
+    } else {
+      // Randomly pick a cached host based on the extracted list of cached local hosts
+      size_t rand_host = rand() % cached_locations.size();
+      const TNetworkAddress& replica_host = host_list[cached_locations[rand_host]->host_idx];
+      uint64_t initial_bytes = 0L;
+      min_assigned_bytes = *FindOrInsert(&assigned_bytes_per_host, replica_host, initial_bytes);
+      data_host = &replica_host;
+      volume_id = cached_locations[rand_host]->volume_id;
+      is_cached = true;
     }
 
     int64_t scan_range_length = 0;

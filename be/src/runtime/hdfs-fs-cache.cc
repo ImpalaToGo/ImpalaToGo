@@ -29,6 +29,13 @@ using namespace strings;
 
 namespace impala {
 
+scoped_ptr<HdfsFsCache> HdfsFsCache::instance_;
+
+void HdfsFsCache::Init() {
+  DCHECK(HdfsFsCache::instance_.get() == NULL);
+  HdfsFsCache::instance_.reset(new HdfsFsCache());
+}
+
 Status HdfsFsCache::GetConnection(const string& path, dfsFS* fs) {
 	string namenode;
 	size_t n = path.find("://");

@@ -86,7 +86,7 @@ HdfsOpThreadPool* CreateHdfsOpThreadPool(const std::string& name, uint32_t num_t
 // added.
 class HdfsOperationSet {
  public:
-  // Constructs a new operation set. The hdfsFS parameter is shared between all
+  // Constructs a new operation set. The dfsFS parameter is shared between all
   // operations, and is not owned by this class (and therefore should remain valid until
   // Execute returns).
   HdfsOperationSet(dfsFS* hdfs_connection);

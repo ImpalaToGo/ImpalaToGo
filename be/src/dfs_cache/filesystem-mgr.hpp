@@ -297,7 +297,7 @@ public:
 	void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries);
 
 	/**
-	 * @fn tOffset dfsGetCapacity(hdfsFS fs)
+	 * @fn tOffset dfsGetCapacity(dfsFS fs)
 	 * @brief Return the raw capacity of the local filesystem.
 	 *
 	 * @param fsDescriptor - fs machine belongs to

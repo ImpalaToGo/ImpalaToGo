@@ -14,6 +14,8 @@
 
 package com.cloudera.impala.analysis;
 
+import org.apache.hadoop.fs.permission.FsAction;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.TAlterTableAddPartitionParams;
@@ -80,7 +82,9 @@ public class AlterTableAddPartitionStmt extends AlterTableStmt {
     partitionSpec_.setPrivilegeRequirement(Privilege.ALTER);
     partitionSpec_.analyze(analyzer);
 
-    if (location_ != null) location_.analyze(analyzer, Privilege.ALL);
+    if (location_ != null) {
+      location_.analyze(analyzer, Privilege.ALL, FsAction.READ_WRITE);
+    }
     if (cacheOp_ != null) cacheOp_.analyze(analyzer);
   }
 }

@@ -18,7 +18,6 @@ import static com.cloudera.impala.thrift.ImpalaInternalServiceConstants.DEFAULT_
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -55,9 +53,9 @@ import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.LiteralExpr;
 import com.cloudera.impala.analysis.NullLiteral;
 import com.cloudera.impala.analysis.PartitionKeyValue;
-import com.cloudera.impala.catalog.HdfsPartition.BlockReplica;
 import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpResult;
 import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpStatus;
+import com.cloudera.impala.catalog.HdfsPartition.BlockReplica;
 import com.cloudera.impala.catalog.HdfsPartition.FileBlock;
 import com.cloudera.impala.catalog.HdfsPartition.FileDescriptor;
 import com.cloudera.impala.common.AnalysisException;
@@ -235,6 +233,7 @@ public class HdfsTable extends Table {
 
       // Store all BlockLocations so they can be reused when loading the disk IDs.
       List<BlockLocation> blockLocations = Lists.newArrayList();
+      int numCachedBlocks = 0;
 
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
       Preconditions.checkNotNull(partitionToFds);
@@ -530,10 +529,8 @@ public class HdfsTable extends Table {
       Column col = new Column(s.getName(), type, s.getComment(), pos);
       addColumn(col);
       ++pos;
-
-      // Load and set column stats in col.
-      loadColumnStats(col, client);
     }
+    loadAllColumnStats(client);
   }
 
   /**
@@ -674,17 +671,10 @@ public class HdfsTable extends Table {
         if (perms.canReadAndWrite()) {
           return TAccessLevel.READ_WRITE;
         } else if (perms.canRead()) {
-          LOG.debug(
-              String.format("Impala does not have WRITE access to '%s' in table: %s",
-              location, getFullName()));
           return TAccessLevel.READ_ONLY;
         } else if (perms.canWrite()) {
-          LOG.debug(String.format("Impala does not have READ access to '%s' in table: %s",
-                  location, getFullName()));
           return TAccessLevel.WRITE_ONLY;
         }
-        LOG.debug(String.format("Impala does not have READ or WRITE access to " +
-                "'%s' in table: %s", location, getFullName()));
         return TAccessLevel.NONE;
       }
       location = location.getParent();
@@ -1010,49 +1000,6 @@ public class HdfsTable extends Table {
       else {
         partitionValuesMap_.get(i).remove(literal);
         stats.setNumDistinctValues(stats.getNumDistinctValues() - 1);
-  }
-
-  /**
-   * Drops the partition having the given partition spec from HdfsTable. Cleans up its
-   * metadata from all the mappings used to speed up partition pruning/lookup.
-   * Also updates partition column statistics. Given partitionSpec must match exactly
-   * one partition.
-   * Returns the HdfsPartition that was dropped. If the partition does not exist, returns
-   * null.
-   *
-   * Note: This method is not thread safe because it modifies the list of partitions
-   * and the HdfsTable's partition metadata.
-   */
-  public HdfsPartition dropPartition(List<TPartitionKeyValue> partitionSpec) {
-    HdfsPartition partition = getPartitionFromThriftPartitionSpec(partitionSpec);
-    // Check if the partition does not exist.
-    if (partition == null || !partitions_.remove(partition)) return null;
-    totalHdfsBytes_ -= partition.getSize();
-    Preconditions.checkArgument(partition.getPartitionValues().size() ==
-        numClusteringCols_);
-    Long partitionId = partition.getId();
-    // Remove the partition id from the list of partition ids and other mappings.
-    partitionIds_.remove(partitionId);
-    partitionMap_.remove(partitionId);
-    for (int i = 0; i < partition.getPartitionValues().size(); ++i) {
-      ColumnStats stats = getColumns().get(i).getStats();
-      LiteralExpr literal = partition.getPartitionValues().get(i);
-      // Check if this is a null literal.
-      if (literal instanceof NullLiteral) {
-        nullPartitionIds_.get(i).remove(partitionId);
-        stats.setNumNulls(stats.getNumNulls() - 1);
-        if (nullPartitionIds_.get(i).isEmpty()) {
-          stats.setNumDistinctValues(stats.getNumDistinctValues() - 1);
-        }
-        continue;
-      }
-      HashSet<Long> partitionIds = partitionValuesMap_.get(i).get(literal);
-      // If there are multiple partition ids corresponding to a literal, remove
-      // only this id. Otherwise, remove the <literal, id> pair.
-      if (partitionIds.size() > 1) partitionIds.remove(partitionId);
-      else {
-        partitionValuesMap_.get(i).remove(literal);
-        stats.setNumDistinctValues(stats.getNumDistinctValues() - 1);
       }
     }
     return partition;
@@ -1314,6 +1261,16 @@ public class HdfsTable extends Table {
         IOUtils.closeQuietly(urlStream);
       }
     }
+  }
+
+  @Override
+  protected List<String> getColumnNamesWithHmsStats() {
+    List<String> ret = Lists.newArrayList();
+    // Only non-partition columns have column stats in the HMS.
+    for (Column column: getColumns().subList(numClusteringCols_, getColumns().size())) {
+      ret.add(column.getName().toLowerCase());
+    }
+    return ret;
   }
 
   @Override

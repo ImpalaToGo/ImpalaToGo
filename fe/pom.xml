@@ -67,6 +67,12 @@
 
     <dependency>
       <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-aws</artifactId>
+      <version>${hadoop.version}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-mapreduce-client-core</artifactId>
       <version>${hadoop.version}</version>
     </dependency>
@@ -159,36 +165,6 @@
       <groupId>org.cloudera.htrace</groupId>
       <artifactId>htrace-core</artifactId>
       <version>2.00</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-format</artifactId>
-      <version>${env.IMPALA_PARQUET_FORMAT_VERSION}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop</artifactId>
-      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-common</artifactId>
-      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-encoding</artifactId>
-      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-thrift</artifactId>
-      <version>${env.IMPALA_PARQUET_HADOOP_VERSION}</version>
     </dependency>
 
     <dependency>
@@ -287,12 +263,7 @@
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.apache.hive</groupId>
-      <artifactId>hive-exec</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    
+       
     <!-- This driver supports PostgreSQL 7.2 and newer -->
     <dependency>
       <groupId>postgresql</groupId>

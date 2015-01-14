@@ -27,8 +27,6 @@
 #include <boost/filesystem.hpp>
 #include <gutil/strings/substitute.h>
 
-// Elena : 08.10.2014 Remove hdfs dependency (1)
-// #include <hdfs.h>
 #include "dfs_cache/dfs-cache.h"
 
 #include "codegen/llvm-codegen.h"
@@ -82,13 +80,11 @@ HdfsScanNode::HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode,
       thrift_plan_node_(new TPlanNode(tnode)),
       runtime_state_(NULL),
       tuple_id_(tnode.hdfs_scan_node.tuple_id),
-      requires_compaction_(tnode.compact_data),
       reader_context_(NULL),
       tuple_desc_(NULL),
       unknown_disk_id_warned_(false),
       initial_ranges_issued_(false),
       scanner_thread_bytes_required_(0),
-      num_partition_keys_(0),
       disks_accessed_bitmap_(TCounterType::UNIT, 0),
       done_(false),
       all_ranges_started_(false),
@@ -141,12 +137,11 @@ Status HdfsScanNode::GetNextInternal(
   RETURN_IF_CANCELLED(state);
   RETURN_IF_ERROR(QueryMaintenance(state));
 
-  {
-    unique_lock<mutex> l(lock_);
-    if (ReachedLimit() || !status_.ok()) {
-      *eos = true;
-      return status_;
-    }
+  if (ReachedLimit()) {
+    // LIMIT 0 case.  Other limit values handled below.
+    DCHECK_EQ(limit_, 0);
+    *eos = true;
+    return Status::OK;
   }
   *eos = false;
 
@@ -154,7 +149,7 @@ Status HdfsScanNode::GetNextInternal(
   if (materialized_batch != NULL) {
     num_owned_io_buffers_ -= materialized_batch->num_io_buffers();
     row_batch->AcquireState(materialized_batch);
-    // Update the number of materialized rows instead of when they are materialized.
+    // Update the number of materialized rows now instead of when they are materialized.
     // This means that scanners might process and queue up more rows than are necessary
     // for the limit case but we want to avoid the synchronized writes to
     // num_rows_returned_
@@ -174,15 +169,25 @@ Status HdfsScanNode::GetNextInternal(
     delete materialized_batch;
     return Status::OK;
   }
-
+  // The RowBatchQueue was shutdown either because all scan ranges are complete or a
+  // scanner thread encountered an error.  Check status_ to distinguish those cases.
   *eos = true;
-  return Status::OK;
+  unique_lock<mutex> l(lock_);
+  return status_;
 }
 
 DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t len,
     int64_t offset, int64_t partition_id, int disk_id, bool try_cache,
     bool expected_local) {
   DCHECK_GE(disk_id, -1);
+  // Require that the scan range is within [0, file_length). While this cannot be used
+   // to guarantee safety (file_length metadata may be stale), it avoids different
+   // behavior between Hadoop FileSystems (e.g. s3n hdfsSeek() returns error when seeking
+   // beyond the end of the file).
+   DCHECK_GE(offset, 0);
+   DCHECK_GE(len, 0);
+   DCHECK_LE(offset + len, GetFileDesc(file)->file_length)
+       << "Scan range beyond end of file (offset=" << offset << ", len=" << len << ")";
   if (disk_id == -1) {
     // disk id is unknown, assign it a random one.
     static int next_disk_id = 0;
@@ -317,10 +322,6 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   hdfs_table_ = static_cast<const HdfsTableDescriptor*>(tuple_desc_->table_desc());
   scan_node_pool_.reset(new MemPool(mem_tracker()));
 
-  // If there are no materialized string cols, we never need to compact data
-  // (it is already compact).
-  requires_compaction_ &= tuple_desc_->string_slots().size() > 0;
-
   // Create mapping from column index in table to slot index in output tuple.
   // First, initialize all columns to SKIP_COLUMN.
   int num_cols = hdfs_table_->num_cols();
@@ -328,8 +329,6 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   for (int i = 0; i < num_cols; ++i) {
     column_idx_to_materialized_slot_idx_[i] = SKIP_COLUMN;
   }
-
-  num_partition_keys_ = hdfs_table_->num_clustering_cols();
 
   // Next, collect all materialized (partition key and not) slots
   vector<SlotDescriptor*> all_materialized_slots;
@@ -345,29 +344,32 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
 
   // Finally, populate materialized_slots_ and partition_key_slots_ in the order that
   // the slots appear in the file.
+  int num_partition_keys = hdfs_table_->num_clustering_cols();
   for (int i = 0; i < num_cols; ++i) {
     SlotDescriptor* slot_desc = all_materialized_slots[i];
     if (slot_desc == NULL) continue;
     if (hdfs_table_->IsClusteringCol(slot_desc)) {
       partition_key_slots_.push_back(slot_desc);
     } else {
-      DCHECK_GE(i, num_partition_keys_);
-      column_idx_to_materialized_slot_idx_[i] = materialized_slots_.size();
-      materialized_slots_.push_back(slot_desc);
+    	DCHECK_GE(i, num_partition_keys);
+    	column_idx_to_materialized_slot_idx_[i] = materialized_slots_.size();
+    	materialized_slots_.push_back(slot_desc);
     }
   }
 
   // Initialize is_materialized_col_
-  is_materialized_col_.resize(column_idx_to_materialized_slot_idx_.size());
-  for (int i = 0; i < is_materialized_col_.size(); ++i) {
-    is_materialized_col_[i] = column_idx_to_materialized_slot_idx_[i] != SKIP_COLUMN;
+  is_materialized_col_.resize(num_cols);
+  for (int i = 0; i < num_cols; ++i) {
+	  is_materialized_col_[i] = column_idx_to_materialized_slot_idx_[i] != SKIP_COLUMN;
   }
 
-  hdfs_connection_ = HdfsFsCache::instance()->GetDefaultConnection();
+  // TODO: don't assume all partitions are on the same filesystem.
+  HdfsFsCache::instance()->GetConnection(
+	      hdfs_table_->hdfs_base_dir(), &hdfs_connection_);
   if (!hdfs_connection_.valid ) {
     string error_msg = GetStrErrMsg();
     stringstream ss;
-    ss << "Failed to connect to HDFS." << "\n" << error_msg;
+    ss << "Failed to connect to DFS." << "\n" << error_msg;
     return Status(ss.str());
   }
 
@@ -901,6 +903,8 @@ void HdfsScanNode::ScannerThread() {
           DCHECK(done_);
           break;
         }
+        // Set status_ before calling SetDone() (which shuts down the RowBatchQueue),
+        // to ensure that GetNextInternal() notices the error status.
         status_ = status;
       }
 

@@ -62,6 +62,14 @@ namespace constants
 
 namespace ph = std::placeholders;
 
+FileSystemDescriptor::FileSystemDescriptor(): dfs_type(DFS_TYPE::NON_SPECIFIED), host(""), port(0), valid(false){}
+
+FileSystemDescriptor::FileSystemDescriptor(const std::string& path) : dfs_type(DFS_TYPE::NON_SPECIFIED), valid(false){
+		Uri uri = Uri::Parse(path);
+		host = uri.Host;
+		port = std::stoul(uri.Port);
+	}
+
 /** *********************************************************************************************
  * ***********************   APIs published by Cache Management.  *******************************
  * **********************************************************************************************
@@ -730,6 +738,38 @@ int64_t getDefaultBlockSize(const FileSystemDescriptor& fsDescriptor){
 	}
 
 	return fsAdaptor->getDefaultBlockSize(connection);
+}
+
+phadoopRzOptions _hadoopRzOptionsAlloc(void){
+	return FileSystemDescriptorBound::_hadoopRzOptionsAlloc();
+}
+
+int _hadoopRzOptionsSetSkipChecksum(phadoopRzOptions opts, int skip){
+	return FileSystemDescriptorBound::_hadoopRzOptionsSetSkipChecksum(opts, skip);
+}
+
+int _hadoopRzOptionsSetByteBufferPool(phadoopRzOptions opts, const char *className){
+	return FileSystemDescriptorBound::_hadoopRzOptionsSetByteBufferPool(opts, className);
+}
+
+void _hadoopRzOptionsFree(phadoopRzOptions opts){
+	FileSystemDescriptorBound::_hadoopRzOptionsFree(opts);
+}
+
+phadoopRzBuffer _hadoopReadZero(dfsFile file, phadoopRzOptions opts, int32_t maxLength){
+	return FileSystemDescriptorBound::_hadoopReadZero(file, opts, maxLength);
+}
+
+int32_t _hadoopRzBufferLength(const phadoopRzBuffer buffer){
+	return FileSystemDescriptorBound::_hadoopRzBufferLength(buffer);
+}
+
+const void* _hadoopRzBufferGet(const phadoopRzBuffer buffer){
+	return FileSystemDescriptorBound::_hadoopRzBufferGet(buffer);
+}
+
+void _hadoopRzBufferFree(dfsFile file, phadoopRzBuffer buffer){
+	return FileSystemDescriptorBound::_hadoopRzBufferFree(file, buffer);
 }
 
 }

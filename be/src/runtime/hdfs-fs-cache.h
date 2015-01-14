@@ -43,9 +43,6 @@ class HdfsFsCache {
   // Initializes the cache. Must be called before any other APIs.
   static void Init();
 
-  // Initializes the cache. Must be called before any other APIs.
-  static void Init();
-
   // Get connection to the local filesystem.
   Status GetLocalConnection(dfsFS* fs );
 

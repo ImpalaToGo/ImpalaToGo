@@ -18,6 +18,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <gflags/gflags.h>
+#include <gutil/strings/substitute.h>
 
 #include "common/logging.h"
 #include "resourcebroker/resource-broker.h"
@@ -44,11 +45,14 @@
 #include "util/mem-info.h"
 #include "util/debug-util.h"
 #include "util/cgroups-mgr.h"
+#include "util/memory-metrics.h"
+#include "util/pretty-printer.h"
 #include "gen-cpp/ImpalaInternalService.h"
 #include "gen-cpp/CatalogService.h"
 
 using namespace std;
 using namespace boost;
+using namespace strings;
 
 DEFINE_bool(use_statestore, true,
     "Use an external statestore process to manage cluster membership");
@@ -128,7 +132,7 @@ ExecEnv::ExecEnv()
     htable_factory_(new HBaseTableFactory()),
     disk_io_mgr_(new DiskIoMgr()),
     webserver_(new Webserver()),
-    metrics_(new Metrics()),
+    metrics_(new MetricGroup("impala-metrics")),
     mem_tracker_(NULL),
     thread_mgr_(new ThreadResourceMgr),
     cgroups_mgr_(NULL),
@@ -175,7 +179,7 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
     htable_factory_(new HBaseTableFactory()),
     disk_io_mgr_(new DiskIoMgr()),
     webserver_(new Webserver(webserver_port)),
-    metrics_(new Metrics()),
+    metrics_(new MetricGroup("impala-metrics")),
     mem_tracker_(NULL),
     thread_mgr_(new ThreadResourceMgr),
     hdfs_op_thread_pool_(

@@ -263,16 +263,6 @@ struct TAlterTableSetCachedParams {
   2: optional list<CatalogObjects.TPartitionKeyValue> partition_spec
 }
 
-// Parameters for ALTER TABLE SET [PARTITION partitionSpec] CACHED|UNCACHED
-struct TAlterTableSetCachedParams {
-  // Details on what operation to perform (cache or uncache)
-  1: required THdfsCachingOp cache_op
-
-  // An optional partition spec, set if marking a partition as cached/uncached
-  // rather than a table.
-  2: optional list<CatalogObjects.TPartitionKeyValue> partition_spec
-}
-
 // Parameters for all ALTER TABLE commands.
 struct TAlterTableParams {
   1: required TAlterTableType alter_type

@@ -48,11 +48,12 @@
 #include "statestore/scheduler.h"
 #include "exec/data-sink.h"
 #include "exec/scan-node.h"
+#include "util/container-util.h"
 #include "util/debug-util.h"
 #include "util/hdfs-util.h"
 #include "util/hdfs-bulk-ops.h"
-#include "util/container-util.h"
 #include "util/network-util.h"
+#include "util/pretty-printer.h"
 #include "util/llama-util.h"
 #include "util/summary-util.h"
 #include "gen-cpp/ImpalaInternalService.h"
@@ -385,7 +386,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
 
   query_events_->MarkEvent("Ready to start remote fragments");
   int backend_num = 0;
-  StatsMetric<double> latencies("fragment-latencies");
+  StatsMetric<double> latencies("fragment-latencies", TCounterType::TIME_NS);
   for (int fragment_idx = (has_coordinator_fragment ? 1 : 0);
        fragment_idx < request.fragments.size(); ++fragment_idx) {
     const FragmentExecParams& params = (*fragment_exec_params)[fragment_idx];
@@ -428,10 +429,8 @@ Status Coordinator::Exec(QuerySchedule& schedule,
   }
 
   query_events_->MarkEvent("Remote fragments started");
-  stringstream remote_fragments_status;
-  latencies.PrintValue(&remote_fragments_status);
   query_profile_->AddInfoString("Fragment start latencies",
-      remote_fragments_status.str());
+      latencies.ToHumanReadable());
 
   // If we have a coordinator fragment and remote fragments (the common case),
   // release the thread token on the coordinator fragment.  This fragment
@@ -483,43 +482,7 @@ Status Coordinator::UpdateStatus(const Status& status, const TUniqueId* instance
   return query_status_;
 }
 
-
-  return Status::OK;
-}
-
-Status Coordinator::GetStatus() {
-  lock_guard<mutex> l(lock_);
-  return query_status_;
-}
-
-Status Coordinator::UpdateStatus(const Status& status, const TUniqueId* instance_id) {
-  {
-    lock_guard<mutex> l(lock_);
-
-    // The query is done and we are just waiting for remote fragments to clean up.
-    // Ignore their cancelled updates.
-    if (returned_all_results_ && status.IsCancelled()) return query_status_;
-
-    // nothing to update
-    if (status.ok()) return query_status_;
-
-    // don't override an error status; also, cancellation has already started
-    if (!query_status_.ok()) return query_status_;
-
-    query_status_ = status;
-    CancelInternal();
-  }
-
-  // Log the id of the fragment that first failed so we can track it down easier.
-  if (instance_id != NULL) {
-    VLOG_QUERY << "Query id=" << query_id_ << " failed because fragment id="
-               << *instance_id << " failed.";
-  }
-
-  return query_status_;
-}
-
-void Coordinator::PopulatePathPermissionCache(hdfsFS fs, const string& path_str,
+void Coordinator::PopulatePathPermissionCache(dfsFS fs, const string& path_str,
     PermissionCache* permissions_cache) {
   // Find out if the path begins with a hdfs:// -style prefix, and remove it and the
   // location (e.g. host:port) if so.
@@ -765,15 +728,14 @@ Status Coordinator::FinalizeQuery() {
     return_status = FinalizeSuccessfulInsert();
   }
 
-  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   stringstream staging_dir;
   DCHECK(finalize_params_.__isset.staging_dir);
   staging_dir << finalize_params_.staging_dir << "/" << PrintId(query_id_,"_") << "/";
 
-  hdfsFS hdfs_conn;
+  dfsFS hdfs_conn;
   RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(staging_dir.str(), &hdfs_conn));
   VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
-  dfsDelete(hdfs_connection, staging_dir.str().c_str(), 1);
+  dfsDelete(hdfs_conn, staging_dir.str().c_str(), 1);
 
   return return_status;
 }

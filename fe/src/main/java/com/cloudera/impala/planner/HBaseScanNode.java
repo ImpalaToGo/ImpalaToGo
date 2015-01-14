@@ -24,9 +24,6 @@ import java.util.Map;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.HRegionLocation;
-import org.apache.hadoop.hbase.client.HTable;
-import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,8 +123,6 @@ public class HBaseScanNode extends ScanNode {
 
     // Call computeStats() after materializing slots and computing the mem layout.
     computeStats(analyzer);
-
-    computeScanRangeLocations(analyzer);
   }
 
   /**

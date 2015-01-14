@@ -187,8 +187,6 @@ TTypeEntry ColumnType::ToHs2Type() const {
     }
     default:
       // HiveServer2 does not have a type for invalid, date and datetime.
-    default:
-      // HiveServer2 does not have a type for invalid, date and datetime.
       DCHECK(false) << "bad TypeToTValueType() type: " << DebugString();
       result.primitiveEntry.type = TTypeId::STRING_TYPE;
   };

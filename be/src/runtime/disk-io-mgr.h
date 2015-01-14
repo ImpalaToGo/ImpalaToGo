@@ -288,7 +288,8 @@ class DiskIoMgr {
 
     virtual ~ScanRange();
 
-    // Resets this scan range object with the scan range description.
+    // Resets this scan range object with the scan range description.  The scan range
+    // must fall within the file bounds (offset >= 0 and offset + len <= file_length).
     void Reset(const char* file, int64_t len,
         int64_t offset, int disk_id, bool try_cache, bool expected_local,
         void* metadata = NULL);
@@ -369,7 +370,7 @@ class DiskIoMgr {
     // Reader/owner of the scan range
     RequestContext* reader_;
 
-    // File handle either to hdfs or local fs (FILE*)
+    // File handle either to dfs or local fs (FILE*)
     union {
       FILE* local_file_;
       dfsFile hdfs_file_;

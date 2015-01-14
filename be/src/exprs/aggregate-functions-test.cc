@@ -23,7 +23,7 @@
 
 #include "common/logging.h"
 #include "exprs/aggregate-functions.h"
-#include "runtime/multi-precision.h"
+#include "common/multi-precision.h"
 #include "udf/udf.h"
 #include "udf/uda-test-harness.h"
 #include "util/decimal-util.h"

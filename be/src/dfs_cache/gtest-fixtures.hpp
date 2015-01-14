@@ -51,11 +51,33 @@ class CacheLayerTest : public ::testing::Test {
 
 	  cacheInit(85, "/home/elenav/src/ImpalaToGo/datastorage/local_root/");
 
-	  m_namenode1    = {DFS_TYPE::OTHER, "", 0, "", "", true};
-	  m_namenodeHdfs = {DFS_TYPE::hdfs, "104.236.39.60", 8020, "", "", true};
+	  m_namenode1.dfs_type = DFS_TYPE::OTHER;
+	  m_namenode1.host = "";
+	  m_namenode1.port = 0;
+	  m_namenode1.credentials = "";
+	  m_namenode1.password = "";
+	  m_namenode1.valid = true;
 
-	  m_namenodeDefault         = {DFS_TYPE::NON_SPECIFIED, "default", 0, "", "", true};
-	  m_namenodelocalFilesystem = {DFS_TYPE::LOCAL, "", 0, "", "", true};
+	  m_namenodeHdfs.dfs_type = DFS_TYPE::hdfs;
+	  m_namenodeHdfs.host = "104.236.39.60";
+	  m_namenodeHdfs.port = 8020;
+	  m_namenodeHdfs.credentials = "";
+	  m_namenodeHdfs.password = "";
+	  m_namenodeHdfs.valid = true;
+
+	  m_namenodeDefault.dfs_type = DFS_TYPE::NON_SPECIFIED;
+	  m_namenodeDefault.host = "default";
+	  m_namenodeDefault.port = 0;
+	  m_namenodeDefault.credentials = "";
+	  m_namenodeDefault.password = "";
+	  m_namenodeDefault.valid = true;
+
+	  m_namenodelocalFilesystem.dfs_type = DFS_TYPE::LOCAL;
+	  m_namenodelocalFilesystem.host = "";
+	  m_namenodelocalFilesystem.port = 0;
+	  m_namenodelocalFilesystem.credentials = "";
+	  m_namenodelocalFilesystem.password = "";
+	  m_namenodelocalFilesystem.valid = true;
 
 	  // reset session contexts
 	  m_ctx1 = nullptr;

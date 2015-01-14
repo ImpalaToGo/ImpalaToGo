@@ -22,6 +22,7 @@ import java.util.Map;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
 
 import parquet.hadoop.ParquetFileReader;
 import parquet.hadoop.metadata.ParquetMetadata;
@@ -77,7 +78,9 @@ public class CreateTableLikeFileStmt extends CreateTableStmt {
                                     pathToFile);
       }
     } catch (IOException e) {
-      throw new AnalysisException("Failed to connect to HDFS:" + e);
+      throw new AnalysisException("Failed to connect to filesystem:" + e);
+    } catch (IllegalArgumentException e) {
+      throw new AnalysisException(e.getMessage());
     }
     ParquetMetadata readFooter = null;
     try {
@@ -86,7 +89,7 @@ public class CreateTableLikeFileStmt extends CreateTableStmt {
     } catch (FileNotFoundException e) {
       throw new AnalysisException("File not found: " + e);
     } catch (IOException e) {
-      throw new AnalysisException("Failed to open HDFS file as a parquet file: " + e);
+      throw new AnalysisException("Failed to open file as a parquet file: " + e);
     } catch (RuntimeException e) {
       // Parquet throws a generic RuntimeException when reading a non-parquet file
       if (e.toString().contains("is not a Parquet file")) {
@@ -207,7 +210,7 @@ public class CreateTableLikeFileStmt extends CreateTableStmt {
 
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
-    schemaLocation_.analyze(analyzer, Privilege.ALL);
+    schemaLocation_.analyze(analyzer, Privilege.ALL, FsAction.READ_WRITE);
     switch (schemaFileFormat_) {
       case PARQUET:
         getColumnDefs().addAll(extractParquetSchema(schemaLocation_));

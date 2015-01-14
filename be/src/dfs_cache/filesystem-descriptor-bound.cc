@@ -188,5 +188,38 @@ int64_t FileSystemDescriptorBound::getDefaultBlockSize(raiiDfsConnection& conn){
 	return _dfsGetDefaultBlockSize(conn.connection()->connection);
 }
 
+struct hadoopRzOptions* FileSystemDescriptorBound::_hadoopRzOptionsAlloc(void){
+	return hadoopRzOptionsAlloc();
+}
+
+int FileSystemDescriptorBound::_hadoopRzOptionsSetSkipChecksum(struct hadoopRzOptions* opts, int skip){
+	return hadoopRzOptionsSetSkipChecksum(opts, skip);
+}
+
+int FileSystemDescriptorBound::_hadoopRzOptionsSetByteBufferPool(
+	        struct hadoopRzOptions* opts, const char *className){
+	return hadoopRzOptionsSetByteBufferPool(opts, className);
+}
+
+void FileSystemDescriptorBound::_hadoopRzOptionsFree(struct hadoopRzOptions* opts){
+	hadoopRzOptionsFree(opts);
+}
+
+struct hadoopRzBuffer* FileSystemDescriptorBound::_hadoopReadZero(dfsFile file,
+	        struct hadoopRzOptions* opts, int32_t maxLength){
+	return hadoopReadZero(file, opts, maxLength);
+}
+
+int32_t FileSystemDescriptorBound::_hadoopRzBufferLength(const struct hadoopRzBuffer* buffer){
+	return hadoopRzBufferLength(buffer);
+}
+
+const void * FileSystemDescriptorBound::_hadoopRzBufferGet(const struct hadoopRzBuffer* buffer){
+	return hadoopRzBufferGet(buffer);
+}
+
+void FileSystemDescriptorBound::_hadoopRzBufferFree(dfsFile file, struct hadoopRzBuffer* buffer){
+	hadoopRzBufferFree(file, buffer);
+}
 } /** namespace impala */
 

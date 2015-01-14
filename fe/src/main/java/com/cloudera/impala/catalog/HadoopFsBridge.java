@@ -6,14 +6,18 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
+import org.apache.hadoop.fs.BlockStorageLocation;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.catalog.FsObject.ObjectState;
 import com.cloudera.impala.common.ITPool;
@@ -51,7 +55,7 @@ public class HadoopFsBridge {
   private static final FsObjectCache fsCache = new FsObjectCache();
 
   /** Logging mechanism */
-  private static final Logger LOG = Logger.getLogger(HadoopFsBridge.class);
+  private final static Logger LOG = LoggerFactory.getLogger(HadoopFsBridge.class);
 
   /** Bridged operation result */
   public class BridgeOpResult<T>{
@@ -200,7 +204,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();

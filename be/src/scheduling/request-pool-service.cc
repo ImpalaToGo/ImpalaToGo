@@ -45,7 +45,7 @@ DEFINE_string(default_pool_mem_limit, "", "Maximum amount of memory that all "
     "('<float>[mM]'), gigabytes ('<float>[gG]'), or percentage of the physical memory "
     "('<int>%'). 0 or not setting indicates no limit. Defaults to bytes if no unit is "
     "given. Ignored if fair_scheduler_config_path and llama_site_path are set.");
-DEFINE_int64(default_pool_max_queued, 50, "Maximum number of requests allowed to be "
+DEFINE_int64(default_pool_max_queued, 200, "Maximum number of requests allowed to be "
     "queued before rejecting requests. A negative value or 0 indicates requests "
     "will always be rejected once the maximum number of concurrent requests are "
     "executing. Ignored if fair_scheduler_config_path and "
@@ -63,11 +63,11 @@ const string DEFAULT_POOL_NAME = "default-pool";
 
 const string RESOLVE_POOL_METRIC_NAME = "request-pool-service.resolve-pool-duration-ms";
 
-RequestPoolService::RequestPoolService(Metrics* metrics) :
+RequestPoolService::RequestPoolService(MetricGroup* metrics) :
     metrics_(metrics), resolve_pool_ms_metric_(NULL) {
   DCHECK(metrics_ != NULL);
   resolve_pool_ms_metric_ = metrics_->RegisterMetric(
-      new StatsMetric<double>(RESOLVE_POOL_METRIC_NAME));
+      new StatsMetric<double>(RESOLVE_POOL_METRIC_NAME, TCounterType::TIME_MS));
 
   if (FLAGS_fair_scheduler_allocation_path.empty() &&
       FLAGS_llama_site_path.empty()) {

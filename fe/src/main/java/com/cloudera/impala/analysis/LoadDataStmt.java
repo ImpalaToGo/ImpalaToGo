@@ -19,8 +19,8 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 
 import com.cloudera.impala.authorization.Privilege;
@@ -32,8 +32,8 @@ import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.thrift.TLoadDataReq;
 import com.cloudera.impala.thrift.TTableName;
-import com.cloudera.impala.util.TAccessLevelUtil;
 import com.cloudera.impala.util.FsPermissionChecker;
+import com.cloudera.impala.util.TAccessLevelUtil;
 import com.google.common.base.Preconditions;
 
 /*
@@ -132,10 +132,11 @@ public class LoadDataStmt extends StatementBase {
     try {
       Path source = sourceDataPath_.getPath();
       FileSystem fs = source.getFileSystem(FileSystemUtil.getConfiguration());
-      // sourceDataPath_.analyze() ensured that path is on an HDFS filesystem.
-      Preconditions.checkState(fs instanceof DistributedFileSystem);
-      DistributedFileSystem dfs = (DistributedFileSystem) fs;
-      if (!dfs.exists(source)) {
+      if (!(fs instanceof DistributedFileSystem)) {
+        throw new AnalysisException(String.format("INPATH location '%s' " +
+            "must point to an HDFS filesystem.", sourceDataPath_));
+      }
+      if (!fs.exists(source)) {
         throw new AnalysisException(String.format(
             "INPATH location '%s' does not exist.", sourceDataPath_));
       }
@@ -145,7 +146,7 @@ public class LoadDataStmt extends StatementBase {
       // its parent directory (in order to delete the file as part of the move operation).
       FsPermissionChecker checker = FsPermissionChecker.getInstance();
 
-      if (dfs.isDirectory(source)) {
+      if (fs.isDirectory(source)) {
         if (FileSystemUtil.getTotalNumVisibleFiles(source) == 0) {
           throw new AnalysisException(String.format(
               "INPATH location '%s' contains no visible files.", sourceDataPath_));
@@ -154,7 +155,7 @@ public class LoadDataStmt extends StatementBase {
           throw new AnalysisException(String.format(
               "INPATH location '%s' cannot contain subdirectories.", sourceDataPath_));
         }
-        if (!checker.getPermissions(dfs, source).checkPermissions(
+        if (!checker.getPermissions(fs, source).checkPermissions(
             FsAction.READ_WRITE)) {
           throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
               "because Impala does not have READ or WRITE permissions on this directory",
@@ -167,14 +168,14 @@ public class LoadDataStmt extends StatementBase {
               "INPATH location '%s' points to a hidden file.", source));
         }
 
-        if (!checker.getPermissions(dfs, source.getParent()).checkPermissions(
+        if (!checker.getPermissions(fs, source.getParent()).checkPermissions(
             FsAction.WRITE)) {
           throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
               "because Impala does not have WRITE permissions on its parent " +
               "directory %s", source, source.getParent()));
         }
 
-        if (!checker.getPermissions(dfs, source).checkPermissions(
+        if (!checker.getPermissions(fs, source).checkPermissions(
             FsAction.READ)) {
           throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
               "because Impala does not have READ permissions on this file", source));
@@ -208,7 +209,7 @@ public class LoadDataStmt extends StatementBase {
       if (!FileSystemUtil.isPathOnFileSystem(new Path(location), fs)) {
         throw new AnalysisException(String.format(
             "Unable to LOAD DATA into target table (%s) because source path (%s) and " +
-            "destination %s (%s) are on different file-systems.",
+            "destination %s (%s) are on different filesystems.",
             hdfsTable.getFullName(),
             source, partitionSpec_ == null ? "table" : "partition",
             partition.getLocation()));
@@ -226,7 +227,7 @@ public class LoadDataStmt extends StatementBase {
     } catch (FileNotFoundException e) {
       throw new AnalysisException("File not found: " + e.getMessage(), e);
     } catch (IOException e) {
-      throw new AnalysisException("Error accessing file system: " + e.getMessage(), e);
+      throw new AnalysisException("Error accessing filesystem: " + e.getMessage(), e);
     }
   }
 

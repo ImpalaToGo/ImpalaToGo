@@ -862,7 +862,7 @@ Status BufferedBlockMgr::FindBufferForBlock(Block* block, bool* in_mem) {
       }
       Status status = Status::MEM_LIMIT_EXCEEDED;
       status.AddErrorMsg("Query did not have enough memory to get the minimum required "
-          "buffers.");
+          "buffers in the block manager.");
       return status;
     }
 
@@ -1063,8 +1063,10 @@ void BufferedBlockMgr::Init(DiskIoMgr* io_mgr, RuntimeProfile* parent_profile,
     MemTracker* parent_tracker, int64_t mem_limit) {
   unique_lock<mutex> l(lock_);
   if (initialized_) return;
+  FileSystemDescriptor nulldescriptor;
+  nulldescriptor.valid = false;
 
-  io_mgr->RegisterContext(NULL, &io_request_context_);
+  io_mgr->RegisterContext(nulldescriptor, &io_request_context_);
   if (encryption_) {
     static bool openssl_loaded = false;
     if (!openssl_loaded) {

@@ -73,9 +73,6 @@ void HdfsOp::Execute() const {
     case CHMOD:
     	status = dfsChmod(*hdfs_connection, src_.c_str(), permissions_);
       break;
-    case CHMOD:
-      err = hdfsChmod(*hdfs_connection, src_.c_str(), permissions_);
-      break;
   }
 	if(status != status::OK)
 		err = -1;

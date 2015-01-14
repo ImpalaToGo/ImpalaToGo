@@ -35,6 +35,7 @@
 #include "util/error-util.h"
 #include "util/jni-util.h"
 #include "util/mem-info.h"
+#include "util/pretty-printer.h"
 
 #include <jni.h>
 #include <iostream>
@@ -178,8 +179,8 @@ Status RuntimeState::CreateBlockMgr() {
   }
 
   RETURN_IF_ERROR(BufferedBlockMgr::Create(this, query_mem_tracker(),
-        runtime_profile(), block_mgr_limit, io_mgr()->max_read_buffer_size(),
-        &block_mgr_));
+      runtime_profile(), block_mgr_limit, io_mgr()->max_read_buffer_size(),
+      &block_mgr_));
   return Status::OK;
 }
 
@@ -196,31 +197,33 @@ Status RuntimeState::CreateCodegen() {
 }
 
 bool RuntimeState::ErrorLogIsEmpty() {
-  lock_guard<mutex> l(error_log_lock_);
+  ScopedSpinLock l(&error_log_lock_);
   return (error_log_.size() == 0);
 }
 
 string RuntimeState::ErrorLog() {
-  lock_guard<mutex> l(error_log_lock_);
+  ScopedSpinLock l(&error_log_lock_);
   return join(error_log_, "\n");
 }
 
-string RuntimeState::FileErrors() const {
-  lock_guard<mutex> l(file_errors_lock_);
+string RuntimeState::FileErrors() {
   stringstream out;
-  for (int i = 0; i < file_errors_.size(); ++i) {
-    out << file_errors_[i].second << " errors in " << file_errors_[i].first << endl;
+  {
+    ScopedSpinLock l(&file_errors_lock_);
+    for (int i = 0; i < file_errors_.size(); ++i) {
+      out << file_errors_[i].second << " errors in " << file_errors_[i].first << endl;
+    }
   }
   return out.str();
 }
 
 void RuntimeState::ReportFileErrors(const std::string& file_name, int num_errors) {
-  lock_guard<mutex> l(file_errors_lock_);
+  ScopedSpinLock l(&file_errors_lock_);
   file_errors_.push_back(make_pair(file_name, num_errors));
 }
 
 bool RuntimeState::LogError(const string& error) {
-  lock_guard<mutex> l(error_log_lock_);
+  ScopedSpinLock l(&error_log_lock_);
   if (error_log_.size() < query_options().max_errors) {
     VLOG_QUERY << "Error from query " << query_id() << ": " << error;
     error_log_.push_back(error);
@@ -241,7 +244,7 @@ void RuntimeState::LogError(const Status& status) {
 }
 
 void RuntimeState::GetUnreportedErrors(vector<string>* new_errors) {
-  lock_guard<mutex> l(error_log_lock_);
+  ScopedSpinLock l(&error_log_lock_);
   if (unreported_error_idx_ < error_log_.size()) {
     new_errors->assign(error_log_.begin() + unreported_error_idx_, error_log_.end());
     unreported_error_idx_ = error_log_.size();
@@ -252,7 +255,7 @@ Status RuntimeState::SetMemLimitExceeded(MemTracker* tracker,
     int64_t failed_allocation_size) {
   DCHECK_GE(failed_allocation_size, 0);
   {
-    lock_guard<mutex> l(query_status_lock_);
+    ScopedSpinLock l(&query_status_lock_);
     if (query_status_.ok()) {
       query_status_ = Status::MEM_LIMIT_EXCEEDED;
     } else {
@@ -290,7 +293,7 @@ Status RuntimeState::CheckQueryState() {
   // TODO: it would be nice if this also checked for cancellation, but doing so breaks
   // cases where we use Status::CANCELLED to indicate that the limit was reached.
   if (instance_mem_tracker_->AnyLimitExceeded()) return SetMemLimitExceeded();
-  lock_guard<mutex> l(query_status_lock_);
+  ScopedSpinLock l(&query_status_lock_);
   return query_status_;
 }
 

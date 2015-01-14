@@ -17,9 +17,6 @@ package com.cloudera.impala.common;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Collection;
-
-import com.google.common.base.Predicate;
 
 import com.cloudera.impala.util.Visitor;
 import com.google.common.base.Predicate;

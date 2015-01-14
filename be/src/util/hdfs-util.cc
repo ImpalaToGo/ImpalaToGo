@@ -48,15 +48,6 @@ Status GetLastModificationTime(const dfsFS& connection, const char* filename,
   return Status::OK;
 }
 
-Status GetLastModificationTime(const hdfsFS& connection, const char* filename,
-                               time_t* last_mod_time) {
-  hdfsFileInfo* info = hdfsGetPathInfo(connection, filename);
-  if (info == NULL) return Status(GetHdfsErrorMsg("Failed to get file info ", filename));
-  *last_mod_time = info->mLastMod;
-  hdfsFreeFileInfo(info, 1);
-  return Status::OK;
-}
-
 bool IsHiddenFile(const string& filename) {
   return !filename.empty() && (filename[0] == '.' || filename[0] == '_');
 }
@@ -73,4 +64,9 @@ Status CopyHdfsFile(const dfsFS& src_conn, const string& src_path,
   return Status::OK;
 }
 
+bool IsDfsPath(const char* path) {
+  // TODO: currently, we require defaultFS to be HDFS, but when that is relaxed, we
+  // should fix this to not assume unqualified paths are DFS.
+  return strncmp(path, "hdfs://", 7) == 0 || strstr(path, ":/") == NULL;
+}
 }

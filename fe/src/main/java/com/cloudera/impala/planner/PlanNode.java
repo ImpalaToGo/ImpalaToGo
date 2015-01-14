@@ -366,7 +366,6 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     for (Expr e: conjuncts_) {
       msg.addToConjuncts(e.treeToThrift());
     }
-    msg.compact_data = false;
     toThrift(msg);
     container.addToNodes(msg);
     // For the purpose of the BE consider ExchangeNodes to have no children.
@@ -563,6 +562,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
   public void computeCosts(TQueryOptions queryOptions) {
     perHostMemCost_ = 0;
   }
+
   /**
    * The input cardinality is the sum of output cardinalities of its children.
    * For scan nodes the input cardinality is the expected number of rows scanned.

@@ -39,7 +39,7 @@ Status GetLastModificationTime(const dfsFS& connection, const char* filename,
 
 // Returns the last modification time of 'filename' in seconds.
 // This should not be called in a fast path (e.g., running a UDF).
-Status GetLastModificationTime(const hdfsFS& connection, const char* filename,
+Status GetLastModificationTime(const dfsFS& connection, const char* filename,
                                time_t* last_mod_time);
 
 bool IsHiddenFile(const std::string& filename);
@@ -47,5 +47,8 @@ bool IsHiddenFile(const std::string& filename);
 // Copy the file at 'src_path' from 'src_conn' to 'dst_path' in 'dst_conn'.
 Status CopyHdfsFile(const dfsFS& src_conn, const std::string& src_path,
                     const dfsFS& dst_conn, const std::string& dst_path);
+
+// Returns true iff the path refers to a location on an HDFS filesystem.
+bool IsDfsPath(const char* path);
 }
 #endif // IMPALA_UTIL_HDFS_UTIL_H

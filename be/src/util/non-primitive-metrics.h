@@ -165,6 +165,8 @@ class StatsMetric : public Metrics::Metric<T> {
     this->acc_(value);
   }
 
+  virtual ~StatsMetric(){}
+
   virtual void PrintValueJson(std::stringstream* out) {
     (*out) << "{ \"count\": ";
     PrintPrimitiveAsJson(boost::accumulators::count(this->acc_), out);

@@ -142,11 +142,6 @@ public class AggregationNode extends PlanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
-    if (aggInfo_.getGroupingExprs().isEmpty()) {
-      cardinality_ = 1;
-      return;
-    }
-
     // This is prone to overflow, because we keep multiplying cardinalities,
     // even if the grouping exprs are functionally dependent (example:
     // group by the primary key of a table plus a number of other columns from that
@@ -264,6 +259,6 @@ public class AggregationNode extends PlanNode {
       perHostCardinality = Math.min(perHostCardinality, cardinality_);
     }
     perHostMemCost_ += Math.max(perHostCardinality * avgRowSize_ *
-        Planner.HASH_TBL_SPACE_OVERHEAD, MIN_HASH_TBL_MEM);
+        PlannerContext.HASH_TBL_SPACE_OVERHEAD, MIN_HASH_TBL_MEM);
   }
 }

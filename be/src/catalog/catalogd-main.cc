@@ -62,21 +62,21 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Not starting webserver";
   }
 
-  scoped_ptr<Metrics> metrics(new Metrics());
+  scoped_ptr<MetricGroup> metrics(new MetricGroup("catalog"));
   metrics->Init(FLAGS_enable_webserver ? webserver.get() : NULL);
   EXIT_IF_ERROR(RegisterMemoryMetrics(metrics.get(), true));
   StartThreadInstrumentation(metrics.get(), webserver.get());
-  InitRpcEventTracing(webserver.get());
 
-  metrics->CreateAndRegisterPrimitiveMetric<string>(
-      "catalog.version", GetVersionString(true));
+  InitRpcEventTracing(webserver.get());
+  metrics->AddProperty<string>("catalog.version", GetVersionString(true),
+      "catalogd build version");
 
   CatalogServer catalog_server(metrics.get());
   EXIT_IF_ERROR(catalog_server.Start());
   catalog_server.RegisterWebpages(webserver.get());
-  shared_ptr<TProcessor> processor(
+  boost::shared_ptr<TProcessor> processor(
       new CatalogServiceProcessor(catalog_server.thrift_iface()));
-  shared_ptr<TProcessorEventHandler> event_handler(
+  boost::shared_ptr<TProcessorEventHandler> event_handler(
       new RpcEventHandler("catalog-server", metrics.get()));
   processor->setEventHandler(event_handler);
 

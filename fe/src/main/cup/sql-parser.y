@@ -442,7 +442,7 @@ nonterminal CreateFunctionStmtBase.OptArg create_function_arg_key;
 
 precedence left KW_OR;
 precedence left KW_AND;
-precedence left KW_NOT, NOT;
+precedence right KW_NOT, NOT;
 precedence left KW_BETWEEN, KW_IN, KW_IS, KW_EXISTS;
 precedence left KW_LIKE, KW_RLIKE, KW_REGEXP;
 precedence left EQUAL, LESSTHAN, GREATERTHAN;
@@ -1209,11 +1209,6 @@ drop_stats_stmt ::=
   {: RESULT = new DropStatsStmt(table); :}
   | KW_DROP KW_INCREMENTAL KW_STATS table_name:table partition_spec:spec
   {: RESULT = new DropStatsStmt(table, spec); :}
-  ;
-
-drop_stats_stmt ::=
-  KW_DROP KW_STATS table_name:table
-  {: RESULT = new DropStatsStmt(table); :}
   ;
 
 drop_db_stmt ::=
