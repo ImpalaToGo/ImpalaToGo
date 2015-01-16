@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.CachePoolEntry;
@@ -146,12 +147,14 @@ public class CatalogServiceCatalog extends Catalog {
       // to be performed on the keys.
       Map<String, CachePoolInfo> currentCachePools = Maps.newHashMap();
       try {
-        DistributedFileSystem dfs = FileSystemUtil.getDistributedFileSystem();
-        RemoteIterator<CachePoolEntry> itr = dfs.listCachePools();
-        while (itr.hasNext()) {
-          CachePoolInfo cachePoolInfo = itr.next().getInfo();
-          currentCachePools.put(cachePoolInfo.getPoolName(), cachePoolInfo);
-        }
+        FileSystem fs = FileSystemUtil.getFileSystem();
+        if(fs instanceof DistributedFileSystem){
+          RemoteIterator<CachePoolEntry> itr = ((DistributedFileSystem)fs).listCachePools();
+          while (itr.hasNext()) {
+            CachePoolInfo cachePoolInfo = itr.next().getInfo();
+            currentCachePools.put(cachePoolInfo.getPoolName(), cachePoolInfo);
+            }
+          }
       } catch (Exception e) {
         LOG.error("Error loading cache pools: ", e);
         return;

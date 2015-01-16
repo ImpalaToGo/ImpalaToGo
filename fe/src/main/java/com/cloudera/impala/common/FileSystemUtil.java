@@ -133,6 +133,7 @@ public class FileSystemUtil {
     LOG.debug(String.format(
         "Moving '%s' to '%s'", sourceFile.toString(), destFile.toString()));
     // Move (rename) the file.
+    // TODO : this is horror for s3n...
     fs.rename(sourceFile, destFile);
   }
 
