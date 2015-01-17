@@ -353,7 +353,7 @@ public class HadoopFsBridge {
     }
 
     // if no cached result so far, this is bug in the outer flow:
-    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path.getParent() + "\"");
+    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path + "\"");
 
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
@@ -378,7 +378,7 @@ public class HadoopFsBridge {
 
     // update the cache on success:
     if(res.getStatus().equals(BridgeOpStatus.OK))
-      fsCache.setPathStat(fs, path.getParent(), new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
+      fsCache.setPathStat(fs, path, new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
 
     return res;
   }
