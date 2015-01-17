@@ -23,6 +23,7 @@ import org.apache.sentry.provider.db.service.thrift.SentryPolicyServiceClient;
 import org.apache.sentry.provider.db.service.thrift.TSentryGrantOption;
 import org.apache.sentry.provider.db.service.thrift.TSentryPrivilege;
 import org.apache.sentry.provider.db.service.thrift.TSentryRole;
+import org.apache.sentry.service.thrift.SentryServiceClientFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,14 +80,14 @@ public class SentryPolicyService {
      * Creates a new client to the SentryService.
      */
     private SentryPolicyServiceClient createClient() throws InternalException {
-      SentryPolicyServiceClient client = null;
-      /* TODO : uncomment this!
+      SentryPolicyServiceClient client;
+      // TODO : uncomment this!
       try {
-        client = new SentryServiceClientFactory().create(config_.getConfig());
+        client = SentryServiceClientFactory.create(config_.getConfig());
       } catch (Exception e) {
         throw new InternalException("Error creating Sentry Service client: ", e);
       }
-      */
+
       return client;
     }
   }
