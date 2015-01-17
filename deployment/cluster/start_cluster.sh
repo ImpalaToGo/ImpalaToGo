@@ -20,15 +20,16 @@ fi
 #TODO: Create profile with keys
 #TODO: Fixup logging
 BATCH_ID=$(uuidgen)
-AWS_CMD="aws --profile=cluster ec2"
 . resize.config
+LOG=${LOG_DIR}/${BATCH_ID}.log
+LOG_APPEND='tee -a $LOG'
 take_lock
-echo trying to start cluster $BATCH_ID
+echo trying to start cluster $BATCH_ID|$LOG_APPEND
 store_cluster_id $BATCH_ID
-echo creating security group if required
+echo creating security group if required|$LOG_APPEND
 . create_impala_security_group.sh
 SECURITY_GROUP_IDS=$(get_or_create_security_group ${SECURITY_GROUP})
-echo checking if requested AMI: $IMAGE_ID available
+echo checking if requested AMI: $IMAGE_ID available|$LOG_APPEND
 IMAGE_AVAILABLE=$($AWS_CMD describe-images --image-ids $IMAGE_ID|grep -o $IMAGE_ID)
 if [ -z "$IMAGE_AVAILABLE" ];
 then
@@ -72,7 +73,7 @@ for host in $DNS_NAMES; do
 	echo connecting to $host in background
 	#TODO: You cannot simply run sudo as non-interractive user. Need to discover a way to run it
 	ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
-	ssh -t  $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &
+	ssh $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &
 done
 echo waiting for all configuration commands to complete
 wait
