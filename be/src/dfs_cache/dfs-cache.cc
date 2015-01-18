@@ -64,10 +64,11 @@ namespace ph = std::placeholders;
 
 FileSystemDescriptor::FileSystemDescriptor(): dfs_type(DFS_TYPE::NON_SPECIFIED), host(""), port(0), valid(false){}
 
-FileSystemDescriptor::FileSystemDescriptor(const std::string& path) : dfs_type(DFS_TYPE::NON_SPECIFIED), valid(false){
+FileSystemDescriptor::FileSystemDescriptor(const std::string& path) : valid(false){
 		Uri uri = Uri::Parse(path);
 		host = uri.Host;
 		port = uri.Port.empty() ? 0 : std::stoul(uri.Port);
+		dfs_type = fsTypeFromScheme(uri.Protocol.c_str());
 	}
 
 /** *********************************************************************************************
