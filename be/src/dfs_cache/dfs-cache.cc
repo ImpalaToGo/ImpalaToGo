@@ -67,7 +67,7 @@ FileSystemDescriptor::FileSystemDescriptor(): dfs_type(DFS_TYPE::NON_SPECIFIED),
 FileSystemDescriptor::FileSystemDescriptor(const std::string& path) : dfs_type(DFS_TYPE::NON_SPECIFIED), valid(false){
 		Uri uri = Uri::Parse(path);
 		host = uri.Host;
-		port = std::stoul(uri.Port);
+		port = (uri.Port != NULL && !uri.Port.empty()) ? std::stoul(uri.Port) : 0;
 	}
 
 /** *********************************************************************************************
