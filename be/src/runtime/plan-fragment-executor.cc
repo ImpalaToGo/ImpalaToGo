@@ -199,6 +199,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       ExecNode::CreateTree(obj_pool(), request.fragment.plan, *desc_tbl, &plan_));
   runtime_state_->set_fragment_root_id(plan_->id());
 
+  VLOG_QUERY << "Prepare():exec node created the tree for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   if (request.params.__isset.debug_node_id) {
     DCHECK(request.params.__isset.debug_action);
     DCHECK(request.params.__isset.debug_phase);
@@ -209,6 +212,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   // set #senders of exchange nodes before calling Prepare()
   vector<ExecNode*> exch_nodes;
   plan_->CollectNodes(TPlanNodeType::EXCHANGE_NODE, &exch_nodes);
+  VLOG_QUERY << "Prepare(): nodes collected for plan for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   BOOST_FOREACH(ExecNode* exch_node, exch_nodes)
   {
     DCHECK_EQ(exch_node->type(), TPlanNodeType::EXCHANGE_NODE);
@@ -222,6 +228,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   vector<ExecNode*> scan_nodes;
   vector<TScanRangeParams> no_scan_ranges;
   plan_->CollectScanNodes(&scan_nodes);
+  VLOG_QUERY << "Prepare(): scan nodes collected for plan for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   for (int i = 0; i < scan_nodes.size(); ++i) {
     ScanNode* scan_node = static_cast<ScanNode*>(scan_nodes[i]);
     const vector<TScanRangeParams>& scan_ranges = FindWithDefault(
@@ -233,6 +242,8 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   {
     SCOPED_TIMER(prepare_timer);
     RETURN_IF_ERROR(plan_->Prepare(runtime_state_.get()));
+    VLOG_QUERY << "Prepare(): plan prepared query_id=" << PrintId(query_id_) << " instance_id="
+                 << PrintId(request.fragment_instance_ctx.fragment_instance_id);
   }
 
   PrintVolumeIds(params.per_node_scan_ranges);

@@ -142,7 +142,11 @@ Status ExecNode::Prepare(RuntimeState* state) {
       bind<int64_t>(&RuntimeProfile::UnitsPerSecond, rows_returned_counter_,
         runtime_profile()->total_time_counter()));
 
+  LOG(INFO) << "ExecNode.Prepare(): counters added for " << runtime_profile_->name();
+
   RETURN_IF_ERROR(Expr::Prepare(conjunct_ctxs_, state, row_desc(), expr_mem_tracker()));
+  LOG(INFO) << "ExecNode.Prepare(): expression prepare passed for " << runtime_profile_->name();
+
   AddExprCtxsToFree(conjunct_ctxs_);
 
   for (int i = 0; i < children_.size(); ++i) {
