@@ -344,7 +344,6 @@ Status Expr::Prepare(const vector<ExprContext*>& ctxs, RuntimeState* state,
     RETURN_IF_ERROR(ctxs[i]->Prepare(state, row_desc, tracker));
 
   }
-  LOG(INFO) << "Expr.Prepare(): passed for expression " << DebugString();
   return Status::OK;
 }
 

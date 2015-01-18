@@ -145,7 +145,6 @@ Status ExecNode::Prepare(RuntimeState* state) {
   LOG(INFO) << "ExecNode.Prepare(): counters added for " << runtime_profile_->name();
 
   RETURN_IF_ERROR(Expr::Prepare(conjunct_ctxs_, state, row_desc(), expr_mem_tracker()));
-  LOG(INFO) << "ExecNode.Prepare(): expression prepare passed for " << runtime_profile_->name();
 
   AddExprCtxsToFree(conjunct_ctxs_);
 
