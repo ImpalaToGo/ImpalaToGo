@@ -128,7 +128,7 @@ private:
   	   FileSystemDescriptorBound::freeFileInfo(info, num);
      }
 
-	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root) {
+	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "") {
 		m_valid = false;
         std::string _root = root;
 
