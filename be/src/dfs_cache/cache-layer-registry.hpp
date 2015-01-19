@@ -128,12 +128,13 @@ private:
   	   FileSystemDescriptorBound::freeFileInfo(info, num);
      }
 
-	CacheLayerRegistry(int mem_limit_percent = 0, std::string& root = "") {
+	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root) {
 		m_valid = false;
+        std::string _root = root;
 
-		if(root.empty())
-			root = constants::DEFAULT_CACHE_ROOT;
-		if(!localstorage(root)){
+		if(_root.empty())
+			_root = constants::DEFAULT_CACHE_ROOT;
+		if(!localstorage(_root)){
 			LOG (ERROR) << "Cache Layer is not initialized due to invalid cache location \"" << root << "\"";
 		}
 
