@@ -165,22 +165,21 @@ private:
 
     /** Setter for Local storage root file system path */
     inline bool localstorage(std::string& localpath) {
-    	const std::string backup = localpath;
+    	const std::string alias = localpath;
 		// reworked to check for possible symlink as an input. We ned to resolve symlink here to get the real physical
-		// location. We cannot rely on symlinks internally
-		boost::filesystem::file_status status = boost::filesystem::symlink_status(localpath);
-        bool symlink = boost::filesystem::is_symlink(status);
-        if(symlink){
-        	LOG (INFO) << "The path specified \"" << backup << "\" is a symlink, going to resolve it to a physical path.\n";
-        	// resolve symlink:
-        	localpath = boost::filesystem::canonical(localpath).string();
-        	if(localpath.empty()){
-        		LOG (ERROR) << "Symlink \"" << backup << "\" was not resolved to the physical path.\n";
-        		localpath = backup;
-        		return false;
-        	}
-        	LOG (INFO) << "Symlink \"" << backup << "\" is resolved to a physical path \"" << localpath << "\".\n";
-        }
+    	// location. We cannot rely on symlinks internally
+    	LOG (INFO) << "Original path specified : \"" << alias << "\", run link resolve to a physical path.\n";
+    	// resolve symlink:
+    	localpath = boost::filesystem::canonical(alias).string();
+    	if(localpath.empty()){
+    		LOG (ERROR) << "Alias \"" << alias << "\" was not resolved to any physical path. \n";
+    		localpath = alias;
+    		return false;
+    	}
+    	// whether input path is specified with a trailing slash or not,
+    	// the trailing slash would be removed as a side effect of canonize operation. This will be handled below.
+    	LOG (INFO) << "Alias \"" << alias << "\" is resolved to a physical path \"" << localpath << "\".\n";
+
     	m_localstorageRoot = localpath;
 
         // add file separator if no specified:
