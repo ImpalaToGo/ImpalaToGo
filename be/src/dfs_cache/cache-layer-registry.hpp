@@ -128,12 +128,14 @@ private:
   	   FileSystemDescriptorBound::freeFileInfo(info, num);
      }
 
-	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "") {
+	CacheLayerRegistry(int mem_limit_percent = 0, std::string& root = "") {
 		m_valid = false;
+
 		if(root.empty())
-			localstorage(constants::DEFAULT_CACHE_ROOT);
-		else
-			localstorage(root);
+			root = constants::DEFAULT_CACHE_ROOT;
+		if(!localstorage(root)){
+			LOG (ERROR) << "Cache Layer is not initialized due to invalid cache location \"" << root << "\"";
+		}
 
 		double percent = ( (mem_limit_percent > 0 ) && ( mem_limit_percent <= 85) ) ? mem_limit_percent / 100.0 : m_available_capacity_ratio;
 
@@ -161,7 +163,23 @@ private:
 	CacheLayerRegistry& operator=(CacheLayerRegistry const& l); // disable assignment operator
 
     /** Setter for Local storage root file system path */
-    inline void localstorage(const std::string& localpath) {
+    inline bool localstorage(std::string& localpath) {
+    	const std::string backup = localpath;
+		// reworked to check for possible symlink as an input. We ned to resolve symlink here to get the real physical
+		// location. We cannot rely on symlinks internally
+		boost::filesystem::file_status status = boost::filesystem::symlink_status(localpath);
+        bool symlink = boost::filesystem::is_symlink(status);
+        if(symlink){
+        	LOG (INFO) << "The path specified \"" << backup << "\" is a symlink, going to resolve it to a physical path.\n";
+        	// resolve symlink:
+        	localpath = boost::filesystem::canonical(localpath).string();
+        	if(localpath.empty()){
+        		LOG (ERROR) << "Symlink \"" << backup << "\" was not resolved to the physical path.\n";
+        		localpath = backup;
+        		return false;
+        	}
+        	LOG (INFO) << "Symlink \"" << backup << "\" is resolved to a physical path \"" << localpath << "\".\n";
+        }
     	m_localstorageRoot = localpath;
 
         // add file separator if no specified:
@@ -169,6 +187,7 @@ private:
     	if(!trailing){
     		m_localstorageRoot += fileSeparator;
     	}
+    	return true;
     }
 
     /** reload the cache */
@@ -198,13 +217,22 @@ public:
      * potentially consumed by cache
      *
      * @param root              - local cache root - file system absolute path
+     *
+     * @return cache init status, false if cache init failed. True on success
      */
-    static void init(int mem_limit_percent = 0, const std::string& root = "");
+    static bool init(int mem_limit_percent = 0, const std::string& root = "");
+
+    /**
+     * Return cache validity status.
+     *
+     * @return true if the cache is valid, false otherwise
+     */
+    inline bool valid() { return m_valid; }
 
     /** Getter for Local storage root file system path */
     inline std::string localstorage() {return m_localstorageRoot;}
 
-	/**
+    /**
 	 * Setup namenode
 	 *
 	 * @param[In/Out] fsDescriptor - file system connection details

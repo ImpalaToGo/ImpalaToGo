@@ -60,8 +60,11 @@ int main(int argc, char** argv) {
   LlvmCodeGen::InitializeLlvm();
 
   // init the cache layer with cache data location and percent of available space on the location
-  // that can be potentially consumed by cache:
-  JniUtil::InitLibdfs(FLAGS_cache_mem_percent_of_available, FLAGS_cache_location);
+  // that can be potentially consumed by cache. Check for success:
+  if(!JniUtil::InitLibdfs(FLAGS_cache_mem_percent_of_available, FLAGS_cache_location)){
+	  LOG (ERROR) << "Cache initialization failed due to reasons. Shutting down....\n";
+	  exit(1);
+  }
 
   EXIT_IF_ERROR(HBaseTableScanner::Init());
   EXIT_IF_ERROR(HBaseTableFactory::Init());

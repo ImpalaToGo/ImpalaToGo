@@ -50,7 +50,13 @@ int main(int argc, char** argv) {
   }
 
   LlvmCodeGen::InitializeLlvm();
-  JniUtil::InitLibdfs();
+
+  // Initialize cache layer and check for success:
+  if(!JniUtil::InitLibdfs()){
+	  LOG (ERROR) << "Cache initialization failed due to reasons. Shutting down....\n";
+	  exit(1);
+  }
+
   EXIT_IF_ERROR(HBaseTableScanner::Init());
   EXIT_IF_ERROR(HBaseTableFactory::Init());
   EXIT_IF_ERROR(HBaseTableWriter::InitJNI());

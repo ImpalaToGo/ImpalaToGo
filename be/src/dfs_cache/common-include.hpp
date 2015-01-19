@@ -94,6 +94,8 @@ typedef enum {
 
 	FILE_OBJECT_OPERATION_FAILURE,
 
+	CACHE_IS_NOT_READY,             /**< global cache status, states the cache layer is not ready */
+
 	CACHE_OBJECT_NOT_FOUND,          /**< reports the problem wit ha cache, when the object is missed when expected */
     CACHE_OBJECT_OPERATION_FAILURE,  /**< failure occur during cache object operation */
     CACHE_OBJECT_UNDER_FINALIZATION, /**< requested cache object is under finalization and should not be used. It only can be recalimed */
