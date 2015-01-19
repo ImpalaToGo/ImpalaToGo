@@ -17,8 +17,13 @@ boost::scoped_ptr<CacheLayerRegistry> CacheLayerRegistry::instance_;
 std::string CacheLayerRegistry::fileSeparator;
 
 bool CacheLayerRegistry::init(int mem_limit_percent, const std::string& root) {
-  if(CacheLayerRegistry::instance_.get() == NULL)
-	  CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root));
+	// configure platform-specific file separator:
+	boost::filesystem::path slash("/");
+	boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
+	fileSeparator = preferredSlash;
+
+	if(CacheLayerRegistry::instance_.get() == NULL)
+		CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root));
 
   if(!CacheLayerRegistry::instance()->valid()){
   	  LOG (ERROR) << "Cache initialization is interrupted due to incorrect cache location \"" << root << "\".\n";
@@ -31,10 +36,6 @@ bool CacheLayerRegistry::init(int mem_limit_percent, const std::string& root) {
 	// reload the cache:
   CacheLayerRegistry::instance()->reload();
 
-  // configure platform-specific file separator:
-  boost::filesystem::path slash("/");
-  boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
-  fileSeparator = preferredSlash;
   return true;
 }
 
