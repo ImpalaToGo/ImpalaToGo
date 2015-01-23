@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+if [ "${HADOOP_HOME}x" = "x" ]; then
+  echo "Error: HADOOP_HOME must be set in the environment"
+  exit 1
+fi
+
+# resolve links - $0 may be a softlink
+PRG="${0}"
+
+while [ -h "${PRG}" ]; do
+  ls=`ls -ld "${PRG}"`
+  link=`expr "$ls" : '.*-> \(.*\)$'`
+  if expr "$link" : '/.*' > /dev/null; then
+    PRG="$link"
+  else
+    PRG=`dirname "${PRG}"`/"$link"
+  fi
+done
+
+BASEDIR=`dirname ${PRG}`
+BASEDIR=`cd ${BASEDIR}/..;pwd`
+
+CLASSPATH="${LLAMA_CLIENT_CLASSPATH}:${BASEDIR}/conf"
+for i in "${BASEDIR}/lib/"*.jar; do
+  CLASSPATH="${CLASSPATH}:$i"
+done
+
+LLAMA_CLIENT_HOME=${LLAMA_CLIENT_HOME:=${BASEDIR}}
+LLAMA_CLIENT_CONF=${LLAMA_CLIENT_CONF:=${LLAMA_CLIENT_HOME}/conf}
+LLAMA_CLIENT_LOG=${LLAMA_CLIENT_LOG:=${LLAMA_CLIENT_HOME}/log}
+
+export HADOOP_USER_CLASSPATH_FIRST=true
+export HADOOP_CLASSPATH="${HADOOP_CLASSPATH}:${CLASSPATH}"
+export HADOOP_CLIENT_OPTS="${HADOOP_CLIENT_OPTS} ${LLAMA_CLIENT_OPTS}"
+export HADOOP_CLIENT_OPTS="${HADOOP_CLIENT_OPTS} -Dllama.server.conf.dir=${LLAMA_CLIENT_CONF} -Dllama.server.log.dir=${LLAMA_CLIENT_LOG}"
+exec $HADOOP_HOME/bin/hadoop com.cloudera.llama.am.LlamaClient "$@"
+
