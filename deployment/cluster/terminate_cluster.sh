@@ -14,7 +14,7 @@ if [ -z "$AWS_CMD" ];
 then
 	AWS_CMD="aws ec2"
 fi
-
+set -x
 $AWS_CMD describe-instances $DRY_RUN --filters Name=client-token,Values=$BATCH_ID|tee $TEMP_FILE
 
 INSTANCE_IDS=$(grep $BATCH_ID <$TEMP_FILE|cut -f8)

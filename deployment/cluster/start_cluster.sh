@@ -5,7 +5,7 @@
 # param 2 - access key 
 # param 3 - secret key
 # param 4 - DNS of the master node
-
+set +x
 COUNT=$1
 ACCESS_KEY=$2
 SECRET_KEY=$3
@@ -38,11 +38,12 @@ then
 	exit 1
 fi
 echo requesting to start $COUNT instances of $INSTANCE_TYPE size with AMI: $IMAGE_ID
-$AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" --block-device-mappings '[{"DeviceName": "/dev/xvda","VirtualName":"/","Ebs": {"VolumeSize": 31}},{ "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0"},{ "DeviceName": "/dev/xvde", "VirtualName": "ephemeral1"}]' >> $LOG
+
+$AWS_CMD run-instances --image-id $IMAGE_ID --count $COUNT --instance-type $INSTANCE_TYPE --security-group-ids $SECURITY_GROUP_IDS --placement AvailabilityZone=$AVAILABILITY_ZONE --key-name $KEY_NAME --client-token $BATCH_ID --user-data "\'$USER_DATA\'" >> $LOG
 
 echo run-instances request sent, waiting for all instances to run
 
-$AWS_CMD wait instance-running --filters Name=client-token,Values=$BATCH_ID |tee -a $LOG
+$AWS_CMD wait instance-running --filters Name=client-token,Values=$BATCH_ID
 
 echo all instances running querying instance details 
 TMP_FILE=/tmp/${BATCH_ID}.info
@@ -72,8 +73,10 @@ grep $BATCH_ID <${TMP_FILE}|cut -f8|tee ${CLUSTER_VAR_DIR}/instances
 for host in $DNS_NAMES; do
 	echo connecting to $host in background
 	#TODO: You cannot simply run sudo as non-interractive user. Need to discover a way to run it
-	ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
-	ssh $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &
+	#ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
+	#TODO: generate startup script here, push to target and run in background
+	ssh $SSH_PARAMS ec2-user@$host '"sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &&  "sudo /home/ec2-user/restart_slave.sh" ' &
+
 done
 echo waiting for all configuration commands to complete
 wait
