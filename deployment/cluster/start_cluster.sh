@@ -49,7 +49,7 @@ echo all instances running querying instance details
 TMP_FILE=/tmp/${BATCH_ID}.info
 $AWS_CMD describe-instances --filters Name=client-token,Values=$BATCH_ID >$TMP_FILE
 echo getting DNS names
-DNS_NAMES=$(grep $BATCH_ID <${TMP_FILE}|cut -f 14|tee ${CLUSTER_VAR_DIR}/hosts)
+DNS_NAMES=$(grep $BATCH_ID <${TMP_FILE}|cut -f 14|tee ${CLUSTER_HOSTS})
 
 echo Adding ssh public-keys records to $SSH_KNOWN_HOSTS_FILE
 echo -n " " >$SSH_KNOWN_HOSTS_FILE
