@@ -15,14 +15,17 @@
 #include "runtime/hdfs-fs-cache.h"
 
 #include <boost/thread/locks.hpp>
+#include <gutil/strings/substitute.h>
 
 #include "common/logging.h"
 #include "util/debug-util.h"
 #include "util/error-util.h"
+#include "util/hdfs-util.h"
 #include "util/test-info.h"
 
 using namespace std;
 using namespace boost;
+using namespace strings;
 
 namespace impala {
 
@@ -33,58 +36,44 @@ void HdfsFsCache::Init() {
   HdfsFsCache::instance_.reset(new HdfsFsCache());
 }
 
-dfsFS HdfsFsCache::GetConnection(const string& host, int port) {
-	// Elena : 08.10.2014 Remove hdfs dependency (18)
-	/*
-  lock_guard<mutex> l(lock_);
-  HdfsFsMap::iterator i = fs_map_.find(make_pair(host, port));
-  if (i == fs_map_.end()) {
-    hdfsBuilder* hdfs_builder = hdfsNewBuilder();
-    if (!host.empty()) {
-      hdfsBuilderSetNameNode(hdfs_builder, host.c_str());
-    } else {
-      // Connect to local filesystem
-      hdfsBuilderSetNameNode(hdfs_builder, NULL);
-    }
-    hdfsBuilderSetNameNodePort(hdfs_builder, port);
-    hdfsFS conn = hdfsBuilderConnect(hdfs_builder);
-    DCHECK(conn != NULL);
-    fs_map_.insert(make_pair(make_pair(host, port), conn));
-    return conn;
-  } else {
-    return i->second;
-  }
-  */
-	lock_guard<mutex> l(lock_);
-	HdfsFsMap::iterator i = fs_map_.find(make_pair(host, port));
-	if (i == fs_map_.end()) {
-		// no connection exists.
-	    // dfsFS conn = getConnection(host, port);
+Status HdfsFsCache::GetConnection(const string& path, dfsFS* fs) {
+	string namenode;
+	size_t n = path.find("://");
 
-		// ELENA: remove the hdfs connect from impala
-		dfsFS conn;
-		conn.host = host;
-		conn.port = port;
-		conn.valid = true;
-
-		// run connection resolver and registration:
-	    cacheConfigureFileSystem(conn);
-	    // now that connection is resolved, insert it:
-	    fs_map_.insert(make_pair(make_pair(host, port), conn));
-
-	    return conn;
+	if (n == string::npos) {
+	    // Path is not qualified, so use the default FS.
+	    namenode = "default";
 	  } else {
-	    return i->second;
+	    // Path is qualified, i.e. "scheme://authority/path/to/file".  Extract
+	    // "scheme://authority/".
+	    n = path.find('/', n + 3);
+	    if (n == string::npos) {
+	      return Status(Substitute("Path missing '/' after authority: $0", path));
+	    }
+	    // Include the trailling '/' for local filesystem case, i.e. "file:///".
+	    namenode = path.substr(0, n + 1);
 	  }
+	  DCHECK(!namenode.empty());
+
+	  lock_guard<mutex> l(lock_);
+	  HdfsFsMap::iterator i = fs_map_.find(namenode);
+
+	  if (i == fs_map_.end()) {
+			// no connection exists.
+			dfsFS conn(namenode);
+			conn.valid = true;
+			// run connection resolver and registration:
+		    cacheConfigureFileSystem(conn);
+		    fs_map_.insert(make_pair(namenode, conn));
+		    *fs = conn;
+	  } else {
+		  *fs = i->second;
+	  }
+	  return Status::OK;
 }
 
-dfsFS HdfsFsCache::GetDefaultConnection() {
-  // "default" uses the default NameNode configuration from the XML configuration files.
-  return GetConnection("default", 0);
-}
-
-dfsFS HdfsFsCache::GetLocalConnection() {
-  return GetConnection("", 0);
+Status HdfsFsCache::GetLocalConnection(dfsFS* fs) {
+  return GetConnection("file:///", fs);
 }
 
 }

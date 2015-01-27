@@ -14,6 +14,8 @@
 
 package com.cloudera.impala.analysis;
 
+import org.apache.hadoop.fs.permission.FsAction;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.HdfsPartition;
 import com.cloudera.impala.catalog.HdfsTable;
@@ -23,6 +25,7 @@ import com.cloudera.impala.thrift.TAlterTableParams;
 import com.cloudera.impala.thrift.TAlterTableSetLocationParams;
 import com.cloudera.impala.thrift.TAlterTableType;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.permission.FsAction;
 
 /**
  * Represents an ALTER TABLE [PARTITION partitionSpec] SET LOCATION statement.
@@ -55,22 +58,18 @@ public class AlterTableSetLocationStmt extends AlterTableSetStmt {
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     super.analyze(analyzer);
-    location_.analyze(analyzer, Privilege.ALL);
+    location_.analyze(analyzer, Privilege.ALL, FsAction.READ_WRITE);
 
     Table table = getTargetTable();
     Preconditions.checkNotNull(table);
     if (table instanceof HdfsTable) {
       HdfsTable hdfsTable = (HdfsTable) table;
-      // Table should never be cached on CDH4 since caching is not supported.
-      Preconditions.checkState(!hdfsTable.isMarkedCached());
       if (getPartitionSpec() != null) {
         // Targeting a partition rather than a table.
         PartitionSpec partitionSpec = getPartitionSpec();
         HdfsPartition partition = hdfsTable.getPartition(
             partitionSpec.getPartitionSpecKeyValues());
         Preconditions.checkNotNull(partition);
-        // Partition should never be cached on CDH4 since caching is not supported.
-        Preconditions.checkState(!partition.isMarkedCached());
         if (partition.isMarkedCached()) {
           throw new AnalysisException(String.format("Target partition is cached, " +
               "please uncache before changing the location using: ALTER TABLE %s %s " +

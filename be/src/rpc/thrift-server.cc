@@ -205,11 +205,14 @@ void* ThriftServer::ThriftServerEventProcessor::createContext(shared_ptr<TProtoc
   TTransport* transport = input->getTransport().get();
   shared_ptr<ConnectionContext> connection_ptr =
       shared_ptr<ConnectionContext>(new ConnectionContext);
+  TTransport* underlying_transport =
+      (static_cast<TBufferedTransport*>(transport))->getUnderlyingTransport().get();
   if (!thrift_server_->auth_provider_->is_sasl()) {
-    socket = static_cast<TSocket*>(
-        static_cast<TBufferedTransport*>(transport)->getUnderlyingTransport().get());
+    socket = static_cast<TSocket*>(underlying_transport);
   } else {
-    TSaslServerTransport* sasl_transport = static_cast<TSaslServerTransport*>(transport);
+    TSaslServerTransport* sasl_transport = static_cast<TSaslServerTransport*>(
+        underlying_transport);
+
     // Get the username from the transport.
     connection_ptr->username = sasl_transport->getUsername();
     socket = static_cast<TSocket*>(sasl_transport->getUnderlyingTransport().get());
@@ -251,7 +254,6 @@ void ThriftServer::ThriftServerEventProcessor::processContext(void* context,
 
 void ThriftServer::ThriftServerEventProcessor::deleteContext(void* serverContext,
     shared_ptr<TProtocol> input, shared_ptr<TProtocol> output) {
-
   __connection_context__ = (ConnectionContext*) serverContext;
 
   if (thrift_server_->connection_handler_ != NULL) {
@@ -269,7 +271,7 @@ void ThriftServer::ThriftServerEventProcessor::deleteContext(void* serverContext
 }
 
 ThriftServer::ThriftServer(const string& name, const shared_ptr<TProcessor>& processor,
-    int port, AuthProvider* auth_provider, Metrics* metrics, int num_worker_threads,
+    int port, AuthProvider* auth_provider, MetricGroup* metrics, int num_worker_threads,
     ServerType server_type)
     : started_(false),
       port_(port),
@@ -289,12 +291,10 @@ ThriftServer::ThriftServer(const string& name, const shared_ptr<TProcessor>& pro
     metrics_enabled_ = true;
     stringstream count_ss;
     count_ss << "impala.thrift-server." << name << ".connections-in-use";
-    num_current_connections_metric_ =
-        metrics->CreateAndRegisterPrimitiveMetric(count_ss.str(), 0L);
+    num_current_connections_metric_ = metrics->AddGauge(count_ss.str(), 0L);
     stringstream max_ss;
     max_ss << "impala.thrift-server." << name << ".total-connections";
-    total_connections_metric_ =
-        metrics->CreateAndRegisterPrimitiveMetric(max_ss.str(), 0L);
+    total_connections_metric_ = metrics->AddCounter(max_ss.str(), 0L);
   } else {
     metrics_enabled_ = false;
   }

@@ -111,10 +111,17 @@ class TestTableWriters(ImpalaTestSuite):
   def add_test_dimensions(cls):
     super(TestTableWriters, cls).add_test_dimensions()
     cls.TestMatrix.add_dimension(create_single_exec_option_dimension())
+    # This class tests many formats, but doesn't use the contraints
+    # Each format is tested within one test file, we constrain to text/none
+    # as each test file only needs to be run once.
+    cls.TestMatrix.add_constraint(lambda v:
+        (v.get_value('table_format').file_format =='text' and
+        v.get_value('table_format').compression_codec == 'none'))
 
   def test_seq_writer(self, vector):
-    # TODO debug this test, temporarily disabled. Some issue with zlib on some
-    # of the cluster machines.
+    # TODO debug this test, same as seq writer.
+    # This caused by a zlib failure. Suspected cause is too small a buffer
+    # passed to zlib for compression; similar to IMPALA-424
     pytest.skip()
     self.run_test_case('QueryTest/seq-writer', vector)
 

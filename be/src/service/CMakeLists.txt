@@ -22,12 +22,14 @@ add_library(Service
   frontend.cc
   fe-support.cc
   fragment-exec-state.cc
+  fragment-mgr.cc
   hs2-util.cc
   impala-server.cc
   impala-server-callbacks.cc
   impala-hs2-server.cc
   impala-beeswax-server.cc
   query-exec-state.cc
+  query-options.cc
   child-query.cc
 )
 
@@ -51,3 +53,4 @@ target_link_libraries(impalad
 )
 
 ADD_BE_TEST(session-expiry-test session-expiry-test.cc)
+ADD_BE_TEST(hs2-util-test hs2-util-test.cc)

@@ -20,6 +20,7 @@ import java.io.IOException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 
 import com.cloudera.impala.authorization.Privilege;
@@ -31,6 +32,7 @@ import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.thrift.TLoadDataReq;
 import com.cloudera.impala.thrift.TTableName;
+import com.cloudera.impala.util.FsPermissionChecker;
 import com.cloudera.impala.util.TAccessLevelUtil;
 import com.google.common.base.Preconditions;
 
@@ -114,22 +116,37 @@ public class LoadDataStmt extends StatementBase {
     analyzePaths(analyzer, (HdfsTable) table);
   }
 
+  /**
+   * Check to see if Impala has the necessary permissions to access the source and dest
+   * paths for this LOAD statement (which maps onto a sequence of file move operations,
+   * with the requisite permission requirements), and check to see if all files to be
+   * moved are in format that Impala understands. Errors are raised as AnalysisExceptions.
+   */
   private void analyzePaths(Analyzer analyzer, HdfsTable hdfsTable)
       throws AnalysisException {
     // The user must have permission to access the source location. Since the files will
     // be moved from this location, the user needs to have all permission.
     sourceDataPath_.analyze(analyzer, Privilege.ALL);
 
+    // Catch all exceptions thrown by accessing files, and rethrow as AnalysisExceptions.
     try {
       Path source = sourceDataPath_.getPath();
       FileSystem fs = source.getFileSystem(FileSystemUtil.getConfiguration());
-      DistributedFileSystem dfs = (DistributedFileSystem) fs;
-      if (!dfs.exists(source)) {
+      if (!(fs instanceof DistributedFileSystem)) {
+        throw new AnalysisException(String.format("INPATH location '%s' " +
+            "must point to an HDFS filesystem.", sourceDataPath_));
+      }
+      if (!fs.exists(source)) {
         throw new AnalysisException(String.format(
             "INPATH location '%s' does not exist.", sourceDataPath_));
       }
 
-      if (dfs.isDirectory(source)) {
+      // If the source file is a directory, we must be able to read from and write to
+      // it. If the source file is a file, we must be able to read from it, and write to
+      // its parent directory (in order to delete the file as part of the move operation).
+      FsPermissionChecker checker = FsPermissionChecker.getInstance();
+
+      if (fs.isDirectory(source)) {
         if (FileSystemUtil.getTotalNumVisibleFiles(source) == 0) {
           throw new AnalysisException(String.format(
               "INPATH location '%s' contains no visible files.", sourceDataPath_));
@@ -138,33 +155,65 @@ public class LoadDataStmt extends StatementBase {
           throw new AnalysisException(String.format(
               "INPATH location '%s' cannot contain subdirectories.", sourceDataPath_));
         }
-      } else { // INPATH points to a file.
+        if (!checker.getPermissions(fs, source).checkPermissions(
+            FsAction.READ_WRITE)) {
+          throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
+              "because Impala does not have READ or WRITE permissions on this directory",
+              source));
+        }
+      } else {
+        // INPATH names a file.
         if (FileSystemUtil.isHiddenFile(source.getName())) {
           throw new AnalysisException(String.format(
               "INPATH location '%s' points to a hidden file.", source));
         }
-      }
 
+        if (!checker.getPermissions(fs, source.getParent()).checkPermissions(
+            FsAction.WRITE)) {
+          throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
+              "because Impala does not have WRITE permissions on its parent " +
+              "directory %s", source, source.getParent()));
+        }
+
+        if (!checker.getPermissions(fs, source).checkPermissions(
+            FsAction.READ)) {
+          throw new AnalysisException(String.format("Unable to LOAD DATA from %s " +
+              "because Impala does not have READ permissions on this file", source));
+        }
+      }
 
       String noWriteAccessErrorMsg = String.format("Unable to LOAD DATA into " +
           "target table (%s) because Impala does not have WRITE access to HDFS " +
           "location: ", hdfsTable.getFullName());
 
       HdfsPartition partition;
+      String location;
       if (partitionSpec_ != null) {
         partition = hdfsTable.getPartition(partitionSpec_.getPartitionSpecKeyValues());
+        location = partition.getLocation();
         if (!TAccessLevelUtil.impliesWriteAccess(partition.getAccessLevel())) {
           throw new AnalysisException(noWriteAccessErrorMsg + partition.getLocation());
         }
       } else {
         // "default" partition
         partition = hdfsTable.getPartitions().get(0);
+        location = hdfsTable.getLocation();
         if (!hdfsTable.hasWriteAccess()) {
           throw new AnalysisException(noWriteAccessErrorMsg + hdfsTable.getLocation());
         }
       }
       Preconditions.checkNotNull(partition);
 
+      // Until Frontend.loadTableData() can handle cross-filesystem and filesystems
+      // that aren't HDFS, require that source and dest are on the same HDFS.
+      if (!FileSystemUtil.isPathOnFileSystem(new Path(location), fs)) {
+        throw new AnalysisException(String.format(
+            "Unable to LOAD DATA into target table (%s) because source path (%s) and " +
+            "destination %s (%s) are on different filesystems.",
+            hdfsTable.getFullName(),
+            source, partitionSpec_ == null ? "table" : "partition",
+            partition.getLocation()));
+      }
       // Verify the files being loaded are supported.
       for (FileStatus fStatus: fs.listStatus(source)) {
         if (fs.isDirectory(fStatus.getPath())) continue;
@@ -178,7 +227,7 @@ public class LoadDataStmt extends StatementBase {
     } catch (FileNotFoundException e) {
       throw new AnalysisException("File not found: " + e.getMessage(), e);
     } catch (IOException e) {
-      throw new AnalysisException("Error accessing file system: " + e.getMessage(), e);
+      throw new AnalysisException("Error accessing filesystem: " + e.getMessage(), e);
     }
   }
 

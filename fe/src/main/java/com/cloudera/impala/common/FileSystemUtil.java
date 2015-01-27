@@ -17,6 +17,7 @@ package com.cloudera.impala.common;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.UUID;
 
 import org.apache.commons.io.IOUtils;
@@ -132,6 +133,7 @@ public class FileSystemUtil {
     LOG.debug(String.format(
         "Moving '%s' to '%s'", sourceFile.toString(), destFile.toString()));
     // Move (rename) the file.
+    // TODO : this is horror for s3n...
     fs.rename(sourceFile, destFile);
   }
 
@@ -198,6 +200,14 @@ public class FileSystemUtil {
     return fileName.startsWith(".") || fileName.startsWith("_");
   }
 
+  /**
+   * Return true iff path is on a DFS filesystem.
+   */
+  public static boolean isDistributedFileSystem(Path path) throws IOException {
+    FileSystem fs = path.getFileSystem(CONF);
+    return fs instanceof DistributedFileSystem;
+  }
+
   public static DistributedFileSystem getDistributedFileSystem(Path path)
       throws IOException {
     FileSystem fs = path.getFileSystem(CONF);
@@ -205,17 +215,66 @@ public class FileSystemUtil {
     return (DistributedFileSystem) fs;
   }
 
+  public static FileSystem getFileSystem(Path path)
+      throws IOException {
+    FileSystem fs = path.getFileSystem(CONF);
+    return fs;
+  }
+
   public static DistributedFileSystem getDistributedFileSystem() throws IOException {
     return getDistributedFileSystem(new Path(FileSystem.getDefaultUri(CONF)));
   }
 
+  public static FileSystem getFileSystem() throws IOException{
+    return getFileSystem(new Path(FileSystem.getDefaultUri(CONF)));
+  }
   /**
-   * Fully-qualifies the given path based on the FileSystem configuration. If the given
-   * path is already fully qualified, a new Path object with the same location will be
-   * returned.
+   * Fully-qualifies the given path based on the FileSystem configuration.
    */
   public static Path createFullyQualifiedPath(Path location) {
-    return location.makeQualified(FileSystem.getDefaultUri(CONF), location);
+    URI defaultUri = FileSystem.getDefaultUri(CONF);
+    URI locationUri = location.toUri();
+    // Use the default URI only if location has no scheme or it has the same scheme as
+    // the default URI.  Otherwise, Path.makeQualified() will incorrectly use the
+    // authority from the default URI even though the schemes don't match.  See HDFS-7031.
+    if (locationUri.getScheme() == null ||
+        locationUri.getScheme().equalsIgnoreCase(defaultUri.getScheme())) {
+      return location.makeQualified(defaultUri, location);
+    }
+    // Already qualified (has scheme).
+    return location;
+  }
+
+  /**
+   * Return true iff the path is on the given filesystem.
+   */
+  public static Boolean isPathOnFileSystem(Path path, FileSystem fs) {
+    try {
+      // Call makeQualified() for the side-effect of FileSystem.checkPath() which will
+      // throw an exception if path is not on fs.
+      fs.makeQualified(path);
+      return true;
+    } catch (IllegalArgumentException e) {
+      // Path is not on fs.
+      return false;
+    }
+  }
+
+  /**
+   * Return true if the path can be reached, false for all other cases
+   * File doesn't exist, cannot access the FileSystem, etc.
+   */
+  public static Boolean isPathReachable(Path path, FileSystem fs, StringBuilder error_msg) {
+    try {
+      if (fs.exists(path)) {
+        return true;
+      } else {
+        error_msg.append("Path does not exist.");
+      }
+    } catch (Exception e) {
+      error_msg.append(e.getMessage());
+    }
+    return false;
   }
 
   /**

@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.BlockStorageLocation;
@@ -45,7 +45,7 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeUtils;
-import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +55,7 @@ import com.cloudera.impala.analysis.NullLiteral;
 import com.cloudera.impala.analysis.PartitionKeyValue;
 import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpResult;
 import com.cloudera.impala.catalog.HadoopFsBridge.BridgeOpStatus;
+import com.cloudera.impala.catalog.HdfsPartition.BlockReplica;
 import com.cloudera.impala.catalog.HdfsPartition.FileBlock;
 import com.cloudera.impala.catalog.HdfsPartition.FileDescriptor;
 import com.cloudera.impala.common.AnalysisException;
@@ -160,6 +161,9 @@ public class HdfsTable extends Table {
   // Sum of sizes of all Hdfs files in this table. Set in load().
   private long totalHdfsBytes_;
 
+  // True iff the table's partitions are located on more than one filesystem.
+  private boolean multipleFileSystems_ = false;
+
   // Base Hdfs directory where files of this table are stored.
   // For unpartitioned tables it is simply the path where all files live.
   // For partitioned tables it is the root directory
@@ -191,15 +195,15 @@ public class HdfsTable extends Table {
     // Initialize the diskId as -1 to indicate it is unknown
     int diskId = -1;
 
-    if (hdfsVolumeId != null && hdfsVolumeId.isValid()) {
+    if (hdfsVolumeId != null) {
       // TODO: this is a hack and we'll have to address this by getting the
       // public API. Also, we need to be very mindful of this when we change
       // the version of HDFS.
       String volumeIdString = hdfsVolumeId.toString();
       // This is the hacky part. The toString is currently the underlying id
-      // encoded in base64.
-      byte[] volumeIdBytes = Base64.decodeBase64(volumeIdString);
-      if (volumeIdBytes.length == 4) {
+      // encoded as hex.
+      byte[] volumeIdBytes = StringUtils.hexStringToByte(volumeIdString);
+      if (volumeIdBytes != null && volumeIdBytes.length == 4) {
         diskId = Bytes.toInt(volumeIdBytes);
       } else if (!hasLoggedDiskIdFormatWarning_) {
         LOG.warn("wrong disk id format: " + volumeIdString);
@@ -211,6 +215,8 @@ public class HdfsTable extends Table {
 
   public Map<String, List<FileDescriptor>> getFileDescMap() { return fileDescMap_; }
 
+  public boolean spansMultipleFileSystems() { return multipleFileSystems_; }
+
   /**
    * Loads the file block metadata for the given collection of FileDescriptors.  The
    * FileDescriptors are passed as a tree, where the first level is indexed by
@@ -219,14 +225,15 @@ public class HdfsTable extends Table {
    */
   private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
       throws RuntimeException {
-
     Preconditions.checkNotNull(perFsFileDescs);
+    LOG.debug("load block md for " + name_);
 
     for (FsKey fsEntry: perFsFileDescs.keySet()) {
       FileSystem fs = fsEntry.filesystem;
 
       // Store all BlockLocations so they can be reused when loading the disk IDs.
       List<BlockLocation> blockLocations = Lists.newArrayList();
+      int numCachedBlocks = 0;
 
       Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
       Preconditions.checkNotNull(partitionToFds);
@@ -244,6 +251,7 @@ public class HdfsTable extends Table {
             }
             FileStatus fileStatus = fileStatRes.getResult();
 
+            // fileDescriptors should not contain directories.
             Preconditions.checkArgument(!fileStatus.isDirectory());
 
             long len = fileStatus.getLen();
@@ -260,27 +268,39 @@ public class HdfsTable extends Table {
 
             // Loop over all blocks in the file.
             for (BlockLocation block: locations) {
+              Preconditions.checkNotNull(block);
+              // Get the location of all block replicas in ip:port format.
               String[] blockHostPorts = block.getNames();
-              try {
-                blockHostPorts = block.getNames();
-              } catch (IOException e) {
-                // this shouldn't happen, getNames() doesn't throw anything
-                String errorMsg = "BlockLocation.getNames() failed:\n" + e.getMessage();
-                LOG.error(errorMsg);
-                throw new IllegalStateException(errorMsg);
-              }
-              // Now enumerate all replicas of the block, adding any unknown hosts to
-              // hostIndex_ and the index for that host to replicaHostIdxs.
-              List<Integer> replicaHostIdxs = new ArrayList<Integer>(blockHostPorts.length);
+
+              // Get the hostnames for all block replicas. Used to resolve which hosts
+              // contain cached data. The results are returned in the same order as
+              // block.getNames() so it allows us to match a host specified as ip:port
+              // to corresponding hostname using the same array index.
+              String[] blockHostNames = block.getHosts();
+              Preconditions.checkState(blockHostNames.length == blockHostPorts.length);
+
+              // Get the hostnames that contain cached replicas of this block.
+              Set<String> cachedHosts =
+                  Sets.newHashSet(Arrays.asList(block.getCachedHosts()));
+              Preconditions.checkState(cachedHosts.size() <= blockHostNames.length);
+
+              // Now enumerate all replicas of the block, adding any unknown hosts
+              // to hostMap_/hostList_. The host ID (index in to the hostList_) for each
+              // replica is stored in replicaHostIdxs.
+              List<BlockReplica> blockReplicas =
+                  new ArrayList<BlockReplica>(blockHostPorts.length);
               for (int i = 0; i < blockHostPorts.length; ++i) {
-                String[] ip_port = blockHostPorts[i].split(":");
-                Preconditions.checkState(ip_port.length == 2);
-                TNetworkAddress network_address = new TNetworkAddress(ip_port[0],
-                    Integer.parseInt(ip_port[1]));
-                replicaHostIdxs.add(hostIndex_.getIndex(network_address));
+                TNetworkAddress networkAddress =
+                    BlockReplica.parseLocation(blockHostPorts[i]);
+                Preconditions.checkState(networkAddress != null);
+                blockReplicas.add(
+                    new BlockReplica(hostIndex_.getIndex(networkAddress),
+                        cachedHosts.contains(blockHostNames[i])));
               }
-              fileDescriptor.addFileBlock(
-                  new FileBlock(block.getOffset(), block.getLength(), replicaHostIdxs));
+              FileBlock fileBlock =
+                  new FileBlock(block.getOffset(), block.getLength(), blockReplicas);
+              fileDescriptor.addFileBlock(fileBlock);
+              if (fileBlock.isCached()) ++numCachedBlocks;
             }
           } catch (IOException e) {
             LOG.error("IO exception happens for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\". Ex : \"" +
@@ -290,12 +310,18 @@ public class HdfsTable extends Table {
           }
         }
       }
+      LOG.trace("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
+          numCachedBlocks + "/" + blockLocations.size() + " cached blocks.");
 
-      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem)
+      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
+        LOG.trace("loading disk ids for: " + getFullName() +
+            ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
         loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
+        LOG.trace("completed load of disk ids for: " + getFullName());
+      }
     }
-
   }
+
   /**
    * Populates disk/volume ID metadata inside FileDescriptors given a list of
    * BlockLocations. The FileDescriptors are passed as a Map of parent directory
@@ -509,10 +535,9 @@ public class HdfsTable extends Table {
       Column col = new Column(s.getName(), type, s.getComment(), pos);
       addColumn(col);
       ++pos;
-
-      // Load and set column stats in col.
-      loadColumnStats(col, client);
     }
+
+    loadAllColumnStats(client);
   }
 
   /**
@@ -580,9 +605,7 @@ public class HdfsTable extends Table {
     isMarkedCached_ = cacheDirectiveId != null;
 
     if (msTbl.getPartitionKeysSize() == 0) {
-      LOG.info("Table \"" + msTbl.getTableName() + "\" does not have partitions keys.");
       String partiotionsListEmpty = msPartitions.isEmpty() ? "" : "not";
-      LOG.info("List of partitions is \"" + partiotionsListEmpty + "\" empty");
       Preconditions.checkArgument(msPartitions == null || msPartitions.isEmpty());
       // This table has no partition key, which means it has no declared partitions.
       // We model partitions slightly differently to Hive - every file must exist in a
@@ -653,17 +676,10 @@ public class HdfsTable extends Table {
         if (perms.canReadAndWrite()) {
           return TAccessLevel.READ_WRITE;
         } else if (perms.canRead()) {
-          LOG.debug(
-              String.format("Impala does not have WRITE access to '%s' in table: %s",
-              location, getFullName()));
           return TAccessLevel.READ_ONLY;
         } else if (perms.canWrite()) {
-          LOG.debug(String.format("Impala does not have READ access to '%s' in table: %s",
-                  location, getFullName()));
           return TAccessLevel.WRITE_ONLY;
         }
-        LOG.debug(String.format("Impala does not have READ or WRITE access to " +
-                "'%s' in table: %s", location, getFullName()));
         return TAccessLevel.NONE;
       }
       location = location.getParent();
@@ -675,7 +691,7 @@ public class HdfsTable extends Table {
 
   /**
    * Creates a new HdfsPartition object to be added to HdfsTable's partition list.
-   * Partitions may be empty, or may not even exist in the file system (a partition's
+   * Partitions may be empty, or may not even exist in the filesystem (a partition's
    * location may have been changed to a new path that is about to be created by an
    * INSERT). Also loads the block metadata for this partition.
    * Returns new partition if successful or null if none was added.
@@ -699,7 +715,7 @@ public class HdfsTable extends Table {
   /**
    * Creates a new HdfsPartition object to be added to the internal partition list.
    * Populates with file format information and file locations. Partitions may be empty,
-   * or may not even exist on the file system (a partition's location may have been
+   * or may not even exist on the filesystem (a partition's location may have been
    * changed to a new path that is about to be created by an INSERT). For unchanged
    * files (indicated by unchanged mtime), reuses the FileDescriptor from the
    * oldFileDescMap. The one exception is if the partition is marked as cached
@@ -796,6 +812,9 @@ public class HdfsTable extends Table {
       FileSystem fs = fileSystemRes.getResult();
       FsKey fsKey = new FsKey(fs);
       LOG.info("Filesystem is retrieved for directory \"" + partDirPath.toString() + "\" ; table \"" + this.name_ + "\".");
+
+      multipleFileSystems_ = multipleFileSystems_ ||
+          !FileSystemUtil.isPathOnFileSystem(new Path(getLocation()), fs);
 
       BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, partDirPath);
       if(existsRes.getStatus() != BridgeOpStatus.OK){
@@ -1021,7 +1040,7 @@ public class HdfsTable extends Table {
       org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
     numHdfsFiles_ = 0;
     totalHdfsBytes_ = 0;
-    LOG.info("load table: " + db_.getName() + "." + name_);
+    LOG.debug("load table: " + db_.getName() + "." + name_);
 
     // turn all exceptions into TableLoadingException
     try {
@@ -1142,7 +1161,7 @@ public class HdfsTable extends Table {
             modifiedPartitionNames.remove(cachedPartName);
           }
         }
-        LOG.trace(String.format("Incrementally refreshing %d/%d partitions.",
+        LOG.info(String.format("Incrementally refreshing %d/%d partitions.",
             modifiedPartitionNames.size(), totalPartitions));
 
         // No need to make the metastore call if no partitions are to be updated.
@@ -1163,7 +1182,7 @@ public class HdfsTable extends Table {
 
       // load table stats
       numRows_ = getRowCount(msTbl.getParameters());
-      LOG.info("table #rows=" + Long.toString(numRows_));
+      LOG.debug("table #rows=" + Long.toString(numRows_));
 
       // For unpartitioned tables set the numRows in its partitions
       // to the table's numRows.
@@ -1250,12 +1269,23 @@ public class HdfsTable extends Table {
   }
 
   @Override
+  protected List<String> getColumnNamesWithHmsStats() {
+    List<String> ret = Lists.newArrayList();
+    // Only non-partition columns have column stats in the HMS.
+    for (Column column: getColumns().subList(numClusteringCols_, getColumns().size())) {
+      ret.add(column.getName().toLowerCase());
+    }
+    return ret;
+  }
+
+  @Override
   protected void loadFromThrift(TTable thriftTable) throws TableLoadingException {
     super.loadFromThrift(thriftTable);
     THdfsTable hdfsTable = thriftTable.getHdfs_table();
     hdfsBaseDir_ = hdfsTable.getHdfsBaseDir();
     nullColumnValue_ = hdfsTable.nullColumnValue;
     nullPartitionKeyValue_ = hdfsTable.nullPartitionKeyValue;
+    multipleFileSystems_ = hdfsTable.multiple_filesystems;
     hostIndex_.populate(hdfsTable.getNetwork_addresses());
     resetPartitionMd();
 
@@ -1314,6 +1344,7 @@ public class HdfsTable extends Table {
     THdfsTable hdfsTable = new THdfsTable(hdfsBaseDir_, getColumnNames(),
         nullPartitionKeyValue_, nullColumnValue_, idToPartition);
     hdfsTable.setAvroSchema(avroSchema_);
+    hdfsTable.setMultiple_filesystems(multipleFileSystems_);
     if (includeFileDesc) {
       // Network addresses are used only by THdfsFileBlocks which are inside
       // THdfsFileDesc, so include network addreses only when including THdfsFileDesc.
@@ -1385,6 +1416,7 @@ public class HdfsTable extends Table {
     resultSchema.addToColumns(new TColumn("Size", Type.STRING.toThrift()));
     resultSchema.addToColumns(new TColumn("Bytes Cached", Type.STRING.toThrift()));
     resultSchema.addToColumns(new TColumn("Format", Type.STRING.toThrift()));
+    resultSchema.addToColumns(new TColumn("Incremental stats", Type.STRING.toThrift()));
 
     // Pretty print partitions and their stats.
     ArrayList<HdfsPartition> orderedPartitions = Lists.newArrayList(partitions_);
@@ -1413,14 +1445,17 @@ public class HdfsTable extends Table {
         long cachedBytes = 0L;
         for (FileDescriptor fd: p.getFileDescriptors()) {
           for (THdfsFileBlock fb: fd.getFileBlocks()) {
-            // There should never be any cached bytes on CDH4.
-            if (false) cachedBytes += fb.getLength();
+            if (fb.getIs_replica_cached().contains(true)) {
+              cachedBytes += fb.getLength();
+            }
           }
         }
         totalCachedBytes += cachedBytes;
         rowBuilder.addBytes(cachedBytes);
       }
       rowBuilder.add(p.getInputFormatDescriptor().getFileFormat().toString());
+
+      rowBuilder.add(String.valueOf(p.hasIncrementalStats()));
       result.addToRows(rowBuilder.get());
     }
 
@@ -1435,7 +1470,7 @@ public class HdfsTable extends Table {
 
       // Total num rows, files, and bytes (leave format empty).
       rowBuilder.add(numRows_).add(numHdfsFiles_).addBytes(totalHdfsBytes_)
-          .addBytes(totalCachedBytes).add("");
+          .addBytes(totalCachedBytes).add("").add("");
       result.addToRows(rowBuilder.get());
     }
     return result;

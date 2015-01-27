@@ -959,7 +959,7 @@ string
 # Test group_concat when separator varies by row.
 select group_concat(cast(id as string), cast ((10 - id) as string))
 from functional.alltypesagg
-where id < 10 and day != null
+where id < 10 and day is not null
 group by day
 ---- RESULTS
 '0918273645546372819'
@@ -1110,4 +1110,12 @@ from alltypestiny
 true,1,1,1,1.100000023841858,10.1,'1',2009-03-01 00:00:00
 ---- TYPES
 BOOLEAN, TINYINT, SMALLINT, INT, FLOAT, DOUBLE, STRING, TIMESTAMP
+====
+---- QUERY
+# IMPALA-1419: Agg fn containing arithmetic expr on NULL fails
+select count(null * 1) from functional.alltypes
+---- RESULTS
+0
+---- TYPES
+BIGINT
 ====

@@ -42,6 +42,7 @@
 #include "util/mem-info.h"
 #include "util/periodic-counter-updater.h"
 #include "util/llama-util.h"
+#include "util/pretty-printer.h"
 
 DEFINE_bool(serialize_batch, false, "serialize and deserialize each returned row batch");
 DEFINE_int32(status_report_interval, 5, "interval between profile reports; in seconds");
@@ -136,7 +137,7 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       runtime_state_->query_options().mem_limit > 0) {
     bytes_limit = runtime_state_->query_options().mem_limit;
     VLOG_QUERY << "Using query memory limit from query options: "
-               << PrettyPrinter::Print(bytes_limit, TCounterType::BYTES);
+               << PrettyPrinter::Print(bytes_limit, TUnit::BYTES);
   }
 
   int64_t rm_reservation_size_bytes = -1;
@@ -155,7 +156,7 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       rm_reservation_size_bytes = bytes_limit;
     }
     VLOG_QUERY << "Using RM reservation memory limit from resource reservation: "
-               << PrettyPrinter::Print(rm_reservation_size_bytes, TCounterType::BYTES);
+               << PrettyPrinter::Print(rm_reservation_size_bytes, TUnit::BYTES);
   }
 
   DCHECK(!params.request_pool.empty());
@@ -174,11 +175,11 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       bind<int64_t>(mem_fn(&ThreadResourceMgr::ResourcePool::num_threads),
           runtime_state_->resource_pool()));
   mem_usage_sampled_counter_ = profile()->AddTimeSeriesCounter("MemoryUsage",
-      TCounterType::BYTES,
+      TUnit::BYTES,
       bind<int64_t>(mem_fn(&MemTracker::consumption),
           runtime_state_->instance_mem_tracker()));
   thread_usage_sampled_counter_ = profile()->AddTimeSeriesCounter("ThreadUsage",
-      TCounterType::UNIT,
+      TUnit::UNIT,
       bind<int64_t>(mem_fn(&ThreadResourceMgr::ResourcePool::num_threads),
           runtime_state_->resource_pool()));
 
@@ -198,6 +199,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       ExecNode::CreateTree(obj_pool(), request.fragment.plan, *desc_tbl, &plan_));
   runtime_state_->set_fragment_root_id(plan_->id());
 
+  VLOG_QUERY << "Prepare():exec node created the tree for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   if (request.params.__isset.debug_node_id) {
     DCHECK(request.params.__isset.debug_action);
     DCHECK(request.params.__isset.debug_phase);
@@ -208,6 +212,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   // set #senders of exchange nodes before calling Prepare()
   vector<ExecNode*> exch_nodes;
   plan_->CollectNodes(TPlanNodeType::EXCHANGE_NODE, &exch_nodes);
+  VLOG_QUERY << "Prepare(): nodes collected for plan for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   BOOST_FOREACH(ExecNode* exch_node, exch_nodes)
   {
     DCHECK_EQ(exch_node->type(), TPlanNodeType::EXCHANGE_NODE);
@@ -221,6 +228,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   vector<ExecNode*> scan_nodes;
   vector<TScanRangeParams> no_scan_ranges;
   plan_->CollectScanNodes(&scan_nodes);
+  VLOG_QUERY << "Prepare(): scan nodes collected for plan for query_id=" << PrintId(query_id_) << " instance_id="
+               << PrintId(request.fragment_instance_ctx.fragment_instance_id);
+
   for (int i = 0; i < scan_nodes.size(); ++i) {
     ScanNode* scan_node = static_cast<ScanNode*>(scan_nodes[i]);
     const vector<TScanRangeParams>& scan_ranges = FindWithDefault(
@@ -232,6 +242,8 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   {
     SCOPED_TIMER(prepare_timer);
     RETURN_IF_ERROR(plan_->Prepare(runtime_state_.get()));
+    VLOG_QUERY << "Prepare(): plan prepared query_id=" << PrintId(query_id_) << " instance_id="
+                 << PrintId(request.fragment_instance_ctx.fragment_instance_id);
   }
 
   PrintVolumeIds(params.per_node_scan_ranges);
@@ -254,9 +266,9 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
   // set up profile counters
   profile()->AddChild(plan_->runtime_profile());
   rows_produced_counter_ =
-      ADD_COUNTER(profile(), "RowsProduced", TCounterType::UNIT);
+      ADD_COUNTER(profile(), "RowsProduced", TUnit::UNIT);
   per_host_mem_usage_ =
-      ADD_COUNTER(profile(), PER_HOST_PEAK_MEM_COUNTER, TCounterType::BYTES);
+      ADD_COUNTER(profile(), PER_HOST_PEAK_MEM_COUNTER, TUnit::BYTES);
 
   row_batch_.reset(new RowBatch(plan_->row_desc(), runtime_state_->batch_size(),
         runtime_state_->instance_mem_tracker()));

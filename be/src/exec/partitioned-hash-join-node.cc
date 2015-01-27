@@ -105,8 +105,10 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
 
   // build and probe exprs are evaluated in the context of the rows produced by our
   // right and left children, respectively
-  RETURN_IF_ERROR(Expr::Prepare(build_expr_ctxs_, state, child(1)->row_desc()));
-  RETURN_IF_ERROR(Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(build_expr_ctxs_, state, child(1)->row_desc(), expr_mem_tracker()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc(), expr_mem_tracker()));
   // Although ConstructBuildSide() maybe be run in a separate thread, it is safe to free
   // local allocations in QueryMaintenance() since the build thread is not run
   // concurrently with other expr evaluation in this join node.
@@ -117,7 +119,8 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
   // build and probe tuples; full_row_desc is not necessarily the same as the output row
   // desc, e.g., because semi joins only return the build xor probe tuples
   RowDescriptor full_row_desc(child(0)->row_desc(), child(1)->row_desc());
-  RETURN_IF_ERROR(Expr::Prepare(other_join_conjunct_ctxs_, state, full_row_desc));
+  RETURN_IF_ERROR(
+      Expr::Prepare(other_join_conjunct_ctxs_, state, full_row_desc, expr_mem_tracker()));
   AddExprCtxsToFree(other_join_conjunct_ctxs_);
 
   RETURN_IF_ERROR(state->block_mgr()->RegisterClient(
@@ -145,21 +148,21 @@ Status PartitionedHashJoinNode::Prepare(RuntimeState* state) {
 
   partition_build_timer_ = ADD_TIMER(runtime_profile(), "BuildPartitionTime");
   num_hash_buckets_ =
-      ADD_COUNTER(runtime_profile(), "HashBuckets", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "HashBuckets", TUnit::UNIT);
   partitions_created_ =
-      ADD_COUNTER(runtime_profile(), "PartitionsCreated", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "PartitionsCreated", TUnit::UNIT);
   max_partition_level_ = runtime_profile()->AddHighWaterMarkCounter(
-      "MaxPartitionLevel", TCounterType::UNIT);
+      "MaxPartitionLevel", TUnit::UNIT);
   num_build_rows_partitioned_ =
-      ADD_COUNTER(runtime_profile(), "BuildRowsPartitioned", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "BuildRowsPartitioned", TUnit::UNIT);
   num_probe_rows_partitioned_ =
-      ADD_COUNTER(runtime_profile(), "ProbeRowsPartitioned", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "ProbeRowsPartitioned", TUnit::UNIT);
   num_repartitions_ =
-      ADD_COUNTER(runtime_profile(), "NumRepartitions", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "NumRepartitions", TUnit::UNIT);
   num_spilled_partitions_ =
-      ADD_COUNTER(runtime_profile(), "SpilledPartitions", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "SpilledPartitions", TUnit::UNIT);
   largest_partition_percent_ = runtime_profile()->AddHighWaterMarkCounter(
-      "LargestPartitionPercent", TCounterType::UNIT);
+      "LargestPartitionPercent", TUnit::UNIT);
 
   if (state->codegen_enabled()) {
     // Codegen for hashing rows
@@ -273,8 +276,9 @@ Status PartitionedHashJoinNode::Partition::Spill(bool unpin_all_build) {
     hash_tbl()->Close();
     hash_tbl_.reset();
   }
-  DCHECK(!build_rows()->using_small_buffers());
-  DCHECK(!probe_rows()->using_small_buffers());
+  // If it is still using small buffers, then there is nothing else to do, as the small
+  // buffers are always kept in memory.
+  if (build_rows()->using_small_buffers()) return Status::OK;
   return build_rows()->UnpinStream(unpin_all_build);
 }
 
@@ -290,7 +294,7 @@ Status PartitionedHashJoinNode::Partition::BuildHashTable(RuntimeState* state,
 template<bool const AddProbeFilters>
 Status PartitionedHashJoinNode::Partition::BuildHashTableInternal(
     RuntimeState* state, bool* built) {
-  DCHECK(build_rows_ != NULL);
+  DCHECK_NOTNULL(build_rows_);
   *built = false;
 
   // TODO: estimate the entire size of the hash table and reserve all of it from
@@ -440,6 +444,9 @@ Status PartitionedHashJoinNode::SpillPartition(Partition** spilled_partition) {
     if (hash_partitions_[i]->is_spilled()) continue;
     int64_t mem = hash_partitions_[i]->build_rows()->bytes_in_mem(false);
     if (hash_partitions_[i]->hash_tbl() != NULL) {
+      // IMPALA-1488: Do not spill partitions that already had matches, because we
+      // are going to lose information and return wrong results.
+      if (hash_partitions_[i]->hash_tbl()->HasMatches()) continue;
       mem += hash_partitions_[i]->hash_tbl()->byte_size();
     }
     if (mem > max_freed_mem) {
@@ -828,7 +835,7 @@ Status PartitionedHashJoinNode::OutputUnmatchedBuild(RowBatch* out_batch) {
          num_rows_added < max_rows) {
     // Output remaining unmatched build rows.
     if (!hash_tbl_iterator_.matched()) {
-      hash_tbl_iterator_.set_matched(true);
+      hash_tbl_iterator_.set_matched();
       TupleRow* build_row = hash_tbl_iterator_.GetRow();
       DCHECK(build_row != NULL);
       if (join_op_ == TJoinOp::RIGHT_ANTI_JOIN) {
@@ -1039,8 +1046,8 @@ Status PartitionedHashJoinNode::BuildHashTables(RuntimeState* state) {
     can_add_probe_filters_ = false;
   }
 
-  // First loop over the partitions and build hash tables for the partitions that didn't
-  // already spill.
+  // First loop over the partitions and build hash tables for the partitions that did
+  // not already spill.
   BOOST_FOREACH(Partition* partition, hash_partitions_) {
     if (partition->build_rows()->num_rows() == 0) {
       // This partition is empty, no need to do anything else.
@@ -1048,17 +1055,16 @@ Status PartitionedHashJoinNode::BuildHashTables(RuntimeState* state) {
       continue;
     }
 
-    bool built = false;
     if (!partition->is_spilled()) {
+      bool built = false;
       DCHECK(partition->build_rows()->is_pinned());
       RETURN_IF_ERROR(partition->BuildHashTable(state, &built, can_add_probe_filters_));
-    }
-
-    if (!built) {
-      // We did not have enough memory to build this hash table. We need to
-      // 1) spill this partition (clean up the hash table, unpin build)
-      // 2) get an io buffer for the probe stream for this partition.
-      RETURN_IF_ERROR(partition->Spill(true));
+      if (!built) {
+        // We did not have enough memory to build this hash table. We need to
+        // 1) spill this partition (clean up the hash table, unpin build)
+        // 2) get an IO buffer for the probe stream for this partition.
+        RETURN_IF_ERROR(partition->Spill(true));
+      }
     }
   }
 
@@ -1078,7 +1084,7 @@ Status PartitionedHashJoinNode::BuildHashTables(RuntimeState* state) {
 
     while (true) {
       bool got_buffer;
-      RETURN_IF_ERROR(partition->probe_rows()->InitIoBuffer(&got_buffer));
+      RETURN_IF_ERROR(partition->probe_rows()->SwitchToIoBuffers(&got_buffer));
       if (got_buffer) break;
       Partition* spilled_partition;
       RETURN_IF_ERROR(SpillPartition(&spilled_partition));
@@ -1160,7 +1166,7 @@ Status PartitionedHashJoinNode::EvaluateNullProbe(BufferedTupleStream* build) {
 Status PartitionedHashJoinNode::ReserveTupleStreamBlocks() {
   DCHECK(using_small_buffers_);
 
-  // Partitions that are using small buffers need to switch to io sized buffers. We want
+  // Partitions that are using small buffers need to switch to IO sized buffers. We want
   // this to happen to all partitions at the same time to ensure that all partitions can
   // get at least 1 io buffer (at which point then can append indefinitely). This
   // initial buffer is guaranteed by the reservation for this operator.
@@ -1170,13 +1176,14 @@ Status PartitionedHashJoinNode::ReserveTupleStreamBlocks() {
     DCHECK(hash_partitions_[i]->build_rows()->using_small_buffers());
     DCHECK(hash_partitions_[i]->probe_rows()->using_small_buffers());
     bool got_buffer;
-    RETURN_IF_ERROR(hash_partitions_[i]->build_rows()->InitIoBuffer(&got_buffer));
+    RETURN_IF_ERROR(hash_partitions_[i]->build_rows()->SwitchToIoBuffers(&got_buffer));
     if (got_buffer) {
-      RETURN_IF_ERROR(hash_partitions_[i]->probe_rows()->InitIoBuffer(&got_buffer));
+      RETURN_IF_ERROR(hash_partitions_[i]->probe_rows()->SwitchToIoBuffers(&got_buffer));
     }
     if (!got_buffer) {
       Status status = Status::MEM_LIMIT_EXCEEDED;
-      status.AddErrorMsg("Not enough memory to get the minimum required buffers.");
+      status.AddErrorMsg("Not enough memory to get the minimum required buffers for "
+                         "join.");
       return status;
     }
   }

@@ -199,8 +199,10 @@ class JniUtil {
    *  @param cache_location              - cache location
    *  @param percent_of_memory_for_cache - percent of available on @a cache_location path memory
    *  which can be potentially consumed by cache
+   *
+   *  @return cache layer initialization status, false if initialization failed due to reasons
    */
-  static void InitLibdfs(int percent_of_memory_for_cache = 0, const std::string& cache_location = "");
+  static bool InitLibdfs(int percent_of_memory_for_cache = 0, const std::string& cache_location = "");
 
   // Find JniUtil class, and get JniUtil.throwableToString method id
   static Status Init();

@@ -120,18 +120,24 @@ string DataSink::OutputInsertStats(const PartitionStatusMap& stats,
     }
     const TInsertStats& stats = val.second.stats;
     ss << indent << "BytesWritten: "
-       << PrettyPrinter::Print(stats.bytes_written, TCounterType::BYTES);
+       << PrettyPrinter::Print(stats.bytes_written, TUnit::BYTES);
     if (stats.__isset.parquet_stats) {
       const TParquetInsertStats& parquet_stats = stats.parquet_stats;
       ss << endl << indent << "Per Column Sizes:";
       for (map<string, int64_t>::const_iterator i = parquet_stats.per_column_size.begin();
            i != parquet_stats.per_column_size.end(); ++i) {
         ss << endl << indent << indent << i->first << ": "
-           << PrettyPrinter::Print(i->second, TCounterType::BYTES);
+           << PrettyPrinter::Print(i->second, TUnit::BYTES);
       }
     }
   }
   return ss.str();
+}
+
+Status DataSink::Prepare(RuntimeState* state) {
+  expr_mem_tracker_.reset(
+      new MemTracker(-1, -1, "Data sink", state->instance_mem_tracker(), false));
+  return Status::OK;
 }
 
 }  // namespace impala

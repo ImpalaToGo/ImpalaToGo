@@ -42,7 +42,8 @@ Status SortNode::Init(const TPlanNode& tnode) {
 Status SortNode::Prepare(RuntimeState* state) {
   SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecNode::Prepare(state));
-  RETURN_IF_ERROR(sort_exec_exprs_.Prepare(state, child(0)->row_desc(), row_descriptor_));
+  RETURN_IF_ERROR(sort_exec_exprs_.Prepare(
+      state, child(0)->row_desc(), row_descriptor_, expr_mem_tracker()));
   AddExprCtxsToFree(sort_exec_exprs_);
   return Status::OK;
 }
@@ -58,9 +59,12 @@ Status SortNode::Open(RuntimeState* state) {
   TupleRowComparator less_than(
       sort_exec_exprs_.lhs_ordering_expr_ctxs(), sort_exec_exprs_.rhs_ordering_expr_ctxs(),
       is_asc_order_, nulls_first_);
+
+  // Create and initialize the external sort impl object
   sorter_.reset(new Sorter(
       less_than, sort_exec_exprs_.sort_tuple_slot_expr_ctxs(),
       &row_descriptor_, mem_tracker(), runtime_profile(), state));
+  RETURN_IF_ERROR(sorter_->Init());
 
   // The child has been opened and the sorter created. Sort the input.
   // The final merge is done on-demand as rows are requested in GetNext().

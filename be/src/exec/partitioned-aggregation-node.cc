@@ -106,24 +106,24 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
   state_ = state;
 
   mem_pool_.reset(new MemPool(mem_tracker()));
-  agg_fn_pool_.reset(new MemPool(state->udf_mem_tracker()));
+  agg_fn_pool_.reset(new MemPool(expr_mem_tracker()));
 
   build_timer_ = ADD_TIMER(runtime_profile(), "BuildTime");
   get_results_timer_ = ADD_TIMER(runtime_profile(), "GetResultsTime");
   num_hash_buckets_ =
-      ADD_COUNTER(runtime_profile(), "HashBuckets", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "HashBuckets", TUnit::UNIT);
   partitions_created_ =
-      ADD_COUNTER(runtime_profile(), "PartitionsCreated", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "PartitionsCreated", TUnit::UNIT);
   max_partition_level_ = runtime_profile()->AddHighWaterMarkCounter(
-      "MaxPartitionLevel", TCounterType::UNIT);
+      "MaxPartitionLevel", TUnit::UNIT);
   num_row_repartitioned_ =
-      ADD_COUNTER(runtime_profile(), "RowsRepartitioned", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "RowsRepartitioned", TUnit::UNIT);
   num_repartitions_ =
-      ADD_COUNTER(runtime_profile(), "NumRepartitions", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "NumRepartitions", TUnit::UNIT);
   num_spilled_partitions_ =
-      ADD_COUNTER(runtime_profile(), "SpilledPartitions", TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), "SpilledPartitions", TUnit::UNIT);
   largest_partition_percent_ = runtime_profile()->AddHighWaterMarkCounter(
-      "LargestPartitionPercent", TCounterType::UNIT);
+      "LargestPartitionPercent", TUnit::UNIT);
 
   intermediate_tuple_desc_ =
       state->desc_tbl().GetTupleDescriptor(intermediate_tuple_id_);
@@ -131,7 +131,8 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
   DCHECK_EQ(intermediate_tuple_desc_->slots().size(),
         output_tuple_desc_->slots().size());
 
-  RETURN_IF_ERROR(Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(probe_expr_ctxs_, state, child(0)->row_desc(), expr_mem_tracker()));
   AddExprCtxsToFree(probe_expr_ctxs_);
 
   contains_var_len_grouping_exprs_ = false;
@@ -153,7 +154,8 @@ Status PartitionedAggregationNode::Prepare(RuntimeState* state) {
   // nor this node's output row desc may contain the intermediate tuple, e.g.,
   // in a single-node plan with an intermediate tuple different from the output tuple.
   intermediate_row_desc_.reset(new RowDescriptor(intermediate_tuple_desc_, false));
-  RETURN_IF_ERROR(Expr::Prepare(build_expr_ctxs_, state, *intermediate_row_desc_));
+  RETURN_IF_ERROR(
+      Expr::Prepare(build_expr_ctxs_, state, *intermediate_row_desc_, expr_mem_tracker()));
   AddExprCtxsToFree(build_expr_ctxs_);
 
   int j = probe_expr_ctxs_.size();
@@ -407,7 +409,7 @@ void PartitionedAggregationNode::Close(RuntimeState* state) {
 }
 
 Status PartitionedAggregationNode::Partition::InitStreams() {
-  agg_fn_pool.reset(new MemPool(parent->state_->udf_mem_tracker()));
+  agg_fn_pool.reset(new MemPool(parent->expr_mem_tracker()));
   for (int i = 0; i < parent->agg_fn_ctxs_.size(); ++i) {
     agg_fn_ctxs.push_back(parent->agg_fn_ctxs_[i]->impl()->Clone(agg_fn_pool.get()));
     parent->state_->obj_pool()->Add(agg_fn_ctxs[i]);
@@ -533,8 +535,13 @@ Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
   if (parent->num_spilled_partitions_->value() == 1) {
     parent->AddRuntimeExecOption("Spilled");
   }
-  DCHECK(!aggregated_row_stream->using_small_buffers());
-  DCHECK(!unaggregated_row_stream->using_small_buffers());
+  // Need to make sure that we are not going to lose any information from the small
+  // buffers. Therefore, we are checking if we using small buffers and we actually have
+  // added some rows there.
+  DCHECK(!(aggregated_row_stream->using_small_buffers() &&
+           aggregated_row_stream->num_rows() > 0));
+  DCHECK(!(unaggregated_row_stream->using_small_buffers() &&
+           unaggregated_row_stream->num_rows() > 0));
   return Status::OK;
 }
 
@@ -826,14 +833,15 @@ Status PartitionedAggregationNode::SpillPartition(Partition* curr_partition,
       DCHECK(hash_partitions_[i]->unaggregated_row_stream->using_small_buffers());
       bool got_buffer;
       RETURN_IF_ERROR(
-          hash_partitions_[i]->aggregated_row_stream->InitIoBuffer(&got_buffer));
+          hash_partitions_[i]->aggregated_row_stream->SwitchToIoBuffers(&got_buffer));
       if (got_buffer) {
         RETURN_IF_ERROR(
-            hash_partitions_[i]->unaggregated_row_stream->InitIoBuffer(&got_buffer));
+            hash_partitions_[i]->unaggregated_row_stream->SwitchToIoBuffers(&got_buffer));
       }
       if (!got_buffer) {
         Status status = Status::MEM_LIMIT_EXCEEDED;
-        status.AddErrorMsg("Not enough memory to get the minimum required buffers.");
+        status.AddErrorMsg("Not enough memory to get the minimum required buffers for "
+                           "aggregation.");
         return status;
       }
     }
@@ -846,6 +854,7 @@ Status PartitionedAggregationNode::SpillPartition(Partition* curr_partition,
     if (hash_partitions_[i]->is_spilled()) continue;
     int64_t mem = hash_partitions_[i]->aggregated_row_stream->bytes_in_mem(true);
     mem += hash_partitions_[i]->hash_tbl->byte_size();
+    mem += hash_partitions_[i]->agg_fn_pool->total_reserved_bytes();
     if (mem > max_freed_mem) {
       max_freed_mem = mem;
       partition_idx = i;
@@ -1218,7 +1227,7 @@ Function* PartitionedAggregationNode::CodegenUpdateTuple() {
     if (!supported) {
       VLOG_QUERY << "Could not codegen UpdateTuple because intermediate type "
                  << slot_desc->type()
-                 << "is not yet supported for aggregate function \""
+                 << " is not yet supported for aggregate function \""
                  << evaluator->fn_name() << "()\"";
       return NULL;
     }

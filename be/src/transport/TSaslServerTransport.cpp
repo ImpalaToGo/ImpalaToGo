@@ -24,17 +24,20 @@
 #include <sstream>
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
-#include <boost/thread.hpp>
+#include <boost/thread/thread.hpp>
 
 #include <thrift/transport/TBufferTransports.h>
 #include "transport/TSaslTransport.h"
 #include "transport/TSaslServerTransport.h"
 
+#include "common/logging.h"
+
 using namespace std;
+using namespace boost;
 using namespace sasl;
 
 namespace apache { namespace thrift { namespace transport {
-TSaslServerTransport::TSaslServerTransport(boost::shared_ptr<TTransport> transport)
+TSaslServerTransport::TSaslServerTransport(shared_ptr<TTransport> transport)
    : TSaslTransport(transport) {
 }
 
@@ -107,20 +110,44 @@ void TSaslServerTransport::handleSaslStartMessage() {
 
 }
 
-boost::shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
-    boost::shared_ptr<TTransport> trans) {
-  boost::shared_ptr<TSaslServerTransport> retTransport;
-  boost::lock_guard<boost::mutex> l (transportMap_mutex_);
-  map<boost::shared_ptr<TTransport>, boost::shared_ptr<TSaslServerTransport> >::iterator transMap =
+shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
+    shared_ptr<TTransport> trans) {
+  lock_guard<mutex> l(transportMap_mutex_);
+  // Thrift servers use both an input and an output transport to communicate with
+  // clients. In principal, these can be different, but for SASL clients we require them
+  // to be the same so that the authentication state is identical for communication in
+  // both directions. In order to do this, we cache the transport that we return in a map
+  // keyed by the transport argument to this method. Then if there are two successive
+  // calls to getTransport() with the same transport, we are sure to return the same
+  // wrapped transport both times.
+  //
+  // However, the cache map would retain references to all the transports it ever
+  // created. Instead, we remove an entry in the map after it has been found for the first
+  // time, that is, after the second call to getTransport() with the same argument. That
+  // matches the calling pattern in TThreadedServer and TThreadPoolServer, which both call
+  // getTransport() twice in succession when a connection is established, and then never
+  // again. This is obviously brittle (what if for some reason getTransport() is called a
+  // third time?) but for our usage of Thrift it's a tolerable band-aid.
+  //
+  // An alternative approach is to use the 'custom deleter' feature of shared_ptr to
+  // ensure that when ret_transport is eventually deleted, its corresponding map entry is
+  // removed. That is likely to be error prone given the locking involved; for now we go
+  // with the simple solution.
+  map<shared_ptr<TTransport>, shared_ptr<TBufferedTransport> >::iterator trans_map =
       transportMap_.find(trans);
-  if (transMap == transportMap_.end()) {
-    retTransport.reset(new TSaslServerTransport(serverDefinitionMap_, trans));
-    retTransport.get()->open();
-    transportMap_[trans] = retTransport;
+  VLOG_EVERY_N(2, 100) << "getTransport(): transportMap_ size is: "
+                       << transportMap_.size();
+  shared_ptr<TBufferedTransport> ret_transport;
+  if (trans_map == transportMap_.end()) {
+    shared_ptr<TTransport> wrapped(new TSaslServerTransport(serverDefinitionMap_, trans));
+    ret_transport.reset(new TBufferedTransport(wrapped));
+    ret_transport.get()->open();
+    transportMap_[trans] = ret_transport;
   } else {
-    retTransport = transMap->second;
+    ret_transport = trans_map->second;
+    transportMap_.erase(trans_map);
   }
-  return retTransport;
+  return ret_transport;
 }
 
 }}}

@@ -130,7 +130,8 @@ class FunctionContextImpl {
   int64_t num_updates_;
   int64_t num_removes_;
 
-  // Allocations made and still owned by the user function.
+  // Allocations made and still owned by the user function. Only used if debug_ is true
+  // because it is very expensive to maintain.
   std::map<uint8_t*, int> allocations_;
   // Allocations owned by Impala.
   std::vector<uint8_t*> local_allocations_;
@@ -161,7 +162,8 @@ class FunctionContextImpl {
 
   // Used by ScalarFnCall to store the arguments when running without codegen. Allows us
   // to pass AnyVal* arguments to the scalar function directly, rather than codegening a
-  // call that passes the correct AnyVal subclass pointer type.
+  // call that passes the correct AnyVal subclass pointer type. Note that this is only
+  // used for non-variadic arguments; varargs are always stored in varargs_buffer_.
   std::vector<impala_udf::AnyVal*> staging_input_vals_;
 
   // Indicates whether this context has been closed. Used for verification/debugging.
@@ -171,4 +173,3 @@ class FunctionContextImpl {
 }
 
 #endif
-

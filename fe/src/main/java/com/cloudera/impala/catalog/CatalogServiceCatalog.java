@@ -20,9 +20,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.CachePoolEntry;
+import org.apache.hadoop.hdfs.protocol.CachePoolInfo;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
@@ -30,6 +38,7 @@ import org.apache.thrift.TException;
 import com.cloudera.impala.analysis.TableName;
 import com.cloudera.impala.authorization.SentryConfig;
 import com.cloudera.impala.catalog.MetaStoreClientPool.MetaStoreClient;
+import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.Pair;
 import com.cloudera.impala.thrift.TCatalog;
@@ -46,6 +55,8 @@ import com.cloudera.impala.util.PatternMatcher;
 import com.cloudera.impala.util.SentryProxy;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 /**
  * Specialized Catalog that implements the CatalogService specific Catalog
@@ -99,6 +110,10 @@ public class CatalogServiceCatalog extends Catalog {
 
   private final boolean loadInBackground_;
 
+  // Periodically polls HDFS to get the latest set of known cache pools.
+  private final ScheduledExecutorService cachePoolReader_ =
+      Executors.newScheduledThreadPool(1);
+
   // Proxy to access the Sentry Service and also periodically refreshes the
   // policy metadata. Null if Sentry Service is not enabled.
   private final SentryProxy sentryProxy_;
@@ -113,13 +128,61 @@ public class CatalogServiceCatalog extends Catalog {
     catalogServiceId_ = catalogServiceId;
     tableLoadingMgr_ = new TableLoadingMgr(this, numLoadingThreads);
     loadInBackground_ = loadInBackground;
-
-    if (sentryConfig != null && Boolean.FALSE) {
-      // Sentry Service is not supported on CDH4. Should never make it here.
-      Preconditions.checkState(false);
+    cachePoolReader_.scheduleAtFixedRate(new CachePoolReader(), 0, 1, TimeUnit.MINUTES);
+    if (sentryConfig != null) {
       sentryProxy_ = new SentryProxy(sentryConfig, this);
     } else {
       sentryProxy_ = null;
+    }
+  }
+
+  /**
+   * Reads the current set of cache pools from HDFS and updates the catalog.
+   * Called periodically by the cachePoolReader_.
+   */
+  private class CachePoolReader implements Runnable {
+    public void run() {
+      LOG.trace("Reloading cache pool names from HDFS");
+      // Map of cache pool name to CachePoolInfo. Stored in a map to allow Set operations
+      // to be performed on the keys.
+      Map<String, CachePoolInfo> currentCachePools = Maps.newHashMap();
+      try {
+        FileSystem fs = FileSystemUtil.getFileSystem();
+        if(fs instanceof DistributedFileSystem){
+          RemoteIterator<CachePoolEntry> itr = ((DistributedFileSystem)fs).listCachePools();
+          while (itr.hasNext()) {
+            CachePoolInfo cachePoolInfo = itr.next().getInfo();
+            currentCachePools.put(cachePoolInfo.getPoolName(), cachePoolInfo);
+            }
+          }
+      } catch (Exception e) {
+        LOG.error("Error loading cache pools: ", e);
+        return;
+      }
+
+      catalogLock_.writeLock().lock();
+      try {
+        // Determine what has changed relative to what we have cached.
+        Set<String> droppedCachePoolNames = Sets.difference(
+            hdfsCachePools_.keySet(), currentCachePools.keySet());
+        Set<String> createdCachePoolNames = Sets.difference(
+            currentCachePools.keySet(), hdfsCachePools_.keySet());
+        // Add all new cache pools.
+        for (String createdCachePool: createdCachePoolNames) {
+          HdfsCachePool cachePool = new HdfsCachePool(
+              currentCachePools.get(createdCachePool));
+          cachePool.setCatalogVersion(
+              CatalogServiceCatalog.this.incrementAndGetCatalogVersion());
+          hdfsCachePools_.add(cachePool);
+        }
+        // Remove dropped cache pools.
+        for (String cachePoolName: droppedCachePoolNames) {
+          hdfsCachePools_.remove(cachePoolName);
+          CatalogServiceCatalog.this.incrementAndGetCatalogVersion();
+        }
+      } finally {
+        catalogLock_.writeLock().unlock();
+      }
     }
   }
 
@@ -281,6 +344,17 @@ public class CatalogServiceCatalog extends Catalog {
    * Resets this catalog instance by clearing all cached table and database metadata.
    */
   public void reset() throws CatalogException {
+    // First update the policy metadata.
+    if (sentryProxy_ != null) {
+      // Sentry Service is enabled.
+      try {
+        // Update the authorization policy, waiting for the result to complete.
+        sentryProxy_.refresh();
+      } catch (Exception e) {
+        throw new CatalogException("Error updating authorization policy: ", e);
+      }
+    }
+
     catalogLock_.writeLock().lock();
     try {
       nextTableId_.set(0);

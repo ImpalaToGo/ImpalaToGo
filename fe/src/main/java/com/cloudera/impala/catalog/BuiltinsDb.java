@@ -601,6 +601,15 @@ public class BuiltinsDb extends Db {
           prefix + "11HllFinalizeEPN10impala_udf15FunctionContextERKNS1_9StringValE",
           true, false, true));
 
+      db.addBuiltin(AggregateFunction.createBuiltin(db, "ndv_no_finalize",
+          Lists.newArrayList(t), Type.STRING, Type.STRING,
+          prefix + "7HllInitEPN10impala_udf15FunctionContextEPNS1_9StringValE",
+          prefix + HLL_UPDATE_SYMBOL.get(t),
+          prefix + "8HllMergeEPN10impala_udf15FunctionContextERKNS1_9StringValEPS4_",
+          stringValSerializeOrFinalize,
+          "_Z20IncrementNdvFinalizePN10impala_udf15FunctionContextERKNS_9StringValE",
+          true, false, true));
+
       // distinctpc
       // TODO: this needs to switch to CHAR(64) as the intermediate type
       db.addBuiltin(AggregateFunction.createBuiltin(db, "distinctpc",
@@ -824,7 +833,8 @@ public class BuiltinsDb extends Db {
           prefix + FIRST_VALUE_REWRITE_UPDATE_SYMBOL.get(t),
           null,
           t == Type.STRING ? stringValGetValue : null,
-          t == Type.STRING ? stringValSerializeOrFinalize : null));
+          t == Type.STRING ? stringValSerializeOrFinalize : null,
+          false));
 
       db.addBuiltin(AggregateFunction.createAnalyticBuiltin(
           db, "last_value", Lists.newArrayList(t), t, t,

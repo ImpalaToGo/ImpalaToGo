@@ -49,10 +49,9 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
 
   @Test
   public void AnalyzeShowRoles() {
-    AnalysisError("SHOW ROLES", "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW ROLE GRANT GROUP myGroup",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW CURRENT ROLES", "Sentry Service is not supported on CDH4");
+    AnalyzesOk("SHOW ROLES");
+    AnalyzesOk("SHOW ROLE GRANT GROUP myGroup");
+    AnalyzesOk("SHOW CURRENT ROLES");
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
     AnalysisError("SHOW ROLES", authDisabledAnalyzer,
@@ -65,21 +64,16 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
 
   @Test
   public void AnalyzeShowGrantRole() {
-    AnalysisError("SHOW GRANT ROLE myRole", "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW GRANT ROLE myRole ON SERVER",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW GRANT ROLE myRole ON DATABASE functional",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW GRANT ROLE myRole ON TABLE foo",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW GRANT ROLE myRole ON TABLE functional.alltypes",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("SHOW GRANT ROLE myRole ON URI 'hdfs:////test-warehouse//foo'",
-        "Sentry Service is not supported on CDH4");
+    AnalyzesOk("SHOW GRANT ROLE myRole");
+    AnalyzesOk("SHOW GRANT ROLE myRole ON SERVER");
+    AnalyzesOk("SHOW GRANT ROLE myRole ON DATABASE functional");
+    AnalyzesOk("SHOW GRANT ROLE myRole ON TABLE foo");
+    AnalyzesOk("SHOW GRANT ROLE myRole ON TABLE functional.alltypes");
+    AnalyzesOk("SHOW GRANT ROLE myRole ON URI 'hdfs:////test-warehouse//foo'");
     AnalysisError("SHOW GRANT ROLE does_not_exist",
-        "Sentry Service is not supported on CDH4");
+        "Role 'does_not_exist' does not exist.");
     AnalysisError("SHOW GRANT ROLE does_not_exist ON SERVER",
-        "Sentry Service is not supported on CDH4");
+        "Role 'does_not_exist' does not exist.");
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
     AnalysisError("SHOW GRANT ROLE myRole", authDisabledAnalyzer,
@@ -90,15 +84,15 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
 
   @Test
   public void AnalyzeCreateDropRole() throws AnalysisException {
-    AnalysisError("DROP ROLE myRole", "Sentry Service is not supported on CDH4");
-    AnalysisError("CREATE ROLE doesNotExist", "Sentry Service is not supported on CDH4");
+    AnalyzesOk("DROP ROLE myRole");
+    AnalyzesOk("CREATE ROLE doesNotExist");
 
-    AnalysisError("DROP ROLE doesNotExist",  "Sentry Service is not supported on CDH4");
-    AnalysisError("CREATE ROLE myRole",  "Sentry Service is not supported on CDH4");
+    AnalysisError("DROP ROLE doesNotExist", "Role 'doesNotExist' does not exist.");
+    AnalysisError("CREATE ROLE myRole", "Role 'myRole' already exists.");
 
     // Role names are case-insensitive
-    AnalysisError("DROP ROLE MYrole", "Sentry Service is not supported on CDH4");
-    AnalysisError("CREATE ROLE MYrole", "Sentry Service is not supported on CDH4");
+    AnalyzesOk("DROP ROLE MYrole");
+    AnalysisError("CREATE ROLE MYrole", "Role 'MYrole' already exists.");
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
     AnalysisError("DROP ROLE myRole", authDisabledAnalyzer,
@@ -109,14 +103,12 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
 
   @Test
   public void AnalyzeGrantRevokeRole() throws AnalysisException {
-    AnalysisError("GRANT ROLE myrole TO GROUP abc",
-        "Sentry Service is not supported on CDH4");
-    AnalysisError("REVOKE ROLE myrole FROM GROUP abc",
-        "Sentry Service is not supported on CDH4");
+    AnalyzesOk("GRANT ROLE myrole TO GROUP abc");
+    AnalyzesOk("REVOKE ROLE myrole FROM GROUP abc");
     AnalysisError("GRANT ROLE doesNotExist TO GROUP abc",
-        "Sentry Service is not supported on CDH4");
+        "Role 'doesNotExist' does not exist.");
     AnalysisError("REVOKE ROLE doesNotExist FROM GROUP abc",
-        "Sentry Service is not supported on CDH4");
+        "Role 'doesNotExist' does not exist.");
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
     AnalysisError("GRANT ROLE myrole TO GROUP abc", authDisabledAnalyzer,
@@ -132,45 +124,35 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
       Object[] formatArgs = new String[] {"REVOKE", "FROM"};
       if (isGrant) formatArgs = new String[] {"GRANT", "TO"};
       // ALL privileges
-      AnalysisError(String.format("%s ALL ON TABLE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s ALL ON TABLE bar.foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s ALL ON DATABASE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s ALL ON SERVER %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s ALL ON URI 'hdfs:////abc//123' %s myrole",
-          formatArgs), "Sentry Service is not supported on CDH4");
+      AnalyzesOk(String.format("%s ALL ON TABLE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s ALL ON TABLE bar.foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s ALL ON DATABASE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s ALL ON SERVER %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s ALL ON URI 'hdfs:////abc//123' %s myrole",
+          formatArgs));
       AnalysisError(String.format("%s ALL ON URI 'xxxx:////abc//123' %s myrole",
-          formatArgs), "Sentry Service is not supported on CDH4");
+          formatArgs), "No FileSystem for scheme: xxxx");
 
       // INSERT privilege
-      AnalysisError(String.format("%s INSERT ON TABLE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s INSERT ON TABLE bar.foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s INSERT ON DATABASE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
+      AnalyzesOk(String.format("%s INSERT ON TABLE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s INSERT ON TABLE bar.foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s INSERT ON DATABASE foo %s myrole", formatArgs));
       AnalysisError(String.format("%s INSERT ON SERVER %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
+          "Only 'ALL' privilege may be applied at SERVER scope in privilege spec.");
       AnalysisError(String.format("%s INSERT ON URI 'hdfs:////abc//123' %s myrole",
-          formatArgs), "Sentry Service is not supported on CDH4");
+          formatArgs), "Only 'ALL' privilege may be applied at URI scope in " +
+            "privilege spec.");
 
-      AnalysisError(String.format("%s SELECT ON TABLE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s SELECT ON TABLE bar.foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s SELECT ON DATABASE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s SELECT ON TABLE foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
-      AnalysisError(String.format("%s SELECT ON TABLE bar.foo %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
+      AnalyzesOk(String.format("%s SELECT ON TABLE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s SELECT ON TABLE bar.foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s SELECT ON DATABASE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s SELECT ON TABLE foo %s myrole", formatArgs));
+      AnalyzesOk(String.format("%s SELECT ON TABLE bar.foo %s myrole", formatArgs));
       AnalysisError(String.format("%s SELECT ON SERVER %s myrole", formatArgs),
-          "Sentry Service is not supported on CDH4");
+          "Only 'ALL' privilege may be applied at SERVER scope in privilege spec.");
       AnalysisError(String.format("%s SELECT ON URI 'hdfs:////abc//123' %s myrole",
-          formatArgs), "Sentry Service is not supported on CDH4");
+          formatArgs), "Only 'ALL' privilege may be applied at URI scope in " +
+          "privilege spec.");
     }
 
     Analyzer authDisabledAnalyzer = createAuthDisabledAnalyzer(Catalog.DEFAULT_DB);
@@ -183,6 +165,6 @@ public class AnalyzeAuthStmtsTest extends AnalyzerTest {
     Analyzer noUsernameAnalyzer = new Analyzer(catalog_, queryCtxNoUsername,
         AuthorizationConfig.createHadoopGroupAuthConfig("server1", null, null));
     AnalysisError("GRANT ALL ON SERVER TO myRole", noUsernameAnalyzer,
-        "Sentry Service is not supported on CDH4");
+        "Cannot execute authorization statement with an empty username.");
   }
 }

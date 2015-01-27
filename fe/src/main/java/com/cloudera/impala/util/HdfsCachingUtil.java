@@ -14,11 +14,20 @@
 
 package com.cloudera.impala.util;
 
+import java.io.IOException;
 import java.util.Map;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.CacheDirectiveEntry;
+import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
+import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo.Expiration;
 import org.apache.log4j.Logger;
 
+import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.ImpalaRuntimeException;
 import com.google.common.base.Preconditions;
@@ -38,16 +47,16 @@ public class HdfsCachingUtil {
 
   // Elena: remove dfs currently
   // private final static DistributedFileSystem dfs;
-  /*private final static FileSystem dfs;
+  private final static FileSystem dfs;
   static {
     try {
-      dfs = FileSystemUtil.getDistributedFileSystem();
+      dfs = FileSystemUtil.getFileSystem();
     } catch (IOException e) {
       throw new RuntimeException("HdfsCachingUtil failed to initialize the " +
           "DistributedFileSystem: ", e);
     }
   }
-*/
+
   /**
    * Caches the location of the given Hive Metastore Table and updates the
    * table's properties with the submitted cache directive ID.
@@ -63,7 +72,8 @@ public class HdfsCachingUtil {
     }
     long id = HdfsCachingUtil.submitDirective(new Path(table.getSd().getLocation()),
         poolName);
-    table.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
+    if(id != -1)
+      table.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
     return id;
   }
 
@@ -83,7 +93,8 @@ public class HdfsCachingUtil {
     }
     long id = HdfsCachingUtil.submitDirective(new Path(part.getSd().getLocation()),
         poolName);
-    part.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
+    if(id != -1)
+      part.putToParameters(CACHE_DIR_ID_PROP_NAME, Long.toString(id));
     return id;
   }
 
@@ -121,8 +132,14 @@ public class HdfsCachingUtil {
    * there was an error parsing the associated ID.
    */
   public static Long getCacheDirIdFromParams(Map<String, String> params) {
-    // Always return null on CDH4 to indicate the table/partition is not cached.
-    return null;
+    if (params == null) return null;
+    String idStr = params.get(CACHE_DIR_ID_PROP_NAME);
+    if (idStr == null) return null;
+    try {
+      return Long.parseLong(idStr);
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   /**
@@ -130,7 +147,8 @@ public class HdfsCachingUtil {
    * Returns null if no outstanding cache directive match this ID.
    */
   public static String getCachePool(long requestId) throws ImpalaRuntimeException {
-    throw new UnsupportedOperationException("HDFS caching is not supported on CDH4");
+    CacheDirectiveEntry entry = getDirective(requestId);
+    return entry == null ? null : entry.getInfo().getPool();
   }
 
   /**
@@ -143,7 +161,56 @@ public class HdfsCachingUtil {
    */
   public static void waitForDirective(long directiveId)
       throws ImpalaRuntimeException  {
-    throw new UnsupportedOperationException("HDFS caching is not supported on CDH4");
+    long bytesNeeded = 0L;
+    long currentBytesCached = 0L;
+    CacheDirectiveEntry cacheDir = getDirective(directiveId);
+    if (cacheDir == null) return;
+
+    bytesNeeded = cacheDir.getStats().getBytesNeeded();
+    currentBytesCached = cacheDir.getStats().getBytesCached();
+    LOG.debug(String.format("Waiting on cache directive id: %d. Bytes " +
+        "cached (%d) / needed (%d)", directiveId, currentBytesCached, bytesNeeded));
+    // All the bytes are cached, just return.
+    if (bytesNeeded == currentBytesCached) return;
+
+    // The refresh interval is how often HDFS will update cache directive stats. We use
+    // this value to determine how frequently we should poll for changes.
+    long hdfsRefreshIntervalMs = FileSystemUtil.getConfiguration().getLong(
+        DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS,
+        DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS_DEFAULT);
+    Preconditions.checkState(hdfsRefreshIntervalMs > 0);
+
+    // Loop until either MAX_UNCHANGED_CACHING_REFRESH_INTERVALS have passed with no
+    // changes or all required data is cached.
+    int unchangedCounter = 0;
+    while (unchangedCounter < MAX_UNCHANGED_CACHING_REFRESH_INTERVALS) {
+      long previousBytesCached = currentBytesCached;
+      cacheDir = getDirective(directiveId);
+      if (cacheDir == null) return;
+      currentBytesCached = cacheDir.getStats().getBytesCached();
+      bytesNeeded = cacheDir.getStats().getBytesNeeded();
+      if (currentBytesCached == bytesNeeded) {
+        LOG.debug(String.format("Cache directive id: %d has completed." +
+            "Bytes cached (%d) / needed (%d)", directiveId, currentBytesCached,
+            bytesNeeded));
+        return;
+      }
+
+      if (currentBytesCached == previousBytesCached) {
+        ++unchangedCounter;
+      } else {
+        unchangedCounter = 0;
+      }
+      try {
+        // Sleep for the refresh interval + a little bit more to ensure a full interval
+        // has completed. A value of 25% the refresh interval was arbitrarily chosen.
+        Thread.sleep((long) (hdfsRefreshIntervalMs * 1.25));
+      } catch (InterruptedException e) { /* ignore */ }
+    }
+    LOG.warn(String.format("No changes in cached bytes in: %d(ms). All data may not " +
+        "be cached. Final stats for cache directive id: %d. Bytes cached (%d)/needed " +
+        "(%d)", hdfsRefreshIntervalMs * MAX_UNCHANGED_CACHING_REFRESH_INTERVALS,
+        directiveId, currentBytesCached, bytesNeeded));
   }
 
   /**
@@ -155,7 +222,19 @@ public class HdfsCachingUtil {
       throws ImpalaRuntimeException {
     Preconditions.checkNotNull(path);
     Preconditions.checkState(poolName != null && !poolName.isEmpty());
-    throw new UnsupportedOperationException("HDFS caching is not supported on CDH4");
+    CacheDirectiveInfo info = new CacheDirectiveInfo.Builder()
+        .setExpiration(Expiration.NEVER)
+        .setPool(poolName)
+        .setPath(path).build();
+    LOG.debug("Submitting cache directive: " + info.toString());
+    try {
+      if (dfs instanceof DistributedFileSystem){
+        return ((DistributedFileSystem)dfs).addCacheDirective(info);
+      }
+      else return -1; // for non-distributed fs, return the -1
+    } catch (IOException e) {
+      throw new ImpalaRuntimeException(e.getMessage(), e);
+    }
   }
 
   /**
@@ -166,6 +245,41 @@ public class HdfsCachingUtil {
    */
   private static void removeDirective(long directiveId) throws ImpalaRuntimeException {
     LOG.debug("Removing cache directive id: " + directiveId);
-    throw new UnsupportedOperationException("HDFS caching is not supported on CDH4");
+    try {
+      if (dfs instanceof DistributedFileSystem){
+        ((DistributedFileSystem)dfs).removeCacheDirective(directiveId);
+      }
+    } catch (IOException e) {
+      // There is no special exception type for the case where a directive ID does not
+      // exist so we must inspect the error message.
+      if (e.getMessage().contains("No directive with ID")) return;
+      throw new ImpalaRuntimeException(e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Gets the cache directive matching the given ID. Returns null if no matching
+   * directives were found.
+   */
+  private static CacheDirectiveEntry getDirective(long directiveId)
+      throws ImpalaRuntimeException {
+    LOG.trace("Getting cache directive id: " + directiveId);
+    if (!(dfs instanceof DistributedFileSystem)){
+      LOG.trace("Filesystem instance is not the distibuted fs - for directive id \"" + directiveId + "\".");
+      return null;
+    }
+    CacheDirectiveInfo filter = new CacheDirectiveInfo.Builder()
+        .setId(directiveId)
+        .build();
+    try {
+      RemoteIterator<CacheDirectiveEntry> itr = ((DistributedFileSystem)dfs).listCacheDirectives(filter);
+      while (itr.hasNext()) {
+        CacheDirectiveEntry entry = itr.next();
+        if (entry.getInfo().getId() == directiveId) return entry;
+      }
+    } catch (IOException e) {
+      throw new ImpalaRuntimeException(e.getMessage(), e);
+    }
+    return null;
   }
 }

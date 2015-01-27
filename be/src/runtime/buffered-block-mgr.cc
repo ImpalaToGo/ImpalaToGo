@@ -42,7 +42,7 @@ using namespace strings;
 namespace impala {
 
 BufferedBlockMgr::BlockMgrsMap BufferedBlockMgr::query_to_block_mgrs_;
-mutex BufferedBlockMgr::static_block_mgrs_lock_;
+SpinLock BufferedBlockMgr::static_block_mgrs_lock_;
 
 struct BufferedBlockMgr::Client {
   Client(BufferedBlockMgr* mgr, int num_reserved_buffers, MemTracker* tracker,
@@ -193,6 +193,7 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, int64_t block_size)
     block_write_threshold_(TmpFileMgr::num_tmp_devices() * 2),
     disable_spill_(state->query_ctx().disable_spilling),
     query_id_(state->query_id()),
+    initialized_(false),
     unfullfilled_reserved_buffers_(0),
     total_pinned_buffers_(0),
     num_outstanding_writes_(0),
@@ -201,48 +202,27 @@ BufferedBlockMgr::BufferedBlockMgr(RuntimeState* state, int64_t block_size)
     writes_issued_(0),
     encryption_(FLAGS_disk_spill_encryption),
     check_integrity_(FLAGS_disk_spill_encryption) {
-	  FileSystemDescriptor nulldescriptor;
-	  nulldescriptor.valid = false;
-	  state->io_mgr()->RegisterContext(nulldescriptor, &io_request_context_);
-	  if (encryption_) {
-		  static bool openssl_loaded = false;
-		  if (!openssl_loaded) {
-			  // These are idempotent, so no threading worries.
-			  OpenSSL_add_all_algorithms();
-			  ERR_load_crypto_strings();
-			  openssl_loaded = true;
-		  }
-		  // Seed the random number generator
-		  // TODO: try non-blocking read from /dev/random and add that, too.
-		  RAND_load_file("/dev/urandom", 4096);
-  }
 }
 
 Status BufferedBlockMgr::Create(RuntimeState* state, MemTracker* parent,
     RuntimeProfile* profile, int64_t mem_limit, int64_t block_size,
     boost::shared_ptr<BufferedBlockMgr>* block_mgr) {
   DCHECK_NOTNULL(parent);
-  lock_guard<mutex> lock(static_block_mgrs_lock_);
-  BlockMgrsMap::iterator it = query_to_block_mgrs_.find(state->query_id());
-  if ((it != query_to_block_mgrs_.end())) {
-    *block_mgr = it->second.lock();
-    return Status::OK;
+  block_mgr->reset();
+  {
+    ScopedSpinLock lock(&static_block_mgrs_lock_);
+    BlockMgrsMap::iterator it = query_to_block_mgrs_.find(state->query_id());
+    if (it != query_to_block_mgrs_.end()) *block_mgr = it->second.lock();
+    if (*block_mgr == NULL) {
+      // weak_ptr::lock returns NULL if the weak_ptr is expired. This means
+      // all shared_ptr references have gone to 0 and it is in the process of
+      // being deleted. This can happen if the last shared reference is released
+      // but before the weak ptr is removed from the map.
+      block_mgr->reset(new BufferedBlockMgr(state, block_size));
+      query_to_block_mgrs_[state->query_id()] = *block_mgr;
+    }
   }
-
-  block_mgr->reset(new BufferedBlockMgr(state, block_size));
-  query_to_block_mgrs_[state->query_id()] = *block_mgr;
-
-  // Initialize the tmp files and the initial file to use.
-  int num_tmp_devices = TmpFileMgr::num_tmp_devices();
-  (*block_mgr)->tmp_files_.reserve(num_tmp_devices);
-  for (int i = 0; i < num_tmp_devices; ++i) {
-    TmpFileMgr::File* tmp_file;
-    RETURN_IF_ERROR(TmpFileMgr::GetFile(
-        i, state->query_id(), state->fragment_instance_id(), &tmp_file));
-    (*block_mgr)->tmp_files_.push_back(tmp_file);
-  }
-  (*block_mgr)->next_block_index_ = rand() % num_tmp_devices;
-  (*block_mgr)->Init(profile, parent, mem_limit);
+  (*block_mgr)->Init(state->io_mgr(), profile, parent, mem_limit);
   return Status::OK;
 }
 
@@ -305,13 +285,13 @@ void BufferedBlockMgr::ClearTmpReservation(Client* client) {
 bool BufferedBlockMgr::ConsumeMemory(Client* client, int64_t size) {
   int buffers_needed = BitUtil::Ceil(size, max_block_size());
 
+  unique_lock<mutex> lock(lock_);
+
   if (size < max_block_size() && mem_tracker_->TryConsume(size)) {
     // For small allocations (less than a block size), just let the allocation through.
     client->tracker_->ConsumeLocal(size, client->query_tracker_);
     return true;
   }
-
-  unique_lock<mutex> lock(lock_);
 
   if (max(0L, remaining_unreserved_buffers()) + client->num_tmp_reserved_buffers_ <
         buffers_needed) {
@@ -334,29 +314,36 @@ bool BufferedBlockMgr::ConsumeMemory(Client* client, int64_t size) {
   }
 
   // Loop until we have freed enough memory.
-  while (buffers_needed > 0) {
+  // We free all the memory at the end. We don't want another component to steal the
+  // memory.
+  int buffers_acquired = 0;
+  while (buffers_acquired != buffers_needed) {
     BufferDescriptor* buffer_desc = NULL;
-    FindBuffer(lock, false, &buffer_desc);
+    FindBuffer(lock, &buffer_desc); // This waits on the lock.
     if (buffer_desc == NULL) {
-      if (additional_tmp_reservations > 0) {
-        client->num_tmp_reserved_buffers_ -= additional_tmp_reservations;
-        unfullfilled_reserved_buffers_ -= additional_tmp_reservations;
+      // We couldn't get a buffer. This can happen if another query came and
+      // allocated memory. Undo the reservation.
+      if (buffers_acquired < additional_tmp_reservations) {
+        client->num_tmp_reserved_buffers_ -=
+            (additional_tmp_reservations - buffers_acquired);
+        unfullfilled_reserved_buffers_ -=
+            (additional_tmp_reservations - buffers_acquired);
       }
+      mem_tracker_->Release(buffers_acquired * max_block_size());
       return false;
     }
-    --buffers_needed;
     all_io_buffers_.erase(buffer_desc->all_buffers_it);
     if (buffer_desc->block != NULL) buffer_desc->block->buffer_desc_ = NULL;
     delete[] buffer_desc->buffer;
-    mem_tracker_->Release(buffer_desc->len);
-
-    --additional_tmp_reservations;
-    DCHECK_GT(client->num_tmp_reserved_buffers_, 0);
-    --client->num_tmp_reserved_buffers_;
-    --unfullfilled_reserved_buffers_;
+    ++buffers_acquired;
   }
-
   WriteUnpinnedBlocks();
+
+  client->num_tmp_reserved_buffers_ -= buffers_acquired;
+  unfullfilled_reserved_buffers_ -= buffers_acquired;
+
+  DCHECK_GE(buffers_acquired * max_block_size(), size);
+  mem_tracker_->Release(buffers_acquired * max_block_size());
   if (!mem_tracker_->TryConsume(size)) return false;
   client->tracker_->ConsumeLocal(size, client->query_tracker_);
   DCHECK(Validate()) << endl << DebugInternal();
@@ -380,7 +367,7 @@ Status BufferedBlockMgr::MemLimitTooLowError(Client* client) {
   status.AddErrorMsg(Substitute("The memory limit is set too low initialize the"
       " spilling operator. The minimum required memory to spill this operator is $0.",
       PrettyPrinter::Print(client->num_reserved_buffers_ * max_block_size(),
-          TCounterType::BYTES)));
+          TUnit::BYTES)));
   VLOG_QUERY << "Query: " << query_id_ << " ran out of memory: " << endl
              << DebugInternal() << endl << client->DebugString() << endl
              << GetStackTrace();
@@ -480,7 +467,7 @@ Status BufferedBlockMgr::TransferBuffer(Block* dst, Block* src, bool unpin) {
 
 BufferedBlockMgr::~BufferedBlockMgr() {
   {
-    lock_guard<mutex> lock(static_block_mgrs_lock_);
+    ScopedSpinLock lock(&static_block_mgrs_lock_);
     DCHECK(query_to_block_mgrs_.find(query_id_) != query_to_block_mgrs_.end());
     query_to_block_mgrs_.erase(query_id_);
   }
@@ -561,6 +548,7 @@ Status BufferedBlockMgr::PinBlock(Block* block, bool* pinned, Block* release_blo
       block->is_pinned_ = true;
       *pinned = true;
       block->client_->PinBuffer(block->buffer_desc_);
+      ++total_pinned_buffers_;
       RETURN_IF_ERROR(WriteUnpinnedBlocks());
       return DeleteOrUnpin(release_block, unpin);
     }
@@ -648,6 +636,8 @@ Status BufferedBlockMgr::WriteUnpinnedBlock(Block* block) {
   DCHECK(!block->in_write_) << block->DebugString();
 
   if (block->write_range_ == NULL) {
+    if (tmp_files_.empty()) RETURN_IF_ERROR(InitTmpFiles());
+
     // First time the block is being persisted. Find the next physical file in
     // round-robin order and create a write range for it.
     TmpFileMgr::File& tmp_file = tmp_files_[next_block_index_];
@@ -857,7 +847,7 @@ Status BufferedBlockMgr::FindBufferForBlock(Block* block, bool* in_mem) {
     *in_mem = true;
   } else {
     BufferDescriptor* buffer_desc = NULL;
-    RETURN_IF_ERROR(FindBuffer(l, true, &buffer_desc));
+    RETURN_IF_ERROR(FindBuffer(l, &buffer_desc));
 
     if (buffer_desc == NULL) {
       // There are no free buffers or blocks we can evict. We need to fail this request.
@@ -872,7 +862,7 @@ Status BufferedBlockMgr::FindBufferForBlock(Block* block, bool* in_mem) {
       }
       Status status = Status::MEM_LIMIT_EXCEEDED;
       status.AddErrorMsg("Query did not have enough memory to get the minimum required "
-          "buffers.");
+          "buffers in the block manager.");
       return status;
     }
 
@@ -904,12 +894,12 @@ Status BufferedBlockMgr::FindBufferForBlock(Block* block, bool* in_mem) {
 //     threshold, until we run out of memory.
 //  2. Pick a buffer from the free list.
 //  3. Wait and evict an unpinned buffer.
-Status BufferedBlockMgr::FindBuffer(unique_lock<mutex>& lock, bool can_allocate,
+Status BufferedBlockMgr::FindBuffer(unique_lock<mutex>& lock,
     BufferDescriptor** buffer_desc) {
   *buffer_desc = NULL;
 
   // First try to allocate a new buffer.
-  if (can_allocate && free_io_buffers_.size() < block_write_threshold_ &&
+  if (free_io_buffers_.size() < block_write_threshold_ &&
       mem_tracker_->TryConsume(max_block_size_)) {
     uint8_t* new_buffer = new uint8_t[max_block_size_];
     *buffer_desc = obj_pool_.Add(new BufferDescriptor(new_buffer, max_block_size_));
@@ -940,6 +930,7 @@ Status BufferedBlockMgr::FindBuffer(unique_lock<mutex>& lock, bool can_allocate,
     if (is_cancelled_.Read() == 1) return Status::CANCELLED;
   }
   *buffer_desc = free_io_buffers_.Dequeue();
+
   return Status::OK;
 }
 
@@ -1068,24 +1059,43 @@ string BufferedBlockMgr::DebugInternal() const {
   return ss.str();
 }
 
-void BufferedBlockMgr::Init(RuntimeProfile* parent_profile,
+void BufferedBlockMgr::Init(DiskIoMgr* io_mgr, RuntimeProfile* parent_profile,
     MemTracker* parent_tracker, int64_t mem_limit) {
+  unique_lock<mutex> l(lock_);
+  if (initialized_) return;
+  FileSystemDescriptor nulldescriptor;
+  nulldescriptor.valid = false;
+
+  io_mgr->RegisterContext(nulldescriptor, &io_request_context_);
+  if (encryption_) {
+    static bool openssl_loaded = false;
+    if (!openssl_loaded) {
+      // These are idempotent, so no threading worries.
+      OpenSSL_add_all_algorithms();
+      ERR_load_crypto_strings();
+      openssl_loaded = true;
+    }
+    // Seed the random number generator
+    // TODO: try non-blocking read from /dev/random and add that, too.
+    RAND_load_file("/dev/urandom", 4096);
+  }
+
   profile_.reset(new RuntimeProfile(&obj_pool_, "BlockMgr"));
   parent_profile->AddChild(profile_.get());
 
-  mem_limit_counter_ = ADD_COUNTER(profile_.get(), "MemoryLimit", TCounterType::BYTES);
+  mem_limit_counter_ = ADD_COUNTER(profile_.get(), "MemoryLimit", TUnit::BYTES);
   mem_limit_counter_->Set(mem_limit);
-  block_size_counter_ = ADD_COUNTER(profile_.get(), "MaxBlockSize", TCounterType::BYTES);
+  block_size_counter_ = ADD_COUNTER(profile_.get(), "MaxBlockSize", TUnit::BYTES);
   block_size_counter_->Set(max_block_size_);
   created_block_counter_ = ADD_COUNTER(
-      profile_.get(), "BlocksCreated", TCounterType::UNIT);
+      profile_.get(), "BlocksCreated", TUnit::UNIT);
   recycled_blocks_counter_ = ADD_COUNTER(
-      profile_.get(), "BlocksRecycled", TCounterType::UNIT);
+      profile_.get(), "BlocksRecycled", TUnit::UNIT);
   bytes_written_counter_ = ADD_COUNTER(
-      profile_.get(), "BytesWritten", TCounterType::BYTES);
+      profile_.get(), "BytesWritten", TUnit::BYTES);
   outstanding_writes_counter_ =
-      ADD_COUNTER(profile_.get(), "BlockWritesOutstanding", TCounterType::UNIT);
-  buffered_pin_counter_ = ADD_COUNTER(profile_.get(), "BufferedPins", TCounterType::UNIT);
+      ADD_COUNTER(profile_.get(), "BlockWritesOutstanding", TUnit::UNIT);
+  buffered_pin_counter_ = ADD_COUNTER(profile_.get(), "BufferedPins", TUnit::UNIT);
   disk_read_timer_ = ADD_TIMER(profile_.get(), "TotalReadBlockTime");
   buffer_wait_timer_ = ADD_TIMER(profile_.get(), "TotalBufferWaitTime");
   encryption_timer_ = ADD_TIMER(profile_.get(), "TotalEncryptionTime");
@@ -1094,6 +1104,28 @@ void BufferedBlockMgr::Init(RuntimeProfile* parent_profile,
   // Create a new mem_tracker and allocate buffers.
   mem_tracker_.reset(new MemTracker(
       profile(), mem_limit, -1, "Block Manager", parent_tracker));
+
+  initialized_ = true;
+}
+
+Status BufferedBlockMgr::InitTmpFiles() {
+  DCHECK(tmp_files_.empty());
+
+  // Initialize the tmp files and the initial file to use.
+  int num_tmp_devices = TmpFileMgr::num_tmp_devices();
+  if (num_tmp_devices == 0) {
+    return Status(
+        "No spilling directories configured. Cannot spill. Set --scratch_dirs.");
+  }
+
+  tmp_files_.reserve(num_tmp_devices);
+  for (int i = 0; i < num_tmp_devices; ++i) {
+    TmpFileMgr::File* tmp_file;
+    RETURN_IF_ERROR(TmpFileMgr::GetFile(i, query_id_, &tmp_file));
+    tmp_files_.push_back(tmp_file);
+  }
+  next_block_index_ = rand() % num_tmp_devices;
+  return Status::OK;
 }
 
 // Callback used by OpenSSLErr() - write the error given to us through buf to the

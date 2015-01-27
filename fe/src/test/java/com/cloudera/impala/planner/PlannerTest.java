@@ -48,6 +48,7 @@ import com.cloudera.impala.thrift.TPlanFragment;
 import com.cloudera.impala.thrift.TPlanNode;
 import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TQueryExecRequest;
+import com.cloudera.impala.thrift.TQueryOptions;
 import com.cloudera.impala.thrift.TScanRangeLocations;
 import com.cloudera.impala.thrift.TTableDescriptor;
 import com.cloudera.impala.thrift.TTupleDescriptor;
@@ -278,6 +279,26 @@ public class PlannerTest {
   }
 
   /**
+   * Merge the options of b into a and return a
+   */
+  private TQueryOptions mergeQueryOptions(TQueryOptions a, TQueryOptions b) {
+    for(TQueryOptions._Fields f : TQueryOptions._Fields.values()) {
+      if (b.isSet(f)) {
+        a.setFieldValue(f, b.getFieldValue(f));
+      }
+    }
+    return a;
+  }
+
+  private TQueryOptions defaultQueryOptions() {
+    TQueryOptions options = new TQueryOptions();
+    options.setExplain_level(TExplainLevel.STANDARD);
+    options.setAllow_unsupported_formats(true);
+    options.setExec_single_node_rows_threshold(0);
+    return options;
+  }
+
+  /**
    * Produces single-node and distributed plans for testCase and compares
    * plan and scan range results.
    * Appends the actual single-node and distributed plan as well as the printed
@@ -286,17 +307,26 @@ public class PlannerTest {
    * of 'testCase'.
    */
   private void RunTestCase(TestCase testCase, StringBuilder errorLog,
-      StringBuilder actualOutput, String dbName)
+      StringBuilder actualOutput, String dbName, TQueryOptions options)
       throws CatalogException {
+
+    if (options == null) {
+      options = defaultQueryOptions();
+    } else {
+      options = mergeQueryOptions(defaultQueryOptions(), options);
+    }
+
     String query = testCase.getQuery();
     LOG.info("running query " + query);
+    if (query.isEmpty()) {
+      throw new IllegalStateException("Cannot plan empty query in line: " +
+          testCase.getStartingLineNum());
+    }
     TQueryCtx queryCtx = TestUtils.createQueryContext(
         dbName, System.getProperty("user.name"));
-    queryCtx.request.query_options.setExplain_level(TExplainLevel.STANDARD);
-    queryCtx.request.query_options.allow_unsupported_formats = true;
+    queryCtx.request.query_options = options;
     // single-node plan and scan range locations
     testSingleNodePlan(testCase, queryCtx, errorLog, actualOutput);
-    // distributed plan
     testDistributedPlan(testCase, queryCtx, errorLog, actualOutput);
   }
 
@@ -345,6 +375,7 @@ public class PlannerTest {
       }
     } catch (ImpalaException e) {
       if (e instanceof AnalysisException) {
+        e.printStackTrace();
         errorLog.append(
             "query:\n" + query + "\nanalysis error: " + e.getMessage() + "\n");
         return;
@@ -416,6 +447,7 @@ public class PlannerTest {
        testCase.getSectionContents(Section.DISTRIBUTEDPLAN);
    // Test case has no expected distributed plan. Do not test it.
    if (expectedPlan == null || expectedPlan.isEmpty()) return;
+
    String query = testCase.getQuery();
    String expectedErrorMsg = getExpectedErrorMessage(expectedPlan);
    queryCtx.request.getQuery_options().setNum_nodes(
@@ -483,7 +515,11 @@ public class PlannerTest {
     return explain;
   }
 
-  private void runPlannerTestFile(String testFile, String dbName) {
+  private void runPlannerTestFile(String testFile, TQueryOptions options) {
+    runPlannerTestFile(testFile, "default", options);
+  }
+
+  private void runPlannerTestFile(String testFile, String dbName, TQueryOptions options) {
     String fileName = testDir_ + "/" + testFile + ".test";
     TestFileParser queryFileParser = new TestFileParser(fileName);
     StringBuilder actualOutput = new StringBuilder();
@@ -494,7 +530,7 @@ public class PlannerTest {
       actualOutput.append(testCase.getSectionAsString(Section.QUERY, true, "\n"));
       actualOutput.append("\n");
       try {
-        RunTestCase(testCase, errorLog, actualOutput, dbName);
+        RunTestCase(testCase, errorLog, actualOutput, dbName, options);
       } catch (CatalogException e) {
         errorLog.append(String.format("Failed to plan query\n%s\n%s",
             testCase.getQuery(), e.getMessage()));
@@ -521,7 +557,11 @@ public class PlannerTest {
   }
 
   private void runPlannerTestFile(String testFile) {
-    runPlannerTestFile(testFile, "default");
+    runPlannerTestFile(testFile, "default", null);
+  }
+
+  private void runPlannerTestFile(String testFile, String dbName) {
+    runPlannerTestFile(testFile, dbName, null);
   }
 
   @Test
@@ -582,6 +622,11 @@ public class PlannerTest {
   @Test
   public void testOuterJoins() {
     runPlannerTestFile("outer-joins");
+  }
+
+  @Test
+  public void testImplicitJoins() {
+    runPlannerTestFile("implicit-joins");
   }
 
   @Test
@@ -651,7 +696,16 @@ public class PlannerTest {
 
   @Test
   public void testTpcds() {
-    // Join order has been optimized for Impala. Uses ss_date as partition key.
+    // Uses ss_sold_date_sk as the partition key of store_sales to allow static partition
+    // pruning. The original predicates were rephrased in terms of the ss_sold_date_sk
+    // partition key, with the query semantics identical to the original queries.
     runPlannerTestFile("tpcds-all", "tpcds");
+  }
+
+  @Test
+  public void testSmallQueryOptimization() {
+    TQueryOptions options = new TQueryOptions();
+    options.setExec_single_node_rows_threshold(8);
+    runPlannerTestFile("small-query-opt", options);
   }
 }

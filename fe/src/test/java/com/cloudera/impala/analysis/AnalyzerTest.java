@@ -277,7 +277,7 @@ public class AnalyzerTest {
           errorString.startsWith(expectedErrorString));
       return;
     }
-    fail("Stmt didn't result in rewrite error: " + stmt);
+    fail("Stmt didn't result in analysis error: " + stmt);
   }
 
   /**
@@ -449,6 +449,10 @@ public class AnalyzerTest {
   public void TestUnsupportedTypes() {
     // Select supported types from a table with mixed supported/unsupported types.
     AnalyzesOk("select int_col, str_col, bigint_col from functional.unsupported_types");
+
+    // Select supported types from a table with mixed supported/unsupported types.
+    AnalyzesOk("select int_col, str_col, bigint_col from functional.unsupported_types");
+
     // Unsupported type binary.
     AnalysisError("select bin_col from functional.unsupported_types",
         "Unsupported type 'BINARY' in 'bin_col'.");

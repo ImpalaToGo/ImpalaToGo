@@ -33,7 +33,7 @@ and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: t3.id IS NOT NULL, t1.zip + t2.zip + t3.zip = 20
 |
 |--02:SCAN HDFS [functional.testtbl t3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t3.zip = 94720, t3.id > 0, t3.id IS NOT NULL
 |
 03:HASH JOIN [LEFT OUTER JOIN]
@@ -42,11 +42,11 @@ and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: t2.id IS NULL, t1.zip + t2.zip = 10
 |
 |--01:SCAN HDFS [functional.testtbl t2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t2.zip = 94104
 |
 00:SCAN HDFS [functional.testtbl t1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: t1.id > 0
 ---- DISTRIBUTEDPLAN
 07:EXCHANGE [UNPARTITIONED]
@@ -59,7 +59,7 @@ and t1.zip + t2.zip + t3.zip= 20
 |--06:EXCHANGE [BROADCAST]
 |  |
 |  02:SCAN HDFS [functional.testtbl t3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t3.zip = 94720, t3.id > 0, t3.id IS NOT NULL
 |
 03:HASH JOIN [LEFT OUTER JOIN, BROADCAST]
@@ -70,11 +70,11 @@ and t1.zip + t2.zip + t3.zip= 20
 |--05:EXCHANGE [BROADCAST]
 |  |
 |  01:SCAN HDFS [functional.testtbl t2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t2.zip = 94104
 |
 00:SCAN HDFS [functional.testtbl t1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: t1.id > 0
 ====
 # the same thing with subqueries; should produce the same result
@@ -93,7 +93,7 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: a3.id IS NOT NULL, a1.zip + a2.zip + a3.zip = 20
 |
 |--02:SCAN HDFS [functional.testtbl a3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a3.id > 0, a3.id IS NOT NULL, a3.zip = 94720
 |
 03:HASH JOIN [LEFT OUTER JOIN]
@@ -102,11 +102,11 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: a2.id IS NULL, a1.zip + a2.zip = 10
 |
 |--01:SCAN HDFS [functional.testtbl a2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a2.zip = 94104
 |
 00:SCAN HDFS [functional.testtbl a1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: a1.id > 0
 ---- DISTRIBUTEDPLAN
 07:EXCHANGE [UNPARTITIONED]
@@ -119,7 +119,7 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |--06:EXCHANGE [BROADCAST]
 |  |
 |  02:SCAN HDFS [functional.testtbl a3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a3.id > 0, a3.id IS NOT NULL, a3.zip = 94720
 |
 03:HASH JOIN [LEFT OUTER JOIN, BROADCAST]
@@ -130,11 +130,11 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |--05:EXCHANGE [BROADCAST]
 |  |
 |  01:SCAN HDFS [functional.testtbl a2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a2.zip = 94104
 |
 00:SCAN HDFS [functional.testtbl a1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: a1.id > 0
 ====
 # correct propagation of scan predicates in OJ On clauses:
@@ -149,18 +149,18 @@ from functional.testtbl t1
 |  hash predicates: t1.id = t3.id
 |
 |--02:SCAN HDFS [functional.testtbl t3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |
 03:HASH JOIN [LEFT OUTER JOIN]
 |  hash predicates: t1.id = t2.id
 |  other join predicates: t1.id = 17
 |
 |--01:SCAN HDFS [functional.testtbl t2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t2.id = 17
 |
 00:SCAN HDFS [functional.testtbl t1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
 ====
 # correct placement of predicates with right outer joins; t1 and t2 are nullable
 select *
@@ -198,7 +198,7 @@ and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: t1.id > 0, t2.id IS NULL, t1.zip + t2.zip = 10, t1.zip + t2.zip + t3.zip = 20
 |
 |--02:SCAN HDFS [functional.testtbl t3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t3.id IS NOT NULL
 |
 03:HASH JOIN [RIGHT OUTER JOIN]
@@ -206,11 +206,11 @@ and t1.zip + t2.zip + t3.zip= 20
 |  other join predicates: t1.zip = 94611, t2.zip = 94104
 |
 |--01:SCAN HDFS [functional.testtbl t2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t2.id = 15
 |
 00:SCAN HDFS [functional.testtbl t1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: t1.id > 0, t1.id IS NOT NULL
 ---- DISTRIBUTEDPLAN
 09:EXCHANGE [UNPARTITIONED]
@@ -223,7 +223,7 @@ and t1.zip + t2.zip + t3.zip= 20
 |--08:EXCHANGE [HASH(t3.id)]
 |  |
 |  02:SCAN HDFS [functional.testtbl t3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t3.id IS NOT NULL
 |
 07:EXCHANGE [HASH(t1.id)]
@@ -235,13 +235,13 @@ and t1.zip + t2.zip + t3.zip= 20
 |--06:EXCHANGE [HASH(t2.id + 1)]
 |  |
 |  01:SCAN HDFS [functional.testtbl t2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: t2.id = 15
 |
 05:EXCHANGE [HASH(t1.id - 1)]
 |
 00:SCAN HDFS [functional.testtbl t1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: t1.id > 0, t1.id IS NOT NULL
 ====
 # the same thing with subqueries; should produce the same result
@@ -259,7 +259,7 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |  other predicates: a2.id IS NULL, a1.id > 0, a1.zip + a2.zip = 10, a1.zip + a2.zip + a3.zip = 20
 |
 |--02:SCAN HDFS [functional.testtbl a3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a3.id IS NOT NULL
 |
 03:HASH JOIN [RIGHT OUTER JOIN]
@@ -267,11 +267,11 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |  other join predicates: a1.zip = 94611, a2.zip = 94104
 |
 |--01:SCAN HDFS [functional.testtbl a2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a2.id = 15
 |
 00:SCAN HDFS [functional.testtbl a1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: a1.id > 0, a1.id IS NOT NULL
 ---- DISTRIBUTEDPLAN
 09:EXCHANGE [UNPARTITIONED]
@@ -284,7 +284,7 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |--08:EXCHANGE [HASH(a3.id)]
 |  |
 |  02:SCAN HDFS [functional.testtbl a3]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a3.id IS NOT NULL
 |
 07:EXCHANGE [HASH(a1.id)]
@@ -296,13 +296,13 @@ and t1.zip + t2.zip = 10 and t1.zip + t2.zip + t3.zip= 20
 |--06:EXCHANGE [HASH(a2.id + 1)]
 |  |
 |  01:SCAN HDFS [functional.testtbl a2]
-|     partitions=1/1 size=0B
+|     partitions=1/1 files=0 size=0B
 |     predicates: a2.id = 15
 |
 05:EXCHANGE [HASH(a1.id - 1)]
 |
 00:SCAN HDFS [functional.testtbl a1]
-   partitions=1/1 size=0B
+   partitions=1/1 files=0 size=0B
    predicates: a1.id > 0, a1.id IS NOT NULL
 ====
 # right outer join requires the join op to be partitioned, otherwise non-matches cause
@@ -317,10 +317,10 @@ where a.tinyint_col is null
 |  other predicates: a.tinyint_col IS NULL
 |
 |--01:SCAN HDFS [functional.alltypestiny b]
-|     partitions=4/4 size=460B
+|     partitions=4/4 files=4 size=460B
 |
 00:SCAN HDFS [functional.alltypesagg a]
-   partitions=11/11 size=814.73KB
+   partitions=11/11 files=11 size=814.73KB
 ---- DISTRIBUTEDPLAN
 05:EXCHANGE [UNPARTITIONED]
 |
@@ -331,12 +331,12 @@ where a.tinyint_col is null
 |--04:EXCHANGE [HASH(b.id)]
 |  |
 |  01:SCAN HDFS [functional.alltypestiny b]
-|     partitions=4/4 size=460B
+|     partitions=4/4 files=4 size=460B
 |
 03:EXCHANGE [HASH(a.tinyint_col)]
 |
 00:SCAN HDFS [functional.alltypesagg a]
-   partitions=11/11 size=814.73KB
+   partitions=11/11 files=11 size=814.73KB
 ====
 # same for full outer joins
 select a.tinyint_col, b.id
@@ -349,10 +349,10 @@ where a.tinyint_col is null
 |  other predicates: a.tinyint_col IS NULL
 |
 |--01:SCAN HDFS [functional.alltypestiny b]
-|     partitions=4/4 size=460B
+|     partitions=4/4 files=4 size=460B
 |
 00:SCAN HDFS [functional.alltypesagg a]
-   partitions=11/11 size=814.73KB
+   partitions=11/11 files=11 size=814.73KB
 ---- DISTRIBUTEDPLAN
 05:EXCHANGE [UNPARTITIONED]
 |
@@ -363,10 +363,241 @@ where a.tinyint_col is null
 |--04:EXCHANGE [HASH(b.id)]
 |  |
 |  01:SCAN HDFS [functional.alltypestiny b]
-|     partitions=4/4 size=460B
+|     partitions=4/4 files=4 size=460B
 |
 03:EXCHANGE [HASH(a.tinyint_col)]
 |
 00:SCAN HDFS [functional.alltypesagg a]
-   partitions=11/11 size=814.73KB
+   partitions=11/11 files=11 size=814.73KB
+====
+# Predicate assignment when query has a full outer join (IMPALA-1371)
+select *
+from functional.alltypes a full outer join functional.alltypes b
+# predicate on a from the on clause is not assigned to the scan node
+  on (a.id = b.id and a.int_col < 10 and b.tinyint_col != 5)
+# predicate on b from the where clause is assigned to the scan and
+# also to the full outer join
+where b.bigint_col > 10
+---- PLAN
+02:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.id = b.id
+|  other join predicates: a.int_col < 10, b.tinyint_col != 5
+|  other predicates: b.bigint_col > 10
+|
+|--01:SCAN HDFS [functional.alltypes b]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: b.bigint_col > 10
+|
+00:SCAN HDFS [functional.alltypes a]
+   partitions=24/24 files=24 size=478.45KB
+====
+# Predicate assignment when query has a full outer followed by an inner join
+select *
+from functional.alltypes a full outer join functional.alltypes b
+  on (a.id = b.id)
+inner join functional.alltypes c
+  on (a.int_col = c.int_col and a.tinyint_col < 10)
+# predicate on b from the where clause is assigned to the
+# first full outer join
+where b.tinyint_col > 20
+---- PLAN
+05:HASH JOIN [INNER JOIN]
+|  hash predicates: a.int_col = c.int_col
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+04:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.id = b.id
+|  other predicates: a.tinyint_col < 10, b.tinyint_col > 20
+|
+|--01:SCAN HDFS [functional.alltypes b]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: b.tinyint_col > 20
+|
+00:SCAN HDFS [functional.alltypes a]
+   partitions=24/24 files=24 size=478.45KB
+   predicates: a.tinyint_col < 10
+====
+# Predicate assignment when query has an inner join followed by a full outer join
+select *
+from functional.alltypes a inner join functional.alltypes b
+  on (a.id = b.id)
+full outer join functional.alltypes c
+  on (a.int_col = c.int_col and a.tinyint_col < b.tinyint_col and a.bigint_col < 10)
+# predicate on a is assigned to the scan and the full outer join, predicate on a and b
+# is assigned to the full outer join
+# TODO Ideally, the predicate on a and b should be assigned to the inner join and then
+# re-assigned to the full outer join.
+where a.smallint_col = 100 and a.float_col > b.float_col
+---- PLAN
+04:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.int_col = c.int_col
+|  other join predicates: a.tinyint_col < b.tinyint_col, a.bigint_col < 10
+|  other predicates: a.smallint_col = 100, a.float_col > b.float_col
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+03:HASH JOIN [INNER JOIN]
+|  hash predicates: b.id = a.id
+|
+|--00:SCAN HDFS [functional.alltypes a]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: a.smallint_col = 100
+|
+01:SCAN HDFS [functional.alltypes b]
+   partitions=24/24 files=24 size=478.45KB
+====
+# Predicate assignment when query has a sequence of full outer joins interleaved with
+# an inner join
+select *
+from functional.alltypes a full outer join functional.alltypes b
+  on (a.id = b.id and a.int_col < 10)
+inner join functional.alltypes c
+  on (a.tinyint_col = c.tinyint_col and b.int_col > 10)
+full outer join functional.alltypes d
+# predicate on b from the on clause is assigned to the scan and is also re-applied
+# in the full outer join
+  on (a.tinyint_col = d.tinyint_col and b.int_col < 20)
+# predicate on b from the where clause is assigned to the first full outer join
+where a.bool_col = false and a.float_col < b.float_col
+---- PLAN
+07:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.tinyint_col = d.tinyint_col
+|  other join predicates: b.int_col < 20
+|  other predicates: a.bool_col = FALSE, a.float_col < b.float_col
+|
+|--03:SCAN HDFS [functional.alltypes d]
+|     partitions=24/24 files=24 size=478.45KB
+|
+06:HASH JOIN [INNER JOIN]
+|  hash predicates: a.tinyint_col = c.tinyint_col
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+05:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.id = b.id
+|  other join predicates: a.int_col < 10
+|  other predicates: b.int_col > 10
+|
+|--01:SCAN HDFS [functional.alltypes b]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: b.int_col > 10
+|
+00:SCAN HDFS [functional.alltypes a]
+   partitions=24/24 files=24 size=478.45KB
+   predicates: a.bool_col = FALSE
+====
+# Predicate assignment through an inline-view that has a full outer join
+select 1
+from (
+  select a.tinyint_col x, b.tinyint_col y
+  from functional.alltypes a
+  full outer join functional.alltypes b
+    on (a.id = b.id)
+  inner join functional.alltypes c
+# predicate on a and b from the on clause of the inner join is assigned to
+# the first full outer join
+    on (b.smallint_col = c.smallint_col and a.int_col < b.int_col and b.id < 10)
+  full outer join functional.alltypes d
+# predicate on a and b from the on clause of the full outer join is assigned
+# to the full outer join
+    on (c.id = d.id and a.bigint_col > b.bigint_col)) v
+# predicate not specified in the scope of the inline view is assigned to the last
+# full outer join of the inline view that materializes the corresponding
+# tuple ids
+where x != y
+---- PLAN
+06:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: c.id = d.id
+|  other join predicates: a.bigint_col > b.bigint_col
+|  other predicates: a.tinyint_col != b.tinyint_col
+|
+|--03:SCAN HDFS [functional.alltypes d]
+|     partitions=24/24 files=24 size=478.45KB
+|
+05:HASH JOIN [INNER JOIN]
+|  hash predicates: b.smallint_col = c.smallint_col
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+04:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: a.id = b.id
+|  other predicates: a.int_col < b.int_col, b.id < 10
+|
+|--01:SCAN HDFS [functional.alltypes b]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: b.id < 10
+|
+00:SCAN HDFS [functional.alltypes a]
+   partitions=24/24 files=24 size=478.45KB
+====
+# Predicate assignment when query has an inner join followed by full outer join
+select 1
+from functional.alltypes a
+inner join functional.alltypes b
+  on (a.id = b.id)
+full outer join functional.alltypes c
+  on (b.int_col = c.int_col and c.int_col < 10)
+# predicates on a and b from the where clause are assigned to the last full outer join
+# that materializes the corresponding tuple ids
+where a.bigint_col = b.bigint_col and a.tinyint_col < b.tinyint_col
+---- PLAN
+04:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: b.int_col = c.int_col
+|  other join predicates: c.int_col < 10
+|  other predicates: a.bigint_col = b.bigint_col, a.tinyint_col < b.tinyint_col
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+03:HASH JOIN [INNER JOIN]
+|  hash predicates: b.id = a.id
+|
+|--00:SCAN HDFS [functional.alltypes a]
+|     partitions=24/24 files=24 size=478.45KB
+|
+01:SCAN HDFS [functional.alltypes b]
+   partitions=24/24 files=24 size=478.45KB
+====
+# Predicate assignment when query has a sequence of inner, outer and full
+# outer joins
+select 1
+from functional.alltypes a
+inner join functional.alltypes b
+  on (a.id = b.id)
+left outer join functional.alltypes c
+  on (a.int_col = c.int_col and c.tinyint_col = 10)
+full outer join functional.alltypes d
+  on (b.string_col = d.string_col and a.tinyint_col < b.tinyint_col)
+where a.float_col = b.float_col and b.smallint_col = 1 and d.tinyint_col < 10
+---- PLAN
+06:HASH JOIN [FULL OUTER JOIN]
+|  hash predicates: b.string_col = d.string_col
+|  other join predicates: a.tinyint_col < b.tinyint_col
+|  other predicates: a.float_col = b.float_col, b.smallint_col = 1, d.tinyint_col < 10
+|
+|--03:SCAN HDFS [functional.alltypes d]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: d.tinyint_col < 10
+|
+05:HASH JOIN [LEFT OUTER JOIN]
+|  hash predicates: a.int_col = c.int_col
+|  other join predicates: c.tinyint_col = 10
+|
+|--02:SCAN HDFS [functional.alltypes c]
+|     partitions=24/24 files=24 size=478.45KB
+|
+04:HASH JOIN [INNER JOIN]
+|  hash predicates: a.id = b.id
+|
+|--01:SCAN HDFS [functional.alltypes b]
+|     partitions=24/24 files=24 size=478.45KB
+|     predicates: b.smallint_col = 1
+|
+00:SCAN HDFS [functional.alltypes a]
+   partitions=24/24 files=24 size=478.45KB
 ====

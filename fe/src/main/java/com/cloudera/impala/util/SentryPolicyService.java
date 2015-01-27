@@ -14,10 +14,16 @@
 
 package com.cloudera.impala.util;
 
-import java.io.IOException;
 import java.util.List;
 
-import org.apache.hadoop.conf.Configuration;
+import org.apache.sentry.SentryUserException;
+import org.apache.sentry.provider.db.SentryAccessDeniedException;
+import org.apache.sentry.provider.db.SentryAlreadyExistsException;
+import org.apache.sentry.provider.db.service.thrift.SentryPolicyServiceClient;
+import org.apache.sentry.provider.db.service.thrift.TSentryGrantOption;
+import org.apache.sentry.provider.db.service.thrift.TSentryPrivilege;
+import org.apache.sentry.provider.db.service.thrift.TSentryRole;
+import org.apache.sentry.service.thrift.SentryServiceClientFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,11 +81,13 @@ public class SentryPolicyService {
      */
     private SentryPolicyServiceClient createClient() throws InternalException {
       SentryPolicyServiceClient client;
+      // TODO : uncomment this!
       try {
-        client = new SentryPolicyServiceClient(config_.getConfig());
-      } catch (IOException e) {
+        client = SentryServiceClientFactory.create(config_.getConfig());
+      } catch (Exception e) {
         throw new InternalException("Error creating Sentry Service client: ", e);
       }
+
       return client;
     }
   }
@@ -383,153 +391,5 @@ public class SentryPolicyService {
       privilege.setHas_grant_opt(false);
     }
     return privilege;
-  }
-
-  // Dummy Sentry class to allow compilation on CDH4.
-  public static class SentryUserException extends Exception {
-    private static final long serialVersionUID = 9012029067485961905L;
-  }
-
-  // Dummy Sentry class to allow compilation on CDH4.
-  public static class SentryAlreadyExistsException extends Exception {
-    private static final long serialVersionUID = 9012029067485961905L;
-  }
-
-  //Dummy Sentry class to allow compilation on CDH4.
-  public static class SentryAccessDeniedException extends Exception {
-    private static final long serialVersionUID = 9012029067485961905L;
-  }
-
-  // Dummy Sentry class to allow compilation on CDH4.
-  public abstract static class TSentryRole {
-    public abstract List<TSentryGroup> getGroups();
-    public abstract String getRoleName();
-  }
-
-  //Dummy Sentry class to allow compilation on CDH4.
-  public abstract static class TSentryGroup {
-    public abstract String getGroupName();
-  }
-
-  // Dummy Sentry enum to allow compilation on CDH4.
-  enum TSentryGrantOption {
-    TRUE,
-    FALSE,
-    UNSET
-  }
-
-  // Dummy Sentry class to allow compilation on CDH4.
-  public abstract static class TSentryPrivilege {
-    public abstract boolean isSetDbName();
-    public abstract boolean isSetTableName();
-    public abstract boolean isSetServerName();
-    public abstract boolean isSetURI();
-
-    public abstract String getAction();
-    public abstract String getPrivilegeScope();
-    public abstract String getTableName();
-    public abstract String getDbName();
-    public abstract String getServerName();
-    public abstract String getURI();
-    public abstract long getCreateTime();
-    public abstract boolean isSetGrantOption();
-    public abstract TSentryGrantOption getGrantOption();
-  }
-
-  // Dummy Sentry class to allow compilation on CDH4.
-  public static class SentryPolicyServiceClient {
-    public SentryPolicyServiceClient(Configuration config) throws IOException {
-    }
-
-    public void close() {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void createRole(String user, String roleName) throws SentryUserException,
-        SentryAlreadyExistsException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void dropRole(String user, String roleName) throws SentryUserException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void dropRoleIfExists(String user, String roleName)
-        throws SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public List<TSentryRole> listRoles(String user)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public List<TSentryRole> listUserRoles(String user)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public List<TSentryPrivilege> listAllPrivilegesByRoleName(String user, String role)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void grantTablePrivilege(String user, String roleName,
-        String serverName, String dbName, String tableName, String privilege,
-        Boolean grantOpt)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void revokeTablePrivilege(String user, String roleName,
-        String serverName, String dbName, String tableName, String privilege,
-        Boolean grantOpt) throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void grantDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege, Boolean grantOpt)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void revokeDatabasePrivilege(String user, String roleName,
-        String serverName, String dbName, String privilege, Boolean grantOpt)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void grantServerPrivilege(String user, String roleName,
-        String serverName, Boolean grantOpt) throws SentryUserException,
-        SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void revokeServerPrivilege(String user, String roleName,
-        String serverName, Boolean grantOpt) throws SentryUserException,
-        SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void grantURIPrivilege(String user, String roleName,
-        String serverName, String dbName, Boolean grantOpt) throws SentryUserException,
-        SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void revokeURIPrivilege(String user, String roleName,
-        String serverName, String dbName, Boolean grantOpt) throws SentryUserException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void grantRoleToGroup(String user, String roleName, String group)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
-
-    public void revokeRoleFromGroup(String user, String role, String group)
-        throws SentryUserException, SentryAccessDeniedException {
-      throw new UnsupportedOperationException("Sentry Service is not supported on CDH4");
-    }
   }
 }

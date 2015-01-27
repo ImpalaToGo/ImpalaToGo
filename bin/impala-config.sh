@@ -51,7 +51,7 @@ if [ -z $IMPALA_HOME ]; then
     fi
 fi
 
-export CDH_MAJOR_VERSION=4
+export CDH_MAJOR_VERSION=5
 export HADOOP_LZO=${HADOOP_LZO-~/hadoop-lzo}
 export IMPALA_LZO=${IMPALA_LZO-~/Impala-lzo}
 export IMPALA_AUX_TEST_HOME=${IMPALA_AUX_TEST_HOME-~/impala-auxiliary-tests}
@@ -76,23 +76,20 @@ export IMPALA_CYRUS_SASL_VERSION=2.1.23
 export IMPALA_OPENLDAP_VERSION=2.4.25
 export IMPALA_SQUEASEL_VERSION=3.3
 
-export IMPALA_HADOOP_VERSION=2.0.0-cdh4.5.0
-#export IMPALA_HADOOP_VERSION=2.5.0-cdh5.2.0
-export IMPALA_HBASE_VERSION=0.94.6-cdh4.5.0
-export IMPALA_HIVE_VERSION=0.10.0-cdh4.5.0
-export IMPALA_SENTRY_VERSION=1.1.0
-# If the thrift version changes, please update ext-data-source/pom.xml
-export IMPALA_THRIFT_VERSION=0.9.0
-export IMPALA_AVRO_VERSION=1.7.4
-export IMPALA_LLVM_VERSION=3.3
-export IMPALA_PARQUET_VERSION=1.2.5
-export IMPALA_PARQUET_HADOOP_VERSION=1.5.0
-export IMPALA_PARQUET_FORMAT_VERSION=2.1.0
-export IMPALA_LLAMA_VERSION=1.0.0-cdh5.0.0-SNAPSHOT
-
 # Sasl has problems with 'make install' if the path contains a ~. In our
 # packaging jobs, the path contains ~ so we'll just install somewhere else.
 export IMPALA_CYRUS_SASL_INSTALL_DIR=/tmp/impala-build/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION}/build
+
+export IMPALA_HADOOP_VERSION=2.5.0-cdh5.4.0-SNAPSHOT
+export IMPALA_HBASE_VERSION=0.98.6-cdh5.4.0-SNAPSHOT
+export IMPALA_HIVE_VERSION=0.13.1-cdh5.4.0-SNAPSHOT
+export IMPALA_SENTRY_VERSION=1.4.0-cdh5.4.0-SNAPSHOT
+export IMPALA_LLAMA_VERSION=1.0.0-cdh5.4.0-SNAPSHOT
+export IMPALA_AVRO_VERSION=1.7.4
+export IMPALA_PARQUET_VERSION=1.5.0-cdh5.4.0-SNAPSHOT
+export IMPALA_THRIFT_VERSION=0.9.0
+export IMPALA_LLVM_VERSION=3.3
+export IMPALA_MINIKDC_VERSION=1.0.0
 
 export IMPALA_FE_DIR=$IMPALA_HOME/fe
 export IMPALA_BE_DIR=$IMPALA_HOME/be
@@ -109,6 +106,9 @@ export MINI_DFS_BASE_DATA_DIR=$IMPALA_HOME/cdh-${CDH_MAJOR_VERSION}-hdfs-data
 export PATH=$HADOOP_HOME/bin:$PATH
 
 export LLAMA_HOME=$IMPALA_HOME/thirdparty/llama-${IMPALA_LLAMA_VERSION}/
+export MINIKDC_HOME=$IMPALA_HOME/thirdparty/llama-minikdc-${IMPALA_MINIKDC_VERSION}
+export SENTRY_HOME=$IMPALA_HOME/thirdparty/sentry-${IMPALA_SENTRY_VERSION}
+export SENTRY_CONF_DIR=$IMPALA_HOME/fe/src/test/resources
 
 export HIVE_HOME=$IMPALA_HOME/thirdparty/hive-${IMPALA_HIVE_VERSION}/
 export PATH=$HIVE_HOME/bin:$PATH
@@ -122,6 +122,13 @@ export AUX_CLASSPATH=$HADOOP_LZO/build/hadoop-lzo-0.4.15.jar
 export HBASE_HOME=$IMPALA_HOME/thirdparty/hbase-${IMPALA_HBASE_VERSION}/
 export PATH=$HBASE_HOME/bin:$PATH
 
+# Add the jars so hive can create hbase tables.
+export AUX_CLASSPATH=$AUX_CLASSPATH:$HBASE_HOME/lib/hbase-common-${IMPALA_HBASE_VERSION}.jar
+export AUX_CLASSPATH=$AUX_CLASSPATH:$HBASE_HOME/lib/hbase-client-${IMPALA_HBASE_VERSION}.jar
+export AUX_CLASSPATH=$AUX_CLASSPATH:$HBASE_HOME/lib/hbase-server-${IMPALA_HBASE_VERSION}.jar
+export AUX_CLASSPATH=$AUX_CLASSPATH:$HBASE_HOME/lib/hbase-protocol-${IMPALA_HBASE_VERSION}.jar
+export AUX_CLASSPATH=$AUX_CLASSPATH:$HBASE_HOME/lib/hbase-hadoop-compat-${IMPALA_HBASE_VERSION}.jar
+
 GPERFTOOLS_HOME=${IMPALA_HOME}/thirdparty/gperftools-${IMPALA_GPERFTOOLS_VERSION}/
 export PPROF_PATH="${PPROF_PATH:-${GPERFTOOLS_HOME}/src/pprof}"
 export HBASE_CONF_DIR=$HIVE_CONF_DIR
@@ -129,7 +136,12 @@ export HBASE_CONF_DIR=$HIVE_CONF_DIR
 export THRIFT_SRC_DIR=${IMPALA_HOME}/thirdparty/thrift-${IMPALA_THRIFT_VERSION}/
 export THRIFT_HOME=${THRIFT_SRC_DIR}build/
 
+export CLUSTER_DIR=${IMPALA_HOME}/testdata/cluster
+
 export IMPALA_BUILD_THREADS=`nproc`
+
+# Some environments (like the packaging build) might not have $USER set.  Fix that here.
+export USER=${USER-`id -un`}
 
 # Configure python path
 . $IMPALA_HOME/bin/set-pythonpath.sh
@@ -140,7 +152,7 @@ export IMPALA_BUILD_THREADS=`nproc`
 # When running hive UDFs, this check makes it unacceptably slow (over 100x)
 # Enable if you suspect a JNI issue
 # TODO: figure out how to turn this off only the stuff that can't run with it.
-# LIBHDFS_OPTS="-Xcheck:jni -Xcheck:nabounds"
+#LIBHDFS_OPTS="-Xcheck:jni -Xcheck:nabounds"
 # - Points to the location of libbackend.so.
 
 # LIBHDFS_OPTS="${LIBHDFS_OPTS:-}"
@@ -171,19 +183,19 @@ export LD_LIBRARY_PATH
 LD_PRELOAD="${LD_PRELOAD-}"
 export LD_PRELOAD="${LD_PRELOAD}:${LIB_JSIG}"
 
-export HADOOP_NATIVE_LIB=${HADOOP_HOME}lib/native
-
 CLASSPATH="${CLASSPATH-}"
 CLASSPATH=$IMPALA_FE_DIR/target/dependency:$CLASSPATH
 CLASSPATH=$IMPALA_FE_DIR/target/classes:$CLASSPATH
 CLASSPATH=$IMPALA_FE_DIR/src/test/resources:$CLASSPATH
 CLASSPATH=$HADOOP_LZO/build/hadoop-lzo-0.4.15.jar:$CLASSPATH
-CLASSPATH=$HADOOP_NATIVE_LIB:$CLASSPATH
 export CLASSPATH
 
 # Setup aliases
 # Helper alias to script that verifies and merges Gerrit changes
 alias gerrit-verify-merge="${IMPALA_AUX_TEST_HOME}/jenkins/gerrit-verify-merge.sh"
+
+# A marker in the environment to prove that we really did source this file
+export IMPALA_CONFIG_SOURCED=1
 
 echo "IMPALA_HOME            = $IMPALA_HOME"
 echo "HADOOP_HOME            = $HADOOP_HOME"
@@ -193,6 +205,7 @@ echo "HIVE_HOME              = $HIVE_HOME"
 echo "HIVE_CONF_DIR          = $HIVE_CONF_DIR"
 echo "HBASE_HOME             = $HBASE_HOME"
 echo "HBASE_CONF_DIR         = $HBASE_CONF_DIR"
+echo "MINIKDC_HOME           = $MINIKDC_HOME"
 echo "PPROF_PATH             = $PPROF_PATH"
 echo "THRIFT_HOME            = $THRIFT_HOME"
 echo "HADOOP_LZO             = $HADOOP_LZO"
@@ -203,3 +216,25 @@ echo "PYTHONPATH             = $PYTHONPATH"
 echo "JAVA_HOME              = $JAVA_HOME"
 echo "LD_LIBRARY_PATH        = $LD_LIBRARY_PATH"
 echo "LD_PRELOAD             = $LD_PRELOAD"
+
+# Kerberos things.  If the cluster exists and is kerberized, source
+# the required environment.  This is required for any hadoop tool to
+# work.  Note that if impala-config.sh is sourced before the
+# kerberized cluster is created, it will have to be sourced again
+# *after* the cluster is created in order to pick up these settings.
+export MINIKDC_ENV=${IMPALA_HOME}/testdata/bin/minikdc_env.sh
+if ${CLUSTER_DIR}/admin is_kerberized; then
+  . ${MINIKDC_ENV}
+  echo " *** This cluster is kerberized ***"
+  echo "KRB5_KTNAME            = $KRB5_KTNAME"
+  echo "KRB5_CONFIG            = $KRB5_CONFIG"
+  echo "KRB5_TRACE             = $KRB5_TRACE"
+  echo "HADOOP_OPTS            = $HADOOP_OPTS"
+  echo " *** This cluster is kerberized ***"
+else
+  # If the cluster *isn't* kerberized, ensure that the environment isn't
+  # polluted with kerberos items that might screw us up.  We go through
+  # everything set in the minikdc environment and explicitly unset it.
+  unset `grep export ${MINIKDC_ENV} | sed "s/.*export \([^=]*\)=.*/\1/" \
+      | sort | uniq`
+fi

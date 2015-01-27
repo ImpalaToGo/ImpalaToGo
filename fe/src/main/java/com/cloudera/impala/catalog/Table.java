@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
-import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
+import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.stats.StatsSetupConst;
 import org.apache.log4j.Logger;
 
 import com.cloudera.impala.analysis.TableName;
@@ -35,6 +35,7 @@ import com.cloudera.impala.thrift.TColumn;
 import com.cloudera.impala.thrift.TTable;
 import com.cloudera.impala.thrift.TTableDescriptor;
 import com.cloudera.impala.thrift.TTableStats;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -129,46 +130,55 @@ public abstract class Table implements CatalogObject {
     if (ddlTime > lastDdlTime_) lastDdlTime_ = ddlTime;
   }
 
+  // Returns a list of all column names for this table which we expect to have column
+  // stats in the HMS. This exists because, when we request the column stats from HMS,
+  // including a column name that does not have stats causes the
+  // getTableColumnStatistics() to return nothing. For Hdfs tables, partition columns do
+  // not have column stats in the HMS, but HBase table clustering columns do have column
+  // stats. This method allows each table type to volunteer the set of columns we should
+  // ask the metastore for in loadAllColumnStats().
+  protected List<String> getColumnNamesWithHmsStats() {
+    List<String> ret = Lists.newArrayList();
+    for (String name: colsByName_.keySet()) ret.add(name);
+    return ret;
+  }
+
   /**
-   * Loads the column stats for col from the Hive Metastore.
+   * Loads column statistics for all columns in this table from the Hive metastore. Any
+   * errors are logged and ignored, since the absence of column stats is not critical to
+   * the correctness of the system.
    */
-  protected void loadColumnStats(Column col, HiveMetaStoreClient client) {
-    ColumnStatistics colStats = null;
+  protected void loadAllColumnStats(HiveMetaStoreClient client) {
+    LOG.debug("Loading column stats for table: " + name_);
+    List<ColumnStatisticsObj> colStats;
+
+    // We need to only query those columns which may have stats; asking HMS for other
+    // columns causes loadAllColumnStats() to return nothing.
+    List<String> colNames = getColumnNamesWithHmsStats();
+
     try {
-      // Elena : 16.12.2014
-      LOG.info("Going to load column stats for " + col.getName());
-      colStats = client.getTableColumnStatistics(db_.getName(), name_, col.getName());
+      colStats = client.getTableColumnStatistics(db_.getName(), name_, colNames);
     } catch (Exception e) {
-      // Elena : 16.12.2014
-      LOG.warn("Exception occur while loading column stats for " + col.getName() + "; ex :" + e.getMessage());
-      // don't try to load stats for this column
+      LOG.warn("Could not load column statistics for: " + getFullName(), e);
       return;
     }
-    // Elena : 16.12.2014
-    LOG.info("Column stats loaded for " + col.getName());
 
-    // we should never see more than one ColumnStatisticsObj here
-    if (colStats.getStatsObj().size() > 1) return;
+    for (ColumnStatisticsObj stats: colStats) {
+      Column col = getColumn(stats.getColName());
+      Preconditions.checkNotNull(col);
+      if (!ColumnStats.isSupportedColType(col.getType())) {
+        LOG.warn(String.format("Statistics for %s, column %s are not supported as " +
+                "column has type %s", getFullName(), col.getName(), col.getType()));
+        continue;
+      }
 
-    if (!ColumnStats.isSupportedColType(col.getType())) {
-      LOG.warn(String.format("Column stats are available for table %s / " +
-          "column '%s', but Impala does not currently support column stats for this " +
-          "type of column (%s)",  name_, col.getName(), col.getType().toString()));
-      return;
+      if (!col.updateStats(stats.getStatsData())) {
+        LOG.warn(String.format("Failed to load column stats for %s, column %s. Stats " +
+            "may be incompatible with column type %s. Consider regenerating statistics " +
+            "for %s.", getFullName(), col.getName(), col.getType(), getFullName()));
+        continue;
+      }
     }
-    // Elena : 16.12.2014
-    LOG.info("Going to update column stats for " + col.getName());
-    // Update the column stats data
-    if (!col.updateStats(colStats.getStatsObj().get(0).getStatsData())) {
-      LOG.warn(String.format("Applying the column stats update to table %s / " +
-          "column '%s' did not succeed because column type (%s) was not compatible " +
-          "with the column stats data. Performance may suffer until column stats are" +
-          " regenerated for this column.",
-          name_, col.getName(), col.getType().toString()));
-    }
-    // Elena : 16.12.2014
-    else
-      LOG.info("Update column stats finished for " + col.getName());
   }
 
   /**
@@ -196,7 +206,7 @@ public abstract class Table implements CatalogObject {
     Table table = null;
     if (TableType.valueOf(msTbl.getTableType()) == TableType.VIRTUAL_VIEW) {
       table = new View(id, msTbl, db, msTbl.getTableName(), msTbl.getOwner());
-    } else if (msTbl.getSd().getInputFormat().equals(HBaseTable.getInputFormat())) {
+    } else if (HBaseTable.isHBaseTable(msTbl)) {
       table = new HBaseTable(id, msTbl, db, msTbl.getTableName(), msTbl.getOwner());
     } else if (DataSourceTable.isDataSourceTable(msTbl)) {
       // It's important to check if this is a DataSourceTable before HdfsTable because
@@ -360,15 +370,19 @@ public abstract class Table implements CatalogObject {
    * which Hive enumerates columns.
    */
   public ArrayList<Column> getColumnsInHiveOrder() {
-    ArrayList<Column> columns = Lists.newArrayList();
-    for (Column column: colsByPos_.subList(numClusteringCols_, colsByPos_.size())) {
-      columns.add(column);
-    }
+    ArrayList<Column> columns = Lists.newArrayList(getNonClusteringColumns());
 
     for (Column column: colsByPos_.subList(0, numClusteringCols_)) {
       columns.add(column);
     }
     return columns;
+  }
+
+  /**
+   * Returns the list of all columns excluding any partition columns.
+   */
+  public List<Column> getNonClusteringColumns() {
+    return colsByPos_.subList(numClusteringCols_, colsByPos_.size());
   }
 
   /**

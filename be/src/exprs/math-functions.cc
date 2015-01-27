@@ -44,14 +44,18 @@ DoubleVal MathFunctions::E(FunctionContext* ctx) {
     return RET_TYPE(FN(v.val)); \
   }
 
+ONE_ARG_MATH_FN(Abs, BigIntVal, BigIntVal, llabs);
 ONE_ARG_MATH_FN(Abs, DoubleVal, DoubleVal, fabs);
+ONE_ARG_MATH_FN(Abs, FloatVal, FloatVal, fabs);
+ONE_ARG_MATH_FN(Abs, IntVal, IntVal, abs);
+ONE_ARG_MATH_FN(Abs, SmallIntVal, SmallIntVal, abs);
+ONE_ARG_MATH_FN(Abs, TinyIntVal, TinyIntVal, abs);
 ONE_ARG_MATH_FN(Sin, DoubleVal, DoubleVal, sin);
 ONE_ARG_MATH_FN(Asin, DoubleVal, DoubleVal, asin);
 ONE_ARG_MATH_FN(Cos, DoubleVal, DoubleVal, cos);
 ONE_ARG_MATH_FN(Acos, DoubleVal, DoubleVal, acos);
 ONE_ARG_MATH_FN(Tan, DoubleVal, DoubleVal, tan);
 ONE_ARG_MATH_FN(Atan, DoubleVal, DoubleVal, atan);
-
 ONE_ARG_MATH_FN(Sqrt, DoubleVal, DoubleVal, sqrt);
 ONE_ARG_MATH_FN(Ceil, BigIntVal, DoubleVal, ceil);
 ONE_ARG_MATH_FN(Floor, BigIntVal, DoubleVal, floor);
@@ -393,7 +397,18 @@ template <typename T> T MathFunctions::Negative(FunctionContext* ctx, const T& v
 template <>
 DecimalVal MathFunctions::Negative(FunctionContext* ctx, const DecimalVal& val) {
   if (val.is_null) return val;
-  return DecimalVal(-val.val16);
+  ColumnType type = AnyValUtil::TypeDescToColumnType(ctx->GetReturnType());
+  switch (type.GetByteSize()) {
+    case 4:
+      return DecimalVal(-val.val4);
+    case 8:
+      return DecimalVal(-val.val8);
+    case 16:
+      return DecimalVal(-val.val16);
+    default:
+      DCHECK(false);
+      return DecimalVal::null();
+  }
 }
 
 BigIntVal MathFunctions::QuotientDouble(FunctionContext* ctx, const DoubleVal& x,
@@ -467,13 +482,34 @@ template <bool ISLEAST> DecimalVal MathFunctions::LeastGreatest(
     FunctionContext* ctx, int num_args, const DecimalVal* args) {
   DCHECK_GT(num_args, 0);
   if (args[0].is_null) return DecimalVal::null();
+  ColumnType type = AnyValUtil::TypeDescToColumnType(ctx->GetReturnType());
   DecimalVal result_val = args[0];
   for (int i = 1; i < num_args; ++i) {
     if (args[i].is_null) return DecimalVal::null();
-    if (ISLEAST) {
-      if (args[i].val16 < result_val.val16) result_val = args[i];
-    } else {
-      if (args[i].val16 > result_val.val16) result_val = args[i];
+    switch (type.GetByteSize()) {
+      case 4:
+        if (ISLEAST) {
+          if (args[i].val4 < result_val.val4) result_val = args[i];
+        } else {
+          if (args[i].val4 > result_val.val4) result_val = args[i];
+        }
+        break;
+      case 8:
+        if (ISLEAST) {
+          if (args[i].val8 < result_val.val8) result_val = args[i];
+        } else {
+          if (args[i].val8 > result_val.val8) result_val = args[i];
+        }
+        break;
+      case 16:
+        if (ISLEAST) {
+          if (args[i].val16 < result_val.val16) result_val = args[i];
+        } else {
+          if (args[i].val16 > result_val.val16) result_val = args[i];
+        }
+        break;
+      default:
+        DCHECK(false);
     }
   }
   return result_val;

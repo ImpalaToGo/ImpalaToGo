@@ -288,12 +288,15 @@ class DiskIoMgr {
 
     virtual ~ScanRange();
 
-    // Resets this scan range object with the scan range description.
+    // Resets this scan range object with the scan range description.  The scan range
+    // must fall within the file bounds (offset >= 0 and offset + len <= file_length).
     void Reset(const char* file, int64_t len,
-        int64_t offset, int disk_id, bool try_cache, void* metadata = NULL);
+        int64_t offset, int disk_id, bool try_cache, bool expected_local,
+        void* metadata = NULL);
 
     void* meta_data() const { return meta_data_; }
     bool try_cache() const { return try_cache_; }
+    bool expected_local() const { return expected_local_; }
     int ready_buffers_capacity() const { return ready_buffers_capacity_; }
 
     // Returns the next buffer for this scan range. buffer is an output parameter.
@@ -355,12 +358,19 @@ class DiskIoMgr {
     // will fail and we'll just put the scan range on the normal read path.
     bool try_cache_;
 
+    // If true, we expect this scan range to be a local read. Note that if this is false,
+    // it does not necessarily mean we expect the read to be remote, and that we never
+    // create scan ranges where some of the range is expected to be remote and some of it
+    // local.
+    // TODO: we can do more with this
+    bool expected_local_;
+
     DiskIoMgr* io_mgr_;
 
     // Reader/owner of the scan range
     RequestContext* reader_;
 
-    // File handle either to hdfs or local fs (FILE*)
+    // File handle either to dfs or local fs (FILE*)
     union {
       FILE* local_file_;
       dfsFile hdfs_file_;
@@ -541,6 +551,8 @@ class DiskIoMgr {
   int64_t bytes_read_local(RequestContext* reader) const;
   int64_t bytes_read_short_circuit(RequestContext* reader) const;
   int64_t bytes_read_dn_cache(RequestContext* reader) const;
+  int num_remote_ranges(RequestContext* reader) const;
+  int64_t unexpected_remote_bytes(RequestContext* reader) const;
 
   // Returns the read throughput across all readers.
   // TODO: should this be a sliding window?  This should report metrics for the
@@ -662,9 +674,9 @@ class DiskIoMgr {
   void ReturnBuffer(BufferDescriptor* buffer);
 
   // Returns a buffer to read into with size between *buffer_size and max_buffer_size_,
-  // *buffer_size is set to the size of the buffer. If there is an appropriately-sized
-  // free buffer in the 'free_buffers_', that is returned, otherwise a new one is
-  // allocated. *buffer_size must be between 0 and max_buffer_size_.
+  // and *buffer_size is set to the size of the buffer. If there is an
+  // appropriately-sized free buffer in the 'free_buffers_', that is returned, otherwise
+  // a new one is allocated. *buffer_size must be between 0 and max_buffer_size_.
   char* GetFreeBuffer(int64_t* buffer_size);
 
   // Garbage collect all unused io buffers. This is currently only triggered when the

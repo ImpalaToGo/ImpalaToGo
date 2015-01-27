@@ -18,6 +18,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <gflags/gflags.h>
+#include <gutil/strings/substitute.h>
 
 #include "common/logging.h"
 #include "resourcebroker/resource-broker.h"
@@ -44,11 +45,14 @@
 #include "util/mem-info.h"
 #include "util/debug-util.h"
 #include "util/cgroups-mgr.h"
+#include "util/memory-metrics.h"
+#include "util/pretty-printer.h"
 #include "gen-cpp/ImpalaInternalService.h"
 #include "gen-cpp/CatalogService.h"
 
 using namespace std;
 using namespace boost;
+using namespace strings;
 
 DEFINE_bool(use_statestore, true,
     "Use an external statestore process to manage cluster membership");
@@ -128,13 +132,13 @@ ExecEnv::ExecEnv()
     htable_factory_(new HBaseTableFactory()),
     disk_io_mgr_(new DiskIoMgr()),
     webserver_(new Webserver()),
-    metrics_(new Metrics()),
+    metrics_(new MetricGroup("impala-metrics")),
     mem_tracker_(NULL),
     thread_mgr_(new ThreadResourceMgr),
     cgroups_mgr_(NULL),
     hdfs_op_thread_pool_(
         CreateHdfsOpThreadPool("hdfs-worker-pool", FLAGS_num_hdfs_worker_threads, 1024)),
-    request_pool_service_(new RequestPoolService()),
+    request_pool_service_(new RequestPoolService(metrics_.get())),
     frontend_(new Frontend()),
     enable_webserver_(FLAGS_enable_webserver),
     tz_database_(TimezoneDatabase()),
@@ -151,8 +155,8 @@ ExecEnv::ExecEnv()
         MakeNetworkAddress(FLAGS_state_store_host, FLAGS_state_store_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        TNetworkAddressToString(backend_address_), subscriber_address, statestore_address,
-        metrics_.get()));
+        Substitute("impalad@$0", TNetworkAddressToString(backend_address_)),
+        subscriber_address, statestore_address, metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
         statestore_subscriber_->id(), backend_address_, metrics_.get(),
@@ -175,18 +179,18 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
     htable_factory_(new HBaseTableFactory()),
     disk_io_mgr_(new DiskIoMgr()),
     webserver_(new Webserver(webserver_port)),
-    metrics_(new Metrics()),
+    metrics_(new MetricGroup("impala-metrics")),
     mem_tracker_(NULL),
     thread_mgr_(new ThreadResourceMgr),
     hdfs_op_thread_pool_(
         CreateHdfsOpThreadPool("hdfs-worker-pool", FLAGS_num_hdfs_worker_threads, 1024)),
-    request_pool_service_(new RequestPoolService()),
     frontend_(new Frontend()),
     enable_webserver_(FLAGS_enable_webserver && webserver_port > 0),
     tz_database_(TimezoneDatabase()),
     is_fe_tests_(false),
     backend_address_(MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port)),
     is_pseudo_distributed_llama_(false) {
+  request_pool_service_.reset(new RequestPoolService(metrics_.get()));
   if (FLAGS_enable_rm) InitRm();
 
   if (FLAGS_use_statestore && statestore_port > 0) {
@@ -196,8 +200,8 @@ ExecEnv::ExecEnv(const string& hostname, int backend_port, int subscriber_port,
         MakeNetworkAddress(statestore_host, statestore_port);
 
     statestore_subscriber_.reset(new StatestoreSubscriber(
-        TNetworkAddressToString(backend_address_), subscriber_address, statestore_address,
-        metrics_.get()));
+        Substitute("impalad@$0", TNetworkAddressToString(backend_address_)),
+        subscriber_address, statestore_address, metrics_.get()));
 
     scheduler_.reset(new SimpleScheduler(statestore_subscriber_.get(),
         statestore_subscriber_->id(), backend_address_, metrics_.get(),
@@ -299,9 +303,9 @@ Status ExecEnv::StartServices() {
       FLAGS_num_threads_per_core * FLAGS_num_cores;
   if (bytes_limit < min_requirement) {
     LOG(WARNING) << "Memory limit "
-                 << PrettyPrinter::Print(bytes_limit, TCounterType::BYTES)
+                 << PrettyPrinter::Print(bytes_limit, TUnit::BYTES)
                  << " does not meet minimal memory requirement of "
-                 << PrettyPrinter::Print(min_requirement, TCounterType::BYTES);
+                 << PrettyPrinter::Print(min_requirement, TUnit::BYTES);
   }
 
   metrics_->Init(enable_webserver_ ? webserver_.get() : NULL);
@@ -329,12 +333,12 @@ Status ExecEnv::StartServices() {
 
   if (bytes_limit > MemInfo::physical_mem()) {
     LOG(WARNING) << "Memory limit "
-                 << PrettyPrinter::Print(bytes_limit, TCounterType::BYTES)
+                 << PrettyPrinter::Print(bytes_limit, TUnit::BYTES)
                  << " exceeds physical memory of "
-                 << PrettyPrinter::Print(MemInfo::physical_mem(), TCounterType::BYTES);
+                 << PrettyPrinter::Print(MemInfo::physical_mem(), TUnit::BYTES);
   }
   LOG(INFO) << "Using global memory limit: "
-            << PrettyPrinter::Print(bytes_limit, TCounterType::BYTES);
+            << PrettyPrinter::Print(bytes_limit, TUnit::BYTES);
 
   RETURN_IF_ERROR(disk_io_mgr_->Init(mem_tracker_.get()));
 

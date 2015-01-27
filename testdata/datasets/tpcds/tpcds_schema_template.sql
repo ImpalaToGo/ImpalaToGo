@@ -101,8 +101,8 @@ i_item_id                 string
 i_rec_start_date          string
 i_rec_end_date            string
 i_item_desc               string
-i_current_price           float
-i_wholesale_cost          float
+i_current_price           decimal(7,2)
+i_wholesale_cost          decimal(7,2)
 i_brand_id                int
 i_brand                   string
 i_class_id                int
@@ -159,8 +159,8 @@ s_county                  string
 s_state                   string
 s_zip                     string
 s_country                 string
-s_gmt_offset              float
-s_tax_precentage          float
+s_gmt_offset              decimal(5,2)
+s_tax_precentage          decimal(5,2)
 ---- ROW_FORMAT
 delimited fields terminated by '|'
 ---- DEPENDENT_LOAD
@@ -212,7 +212,7 @@ p_promo_id                string
 p_start_date_sk           int
 p_end_date_sk             int
 p_item_sk                 int
-p_cost                    float
+p_cost                    decimal(15,2)
 p_response_target         int
 p_promo_name              string
 p_channel_dmail           string
@@ -271,7 +271,7 @@ ca_county                 string
 ca_state                  string
 ca_zip                    string
 ca_country                string
-ca_gmt_offset             float
+ca_gmt_offset             decimal(5,2)
 ca_location_type          string
 ---- ROW_FORMAT
 delimited fields terminated by '|'
@@ -298,18 +298,18 @@ ss_store_sk               bigint
 ss_promo_sk               bigint
 ss_ticket_number          int
 ss_quantity               int
-ss_wholesale_cost         float
-ss_list_price             float
-ss_sales_price            float
-ss_ext_discount_amt       float
-ss_ext_sales_price        float
-ss_ext_wholesale_cost     float
-ss_ext_list_price         float
-ss_ext_tax                float
-ss_coupon_amt             float
-ss_net_paid               float
-ss_net_paid_inc_tax       float
-ss_net_profit             float
+ss_wholesale_cost         decimal(7,2)
+ss_list_price             decimal(7,2)
+ss_sales_price            decimal(7,2)
+ss_ext_discount_amt       decimal(7,2)
+ss_ext_sales_price        decimal(7,2)
+ss_ext_wholesale_cost     decimal(7,2)
+ss_ext_list_price         decimal(7,2)
+ss_ext_tax                decimal(7,2)
+ss_coupon_amt             decimal(7,2)
+ss_net_paid               decimal(7,2)
+ss_net_paid_inc_tax       decimal(7,2)
+ss_net_profit             decimal(7,2)
 ---- ROW_FORMAT
 delimited fields terminated by '|'
 ---- DEPENDENT_LOAD
@@ -334,18 +334,18 @@ ss_store_sk               bigint
 ss_promo_sk               bigint
 ss_ticket_number          int
 ss_quantity               int
-ss_wholesale_cost         float
-ss_list_price             float
-ss_sales_price            float
-ss_ext_discount_amt       float
-ss_ext_sales_price        float
-ss_ext_wholesale_cost     float
-ss_ext_list_price         float
-ss_ext_tax                float
-ss_coupon_amt             float
-ss_net_paid               float
-ss_net_paid_inc_tax       float
-ss_net_profit             float
+ss_wholesale_cost         decimal(7,2)
+ss_list_price             decimal(7,2)
+ss_sales_price            decimal(7,2)
+ss_ext_discount_amt       decimal(7,2)
+ss_ext_sales_price        decimal(7,2)
+ss_ext_wholesale_cost     decimal(7,2)
+ss_ext_list_price         decimal(7,2)
+ss_ext_tax                decimal(7,2)
+ss_coupon_amt             decimal(7,2)
+ss_net_paid               decimal(7,2)
+ss_net_paid_inc_tax       decimal(7,2)
+ss_net_profit             decimal(7,2)
 ---- PARTITION_COLUMNS
 ss_sold_date_sk bigint
 ---- ROW_FORMAT
@@ -463,7 +463,8 @@ WHERE 2452184 <= ss_sold_date_sk;
 ---- LOAD
 USE {db_name};
 
-set hive.auto.convert.join=true;
+-- Disable auto.convert.join due to HIVE-5068
+set hive.auto.convert.join=false;
 set hive.exec.max.dynamic.partitions.pernode=10000;
 set hive.exec.max.dynamic.partitions=10000;
 set hive.exec.dynamic.partition.mode=nonstrict;
@@ -498,7 +499,8 @@ distribute by ss_sold_date_sk;
 ---- LOAD_LOCAL
 USE {db_name};
 
-set hive.auto.convert.join=true;
+-- Disable auto.convert.join due to HIVE-5068
+set hive.auto.convert.join=false;
 set hive.exec.max.dynamic.partitions.pernode=10000;
 set hive.exec.max.dynamic.partitions=10000;
 set hive.exec.dynamic.partition.mode=nonstrict;
@@ -531,11 +533,10 @@ select ss.ss_sold_time_sk,
 from date_dim d
 join store_sales_unpartitioned ss
   on (ss.ss_sold_date_sk = d.d_date_sk)
--- The filder below reduced the number of partitions generated for local testing. This
+-- The filter below reduced the number of partitions generated for local testing. This
 -- filter reduces the number of partitions from ~1800 to 120. We are doing a join with
 -- date_dim in order to select the 1st and 15th days of the month. No data in date_dim
--- ends up in store_sales. This is done so that the data remains the same after we 
--- changed the schema.
+-- ends up in store_sales.
 where (d.d_date like '%-01' or d.d_date like '%-15')
 distribute by ss_sold_date_sk;
 ====

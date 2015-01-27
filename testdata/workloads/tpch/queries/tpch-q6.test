@@ -1,9 +1,8 @@
 ====
 ---- QUERY: TPCH-Q6
 # Q6 - Forecasting Revenue Change Query
-# Modifications: Added round() calls
 select
-  round(sum(l_extendedprice * l_discount), 5) as revenue
+  sum(l_extendedprice * l_discount) as revenue
 from
   lineitem
 where
@@ -14,5 +13,5 @@ where
 ---- RESULTS
 123141078.2283
 ---- TYPES
-double
+decimal
 ====

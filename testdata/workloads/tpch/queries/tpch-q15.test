@@ -4,7 +4,7 @@
 with revenue_view as (
   select
     l_suppkey as supplier_no,
-    round(sum(l_extendedprice * (1 - l_discount)), 1) as total_revenue
+    sum(l_extendedprice * (1 - l_discount)) as total_revenue
   from
     lineitem
   where
@@ -32,7 +32,7 @@ where
 order by
   s_suppkey;
 ---- RESULTS
-8449,'Supplier#000008449','Wp34zim9qYFbVctdW','20-469-856-8873',1772627.2
+8449,'Supplier#000008449','Wp34zim9qYFbVctdW','20-469-856-8873',1772627.2087
 ---- TYPES
-bigint, string, string, string, double
+BIGINT, STRING, STRING, STRING, DECIMAL
 ====

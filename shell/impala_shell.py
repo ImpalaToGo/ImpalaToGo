@@ -59,8 +59,7 @@ class CmdStatus:
   ERROR = False
 
 class ImpalaPrettyTable(prettytable.PrettyTable):
-  """Patched version of PrettyTable that handles utf-8 characters by replacing them with a
-  placeholder, rather than ignoring them entirely"""
+  """Patched version of PrettyTable that TODO"""
   def _unicode(self, value):
     if not isinstance(value, basestring):
       value = str(value)
@@ -352,6 +351,7 @@ class ImpalaShell(cmd.Cmd):
       new_imp_client = ImpalaClient(self.impalad)
       new_imp_client.connect()
       new_imp_client.cancel_query(self.last_query_handle, False)
+      self.imp_client.close_query(self.last_query_handle)
       self._validate_database()
     except Exception, e:
       print_to_stderr("Failed to reconnect and close: %s" % str(e))
@@ -485,6 +485,8 @@ class ImpalaShell(cmd.Cmd):
           print_to_stderr(("Kerberos ticket found in the credentials cache, retrying "
                            "the connection with a secure transport."))
           self.imp_client.use_kerberos = True
+          self.imp_client.use_ldap = False
+          self.imp_client.ldap_password = None
           self._connect()
       except OSError, e:
         pass
@@ -649,10 +651,10 @@ class ImpalaShell(cmd.Cmd):
       self.last_query_handle = self.imp_client.execute_query(query)
       self.query_handle_closed = False
       wait_to_finish = self.imp_client.wait_to_finish(self.last_query_handle)
-      # retrieve the error log
-      warning_log = self.imp_client.get_warning_log(self.last_query_handle)
 
       if is_insert:
+        # retrieve the error log
+        warning_log = self.imp_client.get_warning_log(self.last_query_handle)
         num_rows = self.imp_client.close_insert(self.last_query_handle)
       else:
         # impalad does not support the fetching of metadata for certain types of queries.
@@ -670,6 +672,9 @@ class ImpalaShell(cmd.Cmd):
         for rows in rows_fetched:
           self.output_stream.write(rows)
           num_rows += len(rows)
+
+        # retrieve the error log
+        warning_log = self.imp_client.get_warning_log(self.last_query_handle)
 
       end_time = time.time()
 
@@ -894,6 +899,7 @@ def execute_queries_non_interactive_mode(options):
   if options.query_file:
     try:
       query_file_handle = open(options.query_file, 'r')
+
       queries = parse_query_text(query_file_handle.read())
       query_file_handle.close()
     except Exception, e:

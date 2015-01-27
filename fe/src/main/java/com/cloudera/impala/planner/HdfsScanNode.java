@@ -34,6 +34,7 @@ import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.InPredicate;
 import com.cloudera.impala.analysis.IsNullPredicate;
 import com.cloudera.impala.analysis.LiteralExpr;
+import com.cloudera.impala.analysis.NullLiteral;
 import com.cloudera.impala.analysis.SlotDescriptor;
 import com.cloudera.impala.analysis.SlotId;
 import com.cloudera.impala.analysis.SlotRef;
@@ -61,6 +62,7 @@ import com.cloudera.impala.thrift.TScanRangeLocations;
 import com.google.common.base.Objects;
 import com.google.common.base.Objects.ToStringHelper;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
@@ -96,6 +98,9 @@ public class HdfsScanNode extends ScanNode {
 
   // Partitions that are filtered in for scanning by the key ranges
   private final ArrayList<HdfsPartition> partitions_ = Lists.newArrayList();
+
+  // Total number of files from partitions_
+  private long totalFiles_ = 0;
 
   // Total number of bytes from partitions_
   private long totalBytes_ = 0;
@@ -184,6 +189,7 @@ public class HdfsScanNode extends ScanNode {
 
             location.setHost_idx(globalHostIdx);
             location.setVolume_id(block.getDiskId(i));
+            location.setIs_cached(block.isCached(i));
             locations.add(location);
           }
           // create scan ranges, taking into account maxScanRangeLength
@@ -291,6 +297,7 @@ public class HdfsScanNode extends ScanNode {
     Preconditions.checkNotNull(bindingExpr);
     Preconditions.checkState(bindingExpr.isLiteral());
     LiteralExpr literal = (LiteralExpr)bindingExpr;
+    if (literal instanceof NullLiteral) return Sets.newHashSet();
 
     // Get the partition column position and retrieve the associated partition
     // value metadata.
@@ -384,6 +391,10 @@ public class HdfsScanNode extends ScanNode {
 
     if (inPredicate.isNotIn()) {
       // Case: SlotRef NOT IN (Literal, ..., Literal)
+      // If there is a NullLiteral, return an empty set.
+      List<Expr> nullLiterals = Lists.newArrayList();
+      inPredicate.collectAll(Predicates.instanceOf(NullLiteral.class), nullLiterals);
+      if (!nullLiterals.isEmpty()) return matchingIds;
       matchingIds.addAll(tbl_.getPartitionIds());
       // Exclude partitions with null partition column values
       HashSet<Long> nullIds = tbl_.getNullPartitionIds(partitionPos);
@@ -575,12 +586,12 @@ public class HdfsScanNode extends ScanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
-
     LOG.debug("collecting partitions for table " + tbl_.getName());
     if (tbl_.getPartitions().isEmpty()) {
       cardinality_ = tbl_.getNumRows();
     } else {
       cardinality_ = 0;
+      totalFiles_ = 0;
       totalBytes_ = 0;
       boolean hasValidPartitionCardinality = false;
       for (HdfsPartition p: partitions_) {
@@ -589,7 +600,10 @@ public class HdfsScanNode extends ScanNode {
         if (p.getNumRows() > 0) {
           cardinality_ = addCardinalities(cardinality_, p.getNumRows());
           hasValidPartitionCardinality = true;
+        } else {
+          ++numPartitionsMissingStats_;
         }
+        totalFiles_ += p.getFileDescriptors().size();
         totalBytes_ += p.getSize();
       }
 
@@ -599,7 +613,7 @@ public class HdfsScanNode extends ScanNode {
         cardinality_ = tbl_.getNumRows();
       }
     }
-
+    inputCardinality_ = cardinality_;
     Preconditions.checkState(cardinality_ >= 0 || cardinality_ == -1,
         "Internal error: invalid scan node cardinality: " + cardinality_);
     if (cardinality_ > 0) {
@@ -611,7 +625,9 @@ public class HdfsScanNode extends ScanNode {
     LOG.debug("computeStats HdfsScan: cardinality_=" + Long.toString(cardinality_));
 
     // TODO: take actual partitions into account
-    numNodes_ = cardinality_ == 0 ? 1 : tbl_.getNumNodes();
+    // Tables can reside on 0 nodes (empty table), but a plan node must always be
+    // executed on at least one node.
+    numNodes_ = (cardinality_ == 0 || tbl_.getNumNodes() == 0) ? 1 : tbl_.getNumNodes();
     LOG.debug("computeStats HdfsScan: #nodes=" + Integer.toString(numNodes_));
   }
 
@@ -648,8 +664,8 @@ public class HdfsScanNode extends ScanNode {
     if (detailLevel.ordinal() >= TExplainLevel.STANDARD.ordinal()) {
       int numPartitions = partitions_.size();
       if (tbl_.getNumClusteringCols() == 0) numPartitions = 1;
-      output.append(String.format("%spartitions=%s/%s size=%s", detailPrefix,
-          numPartitions, table.getPartitions().size() - 1,
+      output.append(String.format("%spartitions=%s/%s files=%s size=%s", detailPrefix,
+          numPartitions, table.getPartitions().size() - 1, totalFiles_,
           PrintUtils.printBytes(totalBytes_)));
       output.append("\n");
       if (!conjuncts_.isEmpty()) {

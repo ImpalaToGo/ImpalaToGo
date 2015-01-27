@@ -359,11 +359,10 @@ public class HashJoinNode extends PlanNode {
   @Override
   public void computeStats(Analyzer analyzer) {
     super.computeStats(analyzer);
-    if (joinOp_ == JoinOperator.INNER_JOIN || joinOp_.isOuterJoin()) {
-      cardinality_ = getJoinCardinality();
-    } else {
-      Preconditions.checkState(joinOp_.isSemiJoin());
+    if (joinOp_.isSemiJoin()) {
       cardinality_ = getSemiJoinCardinality();
+    } else {
+      cardinality_ = getJoinCardinality();
     }
 
     // Impose lower/upper bounds on the cardinality based on the join type.
@@ -496,7 +495,7 @@ public class HashJoinNode extends PlanNode {
     }
     perHostMemCost_ =
         (long) Math.ceil(getChild(1).cardinality_ * getChild(1).avgRowSize_
-          * Planner.HASH_TBL_SPACE_OVERHEAD);
+          * PlannerContext.HASH_TBL_SPACE_OVERHEAD);
     if (distrMode_ == DistributionMode.PARTITIONED) perHostMemCost_ /= numNodes_;
   }
 }

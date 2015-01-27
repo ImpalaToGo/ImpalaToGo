@@ -357,6 +357,8 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     msg.setLabel_detail(getDisplayLabelDetail());
     msg.setEstimated_stats(estimatedStats);
 
+    msg.setRow_tuples(Lists.<Integer>newArrayListWithCapacity(tupleIds_.size()));
+    msg.setNullable_tuples(Lists.<Boolean>newArrayListWithCapacity(tupleIds_.size()));
     for (TupleId tid: tupleIds_) {
       msg.addToRow_tuples(tid.asInt());
       msg.addToNullable_tuples(nullableTupleIds_.contains(tid));
@@ -364,7 +366,6 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     for (Expr e: conjuncts_) {
       msg.addToConjuncts(e.treeToThrift());
     }
-    msg.compact_data = false;
     toThrift(msg);
     container.addToNodes(msg);
     // For the purpose of the BE consider ExchangeNodes to have no children.
@@ -421,7 +422,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
    * Sets outputSmap_ to compose(existing smap, combined child smap). Also
    * substitutes conjuncts_ using the combined child smap.
    */
-  protected void createDefaultSmap(Analyzer analyzer) throws InternalException {
+  protected void createDefaultSmap(Analyzer analyzer) {
     ExprSubstitutionMap combinedChildSmap = getCombinedChildSmap();
     outputSmap_ =
         ExprSubstitutionMap.compose(outputSmap_, combinedChildSmap, analyzer);
@@ -560,5 +561,19 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
    */
   public void computeCosts(TQueryOptions queryOptions) {
     perHostMemCost_ = 0;
+  }
+
+  /**
+   * The input cardinality is the sum of output cardinalities of its children.
+   * For scan nodes the input cardinality is the expected number of rows scanned.
+   */
+  public long getInputCardinality() {
+    long sum = 0;
+    for(PlanNode p : children_) {
+      long tmp = p.getCardinality();
+      if (tmp == -1) return -1;
+      sum = addCardinalities(sum, tmp);
+    }
+    return sum;
   }
 }

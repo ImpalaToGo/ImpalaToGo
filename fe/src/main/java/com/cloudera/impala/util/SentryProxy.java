@@ -20,6 +20,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.log4j.Logger;
+import org.apache.sentry.provider.db.service.thrift.TSentryGroup;
+import org.apache.sentry.provider.db.service.thrift.TSentryPrivilege;
+import org.apache.sentry.provider.db.service.thrift.TSentryRole;
 
 import com.cloudera.impala.authorization.SentryConfig;
 import com.cloudera.impala.authorization.User;
@@ -31,9 +34,6 @@ import com.cloudera.impala.catalog.RolePrivilege;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.ImpalaRuntimeException;
 import com.cloudera.impala.thrift.TPrivilege;
-import com.cloudera.impala.util.SentryPolicyService.TSentryGroup;
-import com.cloudera.impala.util.SentryPolicyService.TSentryPrivilege;
-import com.cloudera.impala.util.SentryPolicyService.TSentryRole;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 

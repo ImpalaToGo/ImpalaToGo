@@ -48,13 +48,14 @@
 #include "statestore/scheduler.h"
 #include "exec/data-sink.h"
 #include "exec/scan-node.h"
-#include "util/debug-util.h"
-#include "util/hdfs-util.h"
-#include "util/hdfs-bulk-ops.h"
 #include "util/container-util.h"
-#include "util/network-util.h"
+#include "util/debug-util.h"
+#include "util/hdfs-bulk-ops.h"
+#include "util/hdfs-util.h"
 #include "util/llama-util.h"
-#include "util/table-printer.h"
+#include "util/network-util.h"
+#include "util/pretty-printer.h"
+#include "util/summary-util.h"
 #include "gen-cpp/ImpalaInternalService.h"
 #include "gen-cpp/ImpalaInternalService_types.h"
 #include "gen-cpp/Frontend_types.h"
@@ -107,6 +108,9 @@ class Coordinator::BackendExecState {
   // Fragment idx for this ExecState
   int fragment_idx;
 
+  // The 0-based instance idx.
+  int instance_idx;
+
   // protects fields below
   // lock ordering: Coordinator::lock_ can only get obtained *prior*
   // to lock
@@ -137,6 +141,7 @@ class Coordinator::BackendExecState {
       backend_address(params.hosts[instance_idx]),
       total_split_size(0),
       fragment_idx(fragment_idx),
+      instance_idx(instance_idx),
       initiated(false),
       done(false),
       profile_created(false),
@@ -291,7 +296,8 @@ static void ProcessQueryOptions(
       << "because nodes cannot be cancelled in Close()";
 }
 
-Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_expr_ctxs) {
+Status Coordinator::Exec(QuerySchedule& schedule,
+    vector<ExprContext*>* output_expr_ctxs) {
   const TQueryExecRequest& request = schedule.request();
   DCHECK_GT(request.fragments.size(), 0);
   needs_finalization_ = request.__isset.finalize_params;
@@ -340,8 +346,12 @@ Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_e
     // coordinator fragment have been prepared in executor_->Prepare().
     DCHECK(output_expr_ctxs != NULL);
     RETURN_IF_ERROR(Expr::CreateExprTrees(
-        runtime_state()->obj_pool(), request.fragments[0].output_exprs, output_expr_ctxs));
-    RETURN_IF_ERROR(Expr::Prepare(*output_expr_ctxs, runtime_state(), row_desc()));
+        runtime_state()->obj_pool(), request.fragments[0].output_exprs,
+        output_expr_ctxs));
+    MemTracker* output_expr_tracker = runtime_state()->obj_pool()->Add(new MemTracker(
+        -1, -1, "Output exprs", runtime_state()->instance_mem_tracker(), false));
+    RETURN_IF_ERROR(Expr::Prepare(
+        *output_expr_ctxs, runtime_state(), row_desc(), output_expr_tracker));
   } else {
     // The coordinator instance may require a query mem tracker even if there is no
     // coordinator fragment. For example, result-caching tracks memory via the query mem
@@ -376,7 +386,7 @@ Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_e
 
   query_events_->MarkEvent("Ready to start remote fragments");
   int backend_num = 0;
-  StatsMetric<double> latencies("fragment-latencies");
+  StatsMetric<double> latencies("fragment-latencies", TUnit::TIME_NS);
   for (int fragment_idx = (has_coordinator_fragment ? 1 : 0);
        fragment_idx < request.fragments.size(); ++fragment_idx) {
     const FragmentExecParams& params = (*fragment_exec_params)[fragment_idx];
@@ -419,10 +429,8 @@ Status Coordinator::Exec(QuerySchedule& schedule, vector<ExprContext*>* output_e
   }
 
   query_events_->MarkEvent("Remote fragments started");
-  stringstream remote_fragments_status;
-  latencies.PrintValue(&remote_fragments_status);
   query_profile_->AddInfoString("Fragment start latencies",
-      remote_fragments_status.str());
+      latencies.ToHumanReadable());
 
   // If we have a coordinator fragment and remote fragments (the common case),
   // release the thread token on the coordinator fragment.  This fragment
@@ -536,8 +544,13 @@ void Coordinator::PopulatePathPermissionCache(dfsFS fs, const string& path_str,
 }
 
 Status Coordinator::FinalizeSuccessfulInsert() {
-  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   PermissionCache permissions_cache;
+  dfsFS hdfs_connection;
+  // InsertStmt ensures that all partitions are on the same filesystem as the table's
+  // base directory, so opening a single connection is okay.
+  // TODO: modify this code so that restriction can be lifted.
+  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(
+      finalize_params_.hdfs_base_dir, &hdfs_connection));
 
   // INSERT finalization happens in the five following steps
   // 1. If OVERWRITE, remove all the files in the target directory
@@ -715,13 +728,14 @@ Status Coordinator::FinalizeQuery() {
     return_status = FinalizeSuccessfulInsert();
   }
 
-  DCHECK(finalize_params_.__isset.staging_dir);
-
-  dfsFS hdfs_connection = HdfsFsCache::instance()->GetDefaultConnection();
   stringstream staging_dir;
+  DCHECK(finalize_params_.__isset.staging_dir);
   staging_dir << finalize_params_.staging_dir << "/" << PrintId(query_id_,"_") << "/";
+
+  dfsFS hdfs_conn;
+  RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(staging_dir.str(), &hdfs_conn));
   VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
-  dfsDelete(hdfs_connection, staging_dir.str().c_str(), 1);
+  dfsDelete(hdfs_conn, staging_dir.str().c_str(), 1);
 
   return return_status;
 }
@@ -861,10 +875,10 @@ void Coordinator::PrintBackendInfo() {
     double mean = accumulators::mean(acc);
     double stddev = sqrt(accumulators::variance(acc));
     stringstream ss;
-    ss << " min: " << PrettyPrinter::Print(min, TCounterType::BYTES)
-      << ", max: " << PrettyPrinter::Print(max, TCounterType::BYTES)
-      << ", avg: " << PrettyPrinter::Print(mean, TCounterType::BYTES)
-      << ", stddev: " << PrettyPrinter::Print(stddev, TCounterType::BYTES);
+    ss << " min: " << PrettyPrinter::Print(min, TUnit::BYTES)
+      << ", max: " << PrettyPrinter::Print(max, TUnit::BYTES)
+      << ", avg: " << PrettyPrinter::Print(mean, TUnit::BYTES)
+      << ", stddev: " << PrettyPrinter::Print(stddev, TUnit::BYTES);
     fragment_profiles_[i].averaged_profile->AddInfoString("split sizes", ss.str());
 
     if (VLOG_FILE_IS_ON) {
@@ -874,7 +888,7 @@ void Coordinator::PrintBackendInfo() {
         if (exec_state->fragment_idx != i) continue;
         VLOG_FILE << "data volume for ipaddress " << exec_state << ": "
                   << PrettyPrinter::Print(
-                    exec_state->total_split_size, TCounterType::BYTES);
+                    exec_state->total_split_size, TUnit::BYTES);
       }
     }
   }
@@ -937,6 +951,7 @@ void Coordinator::InitExecProfile(const TQueryExecRequest& request) {
     // instance of this profile so the average is just the coordinator profile.
     if (i == 0 && has_coordinator_fragment) {
       fragment_profiles_[i].averaged_profile = executor_->profile();
+      fragment_profiles_[i].num_instances = 1;
       continue;
     }
     fragment_profiles_[i].averaged_profile =
@@ -999,13 +1014,13 @@ void Coordinator::CreateAggregateCounters(
       stringstream s;
       s << PrintPlanNodeType(node.node_type) << " (id="
         << node.node_id << ") Throughput";
-      query_profile_->AddDerivedCounter(s.str(), TCounterType::BYTES_PER_SECOND,
+      query_profile_->AddDerivedCounter(s.str(), TUnit::BYTES_PER_SECOND,
           bind<int64_t>(mem_fn(&Coordinator::ComputeTotalThroughput),
                         this, node.node_id));
       s.str("");
       s << PrintPlanNodeType(node.node_type) << " (id="
         << node.node_id << ") Completed scan ranges";
-      query_profile_->AddDerivedCounter(s.str(), TCounterType::UNIT,
+      query_profile_->AddDerivedCounter(s.str(), TUnit::UNIT,
           bind<int64_t>(mem_fn(&Coordinator::ComputeTotalScanRangesComplete),
                         this, node.node_id));
     }
@@ -1220,6 +1235,8 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
       // Update the average profile for the fragment corresponding to this instance.
       exec_state->profile->ComputeTimeInProfile();
       UpdateAverageProfile(exec_state);
+      UpdateExecSummary(exec_state->fragment_idx, exec_state->instance_idx,
+          exec_state->profile);
     }
     if (!exec_state->profile_created) {
       CollectScanNodeCounters(exec_state->profile, &exec_state->aggregate_counters);
@@ -1368,31 +1385,35 @@ void Coordinator::ComputeFragmentSummaryStats(BackendExecState* backend_exec_sta
   data.root_profile->AddChild(backend_exec_state->profile);
 }
 
-void Coordinator::UpdateExecSummary(RuntimeProfile* profile) {
+void Coordinator::UpdateExecSummary(int fragment_idx, int instance_idx,
+    RuntimeProfile* profile) {
   vector<RuntimeProfile*> children;
   profile->GetAllChildren(&children);
 
-  for (int j = 0; j < children.size(); ++j) {
-    int id = ExecNode::GetNodeIdFromProfile(children[j]);
+  ScopedSpinLock l(&exec_summary_lock_);
+  for (int i = 0; i < children.size(); ++i) {
+    int id = ExecNode::GetNodeIdFromProfile(children[i]);
     if (id == -1) continue;
 
     TPlanNodeExecSummary& exec_summary =
         exec_summary_.nodes[plan_node_id_to_summary_map_[id]];
-    TExecStats stats;
+    if (exec_summary.exec_stats.empty()) {
+      // First time, make an exec_stats for each instance this plan node is running on.
+      DCHECK_LT(fragment_idx, fragment_profiles_.size());
+      exec_summary.exec_stats.resize(fragment_profiles_[fragment_idx].num_instances);
+    }
+    DCHECK_LT(instance_idx, exec_summary.exec_stats.size());
+    TExecStats& stats = exec_summary.exec_stats[instance_idx];
 
-    RuntimeProfile::Counter* rows_counter = children[j]->GetCounter("RowsReturned");
-    RuntimeProfile::Counter* mem_counter = children[j]->GetCounter("PeakMemoryUsage");
+    RuntimeProfile::Counter* rows_counter = children[i]->GetCounter("RowsReturned");
+    RuntimeProfile::Counter* mem_counter = children[i]->GetCounter("PeakMemoryUsage");
     if (rows_counter != NULL) stats.__set_cardinality(rows_counter->value());
     if (mem_counter != NULL) stats.__set_memory_used(mem_counter->value());
-    stats.__set_latency_ns(children[j]->local_time());
+    stats.__set_latency_ns(children[i]->local_time());
     // TODO: we don't track cpu time per node now. Do that.
     exec_summary.__isset.exec_stats = true;
-
-    // TODO: we can't call UpdateExecSummary until the query is complete because
-    // we just keep appending to exec_summary.exec_stats. We already maintain
-    // fragment instance so this shouldn't be hard to fix.
-    exec_summary.exec_stats.push_back(stats);
   }
+  VLOG(2) << PrintExecSummary(exec_summary_);
 }
 
 // This function appends summary information to the query_profile_ before
@@ -1411,7 +1432,7 @@ void Coordinator::ReportQuerySummary() {
   // fraction of time spent in each node.
   if (executor_.get() != NULL) {
     executor_->profile()->ComputeTimeInProfile();
-    UpdateExecSummary(executor_->profile());
+    UpdateExecSummary(0, 0, executor_->profile());
   }
 
   if (!backend_exec_states_.empty()) {
@@ -1420,7 +1441,8 @@ void Coordinator::ReportQuerySummary() {
       backend_exec_states_[i]->profile->ComputeTimeInProfile();
       UpdateAverageProfile(backend_exec_states_[i]);
       ComputeFragmentSummaryStats(backend_exec_states_[i]);
-      UpdateExecSummary(backend_exec_states_[i]->profile);
+      UpdateExecSummary(backend_exec_states_[i]->fragment_idx,
+          backend_exec_states_[i]->instance_idx, backend_exec_states_[i]->profile);
     }
 
     InstanceComparator comparator;
@@ -1433,24 +1455,24 @@ void Coordinator::ReportQuerySummary() {
       stringstream times_label;
       times_label
         << "min:" << PrettyPrinter::Print(
-            accumulators::min(completion_times), TCounterType::TIME_NS)
+            accumulators::min(completion_times), TUnit::TIME_NS)
         << "  max:" << PrettyPrinter::Print(
-            accumulators::max(completion_times), TCounterType::TIME_NS)
+            accumulators::max(completion_times), TUnit::TIME_NS)
         << "  mean: " << PrettyPrinter::Print(
-            accumulators::mean(completion_times), TCounterType::TIME_NS)
+            accumulators::mean(completion_times), TUnit::TIME_NS)
         << "  stddev:" << PrettyPrinter::Print(
-            sqrt(accumulators::variance(completion_times)), TCounterType::TIME_NS);
+            sqrt(accumulators::variance(completion_times)), TUnit::TIME_NS);
 
       stringstream rates_label;
       rates_label
         << "min:" << PrettyPrinter::Print(
-            accumulators::min(rates), TCounterType::BYTES_PER_SECOND)
+            accumulators::min(rates), TUnit::BYTES_PER_SECOND)
         << "  max:" << PrettyPrinter::Print(
-            accumulators::max(rates), TCounterType::BYTES_PER_SECOND)
+            accumulators::max(rates), TUnit::BYTES_PER_SECOND)
         << "  mean:" << PrettyPrinter::Print(
-            accumulators::mean(rates), TCounterType::BYTES_PER_SECOND)
+            accumulators::mean(rates), TUnit::BYTES_PER_SECOND)
         << "  stddev:" << PrettyPrinter::Print(
-            sqrt(accumulators::variance(rates)), TCounterType::BYTES_PER_SECOND);
+            sqrt(accumulators::variance(rates)), TUnit::BYTES_PER_SECOND);
 
       fragment_profiles_[i].averaged_profile->AddInfoString(
           "completion times", times_label.str());
@@ -1489,7 +1511,7 @@ void Coordinator::ReportQuerySummary() {
     stringstream info;
     BOOST_FOREACH(PerNodePeakMemoryUsage::value_type entry, per_node_peak_mem_usage) {
       info << entry.first << "("
-           << PrettyPrinter::Print(entry.second, TCounterType::BYTES) << ") ";
+           << PrettyPrinter::Print(entry.second, TUnit::BYTES) << ") ";
     }
     query_profile_->AddInfoString("Per Node Peak Memory Usage", info.str());
   }

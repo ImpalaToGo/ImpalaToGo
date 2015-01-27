@@ -60,10 +60,13 @@ class QueryResourceMgr;
 // This class is thread-safe.
 class MemTracker {
  public:
-  // byte_limit < 0 means no limit
+  // 'byte_limit' < 0 means no limit
   // 'label' is the label used in the usage string (LogUsage())
+  // If 'log_usage_if_zero' is false, this tracker (and its children) will not be included
+  // in LogUsage() output if consumption is 0.
   MemTracker(int64_t byte_limit = -1, int64_t rm_reserved_limit = -1,
-      const std::string& label = std::string(), MemTracker* parent = NULL);
+      const std::string& label = std::string(), MemTracker* parent = NULL,
+      bool log_usage_if_zero = true);
 
   // C'tor for tracker for which consumption counter is created as part of a profile.
   // The counter is created with name COUNTER_NAME.
@@ -72,7 +75,7 @@ class MemTracker {
 
   // C'tor for tracker that uses consumption_metric as the consumption value.
   // Consume()/Release() can still be called. This is used for the process tracker.
-  MemTracker(Metrics::PrimitiveMetric<uint64_t>* consumption_metric,
+  MemTracker(UIntGauge* consumption_metric,
       int64_t byte_limit = -1, int64_t rm_reserved_limit = -1,
       const std::string& label = std::string());
 
@@ -254,7 +257,7 @@ class MemTracker {
   bool LimitExceeded() {
     if (UNLIKELY(CheckLimitExceeded())) {
       if (bytes_over_limit_metric_ != NULL) {
-        bytes_over_limit_metric_->Update(consumption() - limit_);
+        bytes_over_limit_metric_->set_value(consumption() - limit_);
       }
       return GcMemory(limit_);
     }
@@ -311,7 +314,7 @@ class MemTracker {
 
   // Register this MemTracker's metrics. Each key will be of the form
   // "<prefix>.<metric name>".
-  void RegisterMetrics(Metrics* metrics, const std::string& prefix);
+  void RegisterMetrics(MetricGroup* metrics, const std::string& prefix);
 
   // Logs the usage of this tracker and all of its children (recursively).
   std::string LogUsage(const std::string& prefix = "") const;
@@ -417,7 +420,7 @@ class MemTracker {
   // If non-NULL, used to measure consumption (in bytes) rather than the values provided
   // to Consume()/Release(). Only used for the process tracker, thus parent_ should be
   // NULL if consumption_metric_ is set.
-  Metrics::PrimitiveMetric<uint64_t>* consumption_metric_;
+  UIntGauge* consumption_metric_;
 
   std::vector<MemTracker*> all_trackers_;  // this tracker plus all of its ancestors
   std::vector<MemTracker*> limit_trackers_;  // all_trackers_ with valid limits
@@ -446,6 +449,10 @@ class MemTracker {
   // If true, log the stack as well.
   bool log_stack_;
 
+  // If false, this tracker (and its children) will not be included in LogUsage() output
+  // if consumption is 0.
+  bool log_usage_if_zero_;
+
   // Lock is taken during ExpandRmReservation() to prevent concurrent acquisition of new
   // resources.
   boost::mutex resource_acquisition_lock_;
@@ -455,16 +462,16 @@ class MemTracker {
   QueryResourceMgr* query_resource_mgr_;
 
   // The number of times the GcFunctions were called.
-  Metrics::IntMetric* num_gcs_metric_;
+  IntCounter* num_gcs_metric_;
 
   // The number of bytes freed by the last round of calling the GcFunctions (-1 before any
   // GCs are performed).
-  Metrics::BytesMetric* bytes_freed_by_last_gc_metric_;
+  IntGauge* bytes_freed_by_last_gc_metric_;
 
   // The number of bytes over the limit we were the last time LimitExceeded() was called
   // and the limit was exceeded pre-GC. -1 if there is no limit or the limit was never
   // exceeded.
-  Metrics::BytesMetric* bytes_over_limit_metric_;
+  IntGauge* bytes_over_limit_metric_;
 };
 
 }

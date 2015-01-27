@@ -390,23 +390,24 @@ Status DataStreamSender::Prepare(RuntimeState* state) {
   profile_ = pool_->Add(new RuntimeProfile(pool_, title.str()));
   SCOPED_TIMER(profile_->total_time_counter());
 
-  RETURN_IF_ERROR(Expr::Prepare(partition_expr_ctxs_, state, row_desc_));
-
   mem_tracker_.reset(new MemTracker(profile(), -1, -1, "DataStreamSender",
       state->instance_mem_tracker()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(partition_expr_ctxs_, state, row_desc_, mem_tracker_.get()));
+
   bytes_sent_counter_ =
-      ADD_COUNTER(profile(), "BytesSent", TCounterType::BYTES);
+      ADD_COUNTER(profile(), "BytesSent", TUnit::BYTES);
   uncompressed_bytes_counter_ =
-      ADD_COUNTER(profile(), "UncompressedRowBatchSize", TCounterType::BYTES);
+      ADD_COUNTER(profile(), "UncompressedRowBatchSize", TUnit::BYTES);
   serialize_batch_timer_ =
       ADD_TIMER(profile(), "SerializeBatchTime");
   thrift_transmit_timer_ = ADD_TIMER(profile(), "ThriftTransmitTime(*)");
   network_throughput_ =
-      profile()->AddDerivedCounter("NetworkThroughput(*)", TCounterType::BYTES_PER_SECOND,
+      profile()->AddDerivedCounter("NetworkThroughput(*)", TUnit::BYTES_PER_SECOND,
           bind<int64_t>(&RuntimeProfile::UnitsPerSecond, bytes_sent_counter_,
                         thrift_transmit_timer_));
   overall_throughput_ =
-      profile()->AddDerivedCounter("OverallThroughput", TCounterType::BYTES_PER_SECOND,
+      profile()->AddDerivedCounter("OverallThroughput", TUnit::BYTES_PER_SECOND,
            bind<int64_t>(&RuntimeProfile::UnitsPerSecond, bytes_sent_counter_,
                          profile()->total_time_counter()));
 
@@ -426,6 +427,7 @@ Status DataStreamSender::Send(RuntimeState* state, RowBatch* batch, bool eos) {
   RETURN_IF_ERROR(state->CheckQueryState());
   DCHECK(!closed_);
 
+  if (batch->num_rows() == 0) return Status::OK;
   if (broadcast_ || channels_.size() == 1) {
     // current_thrift_batch_ is *not* the one that was written by the last call
     // to Serialize()

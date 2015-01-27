@@ -1,10 +1,9 @@
 ====
 ---- QUERY: TPCH-Q5
 # Q5 - Local Supplier Volume Query
-# Modifications: Added round() calls
 select
   n_name,
-  round(sum(l_extendedprice * (1 - l_discount)), 5) as revenue
+  sum(l_extendedprice * (1 - l_discount)) as revenue
 from
   customer,
   orders,
@@ -33,5 +32,5 @@ order by
 'INDIA',52035512.0002
 'JAPAN',45410175.6954
 ---- TYPES
-string, double
+string, decimal
 ====

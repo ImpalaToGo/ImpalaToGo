@@ -12,6 +12,7 @@
 #include "runtime/mem-pool.h"
 #include "util/cpu-info.h"
 #include "util/debug-util.h"
+#include "util/pretty-printer.h"
 #include "util/hash-util.h"
 #include "util/runtime-profile.h"
 #include "util/stopwatch.h"
@@ -88,10 +89,10 @@ int main(int argc, char **argv) {
   ProbeTuple* input = GenTuples(NUM_TUPLES, NUM_BUILD_TUPLES);
   uint64_t cache_time = Test<CacheHashTable>(&cache_ht, input, NUM_TUPLES);
   LOG(ERROR) << "Cache-aware time: "
-             << PrettyPrinter::Print(cache_time, TCounterType::CPU_TICKS);
+             << PrettyPrinter::Print(cache_time, TUnit::CPU_TICKS);
   uint64_t std_time = Test<StandardHashTable>(&std_ht, input, NUM_TUPLES);
 
   LOG(ERROR) << "Bucket-chained time: "
-             << PrettyPrinter::Print(std_time, TCounterType::CPU_TICKS);
+             << PrettyPrinter::Print(std_time, TUnit::CPU_TICKS);
   return 0;
 }

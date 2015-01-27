@@ -358,7 +358,7 @@ def build_db_suffix(file_format, codec, compression_type):
 # Does a hdfs directory listing and returns array with all the subdir names.
 def get_hdfs_subdirs_with_data(path):
   tmp_file = tempfile.TemporaryFile("w+")
-  cmd = "hadoop fs -du %s | grep -v '^0' | awk '{print $2}'" % path
+  cmd = "hadoop fs -du %s | grep -v '^0' | awk '{print $3}'" % path
   subprocess.call([cmd], shell = True, stderr = open('/dev/null'), stdout = tmp_file)
   tmp_file.seek(0)
 
@@ -406,6 +406,7 @@ def generate_statements(output_name, test_vectors, sections,
   # Parquet statements to be executed separately by Impala
   hive_output = Statements()
   hbase_output = Statements()
+  hbase_post_load = Statements()
 
   table_names = None
   if options.table_names:
@@ -526,6 +527,7 @@ def generate_statements(output_name, test_vectors, sections,
         column_families = section.get('HBASE_COLUMN_FAMILIES', 'd')
         hbase_output.create.extend(build_hbase_create_stmt(db_name, table_name,
             column_families))
+        hbase_post_load.load.append("flush '%s_hbase.%s'\n" % (db_name, table_name))
 
       # The ALTER statement in hive does not accept fully qualified table names so
       # insert a use statement. The ALTER statement is skipped for HBASE as it's
@@ -580,6 +582,8 @@ def generate_statements(output_name, test_vectors, sections,
   hive_output.write_to_file('load-' + output_name + '-hive-generated.sql')
   hbase_output.create.append("exit")
   hbase_output.write_to_file('load-' + output_name + '-hbase-generated.create')
+  hbase_post_load.load.append("exit")
+  hbase_post_load.write_to_file('post-load-' + output_name + '-hbase-generated.sql')
 
 def parse_schema_template_file(file_name):
   VALID_SECTION_NAMES = ['DATASET', 'BASE_TABLE_NAME', 'COLUMNS', 'PARTITION_COLUMNS',

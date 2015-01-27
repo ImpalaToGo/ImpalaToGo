@@ -31,8 +31,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hive.service.cli.thrift.TGetColumnsReq;
 import org.apache.hive.service.cli.thrift.TGetFunctionsReq;
 import org.apache.hive.service.cli.thrift.TGetSchemasReq;
@@ -495,7 +495,7 @@ public class Frontend {
     }
 
     Path destPath = new Path(destPathString);
-    DistributedFileSystem dfs = FileSystemUtil.getDistributedFileSystem(destPath);
+    FileSystem fs = FileSystemUtil.getFileSystem(destPath);
 
     // Create a temporary directory within the final destination directory to stage the
     // file move.
@@ -503,7 +503,7 @@ public class Frontend {
 
     Path sourcePath = new Path(request.source_path);
     int filesLoaded = 0;
-    if (dfs.isDirectory(sourcePath)) {
+    if (fs.isDirectory(sourcePath)) {
       filesLoaded = FileSystemUtil.moveAllVisibleFiles(sourcePath, tmpDestPath);
     } else {
       FileSystemUtil.moveFile(sourcePath, tmpDestPath, true);
@@ -518,7 +518,7 @@ public class Frontend {
     // Move the files from the temporary location to the final destination.
     FileSystemUtil.moveAllVisibleFiles(tmpDestPath, destPath);
     // Cleanup the tmp directory.
-    dfs.delete(tmpDestPath, true);
+    fs.delete(tmpDestPath, true);
     TLoadDataResp response = new TLoadDataResp();
     TColumnValue col = new TColumnValue();
     String loadMsg = String.format(
@@ -831,9 +831,8 @@ public class Frontend {
     TQueryExecRequest queryExecRequest = new TQueryExecRequest();
     // create plan
     LOG.debug("create plan");
-    Planner planner = new Planner();
-    ArrayList<PlanFragment> fragments =
-        planner.createPlanFragments(analysisResult, queryCtx.request.query_options);
+    Planner planner = new Planner(analysisResult, queryCtx);
+    ArrayList<PlanFragment> fragments = planner.createPlan();
     List<ScanNode> scanNodes = Lists.newArrayList();
     // map from fragment to its index in queryExecRequest.fragments; needed for
     // queryExecRequest.dest_fragment_idx
@@ -882,8 +881,7 @@ public class Frontend {
     // Compute resource requirements after scan range locations because the cost
     // estimates of scan nodes rely on them.
     try {
-      planner.computeResourceReqs(fragments, true, queryCtx.request.query_options,
-          queryExecRequest);
+      planner.computeResourceReqs(fragments, true, queryExecRequest);
     } catch (Exception e) {
       // Turn exceptions into a warning to allow the query to execute.
       LOG.error("Failed to compute resource requirements for query\n" +
@@ -906,8 +904,8 @@ public class Frontend {
     // Global query parameters to be set in each TPlanExecRequest.
     queryExecRequest.setQuery_ctx(queryCtx);
 
-    explainString.append(planner.getExplainString(fragments, queryExecRequest,
-        explainLevel));
+    explainString.append(
+        planner.getExplainString(fragments, queryExecRequest, explainLevel));
     queryExecRequest.setQuery_plan(explainString.toString());
     queryExecRequest.setDesc_tbl(analysisResult.getAnalyzer().getDescTbl().toThrift());
 
@@ -956,7 +954,7 @@ public class Frontend {
         HdfsTable hdfsTable = (HdfsTable) insertStmt.getTargetTable();
         finalizeParams.setHdfs_base_dir(hdfsTable.getHdfsBaseDir());
         finalizeParams.setStaging_dir(
-            hdfsTable.getHdfsBaseDir() + "/impala_insert_staging");
+            hdfsTable.getHdfsBaseDir() + "/_impala_insert_staging");
         queryExecRequest.setFinalize_params(finalizeParams);
       }
     }

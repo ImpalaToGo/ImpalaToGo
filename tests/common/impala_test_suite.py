@@ -93,7 +93,7 @@ class ImpalaTestSuite(BaseTestSuite):
       cls.hdfs_client = get_hdfs_client_from_conf(HDFS_CONF)
     else:
       host, port = pytest.config.option.namenode_http_address.split(":")
-      cls.hdfs_client = get_hdfs_client()
+      cls.hdfs_client = get_hdfs_client(host, port)
 
   @classmethod
   def teardown_class(cls):
@@ -294,6 +294,18 @@ class ImpalaTestSuite(BaseTestSuite):
     return result
 
   @execute_wrapper
+  def execute_query_expect_failure(self, impalad_client, query, query_options=None):
+    """Executes a query and asserts if the query succeeds"""
+    result = None
+    try:
+      result = self.__execute_query(impalad_client, query, query_options)
+    except Exception, e:
+      return e
+
+    assert not result.success, "No failure encountered for query %s" % query
+    return result
+
+  @execute_wrapper
   def execute_query(self, query, query_options=None):
     return self.__execute_query(self.client, query, query_options)
 
@@ -395,11 +407,13 @@ class ImpalaTestSuite(BaseTestSuite):
     cluster_sizes = ALL_CLUSTER_SIZES
     disable_codegen_options = ALL_DISABLE_CODEGEN_OPTIONS
     batch_sizes = ALL_BATCH_SIZES
+    exec_single_node_option = [0]
     if cls.exploration_strategy() == 'core':
       disable_codegen_options = [False]
       cluster_sizes = ALL_NODES_ONLY
     return create_exec_option_dimension(cluster_sizes, disable_codegen_options,
-                                        batch_sizes)
+                                        batch_sizes,
+                                        exec_single_node_option=exec_single_node_option)
 
   @classmethod
   def exploration_strategy(cls):

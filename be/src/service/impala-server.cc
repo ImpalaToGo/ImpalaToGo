@@ -50,7 +50,9 @@
 #include "runtime/timestamp-value.h"
 #include "runtime/tmp-file-mgr.h"
 #include "service/fragment-exec-state.h"
+#include "service/impala-internal-service.h"
 #include "service/query-exec-state.h"
+#include "service/query-options.h"
 #include "statestore/simple-scheduler.h"
 #include "util/bit-util.h"
 #include "util/cgroups-mgr.h"
@@ -96,17 +98,13 @@ DEFINE_int32(be_service_threads, 64,
 DEFINE_string(default_query_options, "", "key=value pair of default query options for"
     " impalad, separated by ','");
 DEFINE_int32(query_log_size, 25, "Number of queries to retain in the query log. If -1, "
-                                 "the query log has unbounded size.");
+    "the query log has unbounded size.");
 DEFINE_bool(log_query_to_file, true, "if true, logs completed query profiles to file.");
 
 DEFINE_int64(max_result_cache_size, 100000L, "Maximum number of query results a client "
     "may request to be cached on a per-query basis to support restarting fetches. This "
     "option guards against unreasonably large result caches requested by clients. "
     "Requests exceeding this maximum will be rejected.");
-
-// TODO: this logging should go into a per query log.
-DEFINE_int32(log_mem_usage_interval, 0, "If non-zero, impalad will output memory usage "
-    "every log_mem_usage_interval'th fragment completion.");
 
 DEFINE_int32(max_audit_event_log_file_size, 5000, "The maximum size (in queries) of the "
     "audit event log file before a new one is created (if event logging is enabled)");
@@ -222,7 +220,7 @@ ImpalaServer::ImpalaServer(ExecEnv* exec_env)
     LOG(ERROR) << status.GetErrorMsg();
     if (FLAGS_abort_on_config_error) {
       LOG(ERROR) << "Aborting Impala Server startup due to improperly "
-                  << "configured scratch directories.";
+                 << "configured scratch directories.";
       exit(1);
     }
   }
@@ -268,8 +266,8 @@ ImpalaServer::ImpalaServer(ExecEnv* exec_env)
   RegisterWebserverCallbacks(exec_env->webserver());
 
   // Initialize impalad metrics
-  ImpaladMetrics::CreateMetrics(exec_env->metrics());
-  ImpaladMetrics::IMPALA_SERVER_START_TIME->Update(
+  ImpaladMetrics::CreateMetrics(exec_env->metrics()->GetChildGroup("impala-server"));
+  ImpaladMetrics::IMPALA_SERVER_START_TIME->set_value(
       TimestampValue::local_time().DebugString());
 
   // Register the membership callback if required
@@ -454,8 +452,20 @@ Status ImpalaServer::GetRuntimeProfileStr(const TUniqueId& query_id,
 }
 
 Status ImpalaServer::GetExecSummary(const TUniqueId& query_id, TExecSummary* result) {
-  // TODO: this is only populated when the query is done currently so only look
-  // in the log. We'll have to make it thread safe for in flight queries.
+  // Search for the query id in the active query map
+  {
+    shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+    if (exec_state != NULL) {
+      lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
+      if (exec_state->coord() != NULL) {
+        ScopedSpinLock lock(exec_state->coord()->GetExecSummaryLock());
+        *result = exec_state->coord()->exec_summary();
+        return Status::OK;
+      }
+    }
+  }
+
+  // Look for the query in completed query log.
   {
     lock_guard<mutex> l(query_log_lock_);
     QueryLogIndex::const_iterator query_record = query_log_index_.find(query_id);
@@ -513,6 +523,7 @@ void ImpalaServer::ArchiveQuery(const QueryExecState& query) {
   if (FLAGS_query_log_size == 0) return;
   QueryStateRecord record(query, true, encoded_profile_str);
   if (query.coord() != NULL) {
+    ScopedSpinLock lock(query.coord()->GetExecSummaryLock());
     record.exec_summary = query.coord()->exec_summary();
   }
   {
@@ -677,7 +688,7 @@ Status ImpalaServer::SetQueryInflight(shared_ptr<SessionState> session_state,
     lock_guard<mutex> l2(query_expiration_lock_);
     VLOG_QUERY << "Query " << PrintId(query_id) << " has timeout of "
                << PrettyPrinter::Print(timeout_s * 1000L * 1000L * 1000L,
-                     TCounterType::TIME_NS);
+                     TUnit::TIME_NS);
     queries_by_timestamp_.insert(
         make_pair(ms_since_epoch() + (1000L * timeout_s), query_id));
   }
@@ -715,7 +726,12 @@ Status ImpalaServer::UnregisterQuery(const TUniqueId& query_id, bool check_infli
   }
 
   if (exec_state->coord() != NULL) {
-    const string& exec_summary = PrintExecSummary(exec_state->coord()->exec_summary());
+    string exec_summary;
+    {
+      ScopedSpinLock lock(exec_state->coord()->GetExecSummaryLock());
+      const TExecSummary& summary = exec_state->coord()->exec_summary();
+      exec_summary = PrintExecSummary(summary);
+    }
     exec_state->summary_profile()->AddInfoString("ExecSummary", exec_summary);
 
     const unordered_set<TNetworkAddress>& unique_hosts =
@@ -741,8 +757,8 @@ Status ImpalaServer::UnregisterQuery(const TUniqueId& query_id, bool check_infli
 Status ImpalaServer::UpdateCatalogMetrics() {
   TGetDbsResult db_names;
   RETURN_IF_ERROR(exec_env_->frontend()->GetDbNames(NULL, NULL, &db_names));
-  ImpaladMetrics::CATALOG_NUM_DBS->Update(db_names.dbs.size());
-  ImpaladMetrics::CATALOG_NUM_TABLES->Update(0L);
+  ImpaladMetrics::CATALOG_NUM_DBS->set_value(db_names.dbs.size());
+  ImpaladMetrics::CATALOG_NUM_TABLES->set_value(0L);
   BOOST_FOREACH(const string& db, db_names.dbs) {
     TGetTablesResult table_names;
     RETURN_IF_ERROR(exec_env_->frontend()->GetTableNames(db, NULL, NULL, &table_names));
@@ -835,221 +851,6 @@ Status ImpalaServer::GetSessionState(const TUniqueId& session_id,
   }
 }
 
-
-Status ImpalaServer::ParseQueryOptions(const string& options,
-    TQueryOptions* query_options) {
-  if (options.length() == 0) return Status::OK;
-  vector<string> kv_pairs;
-  split(kv_pairs, options, is_any_of(","), token_compress_on);
-  BOOST_FOREACH(string& kv_string, kv_pairs) {
-    trim(kv_string);
-    if (kv_string.length() == 0) continue;
-    vector<string> key_value;
-    split(key_value, kv_string, is_any_of("="), token_compress_on);
-    if (key_value.size() != 2) {
-      stringstream ss;
-      ss << "Ignoring invalid configuration option " << kv_string
-         << ": bad format (expected key=value)";
-      return Status(ss.str());
-    }
-    RETURN_IF_ERROR(SetQueryOptions(key_value[0], key_value[1], query_options));
-  }
-  return Status::OK;
-}
-
-static Status ParseMemValue(const string& value, const string& key, int64_t* result) {
-  bool is_percent;
-  *result = ParseUtil::ParseMemSpec(value, &is_percent);
-  if (*result < 0) {
-    return Status("Failed to parse " + key + " from '" + value + "'.");
-  }
-  if (is_percent) {
-    return Status("Invalid " + key + " with percent '" + value + "'.");
-  }
-  return Status::OK;
-}
-
-Status ImpalaServer::SetQueryOptions(const string& key, const string& value,
-    TQueryOptions* query_options) {
-  int option = GetQueryOption(key);
-  if (option < 0) {
-    stringstream ss;
-    ss << "Ignoring invalid configuration option: " << key;
-    return Status(ss.str());
-  } else {
-    switch (option) {
-      case TImpalaQueryOptions::ABORT_ON_ERROR:
-        query_options->__set_abort_on_error(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::MAX_ERRORS:
-        query_options->__set_max_errors(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::DISABLE_CODEGEN:
-        query_options->__set_disable_codegen(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::BATCH_SIZE:
-        query_options->__set_batch_size(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::MEM_LIMIT: {
-        // Parse the mem limit spec and validate it.
-        int64_t bytes_limit;
-        RETURN_IF_ERROR(ParseMemValue(value, "query memory limit", &bytes_limit));
-        query_options->__set_mem_limit(bytes_limit);
-        break;
-      }
-      case TImpalaQueryOptions::NUM_NODES:
-        query_options->__set_num_nodes(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::MAX_SCAN_RANGE_LENGTH:
-        query_options->__set_max_scan_range_length(atol(value.c_str()));
-        break;
-      case TImpalaQueryOptions::MAX_IO_BUFFERS:
-        query_options->__set_max_io_buffers(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::NUM_SCANNER_THREADS:
-        query_options->__set_num_scanner_threads(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::ALLOW_UNSUPPORTED_FORMATS:
-        query_options->__set_allow_unsupported_formats(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::DEFAULT_ORDER_BY_LIMIT:
-        query_options->__set_default_order_by_limit(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::DEBUG_ACTION:
-        query_options->__set_debug_action(value.c_str());
-        break;
-      case TImpalaQueryOptions::COMPRESSION_CODEC: {
-        if (value.empty()) break;
-        if (iequals(value, "none")) {
-          query_options->__set_compression_codec(THdfsCompression::NONE);
-        } else if (iequals(value, "gzip")) {
-          query_options->__set_compression_codec(THdfsCompression::GZIP);
-        } else if (iequals(value, "bzip2")) {
-          query_options->__set_compression_codec(THdfsCompression::BZIP2);
-        } else if (iequals(value, "default")) {
-          query_options->__set_compression_codec(THdfsCompression::DEFAULT);
-        } else if (iequals(value, "snappy")) {
-          query_options->__set_compression_codec(THdfsCompression::SNAPPY);
-        } else if (iequals(value, "snappy_blocked")) {
-          query_options->__set_compression_codec(THdfsCompression::SNAPPY_BLOCKED);
-        } else {
-          stringstream ss;
-          ss << "Invalid compression codec: " << value;
-          return Status(ss.str());
-        }
-        break;
-      }
-      case TImpalaQueryOptions::ABORT_ON_DEFAULT_LIMIT_EXCEEDED:
-        query_options->__set_abort_on_default_limit_exceeded(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::HBASE_CACHING:
-        query_options->__set_hbase_caching(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::HBASE_CACHE_BLOCKS:
-        query_options->__set_hbase_cache_blocks(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::PARQUET_FILE_SIZE: {
-        int64_t file_size;
-        RETURN_IF_ERROR(ParseMemValue(value, "parquet file size", &file_size));
-        query_options->__set_parquet_file_size(file_size);
-        break;
-      }
-      case TImpalaQueryOptions::EXPLAIN_LEVEL:
-        if (iequals(value, "minimal") || iequals(value, "0")) {
-          query_options->__set_explain_level(TExplainLevel::MINIMAL);
-        } else if (iequals(value, "standard") || iequals(value, "1")) {
-          query_options->__set_explain_level(TExplainLevel::STANDARD);
-        } else if (iequals(value, "extended") || iequals(value, "2")) {
-          query_options->__set_explain_level(TExplainLevel::EXTENDED);
-        } else if (iequals(value, "verbose") || iequals(value, "3")) {
-          query_options->__set_explain_level(TExplainLevel::VERBOSE);
-        } else {
-          stringstream ss;
-          ss << "Invalid explain level: " << value;
-          return Status(ss.str());
-        }
-        break;
-      case TImpalaQueryOptions::SYNC_DDL:
-        query_options->__set_sync_ddl(iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::REQUEST_POOL:
-        query_options->__set_request_pool(value);
-        break;
-      case TImpalaQueryOptions::V_CPU_CORES:
-        query_options->__set_v_cpu_cores(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::RESERVATION_REQUEST_TIMEOUT:
-        query_options->__set_reservation_request_timeout(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::DISABLE_CACHED_READS:
-        query_options->__set_disable_cached_reads(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::DISABLE_OUTERMOST_TOPN:
-        query_options->__set_disable_outermost_topn(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      case TImpalaQueryOptions::RM_INITIAL_MEM: {
-        int64_t reservation_size;
-        RETURN_IF_ERROR(ParseMemValue(value, "RM memory limit", &reservation_size));
-        query_options->__set_rm_initial_mem(reservation_size);
-        break;
-      }
-      case TImpalaQueryOptions::QUERY_TIMEOUT_S:
-        query_options->__set_query_timeout_s(atoi(value.c_str()));
-        break;
-      case TImpalaQueryOptions::MAX_BLOCK_MGR_MEMORY: {
-        int64_t mem;
-        RETURN_IF_ERROR(ParseMemValue(value, "block mgr memory limit", &mem));
-        query_options->__set_max_block_mgr_memory(mem);
-        break;
-      }
-      case TImpalaQueryOptions::APPX_COUNT_DISTINCT: {
-        query_options->__set_appx_count_distinct(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      }
-      case TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS: {
-        query_options->__set_disable_unsafe_spills(
-            iequals(value, "true") || iequals(value, "1"));
-        break;
-      }
-      default:
-        // We hit this DCHECK(false) if we forgot to add the corresponding entry here
-        // when we add a new query option.
-        LOG(ERROR) << "Missing exec option implementation: " << key;
-        DCHECK(false);
-        break;
-    }
-  }
-  return Status::OK;
-}
-
-inline shared_ptr<ImpalaServer::FragmentExecState> ImpalaServer::GetFragmentExecState(
-    const TUniqueId& fragment_instance_id) {
-  lock_guard<mutex> l(fragment_exec_state_map_lock_);
-  FragmentExecStateMap::iterator i = fragment_exec_state_map_.find(fragment_instance_id);
-  if (i == fragment_exec_state_map_.end()) {
-    return shared_ptr<FragmentExecState>();
-  } else {
-    return i->second;
-  }
-}
-
-void ImpalaServer::ExecPlanFragment(
-    TExecPlanFragmentResult& return_val, const TExecPlanFragmentParams& params) {
-  VLOG_QUERY << "ExecPlanFragment() instance_id="
-             << params.fragment_instance_ctx.fragment_instance_id
-             << " coord=" << params.fragment_instance_ctx.query_ctx.coord_address
-             << " backend#=" << params.fragment_instance_ctx.backend_num;
-  StartPlanFragmentExecution(params).SetTStatus(&return_val);
-}
-
 void ImpalaServer::ReportExecStatus(
     TReportExecStatusResult& return_val, const TReportExecStatusParams& params) {
   VLOG_FILE << "ReportExecStatus() query_id=" << params.query_id
@@ -1072,28 +873,10 @@ void ImpalaServer::ReportExecStatus(
         " $2 done: $3)", PrintId(params.query_id), params.backend_num,
         PrintId(params.fragment_instance_id), params.done);
     return_val.status.error_msgs.push_back(err);
-    LOG(INFO) << err;
+    VLOG_QUERY << err;
     return;
   }
   exec_state->coord()->UpdateFragmentExecStatus(params).SetTStatus(&return_val);
-}
-
-void ImpalaServer::CancelPlanFragment(
-    TCancelPlanFragmentResult& return_val, const TCancelPlanFragmentParams& params) {
-  VLOG_QUERY << "CancelPlanFragment(): instance_id=" << params.fragment_instance_id;
-  shared_ptr<FragmentExecState> exec_state =
-      GetFragmentExecState(params.fragment_instance_id);
-  if (exec_state.get() == NULL) {
-    stringstream str;
-    str << "unknown fragment id: " << params.fragment_instance_id;
-    Status status(TStatusCode::INTERNAL_ERROR, str.str());
-    status.SetTStatus(&return_val);
-    return;
-  }
-  // we only initiate cancellation here, the map entry as well as the exec state
-  // are removed when fragment execution terminates (which is at present still
-  // running in exec_state->exec_thread_)
-  exec_state->Cancel().SetTStatus(&return_val);
 }
 
 void ImpalaServer::TransmitData(
@@ -1123,77 +906,6 @@ void ImpalaServer::TransmitData(
   }
 }
 
-Status ImpalaServer::StartPlanFragmentExecution(
-    const TExecPlanFragmentParams& exec_params) {
-  if (!exec_params.fragment.__isset.output_sink) {
-    return Status("missing sink in plan fragment");
-  }
-
-  shared_ptr<FragmentExecState> exec_state(
-      new FragmentExecState(exec_params.fragment_instance_ctx, exec_env_));
-  // Call Prepare() now, before registering the exec state, to avoid calling
-  // exec_state->Cancel().
-  // We might get an async cancellation, and the executor requires that Cancel() not
-  // be called before Prepare() returns.
-  RETURN_IF_ERROR(exec_state->Prepare(exec_params));
-
-  {
-    lock_guard<mutex> l(fragment_exec_state_map_lock_);
-    // register exec_state before starting exec thread
-    fragment_exec_state_map_.insert(
-        make_pair(exec_params.fragment_instance_ctx.fragment_instance_id, exec_state));
-  }
-
-  // execute plan fragment in new thread
-  // TODO: manage threads via global thread pool
-  exec_state->set_exec_thread(new Thread("impala-server", "exec-plan-fragment",
-      &ImpalaServer::RunExecPlanFragment, this, exec_state.get()));
-
-  return Status::OK;
-}
-
-void ImpalaServer::RunExecPlanFragment(FragmentExecState* exec_state) {
-  ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->Increment(1L);
-  exec_state->Exec();
-
-  // we're done with this plan fragment
-  {
-    lock_guard<mutex> l(fragment_exec_state_map_lock_);
-    FragmentExecStateMap::iterator i =
-        fragment_exec_state_map_.find(exec_state->fragment_instance_id());
-    if (i != fragment_exec_state_map_.end()) {
-      // ends up calling the d'tor, if there are no async cancellations
-      fragment_exec_state_map_.erase(i);
-    } else {
-      LOG(ERROR) << "missing entry in fragment exec state map: instance_id="
-                 << exec_state->fragment_instance_id();
-    }
-  }
-#ifndef ADDRESS_SANITIZER
-  // tcmalloc and address sanitizer can not be used together
-  if (FLAGS_log_mem_usage_interval > 0) {
-    uint64_t num_complete = ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS->value();
-    if (num_complete % FLAGS_log_mem_usage_interval == 0) {
-      char buf[2048];
-      // This outputs how much memory is currently being used by this impalad
-      MallocExtension::instance()->GetStats(buf, 2048);
-      LOG(INFO) << buf;
-    }
-  }
-#endif
-}
-
-int ImpalaServer::GetQueryOption(const string& key) {
-  map<int, const char*>::const_iterator itr =
-      _TImpalaQueryOptions_VALUES_TO_NAMES.begin();
-  for (; itr != _TImpalaQueryOptions_VALUES_TO_NAMES.end(); ++itr) {
-    if (iequals(key, (*itr).second)) {
-      return itr->first;
-    }
-  }
-  return -1;
-}
-
 void ImpalaServer::InitializeConfigVariables() {
   Status status = ParseQueryOptions(FLAGS_default_query_options, &default_query_options_);
   if (!status.ok()) {
@@ -1217,110 +929,6 @@ void ImpalaServer::InitializeConfigVariables() {
   support_start_over.__set_key("support_start_over");
   support_start_over.__set_value("false");
   default_configs_.push_back(support_start_over);
-}
-
-void ImpalaServer::TQueryOptionsToMap(const TQueryOptions& query_option,
-    map<string, string>* configuration) {
-  map<int, const char*>::const_iterator itr =
-      _TImpalaQueryOptions_VALUES_TO_NAMES.begin();
-  for (; itr != _TImpalaQueryOptions_VALUES_TO_NAMES.end(); ++itr) {
-    stringstream val;
-    switch (itr->first) {
-      case TImpalaQueryOptions::ABORT_ON_ERROR:
-        val << query_option.abort_on_error;
-        break;
-      case TImpalaQueryOptions::MAX_ERRORS:
-        val << query_option.max_errors;
-        break;
-      case TImpalaQueryOptions::DISABLE_CODEGEN:
-        val << query_option.disable_codegen;
-        break;
-      case TImpalaQueryOptions::BATCH_SIZE:
-        val << query_option.batch_size;
-        break;
-      case TImpalaQueryOptions::MEM_LIMIT:
-        val << query_option.mem_limit;
-        break;
-      case TImpalaQueryOptions::NUM_NODES:
-        val << query_option.num_nodes;
-        break;
-      case TImpalaQueryOptions::MAX_SCAN_RANGE_LENGTH:
-        val << query_option.max_scan_range_length;
-        break;
-      case TImpalaQueryOptions::MAX_IO_BUFFERS:
-        val << query_option.max_io_buffers;
-        break;
-      case TImpalaQueryOptions::NUM_SCANNER_THREADS:
-        val << query_option.num_scanner_threads;
-        break;
-      case TImpalaQueryOptions::ALLOW_UNSUPPORTED_FORMATS:
-        val << query_option.allow_unsupported_formats;
-        break;
-      case TImpalaQueryOptions::DEFAULT_ORDER_BY_LIMIT:
-        val << query_option.default_order_by_limit;
-        break;
-      case TImpalaQueryOptions::DEBUG_ACTION:
-        val << query_option.debug_action;
-        break;
-      case TImpalaQueryOptions::ABORT_ON_DEFAULT_LIMIT_EXCEEDED:
-        val << query_option.abort_on_default_limit_exceeded;
-        break;
-      case TImpalaQueryOptions::COMPRESSION_CODEC:
-        val << query_option.compression_codec;
-        break;
-      case TImpalaQueryOptions::HBASE_CACHING:
-        val << query_option.hbase_caching;
-        break;
-      case TImpalaQueryOptions::HBASE_CACHE_BLOCKS:
-        val << query_option.hbase_cache_blocks;
-        break;
-      case TImpalaQueryOptions::PARQUET_FILE_SIZE:
-        val << query_option.parquet_file_size;
-        break;
-      case TImpalaQueryOptions::EXPLAIN_LEVEL:
-        val << query_option.explain_level;
-        break;
-      case TImpalaQueryOptions::SYNC_DDL:
-        val << query_option.sync_ddl;
-        break;
-      case TImpalaQueryOptions::REQUEST_POOL:
-        val << query_option.request_pool;
-        break;
-      case TImpalaQueryOptions::V_CPU_CORES:
-        val << query_option.v_cpu_cores;
-        break;
-      case TImpalaQueryOptions::RESERVATION_REQUEST_TIMEOUT:
-        val << query_option.reservation_request_timeout;
-        break;
-      case TImpalaQueryOptions::DISABLE_CACHED_READS:
-        val << query_option.disable_cached_reads;
-        break;
-      case TImpalaQueryOptions::DISABLE_OUTERMOST_TOPN:
-        val << query_option.disable_outermost_topn;
-        break;
-      case TImpalaQueryOptions::RM_INITIAL_MEM:
-        val << query_option.rm_initial_mem;
-        break;
-      case TImpalaQueryOptions::QUERY_TIMEOUT_S:
-        val << query_option.query_timeout_s;
-        break;
-      case TImpalaQueryOptions::MAX_BLOCK_MGR_MEMORY:
-        val << query_option.max_block_mgr_memory;
-        break;
-      case TImpalaQueryOptions::APPX_COUNT_DISTINCT:
-        val << query_option.appx_count_distinct;
-        break;
-      case TImpalaQueryOptions::DISABLE_UNSAFE_SPILLS:
-        val << query_option.disable_unsafe_spills;
-        break;
-      default:
-        // We hit this DCHECK(false) if we forgot to add the corresponding entry here
-        // when we add a new query option.
-        LOG(ERROR) << "Missing exec option implementation: " << itr->second;
-        DCHECK(false);
-    }
-    (*configuration)[itr->second] = val.str();
-  }
 }
 
 void ImpalaServer::SessionState::ToThrift(const TUniqueId& session_id,
@@ -1480,7 +1088,7 @@ void ImpalaServer::CatalogUpdateCallback(
       TTopicDelta& update = subscriber_topic_updates->back();
       update.topic_name = CatalogServer::IMPALA_CATALOG_TOPIC;
       update.__set_from_version(0L);
-      ImpaladMetrics::CATALOG_READY->Update(false);
+      ImpaladMetrics::CATALOG_READY->set_value(false);
       // Dropped all cached lib files (this behaves as if all functions and data
       // sources are dropped).
       LibCache::instance()->DropCache();
@@ -1491,7 +1099,7 @@ void ImpalaServer::CatalogUpdateCallback(
         catalog_update_info_.catalog_topic_version = delta.to_version;
         catalog_update_info_.catalog_service_id = resp.catalog_service_id;
       }
-      ImpaladMetrics::CATALOG_READY->Update(new_catalog_version > 0);
+      ImpaladMetrics::CATALOG_READY->set_value(new_catalog_version > 0);
       UpdateCatalogMetrics();
       // Remove all dropped objects from the library cache.
       // TODO: is this expensive? We'd like to process heartbeats promptly.
@@ -1869,7 +1477,7 @@ void ImpalaServer::ExpireQueries() {
           const string& err_msg = Substitute(
               "Query $0 expired due to client inactivity (timeout is $1)",
               PrintId(expiration_event->second),
-              PrettyPrinter::Print(timeout_s * 1000000000L, TCounterType::TIME_NS));
+              PrettyPrinter::Print(timeout_s * 1000000000L, TUnit::TIME_NS));
 
           cancellation_thread_pool_->Offer(
               CancellationWork(expiration_event->second, Status(err_msg), false));
@@ -1942,7 +1550,10 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
   }
 
   if (be_port != 0 && be_server != NULL) {
-    shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(handler));
+    shared_ptr<FragmentMgr> fragment_mgr(new FragmentMgr());
+    shared_ptr<ImpalaInternalService> thrift_if(
+        new ImpalaInternalService(handler, fragment_mgr));
+    shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(thrift_if));
     shared_ptr<TProcessorEventHandler> event_handler(
         new RpcEventHandler("backend", exec_env->metrics()));
     be_processor->setEventHandler(event_handler);
@@ -1985,7 +1596,7 @@ shared_ptr<ImpalaServer::QueryExecState> ImpalaServer::GetQueryExecState(
 void ImpalaServer::SetOffline(bool is_offline) {
   lock_guard<mutex> l(is_offline_lock_);
   is_offline_ = is_offline;
-  ImpaladMetrics::IMPALA_SERVER_READY->Update(is_offline);
+  ImpaladMetrics::IMPALA_SERVER_READY->set_value(is_offline);
 }
 
 void ImpalaServer::DetectNmFailures() {

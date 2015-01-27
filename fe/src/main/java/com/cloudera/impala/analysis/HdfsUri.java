@@ -18,16 +18,18 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
 
 import com.cloudera.impala.authorization.AuthorizeableUri;
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.authorization.PrivilegeRequest;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.FileSystemUtil;
+import com.cloudera.impala.util.FsPermissionChecker;
 import com.google.common.base.Preconditions;
 
 /*
- * Represents an HDFS URI in a SQL statement.
+ * Represents a Hadoop FileSystem URI in a SQL statement.
  */
 public class HdfsUri {
   private final String location_;
@@ -47,15 +49,27 @@ public class HdfsUri {
 
   public void analyze(Analyzer analyzer, Privilege privilege)
       throws AnalysisException {
-    analyze(analyzer, privilege, true);
+    analyze(analyzer, privilege, FsAction.NONE, true);
+  }
+
+  public void analyze(Analyzer analyzer, Privilege privilege, FsAction perm)
+      throws AnalysisException {
+    analyze(analyzer, privilege, perm, true);
+  }
+
+  public void analyze(Analyzer analyzer, Privilege privilege, boolean registerPrivReq)
+      throws AnalysisException {
+    analyze(analyzer, privilege, FsAction.NONE, registerPrivReq);
   }
 
   /**
-   * Analyzes the URI, optionally registering a privilege request. Used by GRANT/REVOKE
-   * privilege statements.
+   * Analyzes the URI.
+   * Optionally check location path permission, issue warning if impala user doesn't
+   * have sufficient access rights.
+   * Optionally register a privilege request. Used by GRANT/REVOKE privilege statements.
    */
-  public void analyze(Analyzer analyzer, Privilege privilege, boolean registerPrivReq)
-      throws AnalysisException {
+  public void analyze(Analyzer analyzer, Privilege privilege, FsAction perm,
+      boolean registerPrivReq) throws AnalysisException {
     if (location_.isEmpty()) {
       throw new AnalysisException("URI path cannot be empty.");
     }
@@ -64,19 +78,29 @@ public class HdfsUri {
     if (!uriPath_.isUriPathAbsolute()) {
       throw new AnalysisException("URI path must be absolute: " + uriPath_);
     }
+
+    uriPath_ = FileSystemUtil.createFullyQualifiedPath(uriPath_);
+
+    // Check if parent path exists and if impala is allowed to access it.
+    Path parentPath = uriPath_.getParent();
     try {
       FileSystem fs = uriPath_.getFileSystem(FileSystemUtil.getConfiguration());
-      /*
-      if (!(fs instanceof DistributedFileSystem)) {
-        throw new AnalysisException(String.format("URI location '%s' " +
-            "must point to an HDFS file system.", uriPath_));
-      } */
+      StringBuilder errorMsg = new StringBuilder();
+      if (!FileSystemUtil.isPathReachable(parentPath, fs, errorMsg)) {
+        analyzer.addWarning(String.format("Path '%s' cannot be reached: %s",
+            parentPath, errorMsg.toString()));
+      } else if (perm != FsAction.NONE) {
+        FsPermissionChecker checker = FsPermissionChecker.getInstance();
+        if (!checker.getPermissions(fs, parentPath).checkPermissions(perm)) {
+          analyzer.addWarning(String.format(
+              "Impala does not have %s access to path '%s'",
+              perm.toString(), parentPath));
+        }
+      }
     } catch (IOException e) {
       throw new AnalysisException(e.getMessage(), e);
     }
 
-    // Fully-qualify the path
-    uriPath_ = FileSystemUtil.createFullyQualifiedPath(uriPath_);
     if (registerPrivReq) {
       analyzer.registerPrivReq(new PrivilegeRequest(
           new AuthorizeableUri(uriPath_.toString()), privilege));

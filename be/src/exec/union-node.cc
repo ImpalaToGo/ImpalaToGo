@@ -56,6 +56,7 @@ Status UnionNode::Init(const TPlanNode& tnode) {
 }
 
 Status UnionNode::Prepare(RuntimeState* state) {
+  SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecNode::Prepare(state));
   tuple_desc_ = state->desc_tbl().GetTupleDescriptor(tuple_id_);
   DCHECK(tuple_desc_ != NULL);
@@ -68,14 +69,16 @@ Status UnionNode::Prepare(RuntimeState* state) {
 
   // Prepare const expr lists.
   for (int i = 0; i < const_result_expr_ctx_lists_.size(); ++i) {
-    RETURN_IF_ERROR(Expr::Prepare(const_result_expr_ctx_lists_[i], state, row_desc()));
+    RETURN_IF_ERROR(Expr::Prepare(
+        const_result_expr_ctx_lists_[i], state, row_desc(), expr_mem_tracker()));
     AddExprCtxsToFree(const_result_expr_ctx_lists_[i]);
     DCHECK_EQ(const_result_expr_ctx_lists_[i].size(), materialized_slots_.size());
   }
 
   // Prepare result expr lists.
   for (int i = 0; i < result_expr_ctx_lists_.size(); ++i) {
-    RETURN_IF_ERROR(Expr::Prepare(result_expr_ctx_lists_[i], state, child(i)->row_desc()));
+    RETURN_IF_ERROR(Expr::Prepare(
+        result_expr_ctx_lists_[i], state, child(i)->row_desc(), expr_mem_tracker()));
     AddExprCtxsToFree(result_expr_ctx_lists_[i]);
     DCHECK_EQ(result_expr_ctx_lists_[i].size(), materialized_slots_.size());
   }
@@ -83,6 +86,7 @@ Status UnionNode::Prepare(RuntimeState* state) {
 }
 
 Status UnionNode::Open(RuntimeState* state) {
+  SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecNode::Open(state));
   // Open const expr lists.
   for (int i = 0; i < const_result_expr_ctx_lists_.size(); ++i) {
@@ -113,12 +117,12 @@ Status UnionNode::OpenCurrentChild(RuntimeState* state) {
 }
 
 Status UnionNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos) {
+  SCOPED_TIMER(runtime_profile_->total_time_counter());
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
   RETURN_IF_ERROR(QueryMaintenance(state));
-  SCOPED_TIMER(runtime_profile_->total_time_counter());
   // Create new tuple buffer for row_batch.
-  int tuple_buffer_size = row_batch->capacity() * tuple_desc_->byte_size();
+  int tuple_buffer_size = row_batch->MaxTupleBufferSize();
   Tuple* tuple = Tuple::Create(tuple_buffer_size, row_batch->tuple_data_pool());
 
   // Fetch from children, evaluate corresponding exprs and materialize.

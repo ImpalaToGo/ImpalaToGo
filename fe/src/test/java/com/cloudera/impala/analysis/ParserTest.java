@@ -1307,6 +1307,19 @@ public class ParserTest {
         }
       }
     }
+
+    // Test right associativity of NOT.
+    for (String notStr : notStrs) {
+      SelectStmt stmt =
+          (SelectStmt) ParsesOk(String.format("select %s a != b", notStr));
+      // The NOT should be applied on the result of a != b, and not on a only.
+      Expr e = stmt.getSelectList().getItems().get(0).getExpr();
+      assertTrue(e instanceof CompoundPredicate);
+      CompoundPredicate cp = (CompoundPredicate) e;
+      assertEquals(CompoundPredicate.Operator.NOT, cp.getOp());
+      assertEquals(1, cp.getChildren().size());
+      assertTrue(cp.getChild(0) instanceof BinaryPredicate);
+    }
   }
 
   @Test
@@ -2835,5 +2848,30 @@ public class ParserTest {
     ParserError("SHOW GRANT ROLE foo ON DATABASE");
     ParserError("SHOW GRANT ROLE foo ON TABLE");
     ParserError("SHOW GRANT ROLE foo ON URI abc");
+  }
+
+  @Test
+  public void TestComputeStats() {
+    ParsesOk("COMPUTE STATS functional.alltypes");
+    ParserError("COMPUTE functional.alltypes");
+    ParserError("COMPUTE STATS ON functional.alltypes");
+    ParserError("COMPUTE STATS");
+  }
+
+  @Test
+  public void TestComputeStatsIncremental() {
+    ParsesOk("COMPUTE INCREMENTAL STATS functional.alltypes");
+    ParserError("COMPUTE INCREMENTAL functional.alltypes");
+
+    ParsesOk(
+        "COMPUTE INCREMENTAL STATS functional.alltypes PARTITION(month=10, year=2010)");
+    // No dynamic partition specs
+    ParserError("COMPUTE INCREMENTAL STATS functional.alltypes PARTITION(month, year)");
+
+    ParserError("COMPUTE INCREMENTAL STATS");
+
+    ParsesOk("DROP INCREMENTAL STATS functional.alltypes PARTITION(month=10, year=2010)");
+    ParserError("DROP INCREMENTAL STATS functional.alltypes PARTITION(month, year)");
+    ParserError("DROP INCREMENTAL STATS functional.alltypes");
   }
 }

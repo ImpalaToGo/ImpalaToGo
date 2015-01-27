@@ -23,8 +23,9 @@
 #include <sstream>
 #include <stdlib.h>
 #include <string.h>
-
 #include <unistd.h>
+
+#include "util/pretty-printer.h"
 
 using namespace boost;
 using namespace std;
@@ -71,7 +72,7 @@ string MemInfo::DebugString() {
   DCHECK(initialized_);
   stringstream stream;
   stream << "Physical Memory: "
-         << PrettyPrinter::Print(physical_mem_, TCounterType::BYTES)
+         << PrettyPrinter::Print(physical_mem_, TUnit::BYTES)
          << endl;
   return stream.str();
 }

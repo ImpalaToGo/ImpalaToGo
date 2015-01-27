@@ -13,20 +13,22 @@
 // limitations under the License.
 
 #include "util/cpu-info.h"
-#include "util/debug-util.h"
 
 #include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <fstream>
+#include <mmintrin.h>
 #include <sstream>
 #include <stdlib.h>
 #include <string.h>
-
 #include <unistd.h>
+
+#include "util/pretty-printer.h"
 
 using namespace boost;
 using namespace std;
 
+DECLARE_bool(abort_on_config_error);
 DEFINE_int32(num_cores, 0, "(Advanced) If > 0, it sets the number of cores available to"
     " Impala. Setting it to 0 means Impala will use all available cores on the machine"
     " according to /proc/cpuinfo.");
@@ -53,7 +55,7 @@ static struct {
 };
 static const long num_flags = sizeof(flag_mappings) / sizeof(flag_mappings[0]);
 
-// Helper function to parse for hardware flags.  
+// Helper function to parse for hardware flags.
 // values contains a list of space-seperated flags.  check to see if the flags we
 // care about are present.
 // Returns a bitmap of flags.
@@ -71,7 +73,7 @@ void CpuInfo::Init() {
   string line;
   string name;
   string value;
-  
+
   float max_mhz = 0;
   int num_cores = 0;
 
@@ -123,10 +125,17 @@ void CpuInfo::Init() {
   } else {
     num_cores_ = 1;
   }
-  
+
   if (FLAGS_num_cores > 0) num_cores_ = FLAGS_num_cores;
 
   initialized_ = true;
+}
+
+void CpuInfo::VerifyCpuRequirements() {
+  if (!CpuInfo::IsSupported(CpuInfo::SSSE3)) {
+    LOG(ERROR) << "CPU does not support the Supplemental SSE3 (SSSE3) instruction set, "
+               << "which is required. Exiting if Supplemental SSE3 is not functional...";
+  }
 }
 
 void CpuInfo::EnableFeature(long flag, bool enable) {
@@ -149,9 +158,9 @@ string CpuInfo::DebugString() {
   stream << "Cpu Info:" << endl
          << "  Model: " << model_name_ << endl
          << "  Cores: " << num_cores_ << endl
-         << "  L1 Cache: " << PrettyPrinter::Print(L1, TCounterType::BYTES) << endl
-         << "  L2 Cache: " << PrettyPrinter::Print(L2, TCounterType::BYTES) << endl
-         << "  L3 Cache: " << PrettyPrinter::Print(L3, TCounterType::BYTES) << endl
+         << "  L1 Cache: " << PrettyPrinter::Print(L1, TUnit::BYTES) << endl
+         << "  L2 Cache: " << PrettyPrinter::Print(L2, TUnit::BYTES) << endl
+         << "  L3 Cache: " << PrettyPrinter::Print(L3, TUnit::BYTES) << endl
          << "  Hardware Supports:" << endl;
   for (int i = 0; i < num_flags; ++i) {
     if (IsSupported(flag_mappings[i].flag)) {

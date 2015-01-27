@@ -1,6 +1,0 @@
-This is a modified version of the boost multi precision library from boost 1.5.5.
-The only code changes were to change the include paths from <boost/multiprecision...>
-to "boost_multiprecision/..."
-
-When we are ready to move to a newer version of boost (and likely c++ 11) on all
-of our platforms, we can remove this.

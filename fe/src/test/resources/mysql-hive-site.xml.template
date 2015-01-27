@@ -126,9 +126,19 @@
   <name>dfs.replication</name>
   <value>3</value>
 </property>
+
+<!--  Change back to NOSASL when HIVE-4232 is fixed.
+      With NONE, Hive uses the plain SASL transport. -->
 <property>
   <name>hive.server2.authentication</name>
-  <value>NOSASL</value>
+  <value>NONE</value>
+</property>
+
+<property>
+  <!--  TODO: Remove this once Hive has changed their default back to ColumnarSerDe -->
+  <name>hive.default.rcfile.serde</name>
+  <value>org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe</value>
+  <description>The default SerDe hive will use for the rcfile format</description>
 </property>
 
 <property>

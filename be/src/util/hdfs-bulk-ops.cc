@@ -57,21 +57,30 @@ void HdfsOp::Execute() const {
   switch (op_) {
     case DELETE:
     	status = dfsDelete(*hdfs_connection, src_.c_str(), 1);
+      VLOG_FILE << "hdfsDelete() file=" << src_.c_str();
       break;
     case CREATE_DIR:
     	status = dfsCreateDirectory(*hdfs_connection, src_.c_str());
+      VLOG_FILE << "hdfsCreateDirectory() file=" << src_.c_str();
       break;
     case RENAME:
     	status = dfsRename(*hdfs_connection, src_.c_str(), dst_.c_str());
+      VLOG_FILE << "hdfsRename() src_file=" << src_.c_str()
+                << " dst_file=" << dst_.c_str();
       break;
     case DELETE_THEN_CREATE:
     	status = dfsDelete(*hdfs_connection, src_.c_str(), 1);
+    	VLOG_FILE << "dfsDelete() file=" << src_.c_str();
     	if(status != status::OK)
     		err = -1;
-      if (err != -1) err = dfsCreateDirectory(*hdfs_connection, src_.c_str());
+      if (err != -1) {
+      err = dfsCreateDirectory(*hdfs_connection, src_.c_str());  
+      VLOG_FILE << "dfsCreateDirectory() file=" << src_.c_str();
+      }
       break;
     case CHMOD:
     	status = dfsChmod(*hdfs_connection, src_.c_str(), permissions_);
+      VLOG_FILE << "dfsChmod() file=" << src_.c_str();
       break;
   }
 	if(status != status::OK)

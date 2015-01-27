@@ -18,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Collections;
@@ -96,6 +97,11 @@ public class JniFrontend {
   private final static TBinaryProtocol.Factory protocolFactory_ =
       new TBinaryProtocol.Factory();
   private final Frontend frontend_;
+
+  // Required minimum value (in milliseconds) for the HDFS config
+  // 'dfs.client.file-block-storage-locations.timeout.millis'
+  private static final long MIN_DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_MS =
+      10 * 1000;
 
   /**
    * Create a new instance of the Jni Frontend.
@@ -260,7 +266,7 @@ public class JniFrontend {
     result.setApi_versions(Lists.<String>newArrayListWithCapacity(dataSources.size()));
     for (DataSource dataSource: dataSources) {
       result.addToData_src_names(dataSource.getName());
-      result.addToLocations(dataSource.getLocation().toUri().getPath());
+      result.addToLocations(dataSource.getLocation());
       result.addToClass_names(dataSource.getClassName());
       result.addToApi_versions(dataSource.getApiVersion());
     }
@@ -574,11 +580,9 @@ public class JniFrontend {
     }
 
     try {
-      String nnUrl = getCurrentNameNodeAddress();
-      if (nnUrl == null) {
-        return null;
-      }
-      URL nnWebUi = new URL("http://" + nnUrl + "/dfshealth.jsp");
+      URI nnUri = getCurrentNameNodeAddress();
+      if (nnUri == null) return null;
+      URL nnWebUi = new URL(nnUri.toURL(), "/dfshealth.jsp");
       URLConnection conn = nnWebUi.openConnection();
       BufferedReader in = new BufferedReader(
           new InputStreamReader(conn.getInputStream()));
@@ -602,12 +606,12 @@ public class JniFrontend {
   }
 
   /**
-   * Derive the namenode http address from the current file system,
+   * Derive the namenode http address from the current filesystem,
    * either default or as set by "-fs" in the generic options.
    *
    * @return Returns http address or null if failure.
    */
-  private String getCurrentNameNodeAddress() throws Exception {
+  private URI getCurrentNameNodeAddress() throws Exception {
     // get the filesystem object to verify it is an HDFS system
     FileSystem fs;
     fs = FileSystem.get(CONF);
@@ -615,7 +619,7 @@ public class JniFrontend {
       LOG.error("FileSystem is " + fs.getUri());
       return null;
     }
-    return DFSUtil.getInfoServer(HAUtil.getAddressOfActive(fs), CONF, false);
+    return DFSUtil.getInfoServer(HAUtil.getAddressOfActive(fs), CONF, "http");
   }
 
   /**
@@ -777,13 +781,15 @@ public class JniFrontend {
       errorCause.append(" is not enabled.\n");
     }
 
-    // dfs.client.file-block-storage-locations.timeout should be >= 500
-    // TODO: OPSAPS-12765 - it should be >= 3000, but use 500 for now until CM refresh
-    if (conf.getInt(DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT,
-        DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_DEFAULT) < 500) {
+    // dfs.client.file-block-storage-locations.timeout.millis should be >= 10 seconds
+    int dfsClientFileBlockStorageLocationsTimeoutMs = conf.getInt(
+        DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_MS,
+        DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_MS_DEFAULT);
+    if (dfsClientFileBlockStorageLocationsTimeoutMs <
+        MIN_DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_MS) {
       errorCause.append(prefix);
-      errorCause.append(DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT);
-      errorCause.append(" is too low. It should be at least 3000.\n");
+      errorCause.append(DFSConfigKeys.DFS_CLIENT_FILE_BLOCK_STORAGE_LOCATIONS_TIMEOUT_MS);
+      errorCause.append(" is too low. It should be at least 10 seconds.\n");
     }
 
     if (errorCause.length() > 0) {
@@ -804,7 +810,7 @@ public class JniFrontend {
       FileSystem fs = FileSystem.get(CONF);
       /*
       if (!(fs instanceof DistributedFileSystem)) {
-        return "Unsupported file system. Impala only supports DistributedFileSystem " +
+        return "Unsupported filesystem. Impala only supports DistributedFileSystem " +
             "but the configured filesystem is: " + fs.getClass().getSimpleName() + "." +
             CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY +
             "(" + CONF.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY) + ")" +

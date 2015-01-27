@@ -28,8 +28,8 @@ include "TCLIService.thrift"
 // Note: If you add an option or change the default, you also need to update:
 // - ImpalaInternalService.thrift: TQueryOptions
 // - ImpaladClientExecutor.getBeeswaxQueryConfigurations()
-// - ImpalaServer::SetQueryOptions()
-// - ImpalaServer::TQueryOptionsToMap()
+// - SetQueryOption()
+// - TQueryOptionsToMap()
 enum TImpalaQueryOptions {
   // if true, abort execution on the first error
   ABORT_ON_ERROR,
@@ -98,6 +98,9 @@ enum TImpalaQueryOptions {
   // Leave blank to use default.
   COMPRESSION_CODEC,
 
+  // Mode for compressing sequence files; either BLOCK, RECORD, or DEFAULT
+  SEQ_COMPRESSION_MODE,
+
   // HBase scan query option. If set and > 0, HBASE_CACHING is the value for
   // "hbase.client.Scan.setCaching()" when querying HBase table. Otherwise, use backend
   // default.
@@ -158,6 +161,10 @@ enum TImpalaQueryOptions {
   // disastrous query plans. Impala will excercise this option if a query
   // has no plan hints, and at least one table is missing relevant stats.
   DISABLE_UNSAFE_SPILLS
+
+  // If the number of rows that are processed for a single query is below the
+  // threshold, it will be executed on the coordinator only with codegen disabled
+  EXEC_SINGLE_NODE_ROWS_THRESHOLD
 }
 
 // The summary of an insert.
@@ -247,7 +254,6 @@ struct TGetRuntimeProfileResp {
 
   2: optional string profile
 }
-
 
 service ImpalaHiveServer2Service extends TCLIService.TCLIService {
   // Returns the exec summary for the given query

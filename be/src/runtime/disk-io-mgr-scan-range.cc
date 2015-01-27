@@ -16,6 +16,8 @@
 #include "runtime/disk-io-mgr.h"
 #include "runtime/disk-io-mgr-internal.h"
 #include "util/error-util.h"
+#include "dfs_cache/hadoop-fs-adaptive.h"
+#include "util/hdfs-util.h"
 
 using namespace boost;
 using namespace impala;
@@ -204,7 +206,7 @@ bool DiskIoMgr::ScanRange::Validate() {
 DiskIoMgr::ScanRange::ScanRange(int capacity)
   : ready_buffers_capacity_(capacity) {
   request_type_ = RequestType::READ;
-  Reset("", -1, -1, -1, false);
+  Reset("", -1, -1, -1, false, false);
 }
 
 DiskIoMgr::ScanRange::~ScanRange() {
@@ -213,13 +215,14 @@ DiskIoMgr::ScanRange::~ScanRange() {
 }
 
 void DiskIoMgr::ScanRange::Reset(const char* file, int64_t len, int64_t offset,
-    int disk_id, bool try_cache, void* meta_data) {
+    int disk_id, bool try_cache, bool expected_local, void* meta_data) {
   DCHECK(ready_buffers_.empty());
   file_ = file;
   len_ = len;
   offset_ = offset;
   disk_id_ = disk_id;
   try_cache_ = try_cache;
+  expected_local_ = expected_local;
   meta_data_ = meta_data;
   cached_buffer_ = NULL;
   io_mgr_ = NULL;
@@ -256,15 +259,20 @@ Status DiskIoMgr::ScanRange::Open() {
     // the handle across multiple scan ranges of a file?
     bool available;
     hdfs_file_ = dfsOpenFile(reader_->hdfs_connection_, file(), O_RDONLY, 0, 0, 0, available);
+    VLOG_FILE << "dfsOpenFile() file=" << file();
     if (hdfs_file_ == NULL || !available) {
       return Status(GetHdfsErrorMsg("Failed to open HDFS file ", file_));
     }
 
     if (dfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != status::OK) {
-      string error_msg = GetHdfsErrorMsg("");
-      stringstream ss;
-      ss << "Error seeking to " << offset_ << " in file: " << file_ << " " << error_msg;
-      return Status(ss.str());
+    	dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
+    	VLOG_FILE << "hdfsCloseFile() (error) file=" << file();
+    	hdfs_file_ = NULL;
+
+    	string error_msg = GetHdfsErrorMsg("");
+    	stringstream ss;
+    	ss << "Error seeking to " << offset_ << " in file: " << file_ << " " << error_msg;
+    	return Status(ss.str());
     }
   } else {
     if (local_file_ != NULL) return Status::OK;
@@ -277,7 +285,10 @@ Status DiskIoMgr::ScanRange::Open() {
       return Status(ss.str());
     }
     if (fseek(local_file_, offset_, SEEK_SET) == -1) {
+      fclose(local_file_);
+      local_file_ = NULL;
       string error_msg = GetStrErrMsg();
+
       stringstream ss;
       ss << "Could not seek to " << offset_ << " for file: " << file_
          << ": " << error_msg;
@@ -295,15 +306,34 @@ void DiskIoMgr::ScanRange::Close() {
   if (reader_->hdfs_connection_.valid) {
     if (hdfs_file_ == NULL) return;
 
-    struct dfsReadStatistics* read_statistics;
+    dfsReadStatistics* read_statistics;
+    if (IsDfsPath(file())) {
     int success = dfsFileGetReadStatistics(reader_->hdfs_connection_, hdfs_file_, &read_statistics);
     if (success == 0) {
       reader_->bytes_read_local_ += read_statistics->totalLocalBytesRead;
       reader_->bytes_read_short_circuit_ += read_statistics->totalShortCircuitBytesRead;
-      dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
-    }
+      reader_->bytes_read_dn_cache_ += read_statistics->totalZeroCopyBytesRead;
+      
+      if (read_statistics->totalLocalBytesRead != read_statistics->totalBytesRead) {
+          ++reader_->num_remote_ranges_;
+          if (expected_local_) {
+          int remote_bytes = read_statistics->totalBytesRead - read_statistics->totalLocalBytesRead;
+            reader_->unexpected_remote_bytes_ += remote_bytes;
+            VLOG_FILE << "Unexpected remote HDFS read of "
+                      << PrettyPrinter::Print(remote_bytes, TUnit::BYTES)
+                      << " for file '" << file_ << "'";
 
+          }
+        }
+      dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
+      }
+    }
+    if (cached_buffer_ != NULL) {
+      hadoopRzBufferFree(hdfs_file_, cached_buffer_);
+      cached_buffer_ = NULL;
+    }
     dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
+    VLOG_FILE << "dfsCloseFile() file=" << file();
     hdfs_file_ = NULL;
   } else {
     if (local_file_ == NULL) return;
@@ -363,8 +393,46 @@ Status DiskIoMgr::ScanRange::Read(char* buffer, int64_t* bytes_read, bool* eosr)
 Status DiskIoMgr::ScanRange::ReadFromCache(bool* read_succeeded) {
   DCHECK(try_cache_);
   DCHECK_EQ(bytes_read_, 0);
-  // On CDH4, this always fails.
   *read_succeeded = false;
+  Status status = Open();
+  if (!status.ok()) return status;
+
+  // Cached reads not supported on local filesystem.
+  if (reader_->hdfs_connection_.dfs_type == LOCAL ) return Status::OK;
+
+  {
+    unique_lock<mutex> hdfs_lock(hdfs_lock_);
+    if (is_cancelled_) return Status::CANCELLED;
+
+    DCHECK(hdfs_file_ != NULL);
+    DCHECK(cached_buffer_ == NULL);
+    cached_buffer_ = _hadoopReadZero(hdfs_file_, io_mgr_->cached_read_options_, len());
+
+    // Data was not cached, caller will fall back to normal read path.
+    if (cached_buffer_ == NULL) return Status::OK;
+  }
+
+  // Cached read succeeded.
+  void* buffer = const_cast<void*>(_hadoopRzBufferGet(cached_buffer_));
+  int32_t bytes_read =_hadoopRzBufferLength(cached_buffer_);
+  // For now, entire the entire block is cached or none of it.
+  // TODO: if HDFS ever changes this, we'll have to handle the case where half
+  // the block is cached.
+  DCHECK_EQ(bytes_read, len());
+
+  // Create a single buffer desc for the entire scan range and enqueue that.
+  BufferDescriptor* desc = io_mgr_->GetBufferDesc(
+      reader_, this, reinterpret_cast<char*>(buffer), 0);
+  desc->len_ = bytes_read;
+  desc->scan_range_offset_ = 0;
+  desc->eosr_ = true;
+  bytes_read_ = bytes_read;
+  EnqueueBuffer(desc);
+  if (reader_->bytes_read_counter_ != NULL) {
+    COUNTER_ADD(reader_->bytes_read_counter_, bytes_read);
+  }
+  *read_succeeded = true;
+  ++reader_->num_used_buffers_;
   return Status::OK;
 }
 

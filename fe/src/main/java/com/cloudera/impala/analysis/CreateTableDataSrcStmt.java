@@ -23,6 +23,8 @@ import static com.cloudera.impala.catalog.DataSourceTable.TBL_PROP_LOCATION;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.fs.permission.FsAction;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.DataSourceTable;
@@ -33,6 +35,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.apache.hadoop.fs.permission.FsAction;
 
 /**
  * Represents a CREATE TABLE statement for external data sources. Such tables
@@ -81,11 +84,11 @@ public class CreateTableDataSrcStmt extends CreateTableStmt {
     // Add table properties from the DataSource catalog object now that we have access
     // to the catalog. These are stored in the table metadata because DataSource catalog
     // objects are not currently persisted.
-    String location = dataSource.getLocation().toUri().getPath();
+    String location = dataSource.getLocation();
     getTblProperties().put(TBL_PROP_LOCATION, location);
     getTblProperties().put(TBL_PROP_CLASS, dataSource.getClassName());
     getTblProperties().put(TBL_PROP_API_VER, dataSource.getApiVersion());
-    new HdfsUri(location).analyze(analyzer, Privilege.ALL);
+    new HdfsUri(location).analyze(analyzer, Privilege.ALL, FsAction.READ);
     // TODO: check class exists and implements API version
   }
 }

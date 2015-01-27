@@ -217,8 +217,8 @@ DiskIoMgr::DiskIoMgr() :
     min_buffer_size_(FLAGS_min_buffer_size),
     cached_read_options_(NULL),
     shut_down_(false),
-    total_bytes_read_counter_(TCounterType::BYTES),
-    read_timer_(TCounterType::TIME_NS) {
+    total_bytes_read_counter_(TUnit::BYTES),
+    read_timer_(TUnit::TIME_NS) {
   int64_t max_buffer_size_scaled = BitUtil::Ceil(max_buffer_size_, min_buffer_size_);
   free_buffers_.resize(BitUtil::Log2(max_buffer_size_scaled) + 1);
   int num_disks = FLAGS_num_disks;
@@ -234,8 +234,8 @@ DiskIoMgr::DiskIoMgr(int num_disks, int threads_per_disk, int min_buffer_size,
     min_buffer_size_(min_buffer_size),
     cached_read_options_(NULL),
     shut_down_(false),
-    total_bytes_read_counter_(TCounterType::BYTES),
-    read_timer_(TCounterType::TIME_NS) {
+    total_bytes_read_counter_(TUnit::BYTES),
+    read_timer_(TUnit::TIME_NS) {
   int64_t max_buffer_size_scaled = BitUtil::Ceil(max_buffer_size_, min_buffer_size_);
   free_buffers_.resize(BitUtil::Log2(max_buffer_size_scaled) + 1);
   if (num_disks == 0) num_disks = DiskInfo::num_disks();
@@ -285,6 +285,8 @@ DiskIoMgr::~DiskIoMgr() {
   for (int i = 0; i < disk_queues_.size(); ++i) {
     delete disk_queues_[i];
   }
+
+  if (cached_read_options_ != NULL) _hadoopRzOptionsFree(cached_read_options_);
 }
 
 Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
@@ -312,6 +314,16 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
     }
   }
   request_context_cache_.reset(new RequestContextCache(this));
+
+  cached_read_options_ = _hadoopRzOptionsAlloc();
+  DCHECK(cached_read_options_ != NULL);
+  // Disable checksumming for cached reads.
+  int ret = _hadoopRzOptionsSetSkipChecksum(cached_read_options_, true);
+  DCHECK_EQ(ret, 0);
+  // Disable automatic fallback for cached reads.
+  ret = _hadoopRzOptionsSetByteBufferPool(cached_read_options_, NULL);
+  DCHECK_EQ(ret, 0);
+
   return Status::OK;
 }
 
@@ -408,6 +420,14 @@ int64_t DiskIoMgr::bytes_read_short_circuit(RequestContext* reader) const {
 
 int64_t DiskIoMgr::bytes_read_dn_cache(RequestContext* reader) const {
   return reader->bytes_read_dn_cache_;
+}
+
+int DiskIoMgr::num_remote_ranges(RequestContext* reader) const {
+  return reader->num_remote_ranges_;
+}
+
+int64_t DiskIoMgr::unexpected_remote_bytes(RequestContext* reader) const {
+  return reader->unexpected_remote_bytes_;
 }
 
 int64_t DiskIoMgr::GetReadThroughput() {
@@ -660,7 +680,7 @@ void DiskIoMgr::GcIoBuffers() {
     ImpaladMetrics::IO_MGR_TOTAL_BYTES->Increment(-bytes_freed);
   }
   if (ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS != NULL) {
-    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->Update(0);
+    ImpaladMetrics::IO_MGR_NUM_UNUSED_BUFFERS->set_value(0);
   }
 }
 
@@ -874,7 +894,13 @@ void DiskIoMgr::HandleReadFinished(DiskQueue* disk_queue, RequestContext* reader
   }
 
   bool queue_full = buffer->scan_range_->EnqueueBuffer(buffer);
-  if (!buffer->eosr_) {
+  if (buffer->eosr_) {
+    // For cached buffers, we can't close the range until the cached buffer is returned.
+    // Close() is called from DiskIoMgr::ReturnBuffer().
+    if (buffer->scan_range_->cached_buffer_ == NULL) {
+      buffer->scan_range_->Close();
+    }
+  } else {
     if (queue_full) {
       reader->blocked_ranges_.Enqueue(buffer->scan_range_);
     } else {

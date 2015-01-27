@@ -43,7 +43,7 @@ class TupleRow;
 // buffers and only start using IO sized buffers when those fill up. The small buffers
 // never spill.
 // The stream will *not* automatically switch from using small buffers to io sized
-// buffers automatically.
+// buffers.
 //
 // The BufferedTupleStream is *not* thread safe from the caller's point of view. It is
 // expected that all the APIs are called from a single thread. Internally, the
@@ -173,10 +173,10 @@ class BufferedTupleStream {
   // If profile is non-NULL, counters are created.
   Status Init(RuntimeProfile* profile = NULL, bool pinned = true);
 
-  // Must be called for streams using small buffers to switch to io sized
+  // Must be called for streams using small buffers to switch to IO-sized
   // buffers.
   // TODO: this does not seem like the best mechanism.
-  Status InitIoBuffer(bool* got_buffer);
+  Status SwitchToIoBuffers(bool* got_buffer);
 
   // Adds a single row to the stream. Returns false if an error occurred.
   // BufferedTupleStream will do a deep copy of the memory in the row.

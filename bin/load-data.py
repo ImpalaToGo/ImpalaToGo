@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import getpass
 from itertools import product
 from optparse import OptionParser
 from Queue import Queue
@@ -54,6 +55,9 @@ parser.add_option("--dataset_dir", dest="dataset_dir",
                   help="Directory that contains Impala datasets")
 parser.add_option("--use_kerberos", action="store_true", default=False,
                   help="Load data on a kerberized cluster.")
+parser.add_option("--principal", default=None, dest="principal",
+                  help="Kerberos service principal, required if --use_kerberos is set")
+
 options, args = parser.parse_args()
 
 DATA_LOAD_DIR = '/tmp/data-load-files'
@@ -72,10 +76,18 @@ GENERATE_SCHEMA_CMD = "generate-schema-statements.py --exploration_strategy=%s "
 # However, beeline itself also has bugs. For example, inserting a NULL literal into
 # a string-typed column leads to an NPE. We work around these problems by using LOAD from
 # a datafile instead of doing INSERTs.
-# TODO: Adjust connection string for --use_kerberos=true appropriately.
 HIVE_CMD = os.path.join(os.environ['HIVE_HOME'], 'bin/beeline')
-HIVE_ARGS = '-u "jdbc:hive2://%s/default;auth=noSasl" --verbose=true'\
-            % (options.hive_hs2_hostport)
+
+hive_auth = "auth=none"
+if options.use_kerberos:
+  if not options.principal:
+    print "--principal is required when --use_kerberos is specified"
+    exit(1)
+  hive_auth = "principal=" + options.principal
+
+HIVE_ARGS = '-n %s -u "jdbc:hive2://%s/default;%s" --verbose=true'\
+      % (getpass.getuser(), options.hive_hs2_hostport, hive_auth)
+
 HADOOP_CMD = os.path.join(os.environ['HADOOP_HOME'], 'bin/hadoop')
 
 def available_workloads(workload_dir):
@@ -113,6 +125,7 @@ def exec_hbase_query_from_file(file_name):
   print 'Executing HBase Command: %s' % hbase_cmd
   exec_cmd(hbase_cmd, 'Error executing hbase create commands')
 
+# KERBEROS TODO: fails when kerberized and impalad principal isn't "impala"
 def exec_impala_query_from_file(file_name):
   """Execute each query in an Impala query file individually"""
   is_success = True
@@ -260,11 +273,14 @@ if __name__ == "__main__":
     # Execute the data loading scripts.
     # Creating tables in Impala has no dependencies, so we execute them first.
     # HBase table inserts are done via hive, so the hbase tables need to be created before
-    # running the hive script. Finally, some of the Impala inserts depend on hive tables,
-    # so they're done at the end.
+    # running the hive script. Some of the Impala inserts depend on hive tables,
+    # so they're done at the end. Finally, the Hbase Tables that have been filled with data
+    # need to be flushed.
     exec_impala_query_from_file_parallel(impala_create_files)
     exec_hbase_query_from_file('load-%s-hbase-generated.create' % load_file_substr)
     exec_hive_query_from_file('load-%s-hive-generated.sql' % load_file_substr)
+    exec_hbase_query_from_file('post-load-%s-hbase-generated.sql' % load_file_substr)
+
     if impala_load_files: invalidate_impala_metadata()
     exec_impala_query_from_file_parallel(impala_load_files)
     loading_time_map[workload] = time.time() - start_time

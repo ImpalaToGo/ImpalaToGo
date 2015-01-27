@@ -14,8 +14,11 @@
 
 package com.cloudera.impala.analysis;
 
+import com.cloudera.impala.catalog.AuthorizationException;
+import com.cloudera.impala.catalog.HdfsCachePool;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.THdfsCachingOp;
+import com.google.common.base.Preconditions;
 
 /**
  * Represents the partial SQL statement of specifying whether a table/partition
@@ -41,7 +44,19 @@ public class HdfsCachingOp implements ParseNode {
 
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
-    throw new AnalysisException("HDFS caching is not supported on CDH4");
+    if (cacheOp_.isSet_cached()) {
+      String poolName = cacheOp_.getCache_pool_name();
+      Preconditions.checkNotNull(poolName);
+      if (poolName.isEmpty()) {
+        throw new AnalysisException("Cache pool name cannot be empty.");
+      }
+
+      HdfsCachePool cachePool = analyzer.getCatalog().getHdfsCachePool(poolName);
+      if (cachePool == null) {
+        throw new AnalysisException(
+            "The specified cache pool does not exist: " + poolName);
+      }
+    }
   }
 
   @Override

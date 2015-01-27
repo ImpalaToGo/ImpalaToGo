@@ -108,8 +108,6 @@ class HdfsScanNode : public ScanNode {
 
   int limit() const { return limit_; }
 
-  bool requires_compaction() const { return requires_compaction_; }
-
   const std::vector<SlotDescriptor*>& materialized_slots()
       const { return materialized_slots_; }
 
@@ -118,13 +116,13 @@ class HdfsScanNode : public ScanNode {
   int tuple_idx() const { return 0; }
 
   // Returns number of partition keys in the schema, including non-materialized slots
-  int num_partition_keys() const { return num_partition_keys_; }
+  int num_partition_keys() const { return hdfs_table_->num_clustering_cols(); }
 
   // Returns number of materialized partition key slots
   int num_materialized_partition_keys() const { return partition_key_slots_.size(); }
 
   // Number of columns, including partition keys
-  int num_cols() const { return column_idx_to_materialized_slot_idx_.size(); }
+  int num_cols() const { return hdfs_table_->num_cols(); }
 
   const TupleDescriptor* tuple_desc() { return tuple_desc_; }
 
@@ -175,13 +173,15 @@ class HdfsScanNode : public ScanNode {
   // This function will block if materialized_row_batches_ is full.
   void AddMaterializedRowBatch(RowBatch* row_batch);
 
-  // Allocate a new scan range object, stored in the runtime state's object pool.
-  // For scan ranges that correspond to the original hdfs splits, the partition id
-  // must be set to the range's partition id. For other ranges (e.g. columns in parquet,
-  // read past buffers), the partition_id is unused.
+  // Allocate a new scan range object, stored in the runtime state's object pool.  For
+  // scan ranges that correspond to the original hdfs splits, the partition id must be set
+  // to the range's partition id. For other ranges (e.g. columns in parquet, read past
+  // buffers), the partition_id is unused. expected_local should be true if this scan
+  // range is not expected to require a remote read. The range must fall within the file
+  // bounds.  That is, the offset must be >= 0, and offset + len <= file_length.
   // This is thread safe.
   DiskIoMgr::ScanRange* AllocateScanRange(const char* file, int64_t len, int64_t offset,
-      int64_t partition_id, int disk_id, bool try_cache);
+      int64_t partition_id, int disk_id, bool try_cache, bool expected_local);
 
   // Adds ranges to the io mgr queue and starts up new scanner threads if possible.
   Status AddDiskIoRanges(const std::vector<DiskIoMgr::ScanRange*>& ranges);
@@ -270,11 +270,6 @@ class HdfsScanNode : public ScanNode {
   // Tuple id resolved in Prepare() to set tuple_desc_;
   const int tuple_id_;
 
-  // If true, scanners need to compact the resulting tuples. This is only true if
-  // the planner marked this node as producing compact row batches and there are
-  // materialized string slots.
-  bool requires_compaction_;
-
   // RequestContext object to use with the disk-io-mgr for reads.
   DiskIoMgr::RequestContext* reader_context_;
 
@@ -327,9 +322,6 @@ class HdfsScanNode : public ScanNode {
   // Contexts for each conjunct. These are cloned by the scanners so conjuncts can be
   // safely evaluated in parallel.
   std::vector<ExprContext*> conjunct_ctxs_;
-
-  // Total number of partition slot descriptors, including non-materialized ones.
-  int num_partition_keys_;
 
   // Vector containing indices into materialized_slots_.  The vector is indexed by
   // the slot_desc's col_pos.  Non-materialized slots and partition key slots will
@@ -399,6 +391,12 @@ class HdfsScanNode : public ScanNode {
 
   // Total number of bytes read from data node cache
   RuntimeProfile::Counter* bytes_read_dn_cache_;
+
+  // Total number of remote scan ranges
+  RuntimeProfile::Counter* num_remote_ranges_;
+
+  // Total number of bytes read remotely that were expected to be local
+  RuntimeProfile::Counter* unexpected_remote_bytes_;
 
   // Lock protects access between scanner thread and main query thread (the one calling
   // GetNext()) for all fields below.  If this lock and any other locks needs to be taken

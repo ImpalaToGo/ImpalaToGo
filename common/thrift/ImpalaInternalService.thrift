@@ -101,6 +101,15 @@ struct TQueryOptions {
   // disastrous query plans. Impala will excercise this option if a query
   // has no plan hints, and at least one table is missing relevant stats.
   29: optional bool disable_unsafe_spills = 0
+
+  // Mode for compression; RECORD, or BLOCK
+  // This field only applies for certain file types and is ignored
+  // by all other file types.
+  30: optional CatalogObjects.THdfsSeqCompressionMode seq_compression_mode
+
+  // If the number of rows that are processed for a single query is below the
+  // threshold, it will be executed on the coordinator only with codegen disabled
+  31: optional i32 exec_single_node_rows_threshold = 100
 }
 
 // Impala currently has two types of sessions: Beeswax and HiveServer2
@@ -170,6 +179,9 @@ struct TQueryCtx {
   // disastrous query plans. The rationale is that cancelling queries, e.g.,
   // with a huge join build is preferable over spilling "forever".
   8: optional bool disable_spilling
+
+  // Set if this is a child query (e.g. a child of a COMPUTE STATS request)
+  9: optional Types.TUniqueId parent_query_id
 }
 
 // Context of a fragment instance, including its unique id, the total number
@@ -196,6 +208,7 @@ struct TScanRangeParams {
   1: required PlanNodes.TScanRange scan_range
   2: optional i32 volume_id = -1
   3: optional bool is_cached = false
+  4: optional bool is_remote
 }
 
 // Specification of one output destination of a plan fragment

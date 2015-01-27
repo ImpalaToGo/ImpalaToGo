@@ -25,9 +25,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/foreach.hpp>
 #include <boost/filesystem.hpp>
+#include <gutil/strings/substitute.h>
 
-// Elena : 08.10.2014 Remove hdfs dependency (1)
-// #include <hdfs.h>
 #include "dfs_cache/dfs-cache.h"
 
 #include "codegen/llvm-codegen.h"
@@ -60,10 +59,10 @@ using namespace boost;
 using namespace impala;
 using namespace llvm;
 using namespace std;
+using namespace strings;
 
 const string HdfsScanNode::HDFS_SPLIT_STATS_DESC =
     "Hdfs split stats (<volume id>:<# splits>/<split lengths>)";
-
 
 // Amount of memory that we approximate a scanner thread will use not including IoBuffers.
 // The memory used does not vary considerably between file formats (just a couple of MBs).
@@ -81,14 +80,12 @@ HdfsScanNode::HdfsScanNode(ObjectPool* pool, const TPlanNode& tnode,
       thrift_plan_node_(new TPlanNode(tnode)),
       runtime_state_(NULL),
       tuple_id_(tnode.hdfs_scan_node.tuple_id),
-      requires_compaction_(tnode.compact_data),
       reader_context_(NULL),
       tuple_desc_(NULL),
       unknown_disk_id_warned_(false),
       initial_ranges_issued_(false),
       scanner_thread_bytes_required_(0),
-      num_partition_keys_(0),
-      disks_accessed_bitmap_(TCounterType::UNIT, 0),
+      disks_accessed_bitmap_(TUnit::UNIT, 0),
       done_(false),
       all_ranges_started_(false),
       counters_running_(false),
@@ -124,7 +121,7 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
     RETURN_IF_ERROR(BaseSequenceScanner::IssueInitialRanges(this,
         per_type_files_[THdfsFileFormat::AVRO]));
     RETURN_IF_ERROR(HdfsParquetScanner::IssueInitialRanges(this,
-          per_type_files_[THdfsFileFormat::PARQUET]));
+        per_type_files_[THdfsFileFormat::PARQUET]));
     if (progress_.done()) SetDone();
   }
 
@@ -134,27 +131,27 @@ Status HdfsScanNode::GetNext(RuntimeState* state, RowBatch* row_batch, bool* eos
   return status;
 }
 
-Status HdfsScanNode::GetNextInternal(RuntimeState* state, RowBatch* row_batch, bool* eos) {
+Status HdfsScanNode::GetNextInternal(
+    RuntimeState* state, RowBatch* row_batch, bool* eos) {
   RETURN_IF_ERROR(ExecDebugAction(TExecNodePhase::GETNEXT, state));
   RETURN_IF_CANCELLED(state);
   RETURN_IF_ERROR(QueryMaintenance(state));
 
-  {
-    unique_lock<mutex> l(lock_);
-    if (ReachedLimit() || !status_.ok()) {
-      *eos = true;
-      return status_;
-    }
+  if (ReachedLimit()) {
+    // LIMIT 0 case.  Other limit values handled below.
+    DCHECK_EQ(limit_, 0);
+    *eos = true;
+    return Status::OK;
   }
-
+  *eos = false;
   RowBatch* materialized_batch = materialized_row_batches_->GetBatch();
   if (materialized_batch != NULL) {
     num_owned_io_buffers_ -= materialized_batch->num_io_buffers();
     row_batch->AcquireState(materialized_batch);
-    // Update the number of materialized rows instead of when they are materialized.
+    // Update the number of materialized rows now instead of when they are materialized.
     // This means that scanners might process and queue up more rows than are necessary
     // for the limit case but we want to avoid the synchronized writes to
-    // num_rows_returned_
+    // num_rows_returned_.
     num_rows_returned_ += row_batch->num_rows();
     COUNTER_SET(rows_returned_counter_, num_rows_returned_);
 
@@ -169,17 +166,27 @@ Status HdfsScanNode::GetNextInternal(RuntimeState* state, RowBatch* row_batch, b
     }
     DCHECK_EQ(materialized_batch->num_io_buffers(), 0);
     delete materialized_batch;
-    *eos = false;
     return Status::OK;
   }
-
+  // The RowBatchQueue was shutdown either because all scan ranges are complete or a
+  // scanner thread encountered an error.  Check status_ to distinguish those cases.
   *eos = true;
-  return Status::OK;
+  unique_lock<mutex> l(lock_);
+  return status_;
 }
 
 DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t len,
-    int64_t offset, int64_t partition_id, int disk_id, bool try_cache) {
+    int64_t offset, int64_t partition_id, int disk_id, bool try_cache,
+    bool expected_local) {
   DCHECK_GE(disk_id, -1);
+  // Require that the scan range is within [0, file_length). While this cannot be used
+  // to guarantee safety (file_length metadata may be stale), it avoids different
+  // behavior between Hadoop FileSystems (e.g. s3n hdfsSeek() returns error when seeking
+  // beyond the end of the file).
+  DCHECK_GE(offset, 0);
+  DCHECK_GE(len, 0);
+  DCHECK_LE(offset + len, GetFileDesc(file)->file_length)
+      << "Scan range beyond end of file (offset=" << offset << ", len=" << len << ")";
   if (disk_id == -1) {
     // disk id is unknown, assign it a random one.
     static int next_disk_id = 0;
@@ -194,7 +201,7 @@ DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(const char* file, int64_t 
       runtime_state_->obj_pool()->Add(new ScanRangeMetadata(partition_id));
   DiskIoMgr::ScanRange* range =
       runtime_state_->obj_pool()->Add(new DiskIoMgr::ScanRange());
-  range->Reset(file, len, offset, disk_id, try_cache, metadata);
+  range->Reset(file, len, offset, disk_id, try_cache, expected_local, metadata);
   return range;
 }
 
@@ -314,10 +321,6 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   hdfs_table_ = static_cast<const HdfsTableDescriptor*>(tuple_desc_->table_desc());
   scan_node_pool_.reset(new MemPool(mem_tracker()));
 
-  // If there are no materialized string cols, we never need to compact data
-  // (it is already compact).
-  requires_compaction_ &= tuple_desc_->string_slots().size() > 0;
-
   // Create mapping from column index in table to slot index in output tuple.
   // First, initialize all columns to SKIP_COLUMN.
   int num_cols = hdfs_table_->num_cols();
@@ -325,8 +328,6 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   for (int i = 0; i < num_cols; ++i) {
     column_idx_to_materialized_slot_idx_[i] = SKIP_COLUMN;
   }
-
-  num_partition_keys_ = hdfs_table_->num_clustering_cols();
 
   // Next, collect all materialized (partition key and not) slots
   vector<SlotDescriptor*> all_materialized_slots;
@@ -342,29 +343,32 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
 
   // Finally, populate materialized_slots_ and partition_key_slots_ in the order that
   // the slots appear in the file.
+  int num_partition_keys = hdfs_table_->num_clustering_cols();
   for (int i = 0; i < num_cols; ++i) {
     SlotDescriptor* slot_desc = all_materialized_slots[i];
     if (slot_desc == NULL) continue;
     if (hdfs_table_->IsClusteringCol(slot_desc)) {
       partition_key_slots_.push_back(slot_desc);
     } else {
-      DCHECK_GE(i, num_partition_keys_);
-      column_idx_to_materialized_slot_idx_[i] = materialized_slots_.size();
-      materialized_slots_.push_back(slot_desc);
+      DCHECK_GE(i, num_partition_keys);
+    	column_idx_to_materialized_slot_idx_[i] = materialized_slots_.size();
+    	materialized_slots_.push_back(slot_desc);
     }
   }
 
   // Initialize is_materialized_col_
-  is_materialized_col_.resize(column_idx_to_materialized_slot_idx_.size());
-  for (int i = 0; i < is_materialized_col_.size(); ++i) {
-    is_materialized_col_[i] = column_idx_to_materialized_slot_idx_[i] != SKIP_COLUMN;
+  is_materialized_col_.resize(num_cols);
+  for (int i = 0; i < num_cols; ++i) {
+	  is_materialized_col_[i] = column_idx_to_materialized_slot_idx_[i] != SKIP_COLUMN;
   }
 
-  hdfs_connection_ = HdfsFsCache::instance()->GetDefaultConnection();
+  // TODO: don't assume all partitions are on the same filesystem.
+  HdfsFsCache::instance()->GetConnection(
+	      hdfs_table_->hdfs_base_dir(), &hdfs_connection_);
   if (!hdfs_connection_.valid ) {
     string error_msg = GetStrErrMsg();
     stringstream ss;
-    ss << "Failed to connect to HDFS." << "\n" << error_msg;
+    ss << "Failed to connect to DFS." << "\n" << error_msg;
     return Status(ss.str());
   }
 
@@ -417,13 +421,15 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
     }
 
     bool try_cache = (*scan_range_params_)[i].is_cached;
+    bool expected_local = (*scan_range_params_)[i].__isset.is_remote &&
+                          !(*scan_range_params_)[i].is_remote;
     if (runtime_state_->query_options().disable_cached_reads) {
       DCHECK(!try_cache) << "Params should not have had this set.";
     }
     file_desc->splits.push_back(
         AllocateScanRange(file_desc->filename.c_str(), split.length, split.offset,
                           split.partition_id, (*scan_range_params_)[i].volume_id,
-                          try_cache));
+                          try_cache, expected_local));
   }
 
   // Compute the minimum bytes required to start a new thread. This is based on the
@@ -478,13 +484,25 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   // Initialize conjunct exprs
   RETURN_IF_ERROR(Expr::CreateExprTrees(
       runtime_state_->obj_pool(), thrift_plan_node_->conjuncts, &conjunct_ctxs_));
-  RETURN_IF_ERROR(Expr::Prepare(conjunct_ctxs_, runtime_state_, row_desc()));
+  RETURN_IF_ERROR(
+      Expr::Prepare(conjunct_ctxs_, runtime_state_, row_desc(), expr_mem_tracker()));
   AddExprCtxsToFree(conjunct_ctxs_);
 
-  // Create reusable codegen'd functions for each file type type needed
   for (int format = THdfsFileFormat::TEXT;
        format <= THdfsFileFormat::PARQUET; ++format) {
-    if (per_type_files_[static_cast<THdfsFileFormat::type>(format)].empty()) continue;
+    vector<HdfsFileDesc*>& file_descs =
+        per_type_files_[static_cast<THdfsFileFormat::type>(format)];
+
+    if (file_descs.empty()) continue;
+
+    // Randomize the order this node processes the files. We want to do this to avoid
+    // issuing remote reads to the same DN from different impalads. In file formats such
+    // as avro/seq/rc (i.e. splittable with a header), every node first reads the header.
+    // If every node goes through the files in the same order, all the remote reads are
+    // for the same file meaning a few DN serves a lot of remote reads at the same time.
+    random_shuffle(file_descs.begin(), file_descs.end());
+
+    // Create reusable codegen'd functions for each file type type needed
     Function* fn;
     switch (format) {
       case THdfsFileFormat::TEXT:
@@ -539,7 +557,7 @@ Status HdfsScanNode::Open(RuntimeState* state) {
     return Status::OK;
   }
 
-  // Open all the partitions scanned by the scan node
+  // Open all the partition exprs used by the scan node
   BOOST_FOREACH(const int64_t& partition_id, partition_ids_) {
     HdfsPartitionDescriptor* partition_desc = hdfs_table_->GetPartition(partition_id);
     DCHECK(partition_desc != NULL);
@@ -555,18 +573,18 @@ Status HdfsScanNode::Open(RuntimeState* state) {
   // Initialize HdfsScanNode specific counters
   read_timer_ = ADD_TIMER(runtime_profile(), TOTAL_HDFS_READ_TIMER);
   per_read_thread_throughput_counter_ = runtime_profile()->AddDerivedCounter(
-      PER_READ_THREAD_THROUGHPUT_COUNTER, TCounterType::BYTES_PER_SECOND,
+      PER_READ_THREAD_THROUGHPUT_COUNTER, TUnit::BYTES_PER_SECOND,
       bind<int64_t>(&RuntimeProfile::UnitsPerSecond, bytes_read_counter_, read_timer_));
   scan_ranges_complete_counter_ =
-      ADD_COUNTER(runtime_profile(), SCAN_RANGES_COMPLETE_COUNTER, TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), SCAN_RANGES_COMPLETE_COUNTER, TUnit::UNIT);
   if (DiskInfo::num_disks() < 64) {
     num_disks_accessed_counter_ =
-        ADD_COUNTER(runtime_profile(), NUM_DISKS_ACCESSED_COUNTER, TCounterType::UNIT);
+        ADD_COUNTER(runtime_profile(), NUM_DISKS_ACCESSED_COUNTER, TUnit::UNIT);
   } else {
-    num_disks_accessed_counter_ = 0;
+    num_disks_accessed_counter_ = NULL;
   }
   num_scanner_threads_started_counter_ =
-      ADD_COUNTER(runtime_profile(), NUM_SCANNER_THREADS_STARTED, TCounterType::UNIT);
+      ADD_COUNTER(runtime_profile(), NUM_SCANNER_THREADS_STARTED, TUnit::UNIT);
 
   runtime_state_->io_mgr()->set_bytes_read_counter(reader_context_, bytes_read_counter());
   runtime_state_->io_mgr()->set_read_timer(reader_context_, read_timer());
@@ -581,19 +599,23 @@ Status HdfsScanNode::Open(RuntimeState* state) {
       AVERAGE_HDFS_READ_THREAD_CONCURRENCY, &active_hdfs_read_thread_counter_);
 
   bytes_read_local_ = ADD_COUNTER(runtime_profile(), "BytesReadLocal",
-      TCounterType::BYTES);
+      TUnit::BYTES);
   bytes_read_short_circuit_ = ADD_COUNTER(runtime_profile(), "BytesReadShortCircuit",
-      TCounterType::BYTES);
+      TUnit::BYTES);
   bytes_read_dn_cache_ = ADD_COUNTER(runtime_profile(), "BytesReadDataNodeCache",
-      TCounterType::BYTES);
+      TUnit::BYTES);
+  num_remote_ranges_ = ADD_COUNTER(runtime_profile(), "RemoteScanRanges",
+      TUnit::UNIT);
+  unexpected_remote_bytes_ = ADD_COUNTER(runtime_profile(), "BytesReadRemoteUnexpected",
+      TUnit::BYTES);
 
   max_compressed_text_file_length_ = runtime_profile()->AddHighWaterMarkCounter(
-      "MaxCompressedTextFileLength", TCounterType::BYTES);
+      "MaxCompressedTextFileLength", TUnit::BYTES);
 
   // Create num_disks+1 bucket counters
   for (int i = 0; i < state->io_mgr()->num_disks() + 1; ++i) {
     hdfs_read_thread_concurrency_bucket_.push_back(
-        pool_->Add(new RuntimeProfile::Counter(TCounterType::DOUBLE_VALUE, 0)));
+        pool_->Add(new RuntimeProfile::Counter(TUnit::DOUBLE_VALUE, 0)));
   }
   runtime_profile()->RegisterBucketingCounters(&active_hdfs_read_thread_counter_,
       &hdfs_read_thread_concurrency_bucket_);
@@ -880,6 +902,8 @@ void HdfsScanNode::ScannerThread() {
           DCHECK(done_);
           break;
         }
+        // Set status_ before calling SetDone() (which shuts down the RowBatchQueue),
+        // to ensure that GetNextInternal() notices the error status.
         status_ = status;
       }
 
@@ -1022,12 +1046,24 @@ void HdfsScanNode::StopAndFinalizeCounters() {
         runtime_state_->io_mgr()->bytes_read_short_circuit(reader_context_));
     bytes_read_dn_cache_->Set(
         runtime_state_->io_mgr()->bytes_read_dn_cache(reader_context_));
+    num_remote_ranges_->Set(static_cast<int64_t>(
+        runtime_state_->io_mgr()->num_remote_ranges(reader_context_)));
+    unexpected_remote_bytes_->Set(
+        runtime_state_->io_mgr()->unexpected_remote_bytes(reader_context_));
+
+    if (unexpected_remote_bytes_->value() > 0) {
+      runtime_state_->LogError(Substitute(
+          "Block locality metadata for table '$0' may be stale. Consider running "
+          "\"INVALIDATE METADATA $0\".", hdfs_table_->name()));
+    }
 
     ImpaladMetrics::IO_MGR_BYTES_READ->Increment(bytes_read_counter()->value());
     ImpaladMetrics::IO_MGR_LOCAL_BYTES_READ->Increment(
         bytes_read_local_->value());
     ImpaladMetrics::IO_MGR_SHORT_CIRCUIT_BYTES_READ->Increment(
         bytes_read_short_circuit_->value());
+    ImpaladMetrics::IO_MGR_CACHED_BYTES_READ->Increment(
+        bytes_read_dn_cache_->value());
   }
 }
 
@@ -1051,6 +1087,6 @@ void HdfsScanNode::PrintHdfsSplitStats(const PerVolumnStats& per_volume_stats,
   for (PerVolumnStats::const_iterator i = per_volume_stats.begin();
        i != per_volume_stats.end(); ++i) {
      (*ss) << i->first << ":" << i->second.first << "/"
-         << PrettyPrinter::Print(i->second.second, TCounterType::BYTES) << " ";
+         << PrettyPrinter::Print(i->second.second, TUnit::BYTES) << " ";
   }
 }

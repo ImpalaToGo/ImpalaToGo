@@ -53,7 +53,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
   // experimentally determined to be safe.
   public final static int EXPR_CHILDREN_LIMIT = 10000;
   // The expr depth limit is mostly due to our recursive implementation of clone().
-  public final static int EXPR_DEPTH_LIMIT = 1500;
+  public final static int EXPR_DEPTH_LIMIT = 1000;
 
   // Name of the function that needs to be implemented by every Expr that
   // supports negation.
@@ -192,6 +192,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
   public boolean isWhereClauseConjunct() { return isWhereClauseConjunct_; }
   public void setIsWhereClauseConjunct() { isWhereClauseConjunct_ = true; }
   public boolean isAuxExpr() { return isAuxExpr_; }
+  public boolean isRegisteredPredicate() { return id_ != null; }
   public void setIsAuxExpr() { isAuxExpr_ = true; }
   public Function getFn() { return fn_; }
 
@@ -268,6 +269,18 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
       childTypes[i] = children_.get(i).type_;
     }
     return childTypes;
+  }
+
+  /**
+   * Casts any child which is CHAR to a STRING.
+   */
+  public void castChildCharsToStrings(Analyzer analyzer) throws AnalysisException {
+    for (int i = 0; i < children_.size(); ++i) {
+      if (children_.get(i).getType().isScalarType(PrimitiveType.CHAR)) {
+        children_.set(i, children_.get(i).castTo(ScalarType.STRING));
+        children_.get(i).analyze(analyzer);
+      }
+    }
   }
 
   /**
@@ -672,7 +685,6 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
    * If smap is null, this function is equivalent to clone().
    * If preserveRootType is true, the resulting expr tree will be cast if necessary to
    * the type of 'this'.
-   * TODO: set preserveRootType to true in more places?
    */
   public Expr trySubstitute(ExprSubstitutionMap smap, Analyzer analyzer,
       boolean preserveRootType)
@@ -682,7 +694,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
     if (smap == null) return result;
     result = result.substituteImpl(smap, analyzer);
     result.analyze(analyzer);
-    if (preserveRootType) result = result.castTo(type_);
+    if (preserveRootType && !type_.equals(result.getType())) result = result.castTo(type_);
     return result;
   }
 

@@ -1,14 +1,13 @@
 ====
 ---- QUERY: TPCH-Q8
 # Q8 - National Market Share Query
-# Modifications: Added round() calls
 select
   o_year,
-  round(sum(case
+  sum(case
     when nation = 'BRAZIL'
     then volume
     else 0
-  end) / sum(volume), 5) as mkt_share
+  end) / sum(volume) as mkt_share
 from (
   select
     year(o_orderdate) as o_year,
@@ -40,8 +39,8 @@ group by
 order by
   o_year
 ---- RESULTS
-1995,0.03444
-1996,0.04149
+1995,0.0344
+1996,0.0414
 ---- TYPES
-int, double
+int, decimal
 ====

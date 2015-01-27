@@ -16,6 +16,8 @@ package com.cloudera.impala.authorization;
 
 import java.util.List;
 
+import org.apache.sentry.core.model.db.DBModelAuthorizable;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -27,16 +29,16 @@ import com.google.common.collect.Lists;
  * the name AuthorizeableServer.
  */
 public class AuthorizeableServer implements Authorizeable {
-  private final org.apache.sentry.core.Server server_;
+  private final org.apache.sentry.core.model.db.Server server_;
 
   public AuthorizeableServer(String serverName) {
     Preconditions.checkState(!Strings.isNullOrEmpty(serverName));
-    server_ = new org.apache.sentry.core.Server(serverName);
+    server_ = new org.apache.sentry.core.model.db.Server(serverName);
   }
 
   @Override
-  public List<org.apache.sentry.core.Authorizable> getHiveAuthorizeableHierarchy() {
-    return Lists.newArrayList((org.apache.sentry.core.Authorizable) server_);
+  public List<DBModelAuthorizable> getHiveAuthorizeableHierarchy() {
+    return Lists.newArrayList((DBModelAuthorizable) server_);
   }
 
   @Override

@@ -22,6 +22,14 @@ from TCLIService import TCLIService
 # Simple test to make sure all the HS2 types are supported for both the row and
 # column-oriented versions of the HS2 protocol.
 class TestFetch(HS2TestSuite):
+  def __verify_result_precision_scale(self, t, precision, scale):
+    # This should be DECIMAL_TYPE but how do I get that in python
+    assert t.typeDesc.types[0].primitiveEntry.type == 15
+    p = t.typeDesc.types[0].primitiveEntry.typeQualifiers.qualifiers['precision']
+    s = t.typeDesc.types[0].primitiveEntry.typeQualifiers.qualifiers['scale']
+    assert p.i32Value == precision
+    assert s.i32Value == scale
+
   @needs_session(TCLIService.TProtocolVersion.HIVE_CLI_SERVICE_PROTOCOL_V1)
   def test_alltypes_v1(self):
     execute_statement_req = TCLIService.TExecuteStatementReq()
@@ -37,12 +45,21 @@ class TestFetch(HS2TestSuite):
     self.close(execute_statement_resp.operationHandle)
 
     execute_statement_req.statement =\
-        "SELECT * FROM functional.decimal_tbl ORDER BY d1 LIMIT 1"
+        "SELECT d1,d5 FROM functional.decimal_tbl ORDER BY d1 LIMIT 1"
     execute_statement_resp = self.hs2_client.ExecuteStatement(execute_statement_req)
     HS2TestSuite.check_response(execute_statement_resp)
     results = self.fetch(execute_statement_resp.operationHandle,
                 TCLIService.TFetchOrientation.FETCH_NEXT, 1, 1)
     assert len(results.results.rows) == 1
+
+    # Verify the result schema is what we expect. The result has 2 columns, the
+    # first is decimal(9,0) and the second is decimal(10,5)
+    metadata_resp = self.result_metadata(execute_statement_resp.operationHandle)
+    column_types = metadata_resp.schema.columns
+    assert len(column_types) == 2
+    self.__verify_result_precision_scale(column_types[0], 9, 0)
+    self.__verify_result_precision_scale(column_types[1], 10, 5)
+
     self.close(execute_statement_resp.operationHandle)
 
   def __query_and_fetch(self, query):
@@ -162,3 +179,38 @@ class TestFetch(HS2TestSuite):
       assert not fetch_results_resp.hasMoreRows
     except AssertionError:
       pytest.xfail("IMPALA-558")
+
+  @needs_session()
+  def test_select_null(self):
+    """Regression test for IMPALA-1370, where NULL literals would appear as strings where
+    they should be booleans"""
+    execute_statement_req = TCLIService.TExecuteStatementReq()
+    execute_statement_req.sessionHandle = self.session_handle
+    execute_statement_req.statement = "select null"
+    execute_statement_resp = self.hs2_client.ExecuteStatement(execute_statement_req)
+    HS2TestSuite.check_response(execute_statement_resp)
+
+    # Check that the expected type is boolean (for compatibility with Hive, see also
+    # IMPALA-914)
+    get_result_metadata_req = TCLIService.TGetResultSetMetadataReq()
+    get_result_metadata_req.operationHandle = execute_statement_resp.operationHandle
+    get_result_metadata_resp = \
+        self.hs2_client.GetResultSetMetadata(get_result_metadata_req)
+    col = get_result_metadata_resp.schema.columns[0]
+    assert col.typeDesc.types[0].primitiveEntry.type == TCLIService.TTypeId.BOOLEAN_TYPE
+
+    # Check that the actual type is boolean
+    fetch_results_req = TCLIService.TFetchResultsReq()
+    fetch_results_req.operationHandle = execute_statement_resp.operationHandle
+    fetch_results_req.maxRows = 1
+    fetch_results_resp = self.hs2_client.FetchResults(fetch_results_req)
+    HS2TestSuite.check_response(fetch_results_resp)
+    assert fetch_results_resp.results.columns[0].boolVal is not None
+
+    assert self.__column_results_to_string(
+      fetch_results_resp.results.columns) == (1, "NULL\n")
+
+  @needs_session()
+  def test_compute_stats(self):
+    """Exercise the child query path"""
+    self.__query_and_fetch("compute stats functional.alltypes")

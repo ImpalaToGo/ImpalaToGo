@@ -28,9 +28,6 @@ public class AuthorizationStmt extends StatementBase {
 
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
-    if (analyzer.getAuthzConfig().isEnabled()) {
-      throw new AnalysisException("Sentry Service is not supported on CDH4");
-    }
     if (!analyzer.getAuthzConfig().isEnabled()) {
       throw new AnalysisException("Authorization is not enabled. To enable " +
           "authorization restart Impala with the --server_name=<name> flag.");

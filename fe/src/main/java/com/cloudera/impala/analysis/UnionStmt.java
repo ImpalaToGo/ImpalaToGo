@@ -16,7 +16,6 @@ package com.cloudera.impala.analysis;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.ListIterator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -312,9 +311,6 @@ public class UnionStmt extends QueryStmt {
       } catch (AnalysisException e) {
         // this should never happen
         throw new AnalysisException("error creating agg info in UnionStmt.analyze()");
-      } catch (InternalException e) {
-        // this should never happen
-        throw new AnalysisException("error creating agg info in UnionStmt.analyze()");
       }
     }
   }
@@ -457,35 +453,6 @@ public class UnionStmt extends QueryStmt {
       }
     }
     baseTblResultExprs_ = resultExprs_;
-  }
-
-  /**
-   * Substitute exprs of the form "<number>" with the corresponding
-   * expressions from the resultExprs.
-   */
-  @Override
-  protected void substituteOrdinals(List<Expr> exprs, String errorPrefix,
-      Analyzer analyzer) throws AnalysisException {
-    // Substitute ordinals.
-    ListIterator<Expr> i = exprs.listIterator();
-    while (i.hasNext()) {
-      Expr expr = i.next();
-      if (!(expr instanceof NumericLiteral)) continue;
-      expr.analyze(analyzer);
-      if (!expr.getType().isIntegerType()) continue;
-      long pos = ((NumericLiteral) expr).getLongValue();
-      if (pos < 1) {
-        throw new AnalysisException(
-            errorPrefix + ": ordinal must be >= 1: " + expr.toSql());
-      }
-      if (pos > resultExprs_.size()) {
-        throw new AnalysisException(
-            errorPrefix + ": ordinal exceeds number of items in select list: "
-            + expr.toSql());
-      }
-      // Create copy to protect against accidentally shared state.
-      i.set(resultExprs_.get((int) pos - 1).clone());
-    }
   }
 
   public TupleId getTupleId() { return tupleId_; }

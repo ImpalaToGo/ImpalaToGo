@@ -57,9 +57,9 @@ string
 ====
 ---- QUERY
 # Quoting test
-SELECT `table_alias`.`int_col` AS `default_int_col` 
-FROM `functional`.`alltypes` `table_alias` 
-GROUP BY `default_int_col` 
+SELECT `table_alias`.`int_col` AS `default_int_col`
+FROM `functional`.`alltypes` `table_alias`
+GROUP BY `default_int_col`
 LIMIT 10
 ---- TYPES
 int
@@ -153,4 +153,3 @@ bigint
 ---- RESULTS
 3650
 ====
-

@@ -21,14 +21,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 import junit.framework.Assert;
 
 import org.apache.hive.service.cli.thrift.TGetColumnsReq;
 import org.apache.hive.service.cli.thrift.TGetSchemasReq;
 import org.apache.hive.service.cli.thrift.TGetTablesReq;
+import org.apache.sentry.provider.common.ResourceAuthorizationProvider;
 import org.apache.sentry.provider.file.LocalGroupResourceAuthorizationProvider;
-import org.apache.sentry.provider.file.ResourceAuthorizationProvider;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -38,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.authorization.AuthorizationConfig;
+import com.cloudera.impala.authorization.AuthorizeableDb;
 import com.cloudera.impala.authorization.AuthorizeableTable;
 import com.cloudera.impala.authorization.User;
 import com.cloudera.impala.catalog.AuthorizationException;
@@ -98,13 +100,17 @@ public class AuthorizationTest {
   // service.
   @Parameters
   public static Collection testVectors() {
-    return Arrays.asList(new Object[][] {{AUTHZ_POLICY_FILE}});
+    return Arrays.asList(new Object[][] {{null}, {AUTHZ_POLICY_FILE}});
   }
 
   public AuthorizationTest(String policyFile) throws Exception {
     authzConfig_ = AuthorizationConfig.createHadoopGroupAuthConfig("server1", policyFile,
         System.getenv("IMPALA_HOME") + "/fe/src/test/resources/sentry-site.xml");
     authzConfig_.validateConfig();
+    if (!isSetup_ && policyFile == null) {
+      setup();
+      isSetup_ = true;
+    }
     catalog_ = new ImpaladTestCatalog(authzConfig_);
     queryCtx_ = TestUtils.createQueryContext(Catalog.DEFAULT_DB, USER.getName());
     analysisContext_ = new AnalysisContext(catalog_, queryCtx_, authzConfig_);
@@ -237,6 +243,33 @@ public class AuthorizationTest {
     privilege.setServer_name("server1");
     privilege.setDb_name("functional_seq_snap");
     sentryService.grantRolePrivilege(USER, roleName, privilege);
+  }
+
+  @Test
+  public void TestSentryService() throws ImpalaException {
+    SentryPolicyService sentryService =
+        new SentryPolicyService(authzConfig_.getSentryConfig());
+    String roleName = "testRoleName";
+    roleName = roleName.toLowerCase();
+
+    sentryService.createRole(USER, roleName, true);
+    String dbName = UUID.randomUUID().toString();
+    AuthorizeableDb db = new AuthorizeableDb(dbName);
+    TPrivilege privilege =
+        new TPrivilege("", TPrivilegeLevel.ALL, TPrivilegeScope.DATABASE, false);
+    privilege.setServer_name("server1");
+    privilege.setDb_name(dbName);
+    sentryService.grantRoleToGroup(USER, roleName, USER.getName());
+    sentryService.grantRolePrivilege(USER, roleName, privilege);
+
+    for (int i = 0; i < 2; ++i) {
+      privilege = new TPrivilege("", TPrivilegeLevel.SELECT, TPrivilegeScope.TABLE,
+          false);
+      privilege.setServer_name("server1");
+      privilege.setDb_name(dbName);
+      privilege.setTable_name("test_tbl_" + String.valueOf(i));
+      sentryService.grantRolePrivilege(USER, roleName, privilege);
+    }
   }
 
   @After
@@ -808,12 +841,8 @@ public class AuthorizationTest {
     AuthzOk("ALTER TABLE functional_seq_snap.alltypes PARTITION(year=2009, month=1) " +
         "SET LOCATION 'hdfs://localhost:20500/test-warehouse/new_table'");
 
-    try {
-      AuthzOk("ALTER TABLE functional_seq_snap.alltypes SET CACHED IN 'testPool'");
-      fail("Expected AnalysisException");
-    } catch (AnalysisException e) {
-      Assert.assertEquals(e.getMessage(), "HDFS caching is not supported on CDH4");
-    }
+    AuthzOk("ALTER TABLE functional_seq_snap.alltypes SET CACHED IN 'testPool'");
+
 
     // Alter table and set location to a path the user does not have access to.
     AuthzError("ALTER TABLE functional_seq_snap.alltypes SET LOCATION " +
@@ -829,7 +858,7 @@ public class AuthorizationTest {
         "User '%s' does not have privileges to access: " +
         "hdfs://localhost:20500/test-warehouse/no_access");
 
-    // Different file system, user has permission to base path.
+    // Different filesystem, user has permission to base path.
     AuthzError("ALTER TABLE functional_seq_snap.alltypes SET LOCATION " +
         "'hdfs://localhost:20510/test-warehouse/new_table'",
         "User '%s' does not have privileges to access: " +
@@ -848,6 +877,10 @@ public class AuthorizationTest {
     AuthzError("ALTER TABLE functional.alltypes rename to functional_seq_snap.t1",
         "User '%s' does not have privileges to execute 'ALTER' on: functional.alltypes");
     AuthzError("ALTER TABLE functional.alltypes add partition (year=1, month=1)",
+        "User '%s' does not have privileges to execute 'ALTER' on: functional.alltypes");
+    AuthzError("ALTER TABLE functional.alltypes set cached in 'testPool'",
+        "User '%s' does not have privileges to execute 'ALTER' on: functional.alltypes");
+    AuthzError("ALTER TABLE functional.alltypes set uncached",
         "User '%s' does not have privileges to execute 'ALTER' on: functional.alltypes");
 
     // Trying to ALTER TABLE a view does not reveal any privileged information.
@@ -1260,7 +1293,6 @@ public class AuthorizationTest {
     if (authzConfig_.isFileBasedPolicy()) return;
 
     // Admin should be able to do everything
-
     SentryPolicyService sentryService =
         new SentryPolicyService(authzConfig_.getSentryConfig());
     try {
@@ -1436,6 +1468,7 @@ public class AuthorizationTest {
   @Test
   public void TestLocalGroupPolicyProvider() throws AnalysisException,
       AuthorizationException {
+    if (!authzConfig_.isFileBasedPolicy()) return;
     // Use an authorization configuration that uses the
     // LocalGroupResourceAuthorizationProvider.
     AuthorizationConfig authzConfig = new AuthorizationConfig("server1",

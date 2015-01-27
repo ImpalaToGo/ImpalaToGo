@@ -79,6 +79,17 @@ struct dfsFile_internal{
 /** A type definition for internal dfs file */
 typedef struct dfsFile_internal* dfsFile;
 
+/**
+ * Zero-copy options.
+ *
+ * We cache the EnumSet of ReadOptions which has to be passed into every
+ * readZero call, to avoid reconstructing it each time.  This cache is cleared
+ * whenever an element changes.
+ */
+typedef struct hadoopRzOptions* phadoopRzOptions;
+
+typedef struct hadoopRzBuffer* phadoopRzBuffer;
+
 typedef int32_t tSize;   /** size of data for read/write io ops */
 typedef time_t tTime;    /** time type in seconds */
 typedef int64_t tOffset; /** offset within the file */

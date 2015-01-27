@@ -16,7 +16,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.catalog.FsObject.ObjectState;
 import com.cloudera.impala.common.ITPool;
@@ -54,7 +55,7 @@ public class HadoopFsBridge {
   private static final FsObjectCache fsCache = new FsObjectCache();
 
   /** Logging mechanism */
-  private static final Logger LOG = Logger.getLogger(HadoopFsBridge.class);
+  private final static Logger LOG = LoggerFactory.getLogger(HadoopFsBridge.class);
 
   /** Bridged operation result */
   public class BridgeOpResult<T>{
@@ -203,7 +204,7 @@ public class HadoopFsBridge {
         "\" on filesystem \"" + fs.filesystem.getUri() + "\". ";
 
     // run specified task with retries (we only make retries on timed out tasks):
-    BridgeOpStatus status = run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
+    run(callable, result, TIMEOUT_BASE, messageInterruptedEx, messageExexEx, RETRIES);
 
     // wait for result to be ready:
     res = result.get();
@@ -352,7 +353,7 @@ public class HadoopFsBridge {
     }
 
     // if no cached result so far, this is bug in the outer flow:
-    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path.getParent() + "\"");
+    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path + "\"");
 
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
@@ -377,7 +378,7 @@ public class HadoopFsBridge {
 
     // update the cache on success:
     if(res.getStatus().equals(BridgeOpStatus.OK))
-      fsCache.setPathStat(fs, path.getParent(), new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
+      fsCache.setPathStat(fs, path, new FileStatus[]{res.getResult()}, ObjectState.SYNC_OK);
 
     return res;
   }

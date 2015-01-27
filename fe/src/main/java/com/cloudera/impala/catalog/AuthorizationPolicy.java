@@ -20,6 +20,8 @@ import java.util.Set;
 
 import org.apache.commons.net.ntp.TimeStamp;
 import org.apache.log4j.Logger;
+import org.apache.sentry.core.common.ActiveRoleSet;
+import org.apache.sentry.provider.cache.PrivilegeCache;
 
 import com.cloudera.impala.thrift.TColumn;
 import com.cloudera.impala.thrift.TPrivilege;
@@ -50,7 +52,7 @@ import com.google.common.collect.Sets;
  * TODO: Instead of calling into Sentry to perform final authorization checks, we
  * should parse/validate the privileges in Impala.
  */
-public class AuthorizationPolicy {
+public class AuthorizationPolicy implements PrivilegeCache {
   private static final Logger LOG = Logger.getLogger(AuthorizationPolicy.class);
 
   // Cache of role names (case-insensitive) to role objects.
@@ -255,9 +257,13 @@ public class AuthorizationPolicy {
   /**
    * Returns a set of privilege strings in Sentry format.
    */
+  @Override
   public synchronized Set<String>
-      listPrivileges(Set<String> groups) {
+      listPrivileges(Set<String> groups, ActiveRoleSet roleSet) {
     Set<String> privileges = Sets.newHashSet();
+    if (roleSet != ActiveRoleSet.ALL) {
+      throw new UnsupportedOperationException("Impala does not support role subsets.");
+    }
 
     // Collect all privileges granted to all roles.
     for (String groupName: groups) {
@@ -276,6 +282,7 @@ public class AuthorizationPolicy {
     return privileges;
   }
 
+  @Override
   public void close() {
     // Nothing to do, but required by PrivilegeCache.
   }

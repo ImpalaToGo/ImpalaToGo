@@ -390,6 +390,13 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         "correlated subquery with grouping and/or aggregation: SELECT " +
         "min(bigint_col) OVER (PARTITION BY bool_col) FROM " +
         "functional.alltypessmall t2 WHERE t1.id < t2.id");
+
+    // Column labels may conflict after the rewrite as an inline view
+    AnalyzesOk("select int_col from functional.alltypestiny where " +
+        "int_col in (select 1 as int_col from functional.alltypesagg)");
+    AnalyzesOk("select int_col from functional.alltypestiny a where " +
+        "int_col not in (select 1 as int_col from functional.alltypesagg b " +
+        "where a.int_col = b.int_col)");
   }
 
   @Test
@@ -528,6 +535,13 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
     // Correlated subquery with a LIMIT clause
     AnalyzesOk("select count(*) from functional.alltypes t where exists " +
         "(select 1 from functional.alltypesagg g where t.id = g.id limit 1)");
+
+    // Column labels may conflict after the rewrite as an inline view
+    AnalyzesOk("select int_col from functional.alltypestiny where " +
+        "exists (select int_col from functional.alltypesagg)");
+    AnalyzesOk("select int_col from functional.alltypestiny a where " +
+        "not exists (select 1 as int_col from functional.alltypesagg b " +
+        "where a.int_col = b.int_col)");
   }
 
   @Test
@@ -602,6 +616,11 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         }
       }
     }
+    // Column labels may conflict after the rewrite as an inline view
+    AnalyzesOk("select 1 from functional.alltypestiny where " +
+        "int_col = (select count(int_col) as int_col from functional.alltypesagg)");
+    AnalyzesOk("select 1 from functional.alltypestiny where " +
+        "int_col in (select sum(int_col) as int_col from functional.alltypesagg)");
 
     for (String cmpOp: cmpOperators) {
       // Multiple tables in parent and subquery query blocks
@@ -886,6 +905,9 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         "from functional.alltypesagg a where a.id = t.id) and exists " +
         "(select * from functional.alltypestiny s where s.bigint_col = " +
         "t.bigint_col) and int_col < (select min(int_col) from functional.alltypes)");
+    AnalyzesOk("insert into functional.alltypessmall partition (year, month) " +
+        "select * from functional.alltypestiny where id = (select 1) " +
+        "union select * from functional.alltypestiny where id = (select 2)");
 
     // CTAS with correlated subqueries
     AnalyzesOk("create table functional.test_tbl as select * from " +
@@ -893,6 +915,9 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         "a where a.int_col = t.int_col and a.bool_col = false) and not exists " +
         "(select * from functional.alltypestiny s where s.int_col = t.int_col) " +
         "and t.bigint_col = (select count(*) from functional.alltypessmall)");
+    AnalyzesOk("create table functional.test_tbl as " +
+        "select * from functional.alltypestiny where id = (select 1) " +
+        "union select * from functional.alltypestiny where id = (select 2)");
 
     // Predicate with a child subquery in the HAVING clause
     AnalysisError("select id, count(*) from functional.alltypestiny t group by " +
@@ -941,6 +966,18 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
     AnalyzesOk("select * from functional.alltypes_view a where exists " +
         "(select * from functional.alltypes_view b where a.id = b.id)");
 
+    // Union query with subqueries
+    AnalyzesOk("select * from functional.alltypes where id = " +
+        "(select max(id) from functional.alltypestiny) union " +
+        "select * from functional.alltypes where id = " +
+        "(select min(id) from functional.alltypessmall)");
+    AnalyzesOk("select * from functional.alltypes where id = (select 1) " +
+        "union all select * from functional.alltypes where id in " +
+        "(select int_col from functional.alltypestiny)");
+    AnalyzesOk("select * from functional.alltypes where id = (select 1) " +
+        "union select * from (select * from functional.alltypes where id in " +
+        "(select int_col from functional.alltypestiny)) t");
+
     // Union in the subquery
     AnalysisError("select * from functional.alltypes where exists " +
         "(select id from functional.alltypestiny union " +
@@ -948,16 +985,6 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         "A subquery must contain a single select block: " +
         "(SELECT id FROM functional.alltypestiny UNION " +
         "SELECT id FROM functional.alltypesagg)");
-    // Union query with subqueries
-    AnalysisError("select * from functional.alltypes where id = " +
-        "(select max(id) from functional.alltypestiny) union " +
-        "select * from functional.alltypes where id = " +
-        "(select min(id) from functional.alltypessmall)",
-        "Subqueries are not supported in a UNION query: " +
-        "SELECT * FROM functional.alltypes WHERE id = " +
-        "(SELECT max(id) FROM functional.alltypestiny) UNION " +
-        "SELECT * FROM functional.alltypes WHERE id = " +
-        "(SELECT min(id) FROM functional.alltypessmall)");
     AnalysisError("select * from functional.alltypes where exists (values(1))",
         "A subquery must contain a single select block: (VALUES(1))");
 
@@ -1005,5 +1032,10 @@ public class AnalyzeSubqueriesTest extends AnalyzerTest {
         "functional.alltypes)", "Comparison between subqueries is not supported " +
         "in a between predicate: (SELECT min(id) FROM functional.alltypes) BETWEEN " +
         "1 AND (SELECT max(id) FROM functional.alltypes)");
+    AnalyzesOk("select * from functional.alltypestiny where " +
+        "int_col between 0 and 10 and exists (select 1)");
+    AnalyzesOk("select * from functional.alltypestiny a where " +
+        "double_col between cast(1 as double) and cast(10 as double) and " +
+        "exists (select 1 from functional.alltypessmall b where a.id = b.id)");
   }
 }

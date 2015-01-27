@@ -15,12 +15,12 @@
 #ifndef IMPALA_RPC_RPC_TRACE_H
 #define IMPALA_RPC_RPC_TRACE_H
 
-#include "util/non-primitive-metrics.h"
+#include "util/collection-metrics.h"
 #include "rpc/thrift-server.h"
 #include "util/internal-queue.h"
 
 #include <thrift/TProcessor.h>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <boost/unordered_map.hpp>
 
 #include <rapidjson/document.h>
@@ -28,14 +28,14 @@
 namespace impala {
 
 class Webserver;
-class Metrics;
+class MetricGroup;
 
 // An RpcEventHandler is called every time an Rpc is started and completed. There is at
 // most one RpcEventHandler per ThriftServer. When an Rpc is started, getContext() creates
 // an InvocationContext recording the current time and other metadata for that invocation.
 class RpcEventHandler : public apache::thrift::TProcessorEventHandler {
  public:
-  RpcEventHandler(const std::string& server_name, Metrics* metrics);
+  RpcEventHandler(const std::string& server_name, MetricGroup* metrics);
 
   // From TProcessorEventHandler, called initially when an Rpc is invoked. Returns an
   // InvocationContext*. 'server_context' is a per-connection context object. For our
@@ -110,7 +110,7 @@ class RpcEventHandler : public apache::thrift::TProcessorEventHandler {
   std::string server_name_;
 
   // Metrics subsystem access
-  Metrics* metrics_;
+  MetricGroup* metrics_;
 
 };
 

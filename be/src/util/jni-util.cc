@@ -137,8 +137,8 @@ Status JniUtil::Init() {
   return Status::OK;
 }
 
-void JniUtil::InitLibdfs(int percent_of_memory_for_cache, const std::string& cache_location) {
-  cacheInit(percent_of_memory_for_cache, cache_location);
+bool JniUtil::InitLibdfs(int percent_of_memory_for_cache, const std::string& cache_location) {
+  return cacheInit(percent_of_memory_for_cache, cache_location) == 0;
 }
 
 Status JniUtil::Cleanup() {

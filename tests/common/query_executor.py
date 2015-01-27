@@ -371,8 +371,7 @@ def parse_jdbc_query_results(stdout, stderr):
   return create_exec_result(time_taken, result_data)
 
 def create_exec_result(time_taken, result_data):
-  # TODO: Either don't require a query string as an arg, or plumb it through here
-  exec_result = QueryResult("")
+  exec_result = QueryResult()
   if result_data:
     LOG.debug('Data:\n%s\n' % result_data)
     exec_result.data = result_data

@@ -486,7 +486,12 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 }
 
 TEST_F(CacheLayerTest, RemoteFileOpenReadAutoloadTest){
-	m_namenodeHdfs = {DFS_TYPE::hdfs, "104.236.39.60", 8020, "", "", true};
+	m_namenodeHdfs.dfs_type = DFS_TYPE::hdfs;
+	m_namenodeHdfs.host = "104.236.39.60";
+	m_namenodeHdfs.port = 8020;
+	m_namenodeHdfs.credentials = "";
+	m_namenodeHdfs.password = "";
+	m_namenodeHdfs.valid = true;
 }
 }
 

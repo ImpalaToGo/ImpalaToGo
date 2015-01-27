@@ -50,7 +50,64 @@
 
   <property>
     <name>dfs.client.file-block-storage-locations.timeout</name>
-    <value>500</value>
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+<configuration>
+  <property>
+    <name>dfs.namenode.http-address</name>
+    <value>0.0.0.0:${HDFS_WEBUI_PORT}</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file://${NODE_DIR}/data/dfs/nn</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file://${NODE_DIR}/data/dfs/dn</value>
+  </property>
+
+  <property>
+    <name>dfs.webhdfs.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>127.0.0.1:${DATANODE_PORT}</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>127.0.0.1:0</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.ipc.address</name>
+    <value>127.0.0.1:0</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.https.address</name>
+    <value>0.0.0.0:0</value>
+  </property>
+
+  <!-- Configuration to enable disk location metadata -->
+  <property>
+    <name>dfs.datanode.hdfs-blocks-metadata.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>dfs.client.file-block-storage-locations.timeout</name>
+    <value>3000</value>
+  </property>
+
+  <property>
+    <name>dfs.client.file-block-storage-locations.timeout.millis</name>
+    <value>5000000</value>
   </property>
 
   <!-- Configurations to enable short circuit reads -->
@@ -76,4 +133,74 @@
     <name>dfs.block.size</name>
     <value>134217728</value>
   </property>
+
+  <!-- Set the max cached memory to ~64kb. This must be less than ulimit -1 -->
+  <property>
+    <name>dfs.datanode.max.locked.memory</name>
+    <value>64000</value>
+  </property>
+
+  <!-- Increase the frequency the NN talks to the DNs to update the caching policy.
+   This is useful to reduce the lag between asking a path to be cached and it actually
+   being cached. -->
+  <property>
+    <name>dfs.namenode.path.based.cache.refresh.interval.ms</name>
+    <value>3000</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.acls.enabled</name>
+    <value>true</value>
+  </property>
+
+  <!-- BEGIN Kerberos settings -->
+  <!-- We use the MiniKdc; it generates a keytab and krb5.conf; we point
+       everyone at that one keytab and go to town... -->
+  <property>
+    <name>dfs.block.access.token.enable</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.keytab.file</name>
+    <value>${KRB5_KTNAME}</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.kerberos.principal</name>
+    <value>${MINIKDC_PRINC_HDFS}</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.kerberos.internal.spnego.principal</name>
+    <value>${MINIKDC_PRINC_HTTP}</value>
+  </property>
+
+  <property>
+    <name>ignore.secure.ports.for.testing</name>
+    <value>true</value>
+    <!-- This one lets us run the datanode without root! -->
+  </property>
+
+  <property>
+    <name>dfs.datanode.keytab.file</name>
+    <value>${KRB5_KTNAME}</value>
+  </property>
+
+  <property>
+    <name>dfs.datanode.kerberos.principal</name>
+    <value>${MINIKDC_PRINC_HDFS}</value>
+  </property>
+
+  <property>
+    <name>dfs.web.authentication.kerberos.principal</name>
+    <value>${MINIKDC_PRINC_HTTP}</value>
+  </property>
+
+  <property>
+    <name>dfs.web.authentication.kerberos.keytab</name>
+    <value>${KRB5_KTNAME}</value>
+  </property>
+  <!-- END Kerberos settings -->
+
 </configuration>

@@ -18,6 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.hadoop.fs.permission.FsAction;
+
+import org.apache.hadoop.fs.permission.FsAction;
 
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.Column;
@@ -204,7 +207,9 @@ public class CreateTableStmt extends StatementBase {
       throw new AnalysisException("Table requires at least 1 column");
     }
 
-    if (location_ != null) location_.analyze(analyzer, Privilege.ALL);
+    if (location_ != null) {
+      location_.analyze(analyzer, Privilege.ALL, FsAction.READ_WRITE);
+    }
 
     analyzeRowFormatValue(rowFormat_.getFieldDelimiter());
     analyzeRowFormatValue(rowFormat_.getLineDelimiter());
@@ -234,7 +239,6 @@ public class CreateTableStmt extends StatementBase {
     Set<String> colNames = Sets.newHashSet();
     for (ColumnDesc colDef: columnDefs_) {
       colDef.analyze();
-      analyzer.warnIfUnsupportedType(colDef.getType());
       if (!colNames.add(colDef.getColName().toLowerCase())) {
         throw new AnalysisException("Duplicate column name: " + colDef.getColName());
       }
