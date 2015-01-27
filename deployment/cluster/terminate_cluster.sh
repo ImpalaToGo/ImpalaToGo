@@ -2,6 +2,12 @@
 BATCH_ID=$1
 
 . resize.config
+if [ -z $BATCH_ID ];
+then
+	echo Usage
+	echo "   $0 <cluster id>"
+	exit 1
+fi
 take_lock
 function cleanup_cluster_residue(){
 	rm -f $BATCH_ID
