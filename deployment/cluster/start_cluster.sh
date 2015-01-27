@@ -45,7 +45,7 @@ $AWS_CMD wait instance-running --filters Name=client-token,Values=$BATCH_ID|$LOG
 echo $($LOG_PREFIX) All instances running querying instance details |$LOG_APPEND
 $AWS_CMD describe-instances --filters Name=client-token,Values=$BATCH_ID|$LOG_APPEND >$TEMP_FILE
 echo $($LOG_PREFIX) Getting DNS names|$LOG_APPEND
-DNS_NAMES=$(grep $BATCH_ID <${TMP_FILE}|cut -f 14|tee ${CLUSTER_HOSTS}|$LOG_APPEND)
+DNS_NAMES=$(grep $BATCH_ID <${TEMP_FILE}|cut -f 14|tee ${CLUSTER_HOSTS}|$LOG_APPEND)
 
 echo $($LOG_PREFIX) Adding ssh public-keys records to $SSH_KNOWN_HOSTS_FILE|$LOG_APPEND
 echo -n " " >$SSH_KNOWN_HOSTS_FILE
@@ -64,7 +64,7 @@ done
 echo $($LOG_PREFIX) Keyscan complete. Added $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) keys for cluster|$LOG_APPEND
 
 echo $($LOG_PREFIX) Getting instance IDs|$LOG_APPEND
-grep $BATCH_ID <${TMP_FILE}|cut -f8|tee ${CLUSTER_VAR_DIR}/instances
+grep $BATCH_ID <${TEMP_FILE}|cut -f8|tee ${CLUSTER_VAR_DIR}/instances
 
 for host in $DNS_NAMES; do
 	echo $($LOG_PREFIX) Connecting to $host in background|$LOG_APPEND
@@ -77,7 +77,7 @@ done
 echo $($LOG_PREFIX) Waiting for all configuration commands to complete|$LOG_APPEND
 wait
 
-rm -f $TMP_FILE
+rm -f $TEMP_FILE
 echo $($LOG_PREFIX) All cluster nodes got configuration command. See master node $MASTER_NODE for details|$LOG_APPEND
 release_lock
 echo $($LOG_PREFIX) Cluster $BATCH_ID is up and running.|$LOG_APPEND
