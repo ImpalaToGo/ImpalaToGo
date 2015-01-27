@@ -57,13 +57,13 @@ echo -n " " >$SSH_KNOWN_HOSTS_FILE
 #TODO: There is still a possible bug when all hosts does not awaik togather,
 #so when each host exposes more than one key, key count will be greater than required hosts but not enough to connect them all
 while [ $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) -lt $(echo $DNS_NAMES|wc -w) ]; do
-	sleep 20
 	echo trying to perform keyscan
 	#clear known hosts before attempt
 	echo -n  " " >$SSH_KNOWN_HOSTS_FILE
 	for host in $DNS_NAMES; do
-		ssh-keyscan -H $host >>$SSH_KNOWN_HOSTS_FILE
+		ssh-keyscan -H $host >>$SSH_KNOWN_HOSTS_FILE &
 	done
+	wait
 done
 echo Added $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) keys for cluster
 
