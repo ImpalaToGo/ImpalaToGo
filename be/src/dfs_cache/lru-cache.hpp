@@ -374,6 +374,7 @@ private:
          * @return number of remained items in the index
          */
         int rebuildIndex(){
+           	LOG (INFO) << "Index is near to be rebuilt.\n";
         	// reset index size:
         	size_t indexSize = 0;
 
@@ -382,6 +383,7 @@ private:
 
         	WriteLock lo(m_rwLock);
         	m_index.clear();
+        	LOG (INFO) << "Index is cleaned up. Rebuilding...\n";
         	lo.unlock();
 
         	getStartPredicate start = boost::bind(boost::mem_fn(&LifespanMgr::start), m_owner->m_lifeSpan);
@@ -649,8 +651,15 @@ private:
         	unsigned soft_items_fact = m_owner->m_numberOfSoftItems.load(std::memory_order_acquire);
         	unsigned hard_items_fact = m_owner->m_numberOfHardItems.load(std::memory_order_acquire);
 
+        	LOG (INFO) << "Checking whether index is valid. Soft items = \"" << std::to_string(soft_items_fact) << "\";" <<
+        			"hard items : \"" << std::to_string(hard_items_fact) << "\"; max limit forbidden items = \"" <<
+        			std::to_string(m_owner->_max_limit_of_forbidden_items) << "\".";
+
         	// if limit of forbidden nodes is reached, start re-indexing
         	if( soft_items_fact - hard_items_fact >= m_owner->_max_limit_of_forbidden_items ){
+            	LOG (INFO) << "Check index validation is triggered. Soft items = \"" << std::to_string(soft_items_fact) << "\";" <<
+            			"hard items : \"" << std::to_string(hard_items_fact) << "\".";
+
         		// go over indexes and note their capacity
         		for(auto it = m_owner->m_indexList->begin(); it != m_owner->m_indexList->end(); ++it){
         			soft_items_fact = it->second->rebuildIndex();
@@ -962,6 +971,8 @@ private:
         		// if bucket still has nodes but required space is freed, break the cleanup
         		if(node && (weightToRemove <= 0)){
         			LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" still has alive nodes. Required space is freed.\n";
+        			utilities::reverse(node);
+        			node->bucket()->first = node;
         			break;
         		}
 
