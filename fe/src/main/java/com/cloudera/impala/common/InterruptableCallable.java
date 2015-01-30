@@ -34,7 +34,7 @@ public abstract class InterruptableCallable<T> implements Callable<T>{
     }
     finally{
       long estimatedTime = System.nanoTime() - startTime;
-      LOG.info("Interruptable task \"" + _name + "\" took \"" + estimatedTime + "\" nanoseconds.\n");
+      LOG.debug("Interruptable task \"" + _name + "\" took \"" + estimatedTime + "\" nanoseconds.\n");
     }
     return null;
   }

@@ -292,6 +292,7 @@ public class HadoopFsBridge {
    * @return operation compound result, if status is OK, contain list of FileStatus found on the path
    */
   public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
+    LOG.info("listStatus() for \"" + path + "\"");
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getDirStat(fs, path);
 
@@ -328,6 +329,9 @@ public class HadoopFsBridge {
       statistic = res.getResult();
       fsCache.setPathStat(fs, path, statistic, null);
       }
+    else{
+      LOG.warn("FileSystem.listStatus() for \"" + path + "\" completed with status \"" + res.getStatus() + "\"");
+    }
 
     return res;
   }
@@ -353,7 +357,7 @@ public class HadoopFsBridge {
     }
 
     // if no cached result so far, this is bug in the outer flow:
-    LOG.warn("\"FileSystem.getFileStatus\" is invoked on non-synchronized directory \"" + path + "\"");
+    LOG.warn("\"FileSystem.getFileStatus\" is invoked on \"" + path + "\"");
 
     AtomicReference<BridgeOpResult<FileStatus>> result = new AtomicReference<BridgeOpResult<FileStatus>>();
 
