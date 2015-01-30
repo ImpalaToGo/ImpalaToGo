@@ -1,0 +1,80 @@
+#!/bin/bash
+
+DEVICES="$(ls /dev/xvd[b-z])"
+RAID_DEVICE=raid0
+MOUNTPOINT=/dbcache
+function unmount_device(){
+        local device=$1
+        local mounted=$(mount|grep -o $device)
+        if [ -b "$device" -a ! -z "$mounted" ];
+        then
+                umount $device
+        fi
+}
+
+function prepare_mount_point(){
+        local mount_point=$1
+        local mounted=$(mount|grep -o $mount_point)
+        
+        if [ ! -z "$mounted" ];
+        then
+                echo error: $mount_point already mounted
+                exit 1
+        fi
+
+        if [ ! -d "$mount_point" ];
+        then
+                mkdir -p $mount_point
+        fi
+	chmod 777 $mount_point
+}
+
+function format_device()
+{
+	local device=$1
+	mkfs.ext4 -c $device
+}
+
+function create_array()
+{
+	local COUNT=$(echo $DEVICES|wc -w)
+	yes|mdadm --create --level=0 -n $COUNT $RAID_DEVICE $DEVICES
+
+}
+raid_mounted=$(mount|grep -o $RAID_DEVICE)
+if [ ! -z "$raid_mounted" ]
+then
+	exit 0
+fi
+
+for device in $DEVICES
+do
+	unmount_device $device
+done
+
+#prepare mount point before any mount operation, 
+#so if we will have none of ephemerial devices attached, 
+#we'll use mount point on root device as is
+prepare_mount_point $MOUNTPOINT
+
+NUMBER_ATTACHED_DEVICES=$(ls $DEVICES 2>/dev/null|wc -w)
+if [ $NUMBER_ATTACHED_DEVICES -gt 1 ];
+then
+	#Create raid if more than one device mounted
+	create_array
+	DEVICE_PATH=/dev/md/$RAID_DEVICE
+else
+	#There is at most one device in the list, 
+	#discover which one and use it for mounting
+	DEVICE_PATH=$(ls $DEVICES 2>/dev/null)
+fi
+
+if [ ! -z "$DEVICE_PATH" ];
+then
+	format_device $DEVICE_PATH
+	mount -t auto $DEVICE_PATH $MOUNTPOINT
+fi
+
+ls $MOUNTPOINT
+
+echo  Disks ready for DB cache
