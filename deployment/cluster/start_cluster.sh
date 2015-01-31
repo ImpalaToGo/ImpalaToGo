@@ -72,7 +72,8 @@ for host in $DNS_NAMES; do
 	#ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
 	#TODO: generate startup script here, push to target and run in background
 	#TODO: Log the output in some way
-	ssh $SSH_PARAMS ec2-user@$host '"sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET" &&  "sudo /home/ec2-user/restart_slave.sh" ' &
+	
+	ssh $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET &&  sudo /home/ec2-user/restart_slave.sh " &
 done
 echo $($LOG_PREFIX) Waiting for all configuration commands to complete|$LOG_APPEND
 wait
