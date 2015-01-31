@@ -48,18 +48,12 @@ echo $($LOG_PREFIX) Getting DNS names|$LOG_APPEND
 DNS_NAMES=$(grep $BATCH_ID <${TEMP_FILE}|cut -f 14|tee ${CLUSTER_HOSTS}|$LOG_APPEND)
 
 echo $($LOG_PREFIX) Adding ssh public-keys records to $SSH_KNOWN_HOSTS_FILE|$LOG_APPEND
-echo -n " " >$SSH_KNOWN_HOSTS_FILE
+CLUSTER_HOSTS_COUNT=$(cat $CLUSTER_HOSTS|wc -w)
 #TODO: Add timeout
-#TODO: There is still a possible bug when all hosts does not awaik togather,
-#so when each host exposes more than one key, key count will be greater than required hosts but not enough to connect them all
-while [ $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) -lt $(echo $DNS_NAMES|wc -w) ]; do
+while [ $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) -lt $(expr $CLUSTER_HOSTS_COUNT \* 2) ]; do
 	echo $($LOG_PREFIX) Trying to perform keyscan
-	#clear known hosts before attempt
-	echo -n  " " >$SSH_KNOWN_HOSTS_FILE
-	for host in $DNS_NAMES; do
-		ssh-keyscan -H $host >>$SSH_KNOWN_HOSTS_FILE &
-	done
-	wait
+	ssh-keyscan -H -f $CLUSTER_HOSTS  >$SSH_KNOWN_HOSTS_FILE
+        sleep 1
 done
 echo $($LOG_PREFIX) Keyscan complete. Added $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) keys for cluster|$LOG_APPEND
 
