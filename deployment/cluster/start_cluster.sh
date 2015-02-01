@@ -48,35 +48,19 @@ echo $($LOG_PREFIX) Getting DNS names|$LOG_APPEND
 DNS_NAMES=$(grep $BATCH_ID <${TEMP_FILE}|cut -f 14|tee ${CLUSTER_HOSTS}|$LOG_APPEND)
 
 echo $($LOG_PREFIX) Adding ssh public-keys records to $SSH_KNOWN_HOSTS_FILE|$LOG_APPEND
-echo -n " " >$SSH_KNOWN_HOSTS_FILE
+CLUSTER_HOSTS_COUNT=$(cat $CLUSTER_HOSTS|wc -w)
 #TODO: Add timeout
-#TODO: There is still a possible bug when all hosts does not awaik togather,
-#so when each host exposes more than one key, key count will be greater than required hosts but not enough to connect them all
-while [ $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) -lt $(echo $DNS_NAMES|wc -w) ]; do
+while [ $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) -lt $(expr $CLUSTER_HOSTS_COUNT \* 2) ]; do
 	echo $($LOG_PREFIX) Trying to perform keyscan
-	#clear known hosts before attempt
-	echo -n  " " >$SSH_KNOWN_HOSTS_FILE
-	for host in $DNS_NAMES; do
-		ssh-keyscan -H $host >>$SSH_KNOWN_HOSTS_FILE &
-	done
-	wait
+	ssh-keyscan -H -f $CLUSTER_HOSTS  >$SSH_KNOWN_HOSTS_FILE
+        sleep 1
 done
 echo $($LOG_PREFIX) Keyscan complete. Added $(cat $SSH_KNOWN_HOSTS_FILE|wc -l) keys for cluster|$LOG_APPEND
 
 echo $($LOG_PREFIX) Getting instance IDs|$LOG_APPEND
 grep $BATCH_ID <${TEMP_FILE}|cut -f8|tee ${CLUSTER_VAR_DIR}/instances
 
-for host in $DNS_NAMES; do
-	echo $($LOG_PREFIX) Connecting to $host in background|$LOG_APPEND
-	#TODO: You cannot simply run sudo as non-interractive user. Need to discover a way to run it
-	#ssh $SSH_PARAMS ec2-user@$host 'echo command running at `hostname` as user' & 
-	#TODO: generate startup script here, push to target and run in background
-	#TODO: Log the output in some way
-	
-	ssh $SSH_PARAMS ec2-user@$host "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET &&  sudo /home/ec2-user/restart_slave.sh " &
-done
-echo $($LOG_PREFIX) Waiting for all configuration commands to complete|$LOG_APPEND
-wait
+./run_cmd_on_all.sh $BATCH_ID "sudo /home/ec2-user/attachToCluster.sh  $ACCESS_KEY $SECRET_KEY $MASTER_NODE $S3_BUCKET &&  sudo /home/ec2-user/restart_slave.sh" |$LOG_APPEND
 
 rm -f $TEMP_FILE
 echo $($LOG_PREFIX) All cluster nodes got configuration command. See master node $MASTER_NODE for details|$LOG_APPEND

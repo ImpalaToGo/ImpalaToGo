@@ -30,7 +30,7 @@ echo instance list: $INSTANCE_IDS|$LOG_APPEND
 if [ -z "$INSTANCE_IDS" ];
 then
 	echo $($LOG_PREFIX) Cluster $BATCH_ID has no instances|$LOG_APPEND
-	echo $($LOG_PREFIX) Either wrong ID provided, all instances were terminated by other provess or there is residue from other cluster-related scripts|$LOG_APPEND
+	echo $($LOG_PREFIX) Either wrong ID provided, all instances were terminated by other process or there is residue from other cluster-related scripts|$LOG_APPEND
 	cleanup_cluster_residue|$LOG_APPEND
 	release_lock
 	exit 1
@@ -45,4 +45,4 @@ $AWS_CMD wait instance-terminated --instance-ids $INSTANCE_IDS|$LOG_APPEND
 echo $($LOG_PREFIX) instances terminated, cleanup local resources|$LOG_APPEND
 cleanup_cluster_residue|$LOG_APPEND
 release_lock
-echo $($LOG_PREFIX) Done|$LOG_APPEND
+echo $($LOG_PREFIX) Cluster $BATCH_ID terminated|$LOG_APPEND
