@@ -212,6 +212,19 @@ public:
 	dfsFileInfo* fileInfo(raiiDfsConnection& conn, const char* path);
 
 	/**
+	 * Get list of files/directories for a given
+	 * directory-path. freeFileInfo should be called to deallocate memory.
+	 *
+	 * @param [in]  conn       - wrapped managed connection
+	 * @param [in]  path       - path of the directory.
+	 * @param [out] numEntries - set to the number of files/directories in path.
+	 *
+	 * @return Returns a dynamically-allocated array of dfsFileInfo
+	 * objects; NULL on error.
+	 */
+	dfsFileInfo* listDirectory(raiiDfsConnection& conn, const char* path, int *numEntries);
+
+	/**
 	 * Free file info
 	 *
 	 * @param fileInfo     - file info set to free

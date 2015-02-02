@@ -84,7 +84,6 @@ typedef enum {
 	REQUEST_FAILED,
 
 	NAMENODE_IS_NOT_CONFIGURED,
-	NAMENODE_IS_UNREACHABLE,
 	NAMENODE_CONNECTION_FAILED,
 
 	DFS_ADAPTOR_IS_NOT_CONFIGURED,
@@ -99,6 +98,7 @@ typedef enum {
 	CACHE_OBJECT_NOT_FOUND,          /**< reports the problem wit ha cache, when the object is missed when expected */
     CACHE_OBJECT_OPERATION_FAILURE,  /**< failure occur during cache object operation */
     CACHE_OBJECT_UNDER_FINALIZATION, /**< requested cache object is under finalization and should not be used. It only can be recalimed */
+    CACHE_OBJECT_IS_FORBIDDEN,       /**< cache object is forbidden */
 
 	NOT_IMPLEMENTED,                 /**< for developer purposes */
 	NO_STATUS,
@@ -186,6 +186,8 @@ struct FileProgressStatus {
 		FILEPROGRESS_IS_MISSED_REMOTELY = 2,
 		FILEPROGRESS_REMOTE_DFS_IS_UNREACHABLE = 3,
 		FILEPROGRESS_GENERAL_FAILURE = 4,
+		FILEPROGRESS_INCONSISTENT_DATA = 5,
+		FILEPROGRESS_LOCAL_FAILURE = 6,
 	};
 };
 

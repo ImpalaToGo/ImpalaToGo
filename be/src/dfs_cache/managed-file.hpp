@@ -382,6 +382,9 @@ namespace managed_file {
 		   return 0;
 	   }
 
+	   /** getter for remote file - the origin of managed file - size */
+	   inline tOffset remote_size(){ return m_remotesize; }
+
 	   /** getter for File estimated size (for file which is not yet locally).
 	    *  This size is only meaningful for files that are in progress of loading from remote dfs into cache.
 	    */

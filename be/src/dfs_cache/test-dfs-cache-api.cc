@@ -9,8 +9,11 @@
 #include <string>
 #include <gtest/gtest.h>
 #include <fcntl.h>
+#include <future>
+#include <boost/thread/thread.hpp>
 
 #include "dfs_cache/gtest-fixtures.hpp"
+#include "dfs_cache/test-utilities.hpp"
 
 namespace impala{
 
@@ -144,5 +147,175 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 	status::StatusInternal status = dfsCopy(m_namenodeDefault, src, m_namenodelocalFilesystem, dst);
 	ASSERT_TRUE(status == status::StatusInternal::OK);
 }
+
+/**
+ * Scenario :
+ * 1. There's the predefined "set of remote data" located on target A (remote equivalent).
+ * 2. There's "local" destination B where data is cached.
+ * 3. All dataset should be analyzed in two ways - the Model and the Tested Module (dfs_cache).
+ * Analysis results should be compared according to Rules and be identical for test to succeed.
+ * 4. Rules: dataset files sizes should match for Model output and Tested Module output.
+ */
+TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
+	m_dataset_path = "/home/impalauser/data/impala/";
+
+	const char* target      = m_dataset_path.c_str();
+	const char* destination = m_cache_path.c_str();
+
+	boost::system::error_code ec;
+
+	// clean cache directory before usage:
+	boost::filesystem::remove_all(m_cache_path, ec);
+    ASSERT_TRUE(!ec);
+
+	boost::filesystem::create_directory(m_cache_path, ec);
+	ASSERT_TRUE(!ec);
+
+    // first check working directories exist:
+	ASSERT_TRUE(boost::filesystem::exists(target));
+	ASSERT_TRUE(boost::filesystem::exists(destination));
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	// get the list of all files within the specified dataset:
+	int entries;
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    ASSERT_TRUE((files != NULL) && (entries != 0));
+
+    dfsFile file       = nullptr;
+    dfsFile remotefile = nullptr;
+
+#define BUFFER_SIZE 17408
+
+    for(int i = 0 ; i < entries; i++){
+    	// open file, say its local one:
+    	bool available;
+    	file = dfsOpenFile(m_namenodelocalFilesystem, files[i].mName,O_RDONLY, 0, 0, 0, available);
+    	ASSERT_TRUE((file != NULL) && available);
+
+    	// open "target" file:
+    	remotefile = fsAdaptor.fileOpen(conn, files[i].mName, O_RDONLY, 0, 0, 0);
+    	ASSERT_TRUE(remotefile != NULL);
+
+    	// now read by blocks and compare:
+    	tSize last_read_local = 0;
+    	tSize last_read_remote = 0;
+
+    	char* buffer_remote = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+    	char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+
+    	last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+    	last_read_local = fsAdaptor.fileRead(conn, file, (void*)buffer_local, BUFFER_SIZE);
+
+    	ASSERT_TRUE(last_read_remote == last_read_local);
+
+    	for (; last_read_remote > 0;) {
+    		// check read bytes count is equals:
+        	ASSERT_TRUE(last_read_remote == last_read_local);
+        	// compare memory contents we read from files:
+        	ASSERT_TRUE(std::memcmp(buffer_remote, buffer_local, last_read_remote));
+
+    		// read next data buffer:
+    		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+    		last_read_local = fsAdaptor.fileRead(conn, file, (void*)buffer_local, BUFFER_SIZE);
+    	}
+    }
 }
 
+/**
+ * Test for underlying LRU cache age buckets span reduction.
+ * The goal is to get several age buckets hosted by LRU before to reach the cleanup, than check that
+ * the cache is still working.
+ *
+ * Scenario:
+ * 1. Cache is being populated with files those fits into different age bags so that the number
+ * of age bags is increased. Prerequisites : age bag creation split time should be decreased for this test.
+ * 2. Each file is being read directly from "target" and from cache and compared byte by byte.
+ * 3. After all dataset is completed in this way, the dataset should be read and compared once again.
+ * This will trigger full cache reload.
+ */
+TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
+	m_dataset_path = "/home/impalauser/data/impala/";
+
+	m_timeslice = 10;
+
+	// Initialize cache with 1 Mb
+	cacheInit(85, m_cache_path, boost::posix_time::seconds(m_timeslice), 1048576);
+
+	// configure local filesystem:
+	cacheConfigureFileSystem(m_namenodelocalFilesystem);
+
+	const char* target      = m_dataset_path.c_str();
+	const char* destination = m_cache_path.c_str();
+
+	boost::system::error_code ec;
+
+	// clean cache directory before usage:
+	boost::filesystem::remove_all(m_cache_path, ec);
+    ASSERT_TRUE(!ec);
+
+	boost::filesystem::create_directory(m_cache_path, ec);
+	ASSERT_TRUE(!ec);
+
+    // now check all working directories exist:
+	ASSERT_TRUE(boost::filesystem::exists(target));
+	ASSERT_TRUE(boost::filesystem::exists(destination));
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	// get the list of all files within the specified dataset:
+	int entries;
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    ASSERT_TRUE((files != NULL) && (entries != 0));
+
+    dfsFile file       = nullptr;
+    dfsFile remotefile = nullptr;
+
+#define BUFFER_SIZE 17408
+
+    for(int i = 0 ; i < entries; i++){
+    	// open file, say its local one:
+    	bool available;
+    	file = dfsOpenFile(m_namenodelocalFilesystem, files[i].mName,O_RDONLY, 0, 0, 0, available);
+    	ASSERT_TRUE((file != NULL) && available);
+
+    	// open "target" file:
+    	remotefile = fsAdaptor.fileOpen(conn, files[i].mName, O_RDONLY, 0, 0, 0);
+    	ASSERT_TRUE(remotefile != NULL);
+
+    	// now read by blocks and compare:
+    	tSize last_read_local = 0;
+    	tSize last_read_remote = 0;
+
+    	char* buffer_remote = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+    	char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+
+    	last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+    	last_read_local = fsAdaptor.fileRead(conn, file, (void*)buffer_local, BUFFER_SIZE);
+
+    	ASSERT_TRUE(last_read_remote == last_read_local);
+
+    	for (; last_read_remote > 0;) {
+    		// check read bytes count is equals:
+        	ASSERT_TRUE(last_read_remote == last_read_local);
+        	// compare memory contents we read from files:
+        	ASSERT_TRUE(std:: memcmp(buffer_remote, buffer_local, last_read_remote));
+
+    		// read next data buffer:
+    		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+    		last_read_local = fsAdaptor.fileRead(conn, file, (void*)buffer_local, BUFFER_SIZE);
+    	}
+    	// each three files,
+    	if((i % 3) == 0){
+    		// now sleep for "slice duration + 1" to have new age bucket created within the cache:
+    		boost::this_thread::sleep( boost::posix_time::seconds(m_timeslice + 1) );
+    	}
+    }
+}
+}

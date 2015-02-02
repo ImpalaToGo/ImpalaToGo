@@ -154,13 +154,16 @@ public:
      * @param root        - defines root folder for local cache storage
      * @param getfileinfo - predicate to get file info
      * @param freefileInfo - predicate to free file info
+     * @param timeslice    - time slice for age buckets management.
      *
      * @param autoload - flag, indicates whether auto-load should be performed once the file is requested from cache by its name.
      * Currently is true by default.
      */
     FileSystemLRUCache(long long capacity, const std::string& root, managed_file::File::GetFileInfo  getfileinfo,
-    		managed_file::File::FreeFileInfo freefileInfo, bool autoload = true) :
-    		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity), m_root(root){
+    		managed_file::File::FreeFileInfo freefileInfo,
+    		boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+    		bool autoload = true) :
+    		LRUCache<managed_file::File>(boost::posix_time::microsec_clock::local_time(), capacity, timeslice), m_root(root){
 
     	LOG (INFO) << "LRU cache capacity limit = " << std::to_string(capacity) << "\n";
 

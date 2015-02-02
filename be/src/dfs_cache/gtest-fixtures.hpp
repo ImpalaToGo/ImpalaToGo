@@ -39,17 +39,20 @@ class CacheLayerTest : public ::testing::Test {
 	static SessionContext m_ctx5;  /**< session context 5 (shell/web client 5) */
 	static SessionContext m_ctx6;  /**< session context 6 (shell/web client 6) */
 
+	std::string  m_cache_path;    /**< cache location */
+	std::string  m_dataset_path;  /**< origin dataset location */
+
+	/**< Age buckets management timeslice duration, in seconds */
+	int m_timeslice;
+
 	/** signaling we use in async tests */
 	std::mutex m_mux;
 	bool       m_flag;
 	std::condition_variable m_condition;
 
-  static void SetUpTestCase() {
-	  impala::InitGoogleLoggingSafe("Test_dfs_cache");
-	  impala::InitThreading();
-	  cacheInit();
-
-	  cacheInit(85, "/home/elenav/src/ImpalaToGo/datastorage/local_root/");
+    static void SetUpTestCase() {
+  	  impala::InitGoogleLoggingSafe("Test_dfs_cache");
+  	  impala::InitThreading();
 
 	  m_namenode1.dfs_type = DFS_TYPE::OTHER;
 	  m_namenode1.host = "";
@@ -82,18 +85,16 @@ class CacheLayerTest : public ::testing::Test {
 	  // reset session contexts
 	  m_ctx1 = nullptr;
 	  m_ctx2 = nullptr;
+    }
 
-	  // configure some test-purpose file system:
-	  cacheConfigureFileSystem(m_namenode1);
-
-	  // configure Digital Ocean hdfs:
-	  // cacheConfigureFileSystem(m_namenodeHdfs);
-
-	  // configure default file system (as from core-site.xml found on CLASSPATH by Hadoop FS class)
-	  cacheConfigureFileSystem(m_namenodeDefault);
+	virtual void SetUp() {
+		m_cache_path   = "/home/impalauser/cache/";
   }
 
-  // virtual void TearDown() {}
+  virtual void TearDown() {
+	  // shutdown the cache
+	  cacheShutdown();
+  }
 
 };
 }

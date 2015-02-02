@@ -1238,16 +1238,19 @@ private:
 
 	/** construct the LRU cache object
 	 *
-	 * @param startFrom - timestamp, create the start time point in order to accept only items with later timestamps into the cache
-	 * @param isValid   - predicate used to determine if cache is out of date.  Called before index access
-	 *
+	 * @param startFrom - timestamp, create the start time point in order to accept only items with later timestamps into the cache.
+	 * @param isValid   - predicate used to determine if cache is out of date.  Called before index access.
+	 * @param timeslice - timeslice for age buckets management. Non-mandatory parameter.
+	 * @param isValid   - predicate to validate the item managed by cache. Non-mandatory parameter.
 	 */
-    LRUCache(boost::posix_time::ptime startFrom,  long long capacity, isValidPredicate isValid = 0) : m_startTime(startFrom){
+    LRUCache(boost::posix_time::ptime startFrom,  long long capacity,
+    		boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+    		isValidPredicate isValid = 0) : m_startTime(startFrom){
 
     	m_capacityLimit = capacity;
 
         m_isValid  = isValid;
-        m_lifeSpan = new LifespanMgr(this, startFrom);
+        m_lifeSpan = new LifespanMgr(this, startFrom, timeslice);
 
         // statistics collected for cache cleanup
         m_currentCapacity.store(0l);

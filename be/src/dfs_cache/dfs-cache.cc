@@ -76,9 +76,12 @@ FileSystemDescriptor::FileSystemDescriptor(const std::string& path) : valid(fals
  * **********************************************************************************************
  */
 
-status::StatusInternal cacheInit(int mem_limit_percent, const std::string& root) {
+status::StatusInternal cacheInit(int mem_limit_percent,
+		const std::string& root,
+		boost::posix_time::time_duration timeslice,
+		unsigned long size_hard_limit ) {
 	// Initialize singletons.
-	if(!CacheLayerRegistry::init(mem_limit_percent, root))
+	if(!CacheLayerRegistry::init(mem_limit_percent, root, timeslice, size_hard_limit))
 		return status::StatusInternal::CACHE_IS_NOT_READY;
 
     CacheManager::init();

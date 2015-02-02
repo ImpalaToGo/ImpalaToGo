@@ -128,8 +128,22 @@ private:
   	   FileSystemDescriptorBound::freeFileInfo(info, num);
      }
 
-	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "") {
+    /**
+     * Ctor. Instance specific initializations.
+     * @param mem_limit_percent - percent of free memory on the cache location to be utilized by cache.
+     * @param root              - root location for cache
+     * @param timeslice         - time slice duration, for age buckets management.
+     * @param size_hard_limit   - hard cache size limit. Mostly for testing purposes.
+     *
+     */
+	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "",
+			boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+			uintmax_t size_hard_limit = 0) {
 		m_valid = false;
+		// flag, indicates that fixed hard cache size is configured, only needed is to guarantee we have space enough
+		// according to requested cache size
+		bool hardsize = size_hard_limit != 0;
+
         std::string _root = root;
 
 		if(_root.empty())
@@ -138,25 +152,41 @@ private:
 			LOG (ERROR) << "Cache Layer is not initialized due to invalid cache location \"" << root << "\"";
 		}
 
-		double percent = ( (mem_limit_percent > 0 ) && ( mem_limit_percent <= 85) ) ? mem_limit_percent / 100.0 : m_available_capacity_ratio;
-
-		// Get the max 85% of available space on the path specified + space covered already by cache root content:
 		uintmax_t covered = utilities::get_dir_busy_space(m_localstorageRoot);
 		LOG (INFO) << "Cache load : busy space : \"" << std::to_string(covered) << "\"\n";
-		uintmax_t available = utilities::get_free_space_on_disk(m_localstorageRoot) * percent;
-		LOG (INFO) << "Cache load : available space : \"" << std::to_string(available) << "\"\n";
+
+		// available bytes:
+		uintmax_t available = 0;
+		// percent from available cache data bytes configured to use:
+		double percent = 0;
+
+		if(hardsize){
+			percent = 1.0;
+		}
+		else{
+			// Get the max 85% of available space on the path specified + space covered already by cache root content:
+			percent = ( (mem_limit_percent > 0 ) && ( mem_limit_percent <= 85) ) ? mem_limit_percent / 100.0 : m_available_capacity_ratio;
+		}
+
+		available = utilities::get_free_space_on_disk(m_localstorageRoot) * percent;
+		LOG (INFO) << "Cache load : available space : \"" << std::to_string(available) << "\"; LRU percent from available space = \"" <<
+				std::to_string(percent) << "\".";
 
 		available = covered + available;
-        if(available == 0)
+        if((hardsize && (size_hard_limit > available)) || (available == 0))
         	return;
 
-    	LOG (INFO) << "LRU percent from available space  = " << std::to_string(percent) << " on path \""
-    			<< m_localstorageRoot << "\"." << " Space limit, bytes = " << std::to_string(available) << ".\n";
+        // if cache size is hardly configured, just assign the available space limit to this hard size
+        if(hardsize)
+        	available = size_hard_limit;
+
+    	LOG (INFO) << "Space limit available, bytes = \"" << std::to_string(available) << "\" on path \""
+    			<< m_localstorageRoot << "\".\n";
 
 		// create the autoload LRU cache
     	managed_file::File::GetFileInfo getfileinfo = boost::bind(boost::mem_fn(&CacheLayerRegistry::getFileInfo), this, _1, _2);
     	managed_file::File::FreeFileInfo freefileinfo = boost::bind(boost::mem_fn(&CacheLayerRegistry::freeFileInfo), this, _1, _2);
-		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, getfileinfo, freefileinfo, true);
+		m_cache = new FileSystemLRUCache(available, m_localstorageRoot, getfileinfo, freefileinfo, timeslice, true);
 		m_valid = true;
 	}
 
@@ -217,10 +247,15 @@ public:
      * potentially consumed by cache
      *
      * @param root              - local cache root - file system absolute path
+     * @param timeslice         - time slice duration, for age buckets management.
+     * @param size_hard_limit   - hard size limit to configure the cache with. Once specified,
+     * mem_limit_percent is ignored
      *
      * @return cache init status, false if cache init failed. True on success
      */
-    static bool init(int mem_limit_percent = 0, const std::string& root = "");
+    static bool init(int mem_limit_percent = 0, const std::string& root = "",
+    		boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+    		int size_hard_limit = 0);
 
     /**
      * Return cache validity status.

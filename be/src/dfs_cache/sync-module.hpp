@@ -58,10 +58,10 @@ public:
 	 * prepareFile - download file locally and update the registry.
 	 * Reentrant as only rely on its parameters
 	 *
-	 * @param[in] fsDescriptor - fs connection details
-	 * @param[in] path         - file path
+	 * @param[in]     fsDescriptor - fs connection details
+	 * @param[in]     path         - file path
 	 *
-	 * @param[in] task         - task to run in operation
+	 * @param[in]     task         - task to run in operation
 	 *
 	 * @return operation status
 	 */
