@@ -126,6 +126,7 @@ void FileEstimateTask::finalize(){
 /***************************************  File Download task *********************************************************/
 
 void FileDownloadTask::run_internal(){
+	static int randIOFailureGen = 0;
 	if(m_functor == NULL){
 		LOG (ERROR) << "File download task is not initialized with a \"do work\" predicate." << "\n";
         this->m_status = taskOverallStatus::FAILURE;
@@ -139,9 +140,13 @@ void FileDownloadTask::run_internal(){
 	int retry = 3;
 	// compare expected bytes and local bytes and retry for 3 times if not equal:
     do{
+    	m_progress->localBytes     = 0;
+    	m_progress->estimatedBytes = 0;
     	runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
     	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\". \n";
-    }while((m_progress->localBytes != m_progress->estimatedBytes) || (retry-- > 0));
+    }while(((m_progress->localBytes != m_progress->estimatedBytes) || ((randIOFailureGen % 2) == 0)) && (retry-- > 0));
+    // simulate remote IO exception here
+
 
     // if still no equality for locally collected bytes and remote bytes, report an error:
     if(m_progress->localBytes != m_progress->estimatedBytes){
@@ -156,6 +161,7 @@ void FileDownloadTask::run_internal(){
     	m_status = taskOverallStatus::COMPLETED_OK;
     else
     	m_status = taskOverallStatus::FAILURE;
+    randIOFailureGen++;
 }
 
 void FileDownloadTask::callback(){
