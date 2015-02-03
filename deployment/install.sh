@@ -2,7 +2,7 @@
 cp -f llvm-ir/*  /usr/lib/impala/llvm-ir/
 cp -f be/* /usr/lib/impala/sbin/
 sudo rm -rf /usr/lib/impala/impalatogoLib/*
-sudo cp fe/*.jar /usr/lib/impala/impalatogoLib/
+sudo cp fe/*.jar /usr/lib/impala/lib/
 
 sudo cp fe/dependency/* /usr/lib/impala/impalatogoLib/
 sudo cp $(eval echo ~${SUDO_USER})/build/lib/* /usr/lib/impala/lib/

@@ -35,3 +35,8 @@ scp  -i $KEY /usr/lib/x86_64-linux-gnu/libboost_system.so.1.54.0  ec2-user@$TARG
 scp  -i $KEY /usr/lib/x86_64-linux-gnu/libicuuc.so.52.1  ec2-user@$TARGET_HOST:/home/ec2-user/build/lib
 scp  -i $KEY /usr/lib/x86_64-linux-gnu/libicui18n.so.52.1  ec2-user@$TARGET_HOST:/home/ec2-user/build/lib
 scp  -i $KEY /usr/lib/x86_64-linux-gnu/libicudata.so.52.1  ec2-user@$TARGET_HOST:/home/ec2-user/build/lib
+
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+
+$SCRIPTPATH\deploy_scripts.sh
