@@ -94,6 +94,7 @@ static void TestLogging(bool check_counts);
 static void TestRawLogging();
 static void LogWithLevels(int v, int severity, bool err, bool alsoerr);
 static void TestLoggingLevels();
+static void TestMessageListener();
 static void TestLogString();
 static void TestLogSink();
 static void TestLogToString();
@@ -207,6 +208,7 @@ int main(int argc, char **argv) {
   TestLogging(true);
   TestRawLogging();
   TestLoggingLevels();
+  TestMessageListener();
   TestLogString();
   TestLogSink();
   TestLogToString();
@@ -427,6 +429,22 @@ void TestLoggingLevels() {
   LogWithLevels(0, GLOG_FATAL, false, true);
   LogWithLevels(1, GLOG_WARNING, false, false);
   LogWithLevels(1, GLOG_FATAL, false, true);
+}
+
+void MessageListener(string* message, bool* changed) {
+  if (*message == "Change me") {
+    *message = "Changed";
+    *changed = true;
+  }
+}
+
+void TestMessageListener() {
+  LOG(INFO) << "Message listener";
+  InstallLogMessageListenerFunction(MessageListener);
+  LOG(INFO) << "Unchanged";
+  LOG(INFO) << "Change me";
+  InstallLogMessageListenerFunction(NULL);
+  LOG(INFO) << "Change me";  // Won't actually change
 }
 
 TEST(DeathRawCHECK, logging) {
