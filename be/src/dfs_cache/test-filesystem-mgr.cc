@@ -39,7 +39,7 @@ SessionContext CacheLayerTest::m_ctx5 = nullptr;
 SessionContext CacheLayerTest::m_ctx6 = nullptr;
 
 TEST_F(CacheLayerTest, OpenFileCheckOpened) {
-    const char* path = "/home/elenav/src/ImpalaToGo/be/src/dfs_cache/test_data/hello.txt";
+    const char* path = (constants::TEST_DATASET_DEFAULT_LOCATION + "output1.dat").c_str();
     int flags        =  O_RDONLY;
     int buffer_size  = 0;
 
@@ -47,10 +47,14 @@ TEST_F(CacheLayerTest, OpenFileCheckOpened) {
     size_t block_size     = 0;
     bool available;
 
-    dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(m_namenode1, path, flags, buffer_size, replication, block_size, available);
-
+    SCOPED_TRACE("Going to open the file.");
+    dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(m_namenodelocalFilesystem,
+    		path, flags, buffer_size, replication, block_size, available);
     EXPECT_TRUE(available);
     EXPECT_FALSE(file == NULL);
+    SCOPED_TRACE("File is opened, closing...");
+    filemgmt::FileSystemManager::instance()->dfsCloseFile(m_namenodelocalFilesystem, file);
+    SCOPED_TRACE("File is closed.");
 }
 
 }

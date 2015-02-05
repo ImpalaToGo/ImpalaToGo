@@ -145,8 +145,6 @@ void FileDownloadTask::run_internal(){
     	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\"." <<
     			"Retry, count down #\"" << std::to_string(retry) << "\".\n";
     }while((m_progress->localBytes != m_progress->estimatedBytes) && (retry-- > 0));
-    // simulate remote IO exception here
-
 
     // if still no equality for locally collected bytes and remote bytes, report an error:
     if(m_progress->localBytes != m_progress->estimatedBytes){

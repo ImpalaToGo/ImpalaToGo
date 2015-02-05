@@ -20,7 +20,7 @@
 
 #include "dfs_cache/dfs-cache.h"
 #include "dfs_cache/filesystem-mgr.hpp"
-
+#include "dfs_cache/test-utilities.hpp"
 
 namespace impala{
 
@@ -75,7 +75,7 @@ class CacheLayerTest : public ::testing::Test {
 	  m_namenodeDefault.password = "";
 	  m_namenodeDefault.valid = true;
 
-	  m_namenodelocalFilesystem.dfs_type = DFS_TYPE::LOCAL;
+	  m_namenodelocalFilesystem.dfs_type = DFS_TYPE::local;
 	  m_namenodelocalFilesystem.host = "";
 	  m_namenodelocalFilesystem.port = 0;
 	  m_namenodelocalFilesystem.credentials = "";
@@ -85,10 +85,11 @@ class CacheLayerTest : public ::testing::Test {
 	  // reset session contexts
 	  m_ctx1 = nullptr;
 	  m_ctx2 = nullptr;
+
     }
 
 	virtual void SetUp() {
-		m_cache_path   = "/home/impalauser/cache/";
+		m_cache_path   = constants::TEST_CACHE_DEFAULT_LOCATION;
   }
 
   virtual void TearDown() {

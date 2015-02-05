@@ -56,6 +56,9 @@ namespace constants
      /** s3n scheme name */
      const std::string S3N_SCHEME = "s3n";
 
+     /** local filesystem scheme */
+     const std::string LOCAL_SCHEME = "file";
+
      /** separator we use to divide the source host and the port in the file path */
      const char HOST_PORT_SEPARATOR = '_';
 }
@@ -264,7 +267,14 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	// first check whether the file is already in the registry.
 	// for now, when the autoload is the default behavior, we return immediately if we found that there's no file exist
 	// in the registry or it happens to be retrieved in a forbidden/near-to-be-deleted state:
-	if (!CacheLayerRegistry::instance()->findFile(uri.FilePath.c_str(),
+
+	// for localfs path, the host is not specified, therefore the first part of file path went to "host",
+	// so recreate full file path without protocol:
+	std::string fqp = uri.FilePath;
+	if(fsDescriptor.dfs_type == DFS_TYPE::local)
+		fqp = managed_file::File::fileSeparator + uri.Host + fqp;
+
+	if (!CacheLayerRegistry::instance()->findFile(fqp.c_str(),
 			fsDescriptor, managed_file) || managed_file == nullptr
 			|| !managed_file->valid()) {
 		LOG (ERROR)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
@@ -300,7 +310,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	}
 
 	dfsFile handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
-			fsDescriptor, uri.FilePath.c_str(), flags, bufferSize, replication,
+			fsDescriptor, fqp.c_str(), flags, bufferSize, replication,
 			blocksize, available);
 	if (handle != nullptr && available) {
 		// file is available locally, just reply it back:

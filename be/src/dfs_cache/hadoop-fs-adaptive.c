@@ -65,7 +65,7 @@ DFS_TYPE fsTypeFromScheme(const char* scheme){
     if(strcmp(scheme, SCHEME_S3N) == 0)
     	return s3n;
     if(strcmp(scheme, SCHEME_LOCAL) == 0)
-    	return LOCAL;
+    	return local;
 	return NON_SPECIFIED;
 }
 
@@ -718,7 +718,7 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
     case s3n:
     	explicitScheme = "s3n://";
     	break;
-    case LOCAL:
+    case local:
     	explicitScheme = "file://";
     	break;
     default:

@@ -53,6 +53,9 @@ namespace constants
     /** s3n scheme name */
     extern const std::string S3N_SCHEME;
 
+    /** local filesystem scheme */
+    extern const std::string LOCAL_SCHEME;
+
     /** separator we use to divide the source host and the port in the file path */
     extern const char HOST_PORT_SEPARATOR;
 

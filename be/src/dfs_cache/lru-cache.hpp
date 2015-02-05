@@ -505,8 +505,12 @@ private:
 					// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
 					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
+					valid = false;
 					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
-                    AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp);
+                    AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp, valid);
+                    if(!valid)
+                    	return false;
+
                     if(bucket == m_ageBucket){
                     	// just do nothing, we are still in correct bucket
                     }
@@ -742,15 +746,17 @@ private:
         }
         /** lookup for Age Bucket to fit specified timestamp
          * @param timestamp - timestamp to get the Bucket for
-         *
+         * @param valid     - flag, indicates that the timestamp providen is valid for the cache
          * @return Age Bucket if one found, nullptr otherwise
          */
-        AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp){
+        AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp, bool& valid){
+        	valid = true;
         	// if there's ancient timestamp specified, reply no bucket exists:
         	if(timestamp < m_startTimestamp){
         		LOG (INFO) << "Timestamp is too old to get the bucket for : \"" <<
         				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". Min timestamp : \"" <<
         				std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) << "\".\n";
+        		valid = false;
         		return nullptr;
         	}
 

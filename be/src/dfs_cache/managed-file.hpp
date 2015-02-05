@@ -91,6 +91,9 @@ namespace managed_file {
 		using GetFileInfo = typename boost::function<dfsFileInfo*(const char* path, const FileSystemDescriptor& descriptor)>;
 		/** callback to free remote file info */
         using FreeFileInfo = typename boost::function<void(dfsFileInfo*, int)>;
+
+ 	   static std::string              fileSeparator;  /**< platform-specific file separator */
+
    private:
 	   std::atomic<State> m_state;                   /**< current file state */
 	   std::atomic<int>   m_subscribers;             /**< number of subscribers of this file (who may wait for this file to be downloaded */
@@ -117,8 +120,6 @@ namespace managed_file {
         												* only if it is in FORBIDDEN state */
 
        volatile std::atomic<int>       m_users;        /**< number of users so far */
-
-	   static std::string              fileSeparator;  /**< platform-specific file separator */
 
 	   static std::vector<std::string> m_supportedFs;  /**< list of supported file systems, string representation */
 

@@ -75,15 +75,18 @@ echo "Split and assign HBase regions"
 # To properly test HBase integeration, HBase regions are split and assigned by this
 # script. Restarting HBase will change the region server assignment. Run split-hbase.sh
 # before running any test.
-${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
+#${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
+
+#${IMPALA_HOME}/testdata/bin/split-hbase.sh
 
 for i in $(seq 1 $NUM_ITERATIONS)
 do
   # Preemptively force kill impalads and the statestore to clean up any running instances.
   # The BE unit tests cannot run when impalads are started.
-  ${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
+  #${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
 
   if [[ "$BE_TEST" = true ]]; then
+  echo "Running BE tests...."
     # Run backend tests.
     ${IMPALA_HOME}/bin/run-backend-tests.sh
   fi
@@ -108,6 +111,7 @@ do
   fi
 
   if [[ "$FE_TEST" = true ]]; then
+    echo "Running FE tests...."
     # Run JUnit frontend tests
     # Requires a running impalad cluster because some tests (such as DataErrorTest and
     # JdbcTest) queries against an impala cluster.

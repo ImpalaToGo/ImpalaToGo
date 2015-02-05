@@ -46,6 +46,7 @@ void File::initialize(){
 	  // configure supported file systems:
 	  m_supportedFs.push_back(constants::HDFS_SCHEME);
 	  m_supportedFs.push_back(constants::S3N_SCHEME);
+	  m_supportedFs.push_back(constants::LOCAL_SCHEME);
 }
 
 std::string File::constructLocalPath(const FileSystemDescriptor& fsDescriptor, const char* path){
@@ -57,8 +58,8 @@ std::string File::constructLocalPath(const FileSystemDescriptor& fsDescriptor, c
     // add FileSystem type on top of hierarchy:
     localPath += stream.str();
 
-    if(!fsDescriptor.host.empty())
-    	localPath += fileSeparator;
+    //if(!fsDescriptor.host.empty())
+    localPath += fileSeparator;
     localPath += fsDescriptor.host;
     localPath += constants::HOST_PORT_SEPARATOR;
     localPath += std::to_string(fsDescriptor.port);
@@ -97,6 +98,8 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 		descriptor.dfs_type = DFS_TYPE::hdfs;
 	if(boost::iequals(schema, constants::S3N_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::s3n;
+	if(boost::iequals(schema, constants::LOCAL_SCHEME))
+		descriptor.dfs_type = DFS_TYPE::local;
 
 	if(it == fqdn_to_resolve.end())
 		return descriptor;
@@ -126,7 +129,8 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 		return descriptor;
 	}
 
-    if(descriptor.host.empty())
+	// if there's other schema than local filesystem is detected but the host is unknown, report back immediatelly
+    if((descriptor.dfs_type != DFS_TYPE::local) && descriptor.host.empty())
     	return descriptor;
 
     LOG (INFO) << "substr to cut the catalog and filename : initial string \"" <<
@@ -150,9 +154,10 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	relative = catalog_filename.string();
 	// now having all we need to construct remote origin file system path which we call fqdn, go and construct:
 	fqnp = schema;
-	fqnp += "://";
+	fqnp += (descriptor.dfs_type == DFS_TYPE::local ? ":/" : "://");
 	fqnp += descriptor.host;
-	if(descriptor.dfs_type != DFS_TYPE::s3n){
+	// for 3sn or local filesystem, don't add the port into uri
+	if((descriptor.dfs_type != DFS_TYPE::s3n) && (descriptor.dfs_type != DFS_TYPE::local)){
 		fqnp += ":";
 		fqnp += std::to_string(descriptor.port);
 	}
