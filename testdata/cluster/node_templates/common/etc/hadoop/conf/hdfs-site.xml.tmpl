@@ -1,7 +1,19 @@
 <?xml version="1.0"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
 
+
 <configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>file:///</value>
+  </property>
+  
+  <property>
+    <name>fs.default.name</name>
+    <value>file:///</value>
+    <description>The name of the default file system.  A URI whose scheme and authority determine the FileSystem implementation.</description>
+  </property>
+
   <property>
     <name>dfs.namenode.http-address</name>
     <value>0.0.0.0:${HDFS_WEBUI_PORT}</value>
