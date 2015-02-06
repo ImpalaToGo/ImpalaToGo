@@ -687,8 +687,27 @@ private:
         	boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
         	boost::posix_time::time_duration const diff = timestamp - epoch;
 
+        	// check which time type of timesice is configured, hours, minutes or seconds and set the
+        	// divisor accordingly:
+        	long long time_type = 1;
+        	long diff_type = 1;
+
+        	if(m_timeSlice.hours() != 0){
+        		time_type = m_timeSlice.hours();
+        		diff_type = diff.hours();
+        	}
+        	else if(m_timeSlice.minutes() != 0){
+        		time_type = m_timeSlice.minutes();
+        		diff_type = diff.minutes();
+        	}
+        	else if(m_timeSlice.seconds() != 0){
+        		time_type = m_timeSlice.seconds();
+        		diff_type = diff.seconds();
+        	}
+        	else time_type = diff_type = 1;
+
         	// calculate index in array of buckets that fit requested timestamp:
-        	long long idx = m_oldestIdx + (diff.hours() - m_oldestIdx) / m_timeSlice.hours();
+        	long long idx = m_oldestIdx + (diff_type - m_oldestIdx) / time_type;
         	return idx;
         }
 
