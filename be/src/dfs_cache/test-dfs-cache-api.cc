@@ -172,7 +172,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 
 	boost::system::error_code ec;
 
-	SCOPED_TRACE("Reset the cache... \"" + m_cache_path + "\"");
+	SCOPED_TRACE(testing::Message() << "Reset the cache... \"" << m_cache_path << "\"");
 
 	// clean cache directory before usage:
 	boost::filesystem::remove_all(m_cache_path, ec);
@@ -182,7 +182,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 	boost::filesystem::create_directory(m_cache_path, ec);
 	ASSERT_TRUE(!ec);
 
-	SCOPED_TRACE("Check dataset location exist... \"" + m_dataset_path + "\"");
+	SCOPED_TRACE(testing::Message() << "Check dataset location exist... \"" << m_dataset_path << "\"");
     // first check working directories exist:
 	ASSERT_TRUE(boost::filesystem::exists(target, ec));
 	SCOPED_TRACE(ec.message());
