@@ -297,17 +297,11 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
  * 5. Close the file that was kept opened on step 2.
  * 6. Test succeeded in case if all byte-comparisons passed successfully.
  */
-TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
-	m_dataset_path = constants::TEST_CACHE_DEFAULT_LOCATION;
+TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
+	m_dataset_path = constants::TEST_DATASET_DEFAULT_LOCATION;
 
 	// age bucket time slice:
 	m_timeslice = constants::TEST_CACHE_REDUCED_TIMESLICE;
-
-	// Initialize cache with 1 Mb
-	cacheInit(85, m_cache_path, boost::posix_time::seconds(m_timeslice), constants::TEST_CACHE_FIXED_SIZE);
-
-	// configure local filesystem:
-	cacheConfigureFileSystem(m_namenodelocalFilesystem);
 
 	const char* target      = m_dataset_path.c_str();
 	const char* destination = m_cache_path.c_str();
@@ -318,12 +312,13 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
 
 	// clean cache directory before usage:
 	boost::filesystem::remove_all(m_cache_path, ec);
+	SCOPED_TRACE(ec.message());
     ASSERT_TRUE(!ec);
 
 	boost::filesystem::create_directory(m_cache_path, ec);
 	ASSERT_TRUE(!ec);
 
-    // now check all working directories exist:
+    // first check working directories exist:
 	ASSERT_TRUE(boost::filesystem::exists(target));
 	ASSERT_TRUE(boost::filesystem::exists(destination));
 
@@ -335,6 +330,13 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
     SCOPED_TRACE("Dataset is validated and is ready");
+
+	// Initialize cache with 1 Mb
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
+			boost::posix_time::seconds(m_timeslice), constants::TEST_CACHE_FIXED_SIZE);
+
+	// configure local filesystem:
+	cacheConfigureFileSystem(m_namenodelocalFilesystem);
 
 	// get the connection to local file system:
 	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
@@ -368,14 +370,18 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
     boost::function<void(int)> scenario = [&](int i) {
     	// open file, say its local one:
     	bool available;
-    	file = dfsOpenFile(m_namenodelocalFilesystem, files[i].mName, O_RDONLY, 0, 0, 0, available);
+    	std::string path(files[i].mName);
+    	path = path.insert(path.find_first_of("/"), "/");
+
+    	file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str() , O_RDONLY, 0, 0, 0, available);
     	ASSERT_TRUE((file != NULL) && available);
 
     	// increase cached data size
     	cached_data_size += files[i].mSize;
 
     	// open "target" file:
-    	remotefile = fsAdaptor.fileOpen(conn, files[i].mName, O_RDONLY, 0, 0, 0);
+    	// and add an extra slash to have the uri "file:///path"
+    	remotefile = fsAdaptor.fileOpen(conn, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0);
     	ASSERT_TRUE(remotefile != NULL);
 
     	// now read by blocks and compare:
@@ -394,7 +400,7 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
     		// check read bytes count is equals:
         	ASSERT_TRUE(last_read_remote == last_read_local);
         	// compare memory contents we read from files:
-        	ASSERT_TRUE(std:: memcmp(buffer_remote, buffer_local, last_read_remote));
+        	ASSERT_TRUE((std:: memcmp(buffer_remote, buffer_local, last_read_remote) == 0));
 
     		// read next data buffer:
     		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
@@ -403,7 +409,6 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
     };
 
     for(int i = 0 ; i < entries; i++){
-
     	bool extrascenario = false;
     	// check whether we near to reach the cache size limit on this iteration:
     	if((cached_data_size + files[i].mSize) > constants::TEST_CACHE_FIXED_SIZE){
@@ -445,7 +450,7 @@ TEST_F(CacheLayerTest, DISABLED_TestCacheAgebucketSpanReduction){
     // here, we passed the cache cleanup already.
     // close preserved file and check we can access it.
     ASSERT_TRUE(preserved_handle != nullptr);
-    ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, preserved_handle));
+    ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, preserved_handle) == 0);
 
     SCOPED_TRACE("Going to run comparison for preserved file");
 
