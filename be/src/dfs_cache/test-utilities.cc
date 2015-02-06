@@ -21,7 +21,7 @@ namespace constants{
 	const std::string TEST_DATASET_DEFAULT_LOCATION = "/home/elenav/src/ImpalaToGo/testdata/dfs_cache/";
 
 	/** Test cache location */
-	const std::string TEST_CACHE_DEFAULT_LOCATION = "/home/elenav/src/cache/";
+	const std::string TEST_CACHE_DEFAULT_LOCATION = "/var/cache/ImpalaToGo/";
 
 	/** reduced age bucket timeslice */
 	const int TEST_CACHE_REDUCED_TIMESLICE = 10;
