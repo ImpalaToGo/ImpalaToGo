@@ -101,7 +101,7 @@ public:
      };
 
 protected:
-    isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaidity */
+    isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaдidity */
     TellCapacityLimitPredicate m_tellCapacityLimitPredicate;  /**< predicate to be invoked to get the limit of capacity. For capacity planning */
     TellWeightPredicate        m_tellWeightPredicate;         /**< predicate to be invoked to get the weight of item. For cleanup planning */
     MarkItemForDeletion        m_markForDeletion;             /**< predicate to mark the item for deletion. */
@@ -181,6 +181,8 @@ private:
         /** predicate load the item into the cache is one is requested but is not here yet */
         LoadItemFunc<KeyType_> m_loadItem;
 
+
+
         /** predicate to construct new item to host it within the cache */
         ConstructItemFunc<KeyType_> m_constructItemPredicate;
 
@@ -253,6 +255,11 @@ private:
         			if(item == nullptr)
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
+        			if(!node){
+        				// destroy the newly allocated item
+        				delete item;
+        				item = nullptr;
+        			}
         		}
         		// here,
         		if(!node)
@@ -290,9 +297,15 @@ private:
         			if(item == nullptr)
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
+        			if(!node){
+        				// destroy the newly allocated item
+        				delete item;
+        				item = nullptr;
+        				return nullptr;
+        			}
         		}
-        		if(!node)
-        			return nullptr;
+    			if(!node)
+    				return nullptr;
         	}
         	// check node value. It may be lazy-erased
         	if(node->value() == nullptr)

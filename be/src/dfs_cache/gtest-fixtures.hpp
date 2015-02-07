@@ -17,6 +17,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <utility>
+#include <cstdlib>
 
 #include "dfs_cache/dfs-cache.h"
 #include "dfs_cache/filesystem-mgr.hpp"
@@ -90,6 +91,18 @@ class CacheLayerTest : public ::testing::Test {
 
 	virtual void SetUp() {
 		m_cache_path   = constants::TEST_CACHE_DEFAULT_LOCATION;
+
+		// try to get the ${IMPALA_HOME} environment variable and assign the dataset location
+		// relatively if anything found. Assign to default dataset location otherwise
+		const char* env_v_name = constants::IMPALA_HOME_ENV_VARIABLE_NAME.c_str();
+		if(const char* env_v = std::getenv(env_v_name)){
+			char buff[4096];
+			sprintf(buff, "%s/testdata/dfs_cache/", env_v);
+			m_dataset_path.assign(buff);
+		}
+		else
+			m_dataset_path = constants::TEST_DATASET_DEFAULT_LOCATION;
+
   }
 
   virtual void TearDown() {

@@ -31,6 +31,9 @@ namespace constants{
 	/** Test dataset location */
 	extern const std::string TEST_DATASET_DEFAULT_LOCATION;
 
+	/** IMPALA_HOME environment variable name */
+	extern const std::string IMPALA_HOME_ENV_VARIABLE_NAME;
+
 	/** Test cache location */
 	extern const std::string TEST_CACHE_DEFAULT_LOCATION;
 

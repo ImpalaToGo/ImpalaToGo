@@ -165,8 +165,6 @@ TEST_F(CacheLayerTest, DISABLED_TestCopyRemoteFileToLocal){
  * 5. Test succeeded in case if all byte-comparisons passed successfully.
  */
 TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
-	m_dataset_path = constants::TEST_DATASET_DEFAULT_LOCATION;
-
 	const char* target      = m_dataset_path.c_str();
 	const char* destination = m_cache_path.c_str();
 
@@ -303,8 +301,6 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
  * 6. Test succeeded in case if all byte-comparisons passed successfully.
  */
 TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
-	m_dataset_path = constants::TEST_DATASET_DEFAULT_LOCATION;
-
 	// age bucket time slice:
 	m_timeslice = constants::TEST_CACHE_REDUCED_TIMESLICE;
 
@@ -480,6 +476,142 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     // free file info:
     fsAdaptor.freeFileInfo(files, entries);
 }
+
+TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
+	const char* target      = m_dataset_path.c_str();
+	const char* destination = m_cache_path.c_str();
+
+	boost::system::error_code ec;
+
+	SCOPED_TRACE("Reset the cache...");
+
+	// clean cache directory before usage:
+	boost::filesystem::remove_all(m_cache_path, ec);
+	SCOPED_TRACE(ec.message());
+    ASSERT_TRUE(!ec);
+
+	boost::filesystem::create_directory(m_cache_path, ec);
+	ASSERT_TRUE(!ec);
+
+    // first check working directories exist:
+	ASSERT_TRUE(boost::filesystem::exists(target));
+	ASSERT_TRUE(boost::filesystem::exists(destination));
+
+	SCOPED_TRACE("Working directories exist.");
+
+	// check dataset size it least of 1.5 of configured cache size:
+    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(target);
+    double overlap_ratio = 1.5;
+    ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
+
+    SCOPED_TRACE("Dataset is validated and is ready");
+
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_namenodelocalFilesystem);
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+
+	// get the list of all files within the specified dataset:
+	int entries;
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    ASSERT_TRUE((files != NULL) && (entries != 0));
+    for(int i = 0; i < entries; i++){
+    	std::cout << files[i].mName << std::endl;
+    }
+
+    dfsFile file       = nullptr;
+    dfsFile remotefile = nullptr;
+
+    // data size that is already cached
+    tSize cached_data_size = 0;
+
+    // create the storage for opened handles, at least of the whole dataset size:
+    std::vector<dfsFile> opened_handles(entries);
+
+#define BUFFER_SIZE 17408
+
+    // we need to run twice the functor below to check the cache alive after the cleanup
+	boost::function<void(int i)> scenario_open = [&](int i) {
+		std::string path(files[i].mName);
+		path = path.insert(path.find_first_of("/"), "/");
+
+		// open file, say its local one:
+		bool available;
+		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+		ASSERT_TRUE((file != NULL) && available);
+
+		// preserve opened handle
+		opened_handles.push_back(file);
+
+		// increase cached data size
+		cached_data_size += files[i].mSize;
+
+		// open "target" file:
+		// and add an extra slash to have the uri "file:///path"
+		remotefile = fsAdaptor.fileOpen(conn, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0);
+		ASSERT_TRUE(remotefile != NULL);
+
+		// now read by blocks and compare:
+		tSize last_read_local = 0;
+		tSize last_read_remote = 0;
+
+		char* buffer_remote = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+		char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+
+		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+		last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+
+		ASSERT_TRUE(last_read_remote == last_read_local);
+
+		for (; last_read_remote > 0;) {
+			// check read bytes count is equals:
+			ASSERT_TRUE(last_read_remote == last_read_local);
+			// compare memory contents we read from files:
+			ASSERT_TRUE((std::memcmp(buffer_remote, buffer_local, last_read_remote) == 0));
+
+			// read next data buffer:
+			last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+			last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+		}
+		// close only "target" handle
+		ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
+	};
+	for(int i = 0 ; i < entries; i++){
+	    	// check whether we near to reach the cache size limit on this iteration:
+	    	if((cached_data_size + files[i].mSize) > constants::TEST_CACHE_FIXED_SIZE){
+	    		// and check that the next opened handle will be NULL (because the cache is overloaded with
+	    		// a data "in use":
+
+	    		std::string path(files[i].mName);
+	    		path = path.insert(path.find_first_of("/"), "/");
+  				bool available;
+
+	    		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+	    		ASSERT_TRUE((file == NULL) && !available);
+	    		break;
+
+	    	}
+	    	// run the files opening and comparison
+	    	scenario_open(i);
+	    }
+
+	// close all file handles we preserved before:
+	for(auto handle : opened_handles)
+		if(handle != NULL)
+			ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, handle) == 0);
+
+	SCOPED_TRACE("Test is near to complete, cleanup...");
+
+    // free file info:
+    fsAdaptor.freeFileInfo(files, entries);
+}
+
 }
 
 int main(int argc, char **argv) {

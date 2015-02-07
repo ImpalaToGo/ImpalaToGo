@@ -18,7 +18,10 @@ namespace constants{
 	const int TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT = 95;
 
 	/** Test dataset location */
-	const std::string TEST_DATASET_DEFAULT_LOCATION = "/root/ImpalaToGo/testdata/dfs_cache/"; // "/home/elenav/src/ImpalaToGo/testdata/dfs_cache/";
+	const std::string TEST_DATASET_DEFAULT_LOCATION = "/root/ImpalaToGo/testdata/dfs_cache/";
+
+	/** IMPALA_HOME environment variable name */
+	const std::string IMPALA_HOME_ENV_VARIABLE_NAME = "IMPALA_HOME";
 
 	/** Test cache location */
 	const std::string TEST_CACHE_DEFAULT_LOCATION = "/var/cache/ImpalaToGo/";
