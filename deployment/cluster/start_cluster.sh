@@ -80,6 +80,7 @@ if [ -z "$IMAGE_AVAILABLE" ];
 then
 	echo Image: $IMAGE_ID is not available
 	echo please check configuration.
+	release_lock
 	exit 1
 fi
 
