@@ -111,9 +111,8 @@ std::string FileSystemManager::getMode(int flags) {
 
 dfsFile FileSystemManager::dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
                       int bufferSize, short replication, tSize blocksize, bool& available){
-
-
-	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED, 0, 0};
+	// create the handle to file, define it as "cached file handle"
+	dfsFile file = new dfsFile_internal{nullptr, dfsStreamType::UNINITIALIZED, 0, 0, false};
 
 	// calculate fully qualified local path from requested
 	std::string localPath = managed_file::File::constructLocalPath(fsDescriptor, path);

@@ -593,7 +593,8 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
   				bool available;
 
 	    		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
-	    		ASSERT_TRUE((file == NULL) && !available);
+	    		// check that we got direct handle to the file:
+	    		ASSERT_TRUE((file != NULL) && available && file->direct);
 	    		break;
 
 	    	}

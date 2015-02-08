@@ -74,6 +74,7 @@ struct dfsFile_internal{
 	enum dfsStreamType type;   /**< bound stream type */
 	int                flags;  /**< flags which the stream was opened with */
     size_t             size;   /**< size of file handle */
+    bool               direct; /**<  flag, indicates whether the handle is opened directly (not from cache) */
 };
 
 /** A type definition for internal dfs file */
