@@ -1,0 +1,74 @@
+IMAGE_ID=ami-da8ec8b2
+SECURITY_GROUP_IDS=sg-0f43ba62
+INSTANCE_TYPE=m3.2xlarge
+KEY_NAME=ImpalaToGo
+PRIVATE_KEY=ImpalaToGo.pem
+SECURITY_GROUP=impala2go-slave
+ACCESS_KEY=ACCESS_KEY_PLACE
+SECRET_KEY=SECRET_KEY_PLACE
+
+
+
+BASE_NAME=impala2go
+IMPALA_TO_GO_CACHE=/var/cache/$BASE_NAME
+
+LOG_DIR=/var/log/$BASE_NAME
+LOG=${LOG_DIR}/${BATCH_ID}.log
+LOG_APPEND="tee -a $LOG"
+LOG_PREFIX="date +[%D-%T.%N]"
+
+IMPALA_TO_GO_CACHE=/var/cache/$BASE_NAME
+mkdir -p $IMPALA_TO_GO_CACHE
+CLUSTER_VAR_BASE=${IMPALA_TO_GO_CACHE}/cluster
+mkdir -p $CLUSTER_VAR_BASE
+CLUSTER_VAR_DIR=${CLUSTER_VAR_BASE}/${BATCH_ID}
+mkdir -p $CLUSTER_VAR_DIR
+CLUSTER_HOSTS=$CLUSTER_VAR_DIR/hosts
+KNOWN_CLUSTERS_DIR=${IMPALA_TO_GO_CACHE}/clusters
+mkdir -p $KNOWN_CLUSTERS_DIR
+TEMP_FILE=/tmp/${BATCH_ID}
+
+LOCK_DIR=/var/lock/${BASE_NAME}/
+mkdir -p $LOCK_DIR
+LOCK_FILE=${LOCK_DIR}/${BATCH_ID}.lock
+
+#configuration for SSH connectoin to cluster nodes
+SSH_KNOWN_HOSTS_FILE=$CLUSTER_VAR_DIR/known_hosts
+SSH_PARAMS="-t -t -o UserKnownHostsFile=$SSH_KNOWN_HOSTS_FILE -i $PRIVATE_KEY"
+
+#DRY_RUN=--dry-run
+#for example: AWS_PROFILE_PARAM=--profile=cluster
+AWS_PROFILE_PARAM="--output text"
+AWS_CMD="aws $AWS_PROFILE_PARAM ec2 $DRY_RUN"
+
+function store_cluster_id(){
+	local cluster_id=$1
+	touch ${KNOWN_CLUSTERS_DIR}/${cluster_id}
+	mkdir -p ${CLUSTER_VAR_DIR}
+	mkdir -p ${LOG_DIR}
+}
+
+function wait_lock(){
+	while [ -f $LOCK_FILE ]; 
+	do 
+		sleep 1
+	done
+}
+
+function take_lock(){
+	wait_lock
+	touch $LOCK_FILE
+}
+
+function release_lock(){
+	rm -f $LOCK_FILE
+}
+
+function handle_external_termination(){
+	echo $($LOG_PREFIX) Terminated by signal |$LOG_APPEND
+	wait
+	release_lock
+	exit 1
+}
+trap handle_external_termination SIGHUP SIGINT SIGTERM
+echo $($LOG_PREFIX) ------------------------Staring cluster $BATCH_ID manipulation-------------------------- |$LOG_APPEND
