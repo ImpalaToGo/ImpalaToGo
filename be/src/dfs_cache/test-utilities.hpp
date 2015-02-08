@@ -21,6 +21,26 @@
 #include <ctime>
 
 namespace impala{
+namespace constants{
+    /** Fixed cache size for tests require this setting */
+	extern const int TEST_CACHE_FIXED_SIZE;
+
+	/** default percent of free space on the configured cache location to be considred by cache layer */
+	extern const int TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT;
+
+	/** Test dataset location */
+	extern const std::string TEST_DATASET_DEFAULT_LOCATION;
+
+	/** IMPALA_HOME environment variable name */
+	extern const std::string IMPALA_HOME_ENV_VARIABLE_NAME;
+
+	/** Test cache location */
+	extern const std::string TEST_CACHE_DEFAULT_LOCATION;
+
+	/** reduced age bucket timeslice */
+	extern const int TEST_CACHE_REDUCED_TIMESLICE;
+}
+
 
 template<typename Function_, typename A>
 std::future<typename std::result_of<Function_(A&&)>::type>

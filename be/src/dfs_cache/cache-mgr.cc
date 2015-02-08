@@ -118,6 +118,7 @@ status::StatusInternal CacheManager::shutdown(bool force, bool updateClients){
 	m_LowPriorityQueueThread.reset();
 	m_HighPriorityQueueThread.reset();
 
+	CacheManager::instance_.reset();
 	return status::StatusInternal::OK;
 }
 

@@ -41,11 +41,17 @@ namespace impala {
  *
  * @param mem_limit_percent - limit of available memory on @a root, in percents, that can be
  * potentially consumed by cache
+ *
  * @param root              - local cache root - absoulte filesystem path.
+ * @param timeslice         - time slice duration, for underlying cache buckets management
+ * @param size_hard_limit   - hard size limit to configure the cache with. Once specified,
+ * mem_limit_percent is ignored
  *
  * @return Operation status.
  */
-status::StatusInternal cacheInit(int mem_limit_percent = 0, const std::string& root = "");
+status::StatusInternal cacheInit(int mem_limit_percent = 0, const std::string& root = "",
+		boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+		unsigned long size_hard_limit = 0);
 
 /**
  * @fn StatusInternal cacheConfigureNameNode(const FileSystemDescriptor & adaptor)

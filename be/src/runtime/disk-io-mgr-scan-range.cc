@@ -398,7 +398,7 @@ Status DiskIoMgr::ScanRange::ReadFromCache(bool* read_succeeded) {
   if (!status.ok()) return status;
 
   // Cached reads not supported on local filesystem.
-  if (reader_->hdfs_connection_.dfs_type == LOCAL ) return Status::OK;
+  if (reader_->hdfs_connection_.dfs_type == local ) return Status::OK;
 
   {
     unique_lock<mutex> hdfs_lock(hdfs_lock_);

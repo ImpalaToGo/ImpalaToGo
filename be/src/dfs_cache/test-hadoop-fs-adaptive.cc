@@ -5,6 +5,8 @@
  * @author elenav
  */
 
+#include <gtest/gtest.h>
+
 #include <fcntl.h>
 #include "dfs_cache/filesystem-mgr.hpp"
 #include "dfs_cache/gtest-fixtures.hpp"
@@ -23,7 +25,7 @@ SessionContext CacheLayerTest::m_ctx4 = nullptr;
 SessionContext CacheLayerTest::m_ctx5 = nullptr;
 SessionContext CacheLayerTest::m_ctx6 = nullptr;
 
-TEST_F(CacheLayerTest, ReadFileFromDigitalOceanHDFS) {
+TEST_F(CacheLayerTest, DISABLED_ReadFileFromDigitalOceanHDFS) {
 	FileSystemDescriptorBound fsAdaptor(m_namenodeHdfs);
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
@@ -57,7 +59,7 @@ TEST_F(CacheLayerTest, ReadFileFromDigitalOceanHDFS) {
 	filemgmt::FileSystemManager::instance()->dfsCloseFile(m_namenodeHdfs, file);
 }
 
-TEST_F(CacheLayerTest, CreateLocalFileDifferentInputPathAlternatives) {
+TEST_F(CacheLayerTest, DISABLED_CreateLocalFileDifferentInputPathAlternatives) {
 
 	FileSystemDescriptorBound fsAdaptor(m_namenode1);
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();

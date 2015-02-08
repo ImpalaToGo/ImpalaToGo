@@ -244,6 +244,7 @@ public class HdfsTable extends Table {
           Path p = new Path(partDirPath, fileDescriptor.getFileName());
 
           try {
+            LOG.info("Going to query \"" + p + "\" for file status for \"" + name_ + "\"");
             BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fsEntry, p);
             if(fileStatRes.getStatus() != BridgeOpStatus.OK){
               // no way to proceed, we did not sync with remote FS, throw the exception

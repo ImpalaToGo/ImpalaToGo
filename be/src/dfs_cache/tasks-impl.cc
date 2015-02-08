@@ -38,14 +38,24 @@ std::ostream& operator<<(std::ostream& out, const status::StatusInternal value){
 #define INSERT_ELEMENT(p) strings[p] = #p
         INSERT_ELEMENT(status::OK);
         INSERT_ELEMENT(status::OPERATION_ASYNC_SCHEDULED);
+        INSERT_ELEMENT(status::OPERATION_ASYNC_REJECTED);
+        INSERT_ELEMENT(status::FINALIZATION_IN_PROGRESS);
         INSERT_ELEMENT(status::REQUEST_IS_NOT_FOUND);
+        INSERT_ELEMENT(status::REQUEST_FAILED);
         INSERT_ELEMENT(status::NAMENODE_IS_NOT_CONFIGURED);
-        INSERT_ELEMENT(status::NAMENODE_IS_UNREACHABLE);
         INSERT_ELEMENT(status::NAMENODE_CONNECTION_FAILED);
         INSERT_ELEMENT(status::DFS_ADAPTOR_IS_NOT_CONFIGURED);
         INSERT_ELEMENT(status::DFS_OBJECT_DOES_NOT_EXIST);
+        INSERT_ELEMENT(status::DFS_NAMENODE_IS_NOT_REACHABLE);
+        INSERT_ELEMENT(status::DFS_OBJECT_OPERATION_FAILURE);
         INSERT_ELEMENT(status::FILE_OBJECT_OPERATION_FAILURE);
+        INSERT_ELEMENT(status::CACHE_IS_NOT_READY);
+        INSERT_ELEMENT(status::CACHE_OBJECT_NOT_FOUND);
+        INSERT_ELEMENT(status::CACHE_OBJECT_OPERATION_FAILURE);
+        INSERT_ELEMENT(status::CACHE_OBJECT_UNDER_FINALIZATION);
+        INSERT_ELEMENT(status::CACHE_OBJECT_IS_FORBIDDEN);
         INSERT_ELEMENT(status::NOT_IMPLEMENTED);
+        INSERT_ELEMENT(status::NO_STATUS);
 #undef INSERT_ELEMENT
     }
     return out << strings[value];
@@ -125,9 +135,27 @@ void FileDownloadTask::run_internal(){
 	m_status = taskOverallStatus::IN_PROGRESS;
 
 	// run the functor and share itself allowing the worker to access the cancellation context if needed
-	status::StatusInternal runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
-	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\". \n";
-    if(runstatus == status::StatusInternal::OK)
+	status::StatusInternal runstatus;
+	int retry = 3;
+	// compare expected bytes and local bytes and retry for 3 times if not equal:
+    do{
+    	m_progress->localBytes     = 0;
+    	m_progress->estimatedBytes = 0;
+    	runstatus = m_functor( m_progress->namenode, m_progress->dfsPath.c_str(), this);
+    	LOG (INFO) << "File Download Task was executed with the worker status : \"" << runstatus << "\"." <<
+    			"Retry, count down #\"" << std::to_string(retry) << "\".\n";
+    }while((m_progress->localBytes != m_progress->estimatedBytes) && (retry-- > 0));
+
+    // if still no equality for locally collected bytes and remote bytes, report an error:
+    if(m_progress->localBytes != m_progress->estimatedBytes){
+    	LOG (ERROR) << "File Download Task detected file inconsistency for \"" << m_progress->dfsPath.c_str() << "\".\n";
+    	m_progress->error = true;
+    	m_progress->errdescr = "Local file is not consistent with remote origin";
+    	m_progress->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_INCONSISTENT_DATA;
+    }
+
+    if((runstatus == status::StatusInternal::OK) &&
+    		(m_progress->progressStatus == FileProgressStatus::fileProgressStatus::FILEPROGRESS_COMPLETED_OK))
     	m_status = taskOverallStatus::COMPLETED_OK;
     else
     	m_status = taskOverallStatus::FAILURE;

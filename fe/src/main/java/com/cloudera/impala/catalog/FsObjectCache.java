@@ -5,12 +5,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.util.FsKey;
 import com.google.common.base.Preconditions;
 
 /** Cache for remote file systems within their state */
 public class FsObjectCache {
+
+  /** Logging mechanism */
+  private final static Logger LOG = LoggerFactory.getLogger(FsObjectCache.class);
 
   /** Registry of File System objects constructed from given Configuration and given URI */
   private final ConcurrentHashMap<String, ConcurrentHashMap<Path, FileSystem>> _filesystemsCache =
@@ -134,10 +139,13 @@ public class FsObjectCache {
     FsObject fsobject = null;
     // we hold the statistic for file within its parent directory,
     // look for parent location within the given filesystem:
-    if(_fsobjectsCache.containsKey(filesystem))
-      fsobject = _fsobjectsCache.get(filesystem).get(path.getParent());
+    Path parent = path.getParent();
+    if(_fsobjectsCache.containsKey(filesystem)){
+      fsobject = _fsobjectsCache.get(filesystem).get(parent != null ? parent : path);
+    }
     // ask parent about its file stats:
-    return fsobject != null ? fsobject.getChildMetadata(path.toString()) : null;
+    return fsobject != null ?
+        (parent != null ? fsobject.getChildMetadata(path.toString()) : fsobject.getMetadata()) : null;
   }
 
   /**

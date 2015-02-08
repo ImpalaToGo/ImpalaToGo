@@ -101,7 +101,7 @@ public:
      };
 
 protected:
-    isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaidity */
+    isValidPredicate           m_isValid;                     /**< predicate to be invoked to check for vaдidity */
     TellCapacityLimitPredicate m_tellCapacityLimitPredicate;  /**< predicate to be invoked to get the limit of capacity. For capacity planning */
     TellWeightPredicate        m_tellWeightPredicate;         /**< predicate to be invoked to get the weight of item. For cleanup planning */
     MarkItemForDeletion        m_markForDeletion;             /**< predicate to mark the item for deletion. */
@@ -181,6 +181,8 @@ private:
         /** predicate load the item into the cache is one is requested but is not here yet */
         LoadItemFunc<KeyType_> m_loadItem;
 
+
+
         /** predicate to construct new item to host it within the cache */
         ConstructItemFunc<KeyType_> m_constructItemPredicate;
 
@@ -253,6 +255,11 @@ private:
         			if(item == nullptr)
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
+        			if(!node){
+        				// destroy the newly allocated item
+        				delete item;
+        				item = nullptr;
+        			}
         		}
         		// here,
         		if(!node)
@@ -290,9 +297,15 @@ private:
         			if(item == nullptr)
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
+        			if(!node){
+        				// destroy the newly allocated item
+        				delete item;
+        				item = nullptr;
+        				return nullptr;
+        			}
         		}
-        		if(!node)
-        			return nullptr;
+    			if(!node)
+    				return nullptr;
         	}
         	// check node value. It may be lazy-erased
         	if(node->value() == nullptr)
@@ -374,6 +387,7 @@ private:
          * @return number of remained items in the index
          */
         int rebuildIndex(){
+           	LOG (INFO) << "Index is near to be rebuilt.\n";
         	// reset index size:
         	size_t indexSize = 0;
 
@@ -382,6 +396,7 @@ private:
 
         	WriteLock lo(m_rwLock);
         	m_index.clear();
+        	LOG (INFO) << "Index is cleaned up. Rebuilding...\n";
         	lo.unlock();
 
         	getStartPredicate start = boost::bind(boost::mem_fn(&LifespanMgr::start), m_owner->m_lifeSpan);
@@ -503,8 +518,12 @@ private:
 					// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
 					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
+					valid = false;
 					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
-                    AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp);
+                    AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp, valid);
+                    if(!valid)
+                    	return false;
+
                     if(bucket == m_ageBucket){
                     	// just do nothing, we are still in correct bucket
                     }
@@ -649,8 +668,15 @@ private:
         	unsigned soft_items_fact = m_owner->m_numberOfSoftItems.load(std::memory_order_acquire);
         	unsigned hard_items_fact = m_owner->m_numberOfHardItems.load(std::memory_order_acquire);
 
+        	LOG (INFO) << "Checking whether index is valid. Soft items = \"" << std::to_string(soft_items_fact) << "\";" <<
+        			"hard items : \"" << std::to_string(hard_items_fact) << "\"; max limit forbidden items = \"" <<
+        			std::to_string(m_owner->_max_limit_of_forbidden_items) << "\".";
+
         	// if limit of forbidden nodes is reached, start re-indexing
         	if( soft_items_fact - hard_items_fact >= m_owner->_max_limit_of_forbidden_items ){
+            	LOG (INFO) << "Check index validation is triggered. Soft items = \"" << std::to_string(soft_items_fact) << "\";" <<
+            			"hard items : \"" << std::to_string(hard_items_fact) << "\".";
+
         		// go over indexes and note their capacity
         		for(auto it = m_owner->m_indexList->begin(); it != m_owner->m_indexList->end(); ++it){
         			soft_items_fact = it->second->rebuildIndex();
@@ -674,8 +700,27 @@ private:
         	boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
         	boost::posix_time::time_duration const diff = timestamp - epoch;
 
+        	// check which time type of timesice is configured, hours, minutes or seconds and set the
+        	// divisor accordingly:
+        	long long time_type = 1;
+        	long diff_type = 1;
+
+        	if(m_timeSlice.hours() != 0){
+        		time_type = m_timeSlice.hours();
+        		diff_type = diff.hours();
+        	}
+        	else if(m_timeSlice.minutes() != 0){
+        		time_type = m_timeSlice.minutes();
+        		diff_type = diff.minutes();
+        	}
+        	else if(m_timeSlice.seconds() != 0){
+        		time_type = m_timeSlice.seconds();
+        		diff_type = diff.seconds();
+        	}
+        	else time_type = diff_type = 1;
+
         	// calculate index in array of buckets that fit requested timestamp:
-        	long long idx = m_oldestIdx + (diff.hours() - m_oldestIdx) / m_timeSlice.hours();
+        	long long idx = m_oldestIdx + (diff_type - m_oldestIdx) / time_type;
         	return idx;
         }
 
@@ -733,15 +778,17 @@ private:
         }
         /** lookup for Age Bucket to fit specified timestamp
          * @param timestamp - timestamp to get the Bucket for
-         *
+         * @param valid     - flag, indicates that the timestamp providen is valid for the cache
          * @return Age Bucket if one found, nullptr otherwise
          */
-        AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp){
+        AgeBucket* getBucketForTimestamp(boost::posix_time::ptime timestamp, bool& valid){
+        	valid = true;
         	// if there's ancient timestamp specified, reply no bucket exists:
         	if(timestamp < m_startTimestamp){
         		LOG (INFO) << "Timestamp is too old to get the bucket for : \"" <<
         				std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\". Min timestamp : \"" <<
         				std::to_string(utilities::posix_time_to_time_t(m_startTimestamp)) << "\".\n";
+        		valid = false;
         		return nullptr;
         	}
 
@@ -962,6 +1009,8 @@ private:
         		// if bucket still has nodes but required space is freed, break the cleanup
         		if(node && (weightToRemove <= 0)){
         			LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" still has alive nodes. Required space is freed.\n";
+        			utilities::reverse(node);
+        			node->bucket()->first = node;
         			break;
         		}
 
@@ -1227,16 +1276,19 @@ private:
 
 	/** construct the LRU cache object
 	 *
-	 * @param startFrom - timestamp, create the start time point in order to accept only items with later timestamps into the cache
-	 * @param isValid   - predicate used to determine if cache is out of date.  Called before index access
-	 *
+	 * @param startFrom - timestamp, create the start time point in order to accept only items with later timestamps into the cache.
+	 * @param isValid   - predicate used to determine if cache is out of date.  Called before index access.
+	 * @param timeslice - timeslice for age buckets management. Non-mandatory parameter.
+	 * @param isValid   - predicate to validate the item managed by cache. Non-mandatory parameter.
 	 */
-    LRUCache(boost::posix_time::ptime startFrom,  long long capacity, isValidPredicate isValid = 0) : m_startTime(startFrom){
+    LRUCache(boost::posix_time::ptime startFrom,  long long capacity,
+    		boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
+    		isValidPredicate isValid = 0) : m_startTime(startFrom){
 
     	m_capacityLimit = capacity;
 
         m_isValid  = isValid;
-        m_lifeSpan = new LifespanMgr(this, startFrom);
+        m_lifeSpan = new LifespanMgr(this, startFrom, timeslice);
 
         // statistics collected for cache cleanup
         m_currentCapacity.store(0l);

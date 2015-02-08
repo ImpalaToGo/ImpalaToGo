@@ -63,6 +63,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
     // get the file progress reference:
     boost::shared_ptr<FileProgress> fp = task->progress();
+    fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_COMPLETED_OK;
 
     /********** Synchronization context, for cancellation  *********/
 
@@ -81,6 +82,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     			fsDescriptor.host << "\"" << "\n";
 		fp->error    = true;
 		fp->errdescr = "Failed to establish remote fs connection";
+		fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_REMOTE_DFS_IS_UNREACHABLE;
     	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
     }
 
@@ -93,8 +95,11 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
    	 				 fsDescriptor.host << "\"" << "\n";
    	 fp->error    = true;
    	 fp->errdescr = "Cache-managed registry file could not be located";
+   	 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_LOCAL_FAILURE;
    	 return status::StatusInternal::CACHE_OBJECT_NOT_FOUND;
     }
+    // get estimated bytes from managed file statistics:
+    fp->estimatedBytes = managed_file->remote_size();
 
     #define BUFFER_SIZE 17408
 	// open remote file:
@@ -105,6 +110,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				fsDescriptor.host << "\"" << "\n";
 		fp->error    = true;
 		fp->errdescr = "Unable to open requested remote file";
+
+		fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_IS_MISSED_REMOTELY;
 
 		// update file status:
 		managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
@@ -118,6 +125,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				 fsDescriptor.host << "\"" << "\n";
     	 fp->error    = true;
     	 fp->errdescr = "Insufficient memory for file operation";
+    	 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_GENERAL_FAILURE;
 
     	 // update file status:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
@@ -130,12 +138,14 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 std::string temp_relativename = managed_file->relative_name() + "_tmp";
 	 std::string tempname = managed_file->fqp() + "_tmp";
 
+	 // here, we should recreate the file!
 	 dfsFile file = filemgmt::FileSystemManager::instance()->dfsOpenFile(fsAdaptor->descriptor(), temp_relativename.c_str(), O_CREAT, 0, 0, 0, available);
      if(file == NULL || !available){
     	 LOG (ERROR) << "Unable to create local file \"" << path << "\", being cached from \""
     			 << fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
     	 fp->error    = true;
     	 fp->errdescr = "Cannot create local file";
+    	 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_LOCAL_FAILURE;
 
     	 // update file status:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
@@ -230,6 +240,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 status = status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
     	 fp->error    = true;
     	 fp->errdescr = "Error during remote file read";
+    	 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_INCONSISTENT_DATA;
+
     	 // update the managed file state:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
      }
@@ -254,9 +266,11 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 if(ret != 0){
 		 LOG (ERROR) << "Temporary file \"" << tempname << "\" was not renamed to \"" << managed_file->fqp() <<
 				 "\"; error : " << strerror(errno) << "\n";
-		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		 fp->error = true;
-		 fp->errdescr == strerror(errno);
+		 fp->errdescr = strerror(errno);
+		 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_LOCAL_FAILURE;
+
+		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
 		 managed_file->close();
 		 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 	 }
@@ -267,8 +281,19 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 filemgmt::FileSystemManager::instance()->dfsDelete(fsAdaptor->descriptor(), managed_file->relative_name().c_str(), true);
 	 }
 
+     // check the integrity of local bytes and remote bytes for managed file and assign the appropriate status:
+	 if(managed_file->remote_size() != managed_file->size()){
+		 fp->errdescr = "File is not consistent with remote origin";
+		 fp->error = true;
+		 fp->progressStatus = FileProgressStatus::fileProgressStatus::FILEPROGRESS_GENERAL_FAILURE;
+
+		 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
+		 LOG (ERROR) << "File \"" << managed_file->fqp() << "\" has inconsistent size and is marked as forbidden.\n";
+		 status = status::StatusInternal::CACHE_OBJECT_IS_FORBIDDEN;
+	 }
+
 	 managed_file->close();
-	 return status::StatusInternal::OK;
+	 return status;
 }
 
 status::StatusInternal Sync::cancelFileMakeProgress(bool async, request::CancellableTask* const & task){

@@ -207,16 +207,16 @@ else
 fi
 
 # Stop any running Impala services.
-${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
+#${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
 
-if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ]]
-then
+#if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ]]
+#then
   # Kill any processes that may be accessing postgres metastore. To be safe, this is done
   # before we make any changes to the config files.
-  set +e
-  ${IMPALA_HOME}/testdata/bin/kill-all.sh
-  set -e
-fi
+#  set +e
+#  ${IMPALA_HOME}/testdata/bin/kill-all.sh
+#  set -e
+#fi
 
 # option to clean everything first
 if [ $CLEAN_ACTION -eq 1 ]
@@ -297,11 +297,11 @@ mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/query_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/fe_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/data_loading
 
-if [ $FORMAT_CLUSTER -eq 1 ]; then
-  $IMPALA_HOME/testdata/bin/run-all.sh -format
-elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
-  $IMPALA_HOME/testdata/bin/run-all.sh
-fi
+#if [ $FORMAT_CLUSTER -eq 1 ]; then
+#  $IMPALA_HOME/testdata/bin/run-all.sh -format
+#elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
+#  $IMPALA_HOME/testdata/bin/run-all.sh
+#fi
 
 #
 # KERBEROS TODO
@@ -331,16 +331,16 @@ fi
 #
 # Don't try to run tests without data!
 #
-TESTWH_ITEMS=`hadoop fs -ls /test-warehouse 2> /dev/null | \
-    grep test-warehouse |wc -l`
-if [ ${TESTS_ACTION} -eq 1 -a \
-     ${TESTDATA_ACTION} -eq 0 -a \
-     ${TESTWH_ITEMS} -lt 5 ]; then
-  set +x
-  echo "You just asked buildall to run tests, but did not supply any data."
-  echo "Running tests without data doesn't work. Exiting now."
-  exit 1
-fi
+#TESTWH_ITEMS=`hadoop fs -ls /test-warehouse 2> /dev/null | \
+#    grep test-warehouse |wc -l`
+#if [ ${TESTS_ACTION} -eq 1 -a \
+#     ${TESTDATA_ACTION} -eq 0 -a \
+#     ${TESTWH_ITEMS} -lt 5 ]; then
+#  set +x
+#  echo "You just asked buildall to run tests, but did not supply any data."
+#  echo "Running tests without data doesn't work. Exiting now."
+#  exit 1
+#fi
 
 if [ $TESTDATA_ACTION -eq 1 ]; then
   # Create testdata.
@@ -362,9 +362,18 @@ if [ $TESTDATA_ACTION -eq 1 ]; then
   yes | ${IMPALA_HOME}/testdata/bin/create-load-data.sh ${CREATE_LOAD_DATA_ARGS}
 fi
 
+echo "Test data preparation is passed..."
+
 if [ $TESTS_ACTION -eq 1 ]; then
+  echo "Preparing data set for cache layer tests..."
+  rm -r -f ${IMPALA_HOME}/testdata/dfs_cache
+  mkdir ${IMPALA_HOME}/testdata/dfs_cache/
+  ${IMPALA_HOME}/bin/gen-cache-dataset.sh ${IMPALA_HOME}/testdata/dfs_cache 62 25
+  echo "Going to run all tests..."
   ${IMPALA_HOME}/bin/run-all-tests.sh -e $EXPLORATION_STRATEGY
 fi
+
+echo "Test run phase is passed..."
 
 # Generate list of files for Cscope to index
 $IMPALA_HOME/bin/gen-cscope.sh

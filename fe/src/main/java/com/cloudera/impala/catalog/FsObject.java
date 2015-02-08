@@ -6,6 +6,8 @@ import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.util.FsKey;
 
@@ -33,6 +35,9 @@ public class FsObject {
     FILE,
     DIRECTORY
   }
+
+  /** Logging mechanism */
+  private final static Logger LOG = LoggerFactory.getLogger(FsObject.class);
 
   /** represents the directory tree node */
   private final ConcurrentHashMap<String, FsObject> _children =
@@ -145,7 +150,19 @@ public class FsObject {
           listStatus[i].isDirectory() ? ObjectType.DIRECTORY : ObjectType.FILE);
       obj.setMetadata(listStatus[i]);
       obj.setState(ObjectState.SYNC_OK);
-      _children.putIfAbsent(obj.getPath().toString(), obj);
+
+      obj = _children.putIfAbsent(obj.getPath().toString(), obj);
+
+      // if object was present within the cache, it should be updated with the state and file status
+      if(obj != null){
+        LOG.info("Fs object with \"" + obj.getPath().toString() + "\" was present previously in the cache");
+        // set those statistics that were provided:
+        if(listStatus[i] != null)
+          obj.setMetadata(listStatus[i]);
+      }
+      else{
+        LOG.info("new Fs object with \"" + listStatus[i].getPath() + "\" is added among children of\"" + _path + "\"");
+      }
     }
     _type = ObjectType.DIRECTORY;
   }

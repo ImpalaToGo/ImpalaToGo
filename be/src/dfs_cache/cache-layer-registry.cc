@@ -16,14 +16,16 @@ namespace impala{
 boost::scoped_ptr<CacheLayerRegistry> CacheLayerRegistry::instance_;
 std::string CacheLayerRegistry::fileSeparator;
 
-bool CacheLayerRegistry::init(int mem_limit_percent, const std::string& root) {
+bool CacheLayerRegistry::init(int mem_limit_percent, const std::string& root,
+		boost::posix_time::time_duration timeslice,
+		int size_hard_limit) {
 	// configure platform-specific file separator:
 	boost::filesystem::path slash("/");
 	boost::filesystem::path::string_type preferredSlash = slash.make_preferred().native();
 	fileSeparator = preferredSlash;
 
 	if(CacheLayerRegistry::instance_.get() == NULL)
-		CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root));
+		CacheLayerRegistry::instance_.reset(new CacheLayerRegistry(mem_limit_percent, root, timeslice, size_hard_limit));
 
   if(!CacheLayerRegistry::instance()->valid()){
   	  LOG (ERROR) << "Cache initialization is interrupted due to incorrect cache location \"" << root << "\".\n";

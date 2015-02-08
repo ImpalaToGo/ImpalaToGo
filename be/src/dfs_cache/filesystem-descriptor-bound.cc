@@ -17,13 +17,13 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value) {
 #define INSERT_ELEMENT(p) strings[p] = #p
 		INSERT_ELEMENT(hdfs);
 		INSERT_ELEMENT(s3n);
-		INSERT_ELEMENT(LOCAL);
+		INSERT_ELEMENT(local);
 		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);
 		INSERT_ELEMENT(OTHER);
 		INSERT_ELEMENT(NON_SPECIFIED);
 #undef INSERT_ELEMENT
 	}
-	return out << strings[value];
+	return out << (value == DFS_TYPE::local ? "file" : strings[value]);
 }
 
 fsBridge FileSystemDescriptorBound::connect() {
@@ -170,6 +170,10 @@ int FileSystemDescriptorBound::pathDelete(raiiDfsConnection& conn, const char* p
 
 dfsFileInfo* FileSystemDescriptorBound::fileInfo(raiiDfsConnection& conn, const char* path){
 	return _dfsGetPathInfo(conn.connection()->connection, path);
+}
+
+dfsFileInfo* FileSystemDescriptorBound::listDirectory(raiiDfsConnection& conn, const char* path, int *numEntries){
+	return _dfsListDirectory(conn.connection()->connection, path, numEntries);
 }
 
 void FileSystemDescriptorBound::freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries){

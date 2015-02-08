@@ -485,7 +485,7 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 		lock.unlock();
 }
 
-TEST_F(CacheLayerTest, RemoteFileOpenReadAutoloadTest){
+TEST_F(CacheLayerTest, DISABLED_RemoteFileOpenReadAutoloadTest){
 	m_namenodeHdfs.dfs_type = DFS_TYPE::hdfs;
 	m_namenodeHdfs.host = "104.236.39.60";
 	m_namenodeHdfs.port = 8020;

@@ -17,10 +17,11 @@
 #include <mutex>
 #include <condition_variable>
 #include <utility>
+#include <cstdlib>
 
 #include "dfs_cache/dfs-cache.h"
 #include "dfs_cache/filesystem-mgr.hpp"
-
+#include "dfs_cache/test-utilities.hpp"
 
 namespace impala{
 
@@ -39,17 +40,20 @@ class CacheLayerTest : public ::testing::Test {
 	static SessionContext m_ctx5;  /**< session context 5 (shell/web client 5) */
 	static SessionContext m_ctx6;  /**< session context 6 (shell/web client 6) */
 
+	std::string  m_cache_path;    /**< cache location */
+	std::string  m_dataset_path;  /**< origin dataset location */
+
+	/**< Age buckets management timeslice duration, in seconds */
+	int m_timeslice;
+
 	/** signaling we use in async tests */
 	std::mutex m_mux;
 	bool       m_flag;
 	std::condition_variable m_condition;
 
-  static void SetUpTestCase() {
-	  impala::InitGoogleLoggingSafe("Test_dfs_cache");
-	  impala::InitThreading();
-	  cacheInit();
-
-	  cacheInit(85, "/home/elenav/src/ImpalaToGo/datastorage/local_root/");
+    static void SetUpTestCase() {
+  	  impala::InitGoogleLoggingSafe("Test_dfs_cache");
+  	  impala::InitThreading();
 
 	  m_namenode1.dfs_type = DFS_TYPE::OTHER;
 	  m_namenode1.host = "";
@@ -72,7 +76,7 @@ class CacheLayerTest : public ::testing::Test {
 	  m_namenodeDefault.password = "";
 	  m_namenodeDefault.valid = true;
 
-	  m_namenodelocalFilesystem.dfs_type = DFS_TYPE::LOCAL;
+	  m_namenodelocalFilesystem.dfs_type = DFS_TYPE::local;
 	  m_namenodelocalFilesystem.host = "";
 	  m_namenodelocalFilesystem.port = 0;
 	  m_namenodelocalFilesystem.credentials = "";
@@ -83,17 +87,28 @@ class CacheLayerTest : public ::testing::Test {
 	  m_ctx1 = nullptr;
 	  m_ctx2 = nullptr;
 
-	  // configure some test-purpose file system:
-	  cacheConfigureFileSystem(m_namenode1);
+    }
 
-	  // configure Digital Ocean hdfs:
-	  // cacheConfigureFileSystem(m_namenodeHdfs);
+	virtual void SetUp() {
+		m_cache_path   = constants::TEST_CACHE_DEFAULT_LOCATION;
 
-	  // configure default file system (as from core-site.xml found on CLASSPATH by Hadoop FS class)
-	  cacheConfigureFileSystem(m_namenodeDefault);
+		// try to get the ${IMPALA_HOME} environment variable and assign the dataset location
+		// relatively if anything found. Assign to default dataset location otherwise
+		const char* env_v_name = constants::IMPALA_HOME_ENV_VARIABLE_NAME.c_str();
+		if(const char* env_v = std::getenv(env_v_name)){
+			char buff[4096];
+			sprintf(buff, "%s/testdata/dfs_cache/", env_v);
+			m_dataset_path.assign(buff);
+		}
+		else
+			m_dataset_path = constants::TEST_DATASET_DEFAULT_LOCATION;
+
   }
 
-  // virtual void TearDown() {}
+  virtual void TearDown() {
+	  // shutdown the cache
+	  cacheShutdown();
+  }
 
 };
 }
