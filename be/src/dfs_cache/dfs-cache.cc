@@ -516,13 +516,7 @@ tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buf
 	    			fsDescriptor.host << "\"" << "\n";
 	    	return -1;
 	    }
-
-	    bool ret = fsAdaptor->fileRead(connection, file, buffer, length);
-		if(ret){
-			LOG (INFO) << "Failure while read from file handle opened for direct read on FileSystem \""
-					<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
-			return ret;
-		}
+	    return fsAdaptor->fileRead(connection, file, buffer, length);
 	}
 	return filemgmt::FileSystemManager::instance()->dfsRead(fsDescriptor, file, buffer, length);
 }

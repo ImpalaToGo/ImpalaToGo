@@ -595,8 +595,37 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	    		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
 	    		// check that we got direct handle to the file:
 	    		ASSERT_TRUE((file != NULL) && available && file->direct);
-	    		break;
 
+	    		remotefile = fsAdaptor.fileOpen(conn, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0);
+	    		ASSERT_TRUE(remotefile != NULL);
+
+	    		// so read from opened handle and compare byte-by-byte read data with the Model adaptor read:
+	    		// now read by blocks and compare:
+	    		tSize last_read_local = 0;
+	    		tSize last_read_remote = 0;
+
+	    		char* buffer_remote = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+	    		char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+
+	    		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+	    		last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+
+	    		ASSERT_TRUE(last_read_remote == last_read_local);
+
+	    		for (; last_read_remote > 0;) {
+	    			// check read bytes count is equals:
+	    			ASSERT_TRUE(last_read_remote == last_read_local);
+	    			// compare memory contents we read from files:
+	    			ASSERT_TRUE((std::memcmp(buffer_remote, buffer_local, last_read_remote) == 0));
+
+	    			// read next data buffer:
+	    			last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
+	    			last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+	    		}
+	    		// close both handles:
+	    		ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+	    		ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
+	    		break;
 	    	}
 	    	// run the files opening and comparison
 	    	scenario_open(i);
