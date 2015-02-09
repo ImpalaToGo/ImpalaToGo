@@ -14,7 +14,6 @@
 
 package com.cloudera.impala.analysis;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -345,17 +344,18 @@ public class InsertStmt extends StatementBase {
         throw new AnalysisException(String.format("Unable to INSERT into target table " +
             "(%s) because the table spans multiple filesystems.", targetTableName_));
       }
-      try {
-        /*if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
+      /*try {
+        if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
           throw new AnalysisException(String.format("Unable to INSERT into target " +
               "table (%s) because %s is not an HDFS filesystem.", targetTableName_,
                hdfsTable.getLocation()));
         }
-        */
+
       } catch (IOException e) {
         throw new AnalysisException(String.format("Unable to INSERT into target " +
             "table (%s): %s.", targetTableName_, e.getMessage()), e);
       }
+      */
       for (int colIdx = 0; colIdx < numClusteringCols; ++colIdx) {
         Column col = hdfsTable.getColumns().get(colIdx);
         // Hive has a number of issues handling BOOLEAN partition columns (see HIVE-6590).
