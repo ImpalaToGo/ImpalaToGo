@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +31,6 @@ import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
-import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.planner.DataSink;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -348,11 +346,12 @@ public class InsertStmt extends StatementBase {
             "(%s) because the table spans multiple filesystems.", targetTableName_));
       }
       try {
-        if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
+        /*if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
           throw new AnalysisException(String.format("Unable to INSERT into target " +
               "table (%s) because %s is not an HDFS filesystem.", targetTableName_,
                hdfsTable.getLocation()));
         }
+        */
       } catch (IOException e) {
         throw new AnalysisException(String.format("Unable to INSERT into target " +
             "table (%s): %s.", targetTableName_, e.getMessage()), e);
