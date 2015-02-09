@@ -592,7 +592,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	    		path = path.insert(path.find_first_of("/"), "/");
   				bool available;
 
-	    		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+  				file = dfsOpenFile(m_namenodelocalFilesystem, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0, available);
 	    		// check that we got direct handle to the file:
 	    		ASSERT_TRUE((file != NULL) && available && file->direct);
 
