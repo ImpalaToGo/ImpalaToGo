@@ -658,11 +658,16 @@ Status Coordinator::FinalizeSuccessfulInsert() {
     // Empty destination means delete, so this is a directory. These get deleted in a
     // separate pass to ensure that we have moved all the contents of the directory first.
     if (move.second.empty()) {
-      VLOG_ROW << "Deleting file: " << move.first;
-      dir_deletion_ops.Add(DELETE, move.first);
+    	// for s3 or other block-based filesystem, where we don't want moves due its non-efficiency,
+    	// we don't create any temporary folders and so don't need to delete them
+    	VLOG_ROW << "Deleting file: " << move.first;
+    	dir_deletion_ops.Add(DELETE, move.first);
     } else {
-      VLOG_ROW << "Moving tmp file: " << move.first << " to " << move.second;
-      move_ops.Add(RENAME, move.first, move.second);
+    	// if destination path is equals to temporary path, don't rename anything
+    	if(move.first.compare(move.second) != 0){
+    		VLOG_ROW << "Moving tmp file: " << move.first << " to " << move.second;
+    		move_ops.Add(RENAME, move.first, move.second);
+    	}
     }
   }
 
