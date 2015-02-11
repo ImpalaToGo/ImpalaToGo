@@ -132,6 +132,7 @@ export JAVA_HOME=/usr/lib/jvm/java-7-oracle
 export IMPALA_HOME=YOUR_PATH/ImpalaToGo
 export BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+export LC_ALL="en_US.UTF-8"
 ```
 and then run
 ```sh
