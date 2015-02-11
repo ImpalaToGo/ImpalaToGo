@@ -494,7 +494,7 @@ public class CatalogServiceCatalog extends Catalog {
         return tbl;
       }
       previousCatalogVersion = tbl.getCatalogVersion();
-      loadReq = tableLoadingMgr_.loadAsync(tableName, null);
+      loadReq = tableLoadingMgr_.loadAsync(tableName, null, false);
     } finally {
       catalogLock_.readLock().unlock();
     }
@@ -667,8 +667,30 @@ public class CatalogServiceCatalog extends Catalog {
    * changing) while the reload is in progress, the loaded value will be discarded
    * and the current cached value will be returned. This may mean that a missing table
    * (not yet loaded table) will be returned.
+   * @throws CatalogException
    */
-  public Table reloadTable(TTableName tblName) throws CatalogException {
+  public Table reloadTable(TTableName tblName) throws CatalogException{
+    return reloadTable(tblName, false);
+  }
+
+  /**
+   * Reloads a table's metadata, if {@code force} is "false", reuse any existing cached metadata
+   * to speed up the operation. If {@code force} is "true", full metadata reload, including cached,
+   * will be reloaded. Introduced to satisfy "refresh metadata" scenario.
+   *
+   * If the existing table is dropped or modified (indicated by the catalog version
+   * changing) while the reload is in progress, the loaded value will be discarded
+   * and the current cached (if {@code force} is "false") value or reloaded ({@code force} is "true")
+   * will be returned. This may mean that a missing table (not yet loaded table) will be returned.
+   *
+   * @param tblName - table name
+   * @param force   - flag, indicates whether full meta reload is required for this table, including
+   * everything that was cached
+   *
+   * @return - reloaded table
+   * @throws CatalogException
+   */
+  public Table reloadTable(TTableName tblName, boolean force) throws CatalogException {
     LOG.debug(String.format("Refreshing table metadata: %s.%s",
         tblName.getDb_name(), tblName.getTable_name()));
     long previousCatalogVersion;
@@ -678,7 +700,7 @@ public class CatalogServiceCatalog extends Catalog {
       Table tbl = getTable(tblName.getDb_name(), tblName.getTable_name());
       if (tbl == null) return null;
       previousCatalogVersion = tbl.getCatalogVersion();
-      loadReq = tableLoadingMgr_.loadAsync(tblName, tbl);
+      loadReq = tableLoadingMgr_.loadAsync(tblName, tbl, force);
     } finally {
       catalogLock_.readLock().unlock();
     }

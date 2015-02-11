@@ -54,7 +54,7 @@ public class InlineView extends Table {
    */
   @Override
   public void load(Table oldValue, HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) {
+      org.apache.hadoop.hive.metastore.api.Table msTbl, boolean force) {
     // An inline view is never loaded
     throw new UnsupportedOperationException("Inline View should never be loaded");
   }

@@ -108,7 +108,7 @@ public abstract class Table implements CatalogObject {
    * metadata is still valid.
    */
   public abstract void load(Table oldValue, HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException;
+      org.apache.hadoop.hive.metastore.api.Table msTbl, boolean force) throws TableLoadingException;
 
   public void addColumn(Column col) {
     colsByPos_.add(col);

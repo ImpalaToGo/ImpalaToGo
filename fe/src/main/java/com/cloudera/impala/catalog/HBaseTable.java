@@ -264,7 +264,7 @@ public class HBaseTable extends Table {
    * of the file at all.
    */
   public void load(Table oldValue, HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
+      org.apache.hadoop.hive.metastore.api.Table msTbl, boolean force) throws TableLoadingException {
     Preconditions.checkNotNull(getMetaStoreTable());
     try {
       hbaseTableName_ = getHBaseTableName(getMetaStoreTable());

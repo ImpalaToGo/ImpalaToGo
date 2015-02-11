@@ -2020,7 +2020,7 @@ public class Analyzer {
         missingTables.add(tn);
 
         // Call into the CatalogServer and request the required tables be loaded.
-        LOG.info(String.format("Requesting prioritized load of table: %s", tn));
+//        LOG.info(String.format("Requesting prioritized load of table: %s", tn));
         TStatus status = null;
         try {
           // load only requested table

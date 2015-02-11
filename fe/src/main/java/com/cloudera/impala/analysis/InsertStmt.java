@@ -302,6 +302,9 @@ public class InsertStmt extends StatementBase {
         targetTableName_ =
             new TableName(analyzer.getDefaultDb(), targetTableName_.getTbl());
       }
+      // here, we got the target table with its current metadata cached on catalog side.
+      // after insert will be finished, the cached metadata should be reloaded with a fresh dataset
+      // on catalog
       table_ = analyzer.getTable(targetTableName_, Privilege.INSERT);
     } else {
       targetTableName_ = new TableName(table_.getDb().getName(), table_.getName());
