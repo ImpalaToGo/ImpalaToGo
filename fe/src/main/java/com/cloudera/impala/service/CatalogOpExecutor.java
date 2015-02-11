@@ -2240,7 +2240,7 @@ public class CatalogOpExecutor {
 
       boolean wasRemoved = false;
       if (req.isIs_refresh()) {
-        modifiedObjects.second = catalog_.reloadTable(req.getTable_name());
+        modifiedObjects.second = catalog_.reloadTable(req.getTable_name(), true);
       } else {
         wasRemoved = catalog_.invalidateTable(req.getTable_name(), modifiedObjects);
       }
