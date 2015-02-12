@@ -1,0 +1,605 @@
+From 5d7b53c413c1e59332f025d19fbaff9ee7c4adb7 Mon Sep 17 00:00:00 2001
+From: anoopsjohn <anoopsamjohn@gmail.com>
+Date: Fri, 26 Sep 2014 13:29:36 +0530
+Subject: [PATCH 42/82] HBASE-12085 mob status should print human readable numbers.(Jingcheng Du)
+
+Conflicts:
+
+	hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
+	hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+	src/main/docbkx/hbase_mob.xml
+
+Trivial fix in DeleteTableHandler due to refactoring conflict
+Minor imports changes in HRegion
+Excluded docs changes since docs excluded
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-19420
+---
+ .../org/apache/hadoop/hbase/HColumnDescriptor.java |   54 ++++++++++++++++++++
+ .../apache/hadoop/hbase/util/PrettyPrinter.java    |   10 ++++
+ .../hadoop/hbase/IntegrationTestIngestWithMOB.java |    5 +-
+ .../hbase/master/ExpiredMobFileCleanerChore.java   |    4 +-
+ .../hbase/master/handler/DeleteTableHandler.java   |    2 +-
+ .../hadoop/hbase/mob/DefaultMobCompactor.java      |    2 +-
+ .../hadoop/hbase/mob/DefaultMobStoreFlusher.java   |    2 +-
+ .../hadoop/hbase/mob/ExpiredMobFileCleaner.java    |    2 +-
+ .../org/apache/hadoop/hbase/mob/MobConstants.java  |    4 --
+ .../java/org/apache/hadoop/hbase/mob/MobUtils.java |   23 --------
+ .../apache/hadoop/hbase/mob/mapreduce/Sweeper.java |    3 +-
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |    2 +-
+ .../apache/hadoop/hbase/TestHColumnDescriptor.java |   18 +++++++
+ .../hbase/mob/TestDefaultMobStoreFlusher.java      |    4 +-
+ .../hbase/mob/TestExpiredMobFileCleaner.java       |    9 ++--
+ .../hadoop/hbase/mob/TestMobDataBlockEncoding.java |    4 +-
+ .../apache/hadoop/hbase/mob/TestMobFileCache.java  |   14 +++---
+ .../hbase/mob/mapreduce/TestMobSweepReducer.java   |    4 +-
+ .../hadoop/hbase/mob/mapreduce/TestMobSweeper.java |    4 +-
+ .../hbase/regionserver/TestDeleteMobTable.java     |    4 +-
+ .../hadoop/hbase/regionserver/TestHMobStore.java   |   10 ++--
+ .../hbase/regionserver/TestMobCompaction.java      |    7 +--
+ .../hbase/regionserver/TestMobStoreScanner.java    |    4 +-
+ 23 files changed, 122 insertions(+), 73 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+index e7cdddb..43551d7 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+@@ -110,6 +110,12 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+   public static final String ENCRYPTION = "ENCRYPTION";
+   public static final String ENCRYPTION_KEY = "ENCRYPTION_KEY";
+ 
++  public static final String IS_MOB = "IS_MOB";
++  public static final byte[] IS_MOB_BYTES = Bytes.toBytes(IS_MOB);
++  public static final String MOB_THRESHOLD = "MOB_THRESHOLD";
++  public static final byte[] MOB_THRESHOLD_BYTES = Bytes.toBytes(MOB_THRESHOLD);
++  public static final long DEFAULT_MOB_THRESHOLD = 100 * 1024; // 100k
++
+   /**
+    * Default compression type.
+    */
+@@ -239,6 +245,8 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+       }
+       RESERVED_KEYWORDS.add(new ImmutableBytesWritable(Bytes.toBytes(ENCRYPTION)));
+       RESERVED_KEYWORDS.add(new ImmutableBytesWritable(Bytes.toBytes(ENCRYPTION_KEY)));
++      RESERVED_KEYWORDS.add(new ImmutableBytesWritable(IS_MOB_BYTES));
++      RESERVED_KEYWORDS.add(new ImmutableBytesWritable(MOB_THRESHOLD_BYTES));
+   }
+ 
+   private static final int UNINITIALIZED = -1;
+@@ -1057,6 +1065,10 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+       /* TTL for now, we can add more as we neeed */
+     if (key.equals(HColumnDescriptor.TTL)) {
+       unit = Unit.TIME_INTERVAL;
++    } else if (key.equals(HColumnDescriptor.MOB_THRESHOLD)) {
++      unit = Unit.LONG;
++    } else if (key.equals(HColumnDescriptor.IS_MOB)) {
++      unit = Unit.BOOLEAN;
+     } else {
+       unit = Unit.NONE;
+     }
+@@ -1349,4 +1361,46 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+     setValue(Bytes.toBytes(ENCRYPTION_KEY), keyBytes);
+     return this;
+   }
++
++  /**
++   * Gets the mob threshold of the family.
++   * If the size of a cell value is larger than this threshold, it's regarded as a mob.
++   * The default threshold is 1024*100(100K)B.
++   * @return The mob threshold.
++   */
++  public long getMobThreshold() {
++    byte[] threshold = getValue(MOB_THRESHOLD_BYTES);
++    return threshold != null && threshold.length == Bytes.SIZEOF_LONG ? Bytes.toLong(threshold)
++        : DEFAULT_MOB_THRESHOLD;
++  }
++
++  /**
++   * Sets the mob threshold of the family.
++   * @param threshold The mob threshold.
++   * @return this (for chained invocation)
++   */
++  public HColumnDescriptor setMobThreshold(long threshold) {
++    setValue(MOB_THRESHOLD_BYTES, Bytes.toBytes(threshold));
++    return this;
++  }
++
++  /**
++   * Gets whether the mob is enabled for the family.
++   * @return True if the mob is enabled for the family.
++   */
++  public boolean isMobEnabled() {
++    byte[] isMobEnabled = getValue(IS_MOB_BYTES);
++    return isMobEnabled != null && isMobEnabled.length == Bytes.SIZEOF_BOOLEAN
++        && Bytes.toBoolean(isMobEnabled);
++  }
++
++  /**
++   * Enables the mob for the family.
++   * @param isMobEnabled Whether to enable the mob for the family.
++   * @return this (for chained invocation)
++   */
++  public HColumnDescriptor setMobEnabled(boolean isMobEnabled) {
++    setValue(IS_MOB_BYTES, Bytes.toBytes(isMobEnabled));
++    return this;
++  }
+ }
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/util/PrettyPrinter.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/util/PrettyPrinter.java
+index 702bda6..341f971 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/util/PrettyPrinter.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/util/PrettyPrinter.java
+@@ -29,6 +29,8 @@ public class PrettyPrinter {
+ 
+   public enum Unit {
+     TIME_INTERVAL,
++    LONG,
++    BOOLEAN,
+     NONE
+   }
+ 
+@@ -38,6 +40,14 @@ public class PrettyPrinter {
+       case TIME_INTERVAL:
+         human.append(humanReadableTTL(Long.valueOf(value)));
+         break;
++      case LONG:
++        byte[] longBytes = Bytes.toBytesBinary(value);
++        human.append(String.valueOf(Bytes.toLong(longBytes)));
++        break;
++      case BOOLEAN:
++        byte[] booleanBytes = Bytes.toBytesBinary(value);
++        human.append(String.valueOf(Bytes.toBoolean(booleanBytes)));
++        break;
+       default:
+         human.append(value);
+     }
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+index c48e509..6085f85 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+@@ -25,7 +25,6 @@ import java.util.List;
+ import org.apache.commons.cli.CommandLine;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+-import org.apache.hadoop.hbase.mob.MobConstants;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.LoadTestDataGeneratorWithMOB;
+ import org.apache.hadoop.hbase.util.LoadTestTool;
+@@ -117,8 +116,8 @@ public class IntegrationTestIngestWithMOB extends IntegrationTestIngest {
+     admin.disableTable(tableName);
+     for (HColumnDescriptor columnDescriptor : tableDesc.getFamilies()) {
+       if(Arrays.equals(columnDescriptor.getName(), mobColumnFamily)) {
+-        columnDescriptor.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-        columnDescriptor.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes((long) threshold));
++        columnDescriptor.setMobEnabled(true);
++        columnDescriptor.setMobThreshold((long) threshold);
+         admin.modifyColumn(tableName, columnDescriptor);
+       }
+     }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
+index 98fe236..30b5be3 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
+@@ -29,8 +29,6 @@ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.TableDescriptors;
+ import org.apache.hadoop.hbase.mob.ExpiredMobFileCleaner;
+ import org.apache.hadoop.hbase.mob.MobConstants;
+-import org.apache.hadoop.hbase.mob.MobUtils;
+-import org.apache.hadoop.hbase.util.Threads;
+ 
+ /**
+  * The Class ExpiredMobFileCleanerChore for running cleaner regularly to remove the expired
+@@ -57,7 +55,7 @@ public class ExpiredMobFileCleanerChore extends Chore {
+       Map<String, HTableDescriptor> map = htds.getAll();
+       for (HTableDescriptor htd : map.values()) {
+         for (HColumnDescriptor hcd : htd.getColumnFamilies()) {
+-          if (MobUtils.isMobFamily(hcd) && hcd.getMinVersions() == 0) {
++          if (hcd.isMobEnabled() && hcd.getMinVersions() == 0) {
+             cleaner.cleanExpiredMobFiles(htd.getTableName().getNameAsString(), hcd);
+           }
+         }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
+index 960b1a3..1c0124e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/DeleteTableHandler.java
+@@ -115,7 +115,7 @@ public class DeleteTableHandler extends TableEventHandler {
+       HColumnDescriptor[] hcds = getTableDescriptor().getColumnFamilies();
+       boolean hasMob = false;
+       for (HColumnDescriptor hcd : hcds) {
+-          if (MobUtils.isMobFamily(hcd)) {
++          if (hcd.isMobEnabled()) {
+               hasMob = true;
+               break;
+           }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+index 8a82d36..477def3 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+@@ -60,7 +60,7 @@ public class DefaultMobCompactor extends DefaultCompactor {
+       throw new IllegalArgumentException("The store " + store + " is not a HMobStore");
+     }
+     mobStore = (HMobStore) store;
+-    mobSizeThreshold = MobUtils.getMobThreshold(store.getFamily());
++    mobSizeThreshold = store.getFamily().getMobThreshold();
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
+index 4a036a7..aba81ff 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
+@@ -69,7 +69,7 @@ public class DefaultMobStoreFlusher extends DefaultStoreFlusher {
+ 
+   public DefaultMobStoreFlusher(Configuration conf, Store store) throws IOException {
+     super(conf, store);
+-    mobCellValueSizeThreshold = MobUtils.getMobThreshold(store.getFamily());
++    mobCellValueSizeThreshold = store.getFamily().getMobThreshold();
+     this.targetPath = MobUtils.getMobFamilyPath(conf, store.getTableName(),
+         store.getColumnFamilyName());
+     if (!this.store.getFileSystem().exists(targetPath)) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/ExpiredMobFileCleaner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/ExpiredMobFileCleaner.java
+index d3c11ad..7f38c44 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/ExpiredMobFileCleaner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/ExpiredMobFileCleaner.java
+@@ -99,7 +99,7 @@ public class ExpiredMobFileCleaner extends Configured implements Tool {
+     try {
+       HTableDescriptor htd = admin.getTableDescriptor(tn);
+       HColumnDescriptor family = htd.getFamily(Bytes.toBytes(familyName));
+-      if (family == null || !MobUtils.isMobFamily(family)) {
++      if (family == null || !family.isMobEnabled()) {
+         throw new IOException("Column family " + familyName + " is not a MOB column family");
+       }
+       if (family.getMinVersions() > 0) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
+index 4e3e7c8..7b0f9a0 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobConstants.java
+@@ -32,10 +32,6 @@ import org.apache.hadoop.hbase.util.Bytes;
+ @InterfaceStability.Evolving
+ public class MobConstants {
+ 
+-  public static final byte[] IS_MOB = Bytes.toBytes("IS_MOB");
+-  public static final byte[] MOB_THRESHOLD = Bytes.toBytes("MOB_THRESHOLD");
+-  public static final long DEFAULT_MOB_THRESHOLD = 100 * 1024; // 100k
+-
+   public static final String MOB_SCAN_RAW = "hbase.mob.scan.raw";
+   public static final String MOB_CACHE_BLOCKS = "hbase.mob.cache.blocks";
+   public static final String MOB_SCAN_REF_ONLY = "hbase.mob.scan.ref.only";
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+index ccfd91e..9a821dc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+@@ -74,29 +74,6 @@ public class MobUtils {
+   };
+ 
+   /**
+-   * Indicates whether the column family is a mob one.
+-   * @param hcd The descriptor of a column family.
+-   * @return True if this column family is a mob one, false if it's not.
+-   */
+-  public static boolean isMobFamily(HColumnDescriptor hcd) {
+-    byte[] isMob = hcd.getValue(MobConstants.IS_MOB);
+-    return isMob != null && isMob.length == 1 && Bytes.toBoolean(isMob);
+-  }
+-
+-  /**
+-   * Gets the mob threshold.
+-   * If the size of a cell value is larger than this threshold, it's regarded as a mob.
+-   * The default threshold is 1024*100(100K)B.
+-   * @param hcd The descriptor of a column family.
+-   * @return The threshold.
+-   */
+-  public static long getMobThreshold(HColumnDescriptor hcd) {
+-    byte[] threshold = hcd.getValue(MobConstants.MOB_THRESHOLD);
+-    return threshold != null && threshold.length == Bytes.SIZEOF_LONG ? Bytes.toLong(threshold)
+-        : MobConstants.DEFAULT_MOB_THRESHOLD;
+-  }
+-
+-  /**
+    * Formats a date to a string.
+    * @param date The date.
+    * @return The string format of the date, it's yyyymmdd.
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
+index d71dc83..451ee26 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
+@@ -29,7 +29,6 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+-import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.util.Tool;
+ import org.apache.hadoop.util.ToolRunner;
+@@ -68,7 +67,7 @@ public class Sweeper extends Configured implements Tool {
+       TableName tn = TableName.valueOf(tableName);
+       HTableDescriptor htd = admin.getTableDescriptor(tn);
+       HColumnDescriptor family = htd.getFamily(Bytes.toBytes(familyName));
+-      if (family == null || !MobUtils.isMobFamily(family)) {
++      if (family == null || !family.isMobEnabled()) {
+         throw new IOException("Column family " + familyName + " is not a MOB column family");
+       }
+       SweepJob job = new SweepJob(conf, fs);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 326c959..0c05d99 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -3395,7 +3395,7 @@ public class HRegion implements HeapSize { // , Writable{
+   }
+ 
+   protected HStore instantiateHStore(final HColumnDescriptor family) throws IOException {
+-    if (MobUtils.isMobFamily(family)) {
++    if (family.isMobEnabled()) {
+       if (HFile.getFormatVersion(this.conf) < HFile.MIN_FORMAT_VERSION_WITH_TAGS) {
+         throw new IOException("A minimum HFile version of "
+             + HFile.MIN_FORMAT_VERSION_WITH_TAGS
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+index 2534609..c2e2285 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+@@ -25,6 +25,8 @@ import org.apache.hadoop.hbase.io.compress.Compression;
+ import org.apache.hadoop.hbase.io.compress.Compression.Algorithm;
+ import org.apache.hadoop.hbase.io.encoding.DataBlockEncoding;
+ import org.apache.hadoop.hbase.regionserver.BloomType;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.PrettyPrinter;
+ import org.junit.experimental.categories.Category;
+ 
+ import org.junit.Test;
+@@ -52,6 +54,8 @@ public class TestHColumnDescriptor {
+     hcd.setDataBlockEncoding(DataBlockEncoding.FAST_DIFF);
+     hcd.setBloomFilterType(BloomType.ROW);
+     hcd.setCompressionType(Algorithm.SNAPPY);
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(1000L);
+ 
+ 
+     byte [] bytes = hcd.toByteArray();
+@@ -68,6 +72,8 @@ public class TestHColumnDescriptor {
+     assertTrue(deserializedHcd.getCompressionType().equals(Compression.Algorithm.SNAPPY));
+     assertTrue(deserializedHcd.getDataBlockEncoding().equals(DataBlockEncoding.FAST_DIFF));
+     assertTrue(deserializedHcd.getBloomFilterType().equals(BloomType.ROW));
++    assertEquals(hcd.isMobEnabled(), deserializedHcd.isMobEnabled());
++    assertEquals(hcd.getMobThreshold(), deserializedHcd.getMobThreshold());
+   }
+ 
+   @Test
+@@ -94,4 +100,16 @@ public class TestHColumnDescriptor {
+     desc.removeConfiguration(key);
+     assertEquals(null, desc.getConfigurationValue(key));
+   }
++
++  @Test
++  public void testMobValuesInHColumnDescriptorShouldReadable() {
++    boolean isMob = true;
++    long threshold = 1000;
++    String isMobString = PrettyPrinter.format(Bytes.toStringBinary(Bytes.toBytes(isMob)),
++        HColumnDescriptor.getUnit(HColumnDescriptor.IS_MOB));
++    String thresholdString = PrettyPrinter.format(Bytes.toStringBinary(Bytes.toBytes(threshold)),
++        HColumnDescriptor.getUnit(HColumnDescriptor.MOB_THRESHOLD));
++    assertEquals(String.valueOf(isMob), isMobString);
++    assertEquals(String.valueOf(threshold), thresholdString);
++  }
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
+index f05ec12..c234c52 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
+@@ -138,8 +138,8 @@ public class TestDefaultMobStoreFlusher {
+    try {
+      HTableDescriptor desc = new HTableDescriptor(TableName.valueOf(TN));
+      HColumnDescriptor hcd = new HColumnDescriptor(family);
+-     hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-     hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++     hcd.setMobEnabled(true);
++     hcd.setMobThreshold(3L);
+      hcd.setMaxVersions(4);
+      desc.addFamily(hcd);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
+index f59a1cf..44134a6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
+@@ -33,7 +33,6 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.mob.ExpiredMobFileCleaner;
+-import org.apache.hadoop.hbase.mob.MobConstants;
+ import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.util.ToolRunner;
+@@ -87,8 +86,8 @@ public class TestExpiredMobFileCleaner {
+   private void init() throws Exception {
+     HTableDescriptor desc = new HTableDescriptor(tableName);
+     HColumnDescriptor hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
+     hcd.setMaxVersions(4);
+     desc.addFamily(hcd);
+ 
+@@ -100,8 +99,8 @@ public class TestExpiredMobFileCleaner {
+ 
+   private void modifyColumnExpiryDays(int expireDays) throws Exception {
+     HColumnDescriptor hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
+     // change ttl as expire days to make some row expired
+     int timeToLive = expireDays * secondsOfDay();
+     hcd.setTimeToLive(timeToLive);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
+index 323d5a3..a507de0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
+@@ -76,8 +76,8 @@ public class TestMobDataBlockEncoding {
+       throws Exception {
+     desc = new HTableDescriptor(TableName.valueOf(TN));
+     hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(threshold));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(threshold);
+     hcd.setMaxVersions(4);
+     hcd.setDataBlockEncoding(encoding);
+     desc.addFamily(hcd);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
+index dec2e41..0ba77e6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
+@@ -80,14 +80,14 @@ public class TestMobFileCache extends TestCase {
+     conf.setInt("hfile.format.version", 3);
+     HTableDescriptor htd = UTIL.createTableDescriptor("testMobFileCache");
+     HColumnDescriptor hcd1 = new HColumnDescriptor(FAMILY1);
+-    hcd1.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd1.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(0L));
++    hcd1.setMobEnabled(true);
++    hcd1.setMobThreshold(0);
+     HColumnDescriptor hcd2 = new HColumnDescriptor(FAMILY2);
+-    hcd2.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd2.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(0L));
++    hcd2.setMobEnabled(true);
++    hcd2.setMobThreshold(0);
+     HColumnDescriptor hcd3 = new HColumnDescriptor(FAMILY3);
+-    hcd3.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd3.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(0L));
++    hcd3.setMobEnabled(true);
++    hcd3.setMobThreshold(0);
+     htd.addFamily(hcd1);
+     htd.addFamily(hcd2);
+     htd.addFamily(hcd3);
+@@ -116,7 +116,7 @@ public class TestMobFileCache extends TestCase {
+   private Path createMobStoreFile(Configuration conf, String family) throws IOException {
+     HColumnDescriptor hcd = new HColumnDescriptor(family);
+     hcd.setMaxVersions(4);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
++    hcd.setMobEnabled(true);
+     mobCacheConf = new MobCacheConfig(conf, hcd);
+     return createMobStoreFile(conf, hcd);
+   }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
+index 57633e8..4332dc8 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
+@@ -92,8 +92,8 @@ public class TestMobSweepReducer {
+   public void setUp() throws Exception {
+     HTableDescriptor desc = new HTableDescriptor(tableName);
+     HColumnDescriptor hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
+     hcd.setMaxVersions(4);
+     desc.addFamily(hcd);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
+index 7080564..433c2c5 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
+@@ -82,8 +82,8 @@ public class TestMobSweeper {
+     tableName = "testSweeper" + tid;
+     HTableDescriptor desc = new HTableDescriptor(tableName);
+     HColumnDescriptor hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
+     hcd.setMaxVersions(4);
+     desc.addFamily(hcd);
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+index 652d43d..a1498f2 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+@@ -85,8 +85,8 @@ public class TestDeleteMobTable {
+     TableName tn = TableName.valueOf(tableName);
+     HTableDescriptor htd = new HTableDescriptor(tn);
+     HColumnDescriptor hcd = new HColumnDescriptor(FAMILY);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(0L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(0);
+     htd.addFamily(hcd);
+     HBaseAdmin admin = null;
+     HTable table = null;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+index 926a0e1..eadbb61 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+@@ -115,8 +115,8 @@ public class TestHMobStore {
+   private void init(String methodName, Configuration conf, boolean testStore)
+   throws IOException {
+     hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(3L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
+     hcd.setMaxVersions(4);
+     init(methodName, conf, hcd, testStore);
+   }
+@@ -366,8 +366,8 @@ public class TestHMobStore {
+ 
+     HColumnDescriptor hcd;
+     hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(100L));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(100);
+     hcd.setMaxVersions(4);
+     init(name.getMethodName(), conf, hcd, false);
+ 
+@@ -407,7 +407,7 @@ public class TestHMobStore {
+       //this is not mob reference cell.
+       Assert.assertFalse(MobUtils.isMobReferenceCell(cell));
+       Assert.assertEquals(expected.get(i), results.get(i));
+-      Assert.assertEquals(100, MobUtils.getMobThreshold(store.getFamily()));
++      Assert.assertEquals(100, store.getFamily().getMobThreshold());
+     }
+   }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
+index 2f8d755..d9b66c9 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
+@@ -106,8 +106,8 @@ public class TestMobCompaction {
+     compactionThreshold = conf.getInt("hbase.hstore.compactionThreshold", 3);
+     htd = UTIL.createTableDescriptor(name.getMethodName());
+     hcd = new HColumnDescriptor(COLUMN_FAMILY);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(mobThreshold));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(mobThreshold);
+     hcd.setMaxVersions(1);
+     htd.addFamily(hcd);
+ 
+@@ -167,8 +167,7 @@ public class TestMobCompaction {
+     assertEquals("Before compaction: rows", compactionThreshold, countRows());
+     assertEquals("Before compaction: mob rows", compactionThreshold, countMobRows());
+     // Change the threshold larger than the data size
+-    region.getTableDesc().getFamily(COLUMN_FAMILY).setValue(
+-        MobConstants.MOB_THRESHOLD, Bytes.toBytes(500L));
++    region.getTableDesc().getFamily(COLUMN_FAMILY).setMobThreshold(500);
+     region.initialize();
+     region.compactStores();
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+index b316509..ab5eba6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+@@ -83,8 +83,8 @@ public class TestMobStoreScanner {
+   public void setUp(long threshold, String TN) throws Exception {
+     desc = new HTableDescriptor(TableName.valueOf(TN));
+     hcd = new HColumnDescriptor(family);
+-    hcd.setValue(MobConstants.IS_MOB, Bytes.toBytes(Boolean.TRUE));
+-    hcd.setValue(MobConstants.MOB_THRESHOLD, Bytes.toBytes(threshold));
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(threshold);
+     hcd.setMaxVersions(4);
+     desc.addFamily(hcd);
+     admin = new HBaseAdmin(TEST_UTIL.getConfiguration());
+-- 
+1.7.0.4
+

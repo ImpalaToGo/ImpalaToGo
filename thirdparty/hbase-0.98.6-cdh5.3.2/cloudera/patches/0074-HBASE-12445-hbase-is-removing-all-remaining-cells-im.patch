@@ -1,0 +1,95 @@
+From 051f32f46b36c75e7398d4ed7fe6548e2b99dd75 Mon Sep 17 00:00:00 2001
+From: Enis Soztutar <enis@apache.org>
+Date: Wed, 12 Nov 2014 15:50:10 -0800
+Subject: [PATCH 74/82] HBASE-12445 hbase is removing all remaining cells immediately after the cell marked with marker = KeyValue.Type.DeleteColumn via PUT (Hani Nadra)
+
+Reason: Bug
+Author: Hani Nadra
+Ref: CDH-23170
+
+Conflicts:
+	hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+---
+ .../apache/hadoop/hbase/protobuf/ProtobufUtil.java |    4 +++-
+ .../hadoop/hbase/client/TestPutWithDelete.java     |   18 ++++++++++++------
+ 2 files changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+index 286faee..d42ab73 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/protobuf/ProtobufUtil.java
+@@ -1078,6 +1078,7 @@ public final class ProtobufUtil {
+       if (values != null && values.size() > 0) {
+         for (Cell cell: values) {
+           KeyValue kv = KeyValueUtil.ensureKeyValue(cell);
++          valueBuilder.clear();
+           valueBuilder.setQualifier(ByteStringer.wrap(
+               kv.getQualifierArray(), kv.getQualifierOffset(), kv.getQualifierLength()));
+           valueBuilder.setValue(ByteStringer.wrap(
+@@ -1140,6 +1141,7 @@ public final class ProtobufUtil {
+       columnBuilder.setFamily(ByteStringer.wrap(family.getKey()));
+       for (Cell cell: family.getValue()) {
+         KeyValue kv = KeyValueUtil.ensureKeyValue(cell);
++        valueBuilder.clear();
+         valueBuilder.setQualifier(ByteStringer.wrap(
+             kv.getQualifierArray(), kv.getQualifierOffset(), kv.getQualifierLength()));
+         valueBuilder.setValue(ByteStringer.wrap(
+@@ -1965,7 +1967,7 @@ public final class ProtobufUtil {
+           for (Permission.Action a : actions) {
+             builder.addAction(toPermissionAction(a));
+           }
+-	}
++        }
+         ret.setNamespacePermission(builder);
+         return ret.build();
+       } else if (tablePerm.hasTable()) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestPutWithDelete.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestPutWithDelete.java
+index 028a8ba..121a1c2 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestPutWithDelete.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestPutWithDelete.java
+@@ -60,6 +60,7 @@ public class TestPutWithDelete {
+       put.add(family, Bytes.toBytes("A"), Bytes.toBytes("a"));
+       put.add(family, Bytes.toBytes("B"), Bytes.toBytes("b"));
+       put.add(family, Bytes.toBytes("C"), Bytes.toBytes("c"));
++      put.add(family, Bytes.toBytes("D"), Bytes.toBytes("d"));
+       table.put(put);
+       // get row back and assert the values
+       Get get = new Get(rowKey);
+@@ -70,23 +71,28 @@ public class TestPutWithDelete {
+           Bytes.toString(result.getValue(family, Bytes.toBytes("B"))).equals("b"));
+       assertTrue("Column C value should be c",
+           Bytes.toString(result.getValue(family, Bytes.toBytes("C"))).equals("c"));
++      assertTrue("Column D value should be d",
++          Bytes.toString(result.getValue(family, Bytes.toBytes("D"))).equals("d"));
+       // put the same row again with C column deleted
+       put = new Put(rowKey);
+-      put.add(family, Bytes.toBytes("A"), Bytes.toBytes("a"));
+-      put.add(family, Bytes.toBytes("B"), Bytes.toBytes("b"));
++      put.add(family, Bytes.toBytes("A"), Bytes.toBytes("a1"));
++      put.add(family, Bytes.toBytes("B"), Bytes.toBytes("b1"));
+       KeyValue marker = new KeyValue(rowKey, family, Bytes.toBytes("C"),
+           HConstants.LATEST_TIMESTAMP, KeyValue.Type.DeleteColumn);
++      put.add(family, Bytes.toBytes("D"), Bytes.toBytes("d1"));
+       put.add(marker);
+       table.put(put);
+       // get row back and assert the values
+       get = new Get(rowKey);
+       result = table.get(get);
+-      assertTrue("Column A value should be a",
+-          Bytes.toString(result.getValue(family, Bytes.toBytes("A"))).equals("a"));
+-      assertTrue("Column B value should be b",
+-          Bytes.toString(result.getValue(family, Bytes.toBytes("B"))).equals("b"));
++      assertTrue("Column A value should be a1",
++          Bytes.toString(result.getValue(family, Bytes.toBytes("A"))).equals("a1"));
++      assertTrue("Column B value should be b1",
++          Bytes.toString(result.getValue(family, Bytes.toBytes("B"))).equals("b1"));
+       assertTrue("Column C should not exist",
+           result.getValue(family, Bytes.toBytes("C")) == null);
++      assertTrue("Column D value should be d1",
++          Bytes.toString(result.getValue(family, Bytes.toBytes("D"))).equals("d1"));
+     } finally {
+       table.close();
+     }
+-- 
+1.7.0.4
+

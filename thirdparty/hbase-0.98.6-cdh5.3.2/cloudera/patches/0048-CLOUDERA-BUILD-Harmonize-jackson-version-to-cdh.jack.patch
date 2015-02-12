@@ -1,0 +1,25 @@
+From e10d7d24660a0e6c0b65201b2b263331125203c7 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Tue, 30 Sep 2014 16:14:51 -0700
+Subject: [PATCH 48/82] CLOUDERA-BUILD Harmonize jackson version to cdh.jackson.version
+
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 45bde77..20f7edc 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1004,7 +1004,7 @@
+     <httpclient.version>3.1</httpclient.version>
+     <metrics-core.version>2.2.0</metrics-core.version>
+     <guava.version>12.0.1</guava.version>
+-    <jackson.version>1.8.8</jackson.version>
++    <jackson.version>${cdh.jackson.version}</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+     <jaxb-api.version>2.1</jaxb-api.version>
+     <jetty.version>6.1.26.cloudera.2</jetty.version>
+-- 
+1.7.0.4
+

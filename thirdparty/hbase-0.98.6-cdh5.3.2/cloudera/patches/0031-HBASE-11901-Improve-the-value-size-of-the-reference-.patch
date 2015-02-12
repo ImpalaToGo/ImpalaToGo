@@ -1,0 +1,94 @@
+From ec56bbf4475cde3688647fc2b9bb4a2e19af3f88 Mon Sep 17 00:00:00 2001
+From: anoopsjohn <anoopsamjohn@gmail.com>
+Date: Sat, 6 Sep 2014 09:59:55 +0530
+Subject: [PATCH 31/82] HBASE-11901 Improve the value size of the reference cell in mob column.(Jingcheng Du)
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-19420
+---
+ .../java/org/apache/hadoop/hbase/mob/MobUtils.java |    2 +-
+ .../hadoop/hbase/regionserver/HMobStore.java       |    4 ++--
+ .../hbase/regionserver/TestDeleteMobTable.java     |    2 +-
+ .../hadoop/hbase/regionserver/TestHMobStore.java   |    6 +++---
+ .../hbase/regionserver/TestMobStoreScanner.java    |    5 ++++-
+ 5 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+index 7bc724a..623d121 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+@@ -251,7 +251,7 @@ public class MobUtils {
+     // find the original mob files by this table name. For details please see cloning
+     // snapshot for mob files.
+     existingTags.add(tableNameTag);
+-    long valueLength = kv.getValueLength();
++    int valueLength = kv.getValueLength();
+     byte[] refValue = Bytes.add(Bytes.toBytes(valueLength), fileName);
+     KeyValue reference = new KeyValue(kv.getRowArray(), kv.getRowOffset(), kv.getRowLength(),
+         kv.getFamilyArray(), kv.getFamilyOffset(), kv.getFamilyLength(), kv.getQualifierArray(),
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+index 6b4e450..08157f5 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+@@ -219,9 +219,9 @@ public class HMobStore extends HStore {
+    */
+   public Cell resolve(Cell reference, boolean cacheBlocks) throws IOException {
+     Cell result = null;
+-    if (reference.getValueLength() > Bytes.SIZEOF_LONG) {
++    if (reference.getValueLength() > Bytes.SIZEOF_INT) {
+       String fileName = Bytes.toString(reference.getValueArray(), reference.getValueOffset()
+-          + Bytes.SIZEOF_LONG, reference.getValueLength() - Bytes.SIZEOF_LONG);
++          + Bytes.SIZEOF_INT, reference.getValueLength() - Bytes.SIZEOF_INT);
+       Path targetPath = new Path(mobFamilyPath, fileName);
+       MobFile file = null;
+       try {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+index 1c86f46..652d43d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+@@ -214,7 +214,7 @@ public class TestDeleteMobTable {
+     Result r = rs.next();
+     Assert.assertNotNull(r);
+     byte[] value = r.getValue(FAMILY, QF);
+-    String fileName = Bytes.toString(value, Bytes.SIZEOF_LONG, value.length - Bytes.SIZEOF_LONG);
++    String fileName = Bytes.toString(value, Bytes.SIZEOF_INT, value.length - Bytes.SIZEOF_INT);
+     Path filePath = new Path(
+         MobUtils.getMobFamilyPath(TEST_UTIL.getConfiguration(), tn, familyName), fileName);
+     FileSystem fs = TEST_UTIL.getTestFileSystem();
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+index 6299aaf..926a0e1 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+@@ -170,9 +170,9 @@ public class TestHMobStore {
+     mobWriter.append(key3);
+     mobWriter.close();
+ 
+-    long valueLength1 = key1.getValueLength();
+-    long valueLength2 = key2.getValueLength();
+-    long valueLength3 = key3.getValueLength();
++    int valueLength1 = key1.getValueLength();
++    int valueLength2 = key2.getValueLength();
++    int valueLength3 = key3.getValueLength();
+ 
+     String targetPathName = MobUtils.formatDate(currentDate);
+     byte[] referenceValue =
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+index 9310f13..212654a 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+@@ -308,7 +308,10 @@ public class TestMobStoreScanner {
+     Assert.assertFalse(Bytes.toString(value).equals(
+         Bytes.toString(CellUtil.cloneValue(cell))));
+     byte[] referenceValue = CellUtil.cloneValue(cell);
+-    String fileName = Bytes.toString(referenceValue, 8, referenceValue.length-8);
++    String fileName = Bytes.toString(referenceValue, Bytes.SIZEOF_INT,
++        referenceValue.length - Bytes.SIZEOF_INT);
++    int valLen = Bytes.toInt(referenceValue, 0, Bytes.SIZEOF_INT);
++    Assert.assertEquals(value.length, valLen);
+     Path mobFamilyPath;
+     mobFamilyPath = new Path(MobUtils.getMobRegionPath(TEST_UTIL.getConfiguration(),
+         TableName.valueOf(TN)), hcd.getNameAsString());
+-- 
+1.7.0.4
+

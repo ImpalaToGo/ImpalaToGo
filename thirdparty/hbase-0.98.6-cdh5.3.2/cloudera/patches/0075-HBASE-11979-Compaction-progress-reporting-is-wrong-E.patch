@@ -1,0 +1,34 @@
+From d127ea6c37a10c40ebc7b5360bf068635305cc1b Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Tue, 9 Dec 2014 12:46:35 -0800
+Subject: [PATCH 75/82] HBASE-11979 Compaction progress reporting is wrong (Esteban Gutierrez)
+
+Reason: Bug
+Author: Esteban Gutierrez
+Ref: CDH-23771
+---
+ .../hbase/regionserver/compactions/Compactor.java  |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/Compactor.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/Compactor.java
+index 4d5f188..119b73f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/Compactor.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/Compactor.java
+@@ -116,10 +116,10 @@ public abstract class Compactor {
+         LOG.warn("Null reader for " + file.getPath());
+         continue;
+       }
+-      // NOTE: getFilterEntries could cause under-sized blooms if the user
+-      // switches bloom type (e.g. from ROW to ROWCOL)
+-      long keyCount = (r.getBloomFilterType() == store.getFamily().getBloomFilterType())
+-          ? r.getFilterEntries() : r.getEntries();
++      // NOTE: use getEntries when compacting instead of getFilterEntries, otherwise under-sized
++      // blooms can cause progress to be miscalculated or if the user switches bloom
++      // type (e.g. from ROW to ROWCOL)
++      long keyCount = r.getEntries();
+       fd.maxKeyCount += keyCount;
+       // calculate the latest MVCC readpoint in any of the involved store files
+       Map<byte[], byte[]> fileInfo = r.loadFileInfo();
+-- 
+1.7.0.4
+

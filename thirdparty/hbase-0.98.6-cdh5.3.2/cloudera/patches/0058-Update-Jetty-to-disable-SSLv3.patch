@@ -1,0 +1,28 @@
+From 91191ae0a2c5160fb76798507108b40ea03ad9a9 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 28 Oct 2014 20:25:35 +0000
+Subject: [PATCH 58/82] Update Jetty to disable SSLv3
+
+Reason: CVE-2014-3566
+Author: Matteo Bertozzi
+Ref: CDH-22630
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 20f7edc..5b6127f 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1007,7 +1007,7 @@
+     <jackson.version>${cdh.jackson.version}</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+     <jaxb-api.version>2.1</jaxb-api.version>
+-    <jetty.version>6.1.26.cloudera.2</jetty.version>
++    <jetty.version>6.1.26.cloudera.3</jetty.version>
+     <jetty.jspapi.version>6.1.14</jetty.jspapi.version>
+     <jersey.version>1.8</jersey.version>
+     <jruby.version>1.6.8</jruby.version>
+-- 
+1.7.0.4
+

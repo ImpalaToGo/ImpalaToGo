@@ -1,0 +1,36 @@
+From 946493618f39bbd95cdb0d9c817110430840a56d Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Mon, 29 Dec 2014 16:09:45 -0800
+Subject: [PATCH 78/82] CDH-24020 Fix HBASE-11794 (NPE in stripe store), was disabled when merging HBASE-10648 (pluggable memstore)
+
+Reason: Merge issue
+Author: Srikanth Srungarapu
+Ref: CDH-24020
+---
+ .../hbase/regionserver/StripeStoreFlusher.java     |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StripeStoreFlusher.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StripeStoreFlusher.java
+index 140dea3..ae34799 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StripeStoreFlusher.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StripeStoreFlusher.java
+@@ -21,6 +21,7 @@ package org.apache.hadoop.hbase.regionserver;
+ import static org.apache.hadoop.hbase.regionserver.StripeStoreFileManager.OPEN_KEY;
+ 
+ import java.io.IOException;
++import java.util.ArrayList;
+ import java.util.List;
+ 
+ import org.apache.commons.logging.Log;
+@@ -54,7 +55,7 @@ public class StripeStoreFlusher extends StoreFlusher {
+   @Override
+   public List<Path> flushSnapshot(MemStoreSnapshot snapshot, long cacheFlushSeqNum,
+       MonitoredTask status) throws IOException {
+-    List<Path> result = null;
++    List<Path> result = new ArrayList<Path>();
+     int cellsCount = snapshot.getCellsCount();
+     if (cellsCount == 0) return result; // don't flush if there are no entries
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,29 @@
+From b9adef014e150be61e79114b73d4457fee746179 Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Thu, 20 Nov 2014 10:29:06 +0530
+Subject: [PATCH 70/82] HBASE-12489 Incorrect 'mobFileCacheMissCount' calculated in the mob
+ metrics (Li Jiajia)
+
+Reason: Bug
+Author: Li Jiajia
+Ref: CDH-23659
+---
+ .../MetricsRegionServerSourceImpl.java             |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
+index cf5d15a..80ac0e5 100644
+--- a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
++++ b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
+@@ -247,7 +247,7 @@ public class MetricsRegionServerSourceImpl
+           .addCounter(Interns.info(MOB_FILE_CACHE_ACCESS_COUNT, MOB_FILE_CACHE_ACCESS_COUNT_DESC),
+               rsWrap.getMobFileCacheAccessCount())
+           .addCounter(Interns.info(MOB_FILE_CACHE_MISS_COUNT, MOB_FILE_CACHE_MISS_COUNT_DESC),
+-              rsWrap.getMobFileCacheAccessCount())
++              rsWrap.getMobFileCacheMissCount())
+           .addCounter(
+               Interns.info(MOB_FILE_CACHE_EVICTED_COUNT, MOB_FILE_CACHE_EVICTED_COUNT_DESC),
+               rsWrap.getMobFileCacheEvictedCount())
+-- 
+1.7.0.4
+

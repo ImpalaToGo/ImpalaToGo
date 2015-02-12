@@ -1,0 +1,115 @@
+From 72ba8a69abc7d6eab63f31361c43bed9350d8811 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 30 Sep 2014 19:10:00 +0100
+Subject: [PATCH 50/82] HBASE-12098 User granted namespace table create permissions can't create a table (Srikanth Srungarapu)
+
+Reason: Bug
+Author: Srikanth Srungarapu
+Ref: CDH-22098
+---
+ .../hbase/security/access/AccessController.java    |    3 +-
+ .../security/access/TestNamespaceCommands.java     |   39 +++++++++++++++++---
+ 2 files changed, 36 insertions(+), 6 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index 7f444f5..1c092f4 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -487,7 +487,8 @@ public class AccessController extends BaseMasterAndRegionObserver
+   private void requireGlobalPermission(String request, Action perm, TableName tableName,
+       Map<byte[], ? extends Collection<byte[]>> familyMap) throws IOException {
+     User user = getActiveUser();
+-    if (authManager.authorize(user, perm)) {
++    if (authManager.authorize(user, perm) || (tableName != null &&
++        authManager.authorize(user, tableName.getNamespaceAsString(), perm))) {
+       logResult(AuthResult.allow(request, "Global check allowed", user, perm, tableName, familyMap));
+     } else {
+       logResult(AuthResult.deny(request, "Global check failed", user, perm, tableName, familyMap));
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestNamespaceCommands.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestNamespaceCommands.java
+index 39d8133..a9601d5 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestNamespaceCommands.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/security/access/TestNamespaceCommands.java
+@@ -22,11 +22,17 @@ import static org.junit.Assert.assertTrue;
+ 
+ import java.util.List;
+ 
++import com.google.common.collect.ListMultimap;
++import com.google.protobuf.BlockingRpcChannel;
++
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HConstants;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.NamespaceDescriptor;
++import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Get;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Result;
+@@ -37,14 +43,15 @@ import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.AccessCont
+ import org.apache.hadoop.hbase.security.User;
+ import org.apache.hadoop.hbase.security.access.Permission.Action;
+ import org.apache.hadoop.hbase.util.Bytes;
+-
+ import org.junit.AfterClass;
+ import org.junit.BeforeClass;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
+-import com.google.common.collect.ListMultimap;
+-import com.google.protobuf.BlockingRpcChannel;
++import java.util.List;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
+ 
+ @Category(MediumTests.class)
+ public class TestNamespaceCommands extends SecureTestUtil {
+@@ -62,6 +69,9 @@ public class TestNamespaceCommands extends SecureTestUtil {
+   private static User USER_CREATE;
+   // user with permission on namespace for testing all operations.
+   private static User USER_NSP_WRITE;
++
++  private static String TEST_TABLE = TestNamespace + ":testtable";
++  private static byte[] TEST_FAMILY = Bytes.toBytes("f1");
+   
+   @BeforeClass
+   public static void beforeClass() throws Exception {
+@@ -84,7 +94,7 @@ public class TestNamespaceCommands extends SecureTestUtil {
+     UTIL.getHBaseAdmin().createNamespace(NamespaceDescriptor.create(TestNamespace).build());
+ 
+     grantOnNamespace(UTIL, USER_NSP_WRITE.getShortName(),
+-      TestNamespace, Permission.Action.WRITE);
++      TestNamespace, Permission.Action.WRITE, Permission.Action.CREATE);
+   }
+   
+   @AfterClass
+@@ -188,4 +198,23 @@ public class TestNamespaceCommands extends SecureTestUtil {
+     verifyAllowed(revokeAction, SUPERUSER);
+     verifyDenied(revokeAction, USER_CREATE, USER_RW);    
+   }
++
++  @Test
++  public void testCreateTableWithNamespace() throws Exception {
++    AccessTestAction createTable = new AccessTestAction() {
++      @Override
++      public Object run() throws Exception {
++        HTableDescriptor htd = new HTableDescriptor(TableName.valueOf(TEST_TABLE));
++        htd.addFamily(new HColumnDescriptor(TEST_FAMILY));
++        ACCESS_CONTROLLER.preCreateTable(ObserverContext.createAndPrepare(CP_ENV, null), htd, null);
++        return null;
++      }
++    };
++
++    // Only users with create permissions on namespace should be able to create a new table
++    verifyAllowed(createTable, SUPERUSER, USER_NSP_WRITE);
++
++    // all others should be denied
++    verifyDenied(createTable, USER_CREATE, USER_RW);
++  }
+ }
+-- 
+1.7.0.4
+

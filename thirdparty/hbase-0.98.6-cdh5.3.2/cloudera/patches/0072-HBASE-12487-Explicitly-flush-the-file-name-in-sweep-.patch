@@ -1,0 +1,40 @@
+From f806fcf12c73db84fdcc4be6bde5769c4bfa375c Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 21 Nov 2014 08:53:27 +0530
+Subject: [PATCH 72/82] HBASE-12487 Explicitly flush the file name in sweep job (Jingcheng Du)
+
+Reason: Bug
+Author: Li Jiajia
+Ref: CDH-23659
+---
+ .../hadoop/hbase/mob/mapreduce/SweepJob.java       |    1 +
+ .../hadoop/hbase/mob/mapreduce/SweepReducer.java   |    1 +
+ 2 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
+index 2ab12d9..ab63e5c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
+@@ -322,6 +322,7 @@ public class SweepJob {
+       for (String fileName : fileNames) {
+         writer.append(fileName, MobConstants.EMPTY_STRING);
+       }
++      writer.hflush();
+     } finally {
+       if (writer != null) {
+         IOUtils.closeStream(writer);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepReducer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepReducer.java
+index 20f90f6..bca60eb 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepReducer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepReducer.java
+@@ -192,6 +192,7 @@ public class SweepReducer extends Reducer<Text, KeyValue, Writable, Writable> {
+       if (null != partition) {
+         partition.close();
+       }
++      writer.hflush();
+     } catch (KeeperException e) {
+       throw new IOException(e);
+     } finally {
+-- 
+1.7.0.4
+

@@ -1,0 +1,294 @@
+From 3f07df32de306afb5ea5fcb31dc720329bff22c7 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Fri, 8 Aug 2014 13:54:53 -0700
+Subject: [PATCH 15/82] HBASE-11658 Piped commands to hbase shell should return non-zero if shell command failed (Sean Busbey)
+
+Reason: Improvement
+Author: Sean Busbey
+Ref: CDH-20763
+---
+ bin/hirb.rb                                        |   99 +++++++++++++++-----
+ hbase-shell/src/main/ruby/shell.rb                 |    5 +-
+ hbase-shell/src/main/ruby/shell/commands.rb        |   18 ++--
+ .../src/test/ruby/shell/noninteractive_test.rb     |   42 ++++++++
+ hbase-shell/src/test/ruby/shell/shell_test.rb      |   10 ++
+ 5 files changed, 142 insertions(+), 32 deletions(-)
+ create mode 100644 hbase-shell/src/test/ruby/shell/noninteractive_test.rb
+
+diff --git a/bin/hirb.rb b/bin/hirb.rb
+index 0503c29..94b5cdb 100644
+--- a/bin/hirb.rb
++++ b/bin/hirb.rb
+@@ -19,6 +19,12 @@
+ # File passed to org.jruby.Main by bin/hbase.  Pollutes jirb with hbase imports
+ # and hbase  commands and then loads jirb.  Outputs a banner that tells user
+ # where to find help, shell version, and loads up a custom hirb.
++#
++# In noninteractive mode, runs commands from stdin until completion or an error.
++# On success will exit with status 0, on any problem will exit non-zero. Callers
++# should only rely on "not equal to 0", because the current error exit code of 1
++# will likely be updated to diffentiate e.g. invalid commands, incorrect args,
++# permissions, etc.
+ 
+ # TODO: Interrupt a table creation or a connection to a bad master.  Currently
+ # has to time out.  Below we've set down the retries for rpc and hbase but
+@@ -54,12 +60,16 @@ Usage: shell [OPTIONS] [SCRIPTFILE [ARGUMENTS]]
+ 
+  -d | --debug                   Set DEBUG log levels.
+  -h | --help                    This help.
++ -n | --noninteractive          Do not run within an IRB session
++                                and exit with non-zero status on
++                                first error.
+ HERE
+ found = []
+ format = 'console'
+ script2run = nil
+ log_level = org.apache.log4j.Level::ERROR
+ @shell_debug = false
++interactive = true
+ for arg in ARGV
+   if arg =~ /^--format=(.+)/i
+     format = $1
+@@ -80,6 +90,9 @@ for arg in ARGV
+     @shell_debug = true
+     found.push(arg)
+     puts "Setting DEBUG log level..."
++  elsif arg == '-n' || arg == '--noninteractive'
++    interactive = false
++    found.push(arg)
+   else
+     # Presume it a script. Save it off for running later below
+     # after we've set up some environment.
+@@ -118,10 +131,11 @@ require 'shell/formatter'
+ @hbase = Hbase::Hbase.new
+ 
+ # Setup console
+-@shell = Shell::Shell.new(@hbase, @formatter)
++@shell = Shell::Shell.new(@hbase, @formatter, interactive)
+ @shell.debug = @shell_debug
+ 
+ # Add commands to this namespace
++# TODO avoid polluting main namespace by using a binding
+ @shell.export_commands(self)
+ 
+ # Add help command
+@@ -158,38 +172,75 @@ end
+ # Include hbase constants
+ include HBaseConstants
+ 
+-# If script2run, try running it.  Will go on to run the shell unless
++# If script2run, try running it.  If we're in interactive mode, will go on to run the shell unless
+ # script calls 'exit' or 'exit 0' or 'exit errcode'.
+ load(script2run) if script2run
+ 
+-# Output a banner message that tells users where to go for help
+-@shell.print_banner
++if interactive
++  # Output a banner message that tells users where to go for help
++  @shell.print_banner
+ 
+-require "irb"
+-require 'irb/hirb'
++  require "irb"
++  require 'irb/hirb'
+ 
+-module IRB
+-  def self.start(ap_path = nil)
+-    $0 = File::basename(ap_path, ".rb") if ap_path
++  module IRB
++    def self.start(ap_path = nil)
++      $0 = File::basename(ap_path, ".rb") if ap_path
+ 
+-    IRB.setup(ap_path)
+-    @CONF[:IRB_NAME] = 'hbase'
+-    @CONF[:AP_NAME] = 'hbase'
+-    @CONF[:BACK_TRACE_LIMIT] = 0 unless $fullBackTrace
++      IRB.setup(ap_path)
++      @CONF[:IRB_NAME] = 'hbase'
++      @CONF[:AP_NAME] = 'hbase'
++      @CONF[:BACK_TRACE_LIMIT] = 0 unless $fullBackTrace
+ 
+-    if @CONF[:SCRIPT]
+-      hirb = HIRB.new(nil, @CONF[:SCRIPT])
+-    else
+-      hirb = HIRB.new
+-    end
++      if @CONF[:SCRIPT]
++        hirb = HIRB.new(nil, @CONF[:SCRIPT])
++      else
++        hirb = HIRB.new
++      end
+ 
+-    @CONF[:IRB_RC].call(hirb.context) if @CONF[:IRB_RC]
+-    @CONF[:MAIN_CONTEXT] = hirb.context
++      @CONF[:IRB_RC].call(hirb.context) if @CONF[:IRB_RC]
++      @CONF[:MAIN_CONTEXT] = hirb.context
+ 
+-    catch(:IRB_EXIT) do
+-      hirb.eval_input
++      catch(:IRB_EXIT) do
++        hirb.eval_input
++      end
+     end
+   end
+-end
+ 
+-IRB.start
++  IRB.start
++else
++  begin
++    # Noninteractive mode: if there is input on stdin, do a simple REPL.
++    # XXX Note that this purposefully uses STDIN and not Kernel.gets
++    #     in order to maintain compatibility with previous behavior where
++    #     a user could pass in script2run and then still pipe commands on
++    #     stdin.
++    require "irb/ruby-lex"
++    require "irb/workspace"
++    workspace = IRB::WorkSpace.new(binding())
++    scanner = RubyLex.new
++    scanner.set_input(STDIN)
++    scanner.each_top_level_statement do |statement, linenum|
++       puts(workspace.evaluate(nil, statement, 'stdin', linenum))
++    end
++  # XXX We're catching Exception on purpose, because we want to include
++  #     unwrapped java exceptions, syntax errors, eval failures, etc.
++  rescue Exception => exception
++    message = exception.to_s
++    # exception unwrapping in shell means we'll have to handle Java exceptions
++    # as a special case in order to format them properly.
++    if exception.kind_of? java.lang.Exception
++      $stderr.puts "java exception"
++      message = exception.get_message
++    end
++    # Include the 'ERROR' string to try to make transition easier for scripts that
++    # may have already been relying on grepping output.
++    puts "ERROR #{exception.class}: #{message}"
++    if $fullBacktrace
++      # re-raising the will include a backtrace and exit.
++      raise exception
++    else
++      exit 1
++    end
++  end
++end
+diff --git a/hbase-shell/src/main/ruby/shell.rb b/hbase-shell/src/main/ruby/shell.rb
+index 7e948b7..5b59254 100644
+--- a/hbase-shell/src/main/ruby/shell.rb
++++ b/hbase-shell/src/main/ruby/shell.rb
+@@ -71,13 +71,16 @@ module Shell
+   class Shell
+     attr_accessor :hbase
+     attr_accessor :formatter
++    attr_accessor :interactive
++    alias interactive? interactive
+ 
+     @debug = false
+     attr_accessor :debug
+ 
+-    def initialize(hbase, formatter)
++    def initialize(hbase, formatter, interactive=true)
+       self.hbase = hbase
+       self.formatter = formatter
++      self.interactive = interactive
+     end
+ 
+     def hbase_admin
+diff --git a/hbase-shell/src/main/ruby/shell/commands.rb b/hbase-shell/src/main/ruby/shell/commands.rb
+index 54fa204..1b079fb 100644
+--- a/hbase-shell/src/main/ruby/shell/commands.rb
++++ b/hbase-shell/src/main/ruby/shell/commands.rb
+@@ -37,13 +37,17 @@ module Shell
+         while rootCause != nil && rootCause.respond_to?(:cause) && rootCause.cause != nil
+           rootCause = rootCause.cause
+         end
+-        puts
+-        puts "ERROR: #{rootCause}"
+-        puts "Backtrace: #{rootCause.backtrace.join("\n           ")}" if debug
+-        puts
+-        puts "Here is some help for this command:"
+-        puts help
+-        puts
++        if @shell.interactive?
++          puts
++          puts "ERROR: #{rootCause}"
++          puts "Backtrace: #{rootCause.backtrace.join("\n           ")}" if debug
++          puts
++          puts "Here is some help for this command:"
++          puts help
++          puts
++        else
++          raise rootCause
++        end
+       end
+ 
+       def admin
+diff --git a/hbase-shell/src/test/ruby/shell/noninteractive_test.rb b/hbase-shell/src/test/ruby/shell/noninteractive_test.rb
+new file mode 100644
+index 0000000..14bdbc7
+--- /dev/null
++++ b/hbase-shell/src/test/ruby/shell/noninteractive_test.rb
+@@ -0,0 +1,42 @@
++# Licensed to the Apache Software Foundation (ASF) under one
++# or more contributor license agreements.  See the NOTICE file
++# distributed with this work for additional information
++# regarding copyright ownership.  The ASF licenses this file
++# to you under the Apache License, Version 2.0 (the
++# "License"); you may not use this file except in compliance
++# with the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++require 'hbase'
++require 'shell'
++require 'shell/formatter'
++
++class NonInteractiveTest < Test::Unit::TestCase
++  def setup
++    @formatter = ::Shell::Formatter::Console.new()
++    @hbase = ::Hbase::Hbase.new($TEST_CLUSTER.getConfiguration)
++    @shell = Shell::Shell.new(@hbase, @formatter, false)
++  end
++
++  define_test "Shell::Shell noninteractive mode should throw" do
++    # XXX Exception instead of StandardError because we throw things
++    #     that aren't StandardError
++    assert_raise(ArgumentError) do
++      # incorrect number of arguments
++      @shell.command('create', 'foo')
++    end
++    @shell.command('create', 'foo', 'family_1')
++    exception = assert_raise(RuntimeError) do
++      # create a table that exists
++      @shell.command('create', 'foo', 'family_1')
++    end
++    assert_equal("Table already exists: foo!", exception.message)
++  end
++end
+diff --git a/hbase-shell/src/test/ruby/shell/shell_test.rb b/hbase-shell/src/test/ruby/shell/shell_test.rb
+index 988d09e..56b7dc8 100644
+--- a/hbase-shell/src/test/ruby/shell/shell_test.rb
++++ b/hbase-shell/src/test/ruby/shell/shell_test.rb
+@@ -66,4 +66,14 @@ class ShellTest < Test::Unit::TestCase
+   define_test "Shell::Shell#command should execute a command" do
+     @shell.command('version')
+   end
++
++  #-------------------------------------------------------------------------------
++
++  define_test "Shell::Shell interactive mode should not throw" do
++    # incorrect number of arguments
++    @shell.command('create', 'foo')
++    @shell.command('create', 'foo', 'family_1')
++    # create a table that exists
++    @shell.command('create', 'foo', 'family_1')
++  end
+ end
+-- 
+1.7.0.4
+

@@ -1,0 +1,36 @@
+From 5eec125d7c0016c81cb5a9e8d25bd9f6d094d223 Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 21 Nov 2014 08:52:11 +0530
+Subject: [PATCH 71/82] HBASE-12486 - Move the mob table name tag to the 2nd one (Jingcheng Du)
+
+Reason: Bug
+Author: Li Jiajia
+Ref: CDH-23659
+---
+ .../java/org/apache/hadoop/hbase/mob/MobUtils.java |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+index 5804883..de60a1e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+@@ -393,14 +393,14 @@ public class MobUtils {
+     List<Tag> tags = new ArrayList<Tag>();
+     // Add the ref tag as the 1st one.
+     tags.add(MobConstants.MOB_REF_TAG);
+-    // Add the existing tags.
+-    tags.addAll(Tag.asList(cell.getTagsArray(), cell.getTagsOffset(), cell.getTagsLength()));
+     // Add the tag of the source table name, this table is where this mob file is flushed
+     // from.
+     // It's very useful in cloning the snapshot. When reading from the cloning table, we need to
+     // find the original mob files by this table name. For details please see cloning
+     // snapshot for mob files.
+     tags.add(tableNameTag);
++    // Add the existing tags.
++    tags.addAll(Tag.asList(cell.getTagsArray(), cell.getTagsOffset(), cell.getTagsLength()));
+     int valueLength = cell.getValueLength();
+     byte[] refValue = Bytes.add(Bytes.toBytes(valueLength), fileName);
+     KeyValue reference = new KeyValue(cell.getRowArray(), cell.getRowOffset(), cell.getRowLength(),
+-- 
+1.7.0.4
+

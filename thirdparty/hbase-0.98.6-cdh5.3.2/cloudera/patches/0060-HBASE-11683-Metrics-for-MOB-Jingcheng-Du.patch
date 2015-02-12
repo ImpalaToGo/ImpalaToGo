@@ -1,0 +1,1035 @@
+From c4b204e03e841b490f536847c406abfbdd4425be Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Thu, 30 Oct 2014 06:50:13 -0700
+Subject: [PATCH 60/82] HBASE-11683 Metrics for MOB (Jingcheng Du)
+
+Conflicts:
+
+	hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapper.java
+	hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
+	hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperStub.java
+
+Takes into account hedged read metrics and adds a hfile.format.version 3 setting to modified test.
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-22448
+---
+ .../regionserver/MetricsRegionServerSource.java    |   32 +++++
+ .../regionserver/MetricsRegionServerWrapper.java   |   70 ++++++++++
+ .../MetricsRegionServerSourceImpl.java             |   29 +++++
+ .../hadoop/hbase/mob/DefaultMobCompactor.java      |   12 ++
+ .../hadoop/hbase/mob/DefaultMobStoreFlusher.java   |   11 ++-
+ .../apache/hadoop/hbase/mob/MobCacheConfig.java    |    9 ++-
+ .../org/apache/hadoop/hbase/mob/MobFileCache.java  |   75 ++++++++++--
+ .../hadoop/hbase/regionserver/HMobStore.java       |   81 ++++++++++++
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    5 +
+ .../MetricsRegionServerWrapperImpl.java            |  134 ++++++++++++++++++++
+ .../hadoop/hbase/regionserver/MobStoreScanner.java |   15 ++-
+ .../regionserver/ReversedMobStoreScanner.java      |   15 ++-
+ .../MetricsRegionServerWrapperStub.java            |   73 +++++++++++-
+ .../regionserver/TestRegionServerMetrics.java      |   63 +++++++++
+ 14 files changed, 604 insertions(+), 20 deletions(-)
+
+diff --git a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSource.java b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSource.java
+index 8233b97..897ae84 100644
+--- a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSource.java
++++ b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSource.java
+@@ -233,6 +233,38 @@ public interface MetricsRegionServerSource extends BaseSource {
+   String MAJOR_COMPACTED_CELLS_SIZE = "majorCompactedCellsSize";
+   String MAJOR_COMPACTED_CELLS_SIZE_DESC =
+       "The total amount of data processed during major compactions, in bytes";
++  String MOB_COMPACTED_INTO_MOB_CELLS_COUNT = "mobCompactedIntoMobCellsCount";
++  String MOB_COMPACTED_INTO_MOB_CELLS_COUNT_DESC =
++      "The number of cells moved to mob during compaction";
++  String MOB_COMPACTED_FROM_MOB_CELLS_COUNT = "mobCompactedFromMobCellsCount";
++  String MOB_COMPACTED_FROM_MOB_CELLS_COUNT_DESC =
++      "The number of cells moved from mob during compaction";
++  String MOB_COMPACTED_INTO_MOB_CELLS_SIZE = "mobCompactedIntoMobCellsSize";
++  String MOB_COMPACTED_INTO_MOB_CELLS_SIZE_DESC =
++      "The total amount of cells move to mob during compaction, in bytes";
++  String MOB_COMPACTED_FROM_MOB_CELLS_SIZE = "mobCompactedFromMobCellsSize";
++  String MOB_COMPACTED_FROM_MOB_CELLS_SIZE_DESC =
++      "The total amount of cells move from mob during compaction, in bytes";
++  String MOB_FLUSH_COUNT = "mobFlushCount";
++  String MOB_FLUSH_COUNT_DESC = "The number of the flushes in mob-enabled stores";
++  String MOB_FLUSHED_CELLS_COUNT = "mobFlushedCellsCount";
++  String MOB_FLUSHED_CELLS_COUNT_DESC = "The number of mob cells flushed to disk";
++  String MOB_FLUSHED_CELLS_SIZE = "mobFlushedCellsSize";
++  String MOB_FLUSHED_CELLS_SIZE_DESC = "The total amount of mob cells flushed to disk, in bytes";
++  String MOB_SCAN_CELLS_COUNT = "mobScanCellsCount";
++  String MOB_SCAN_CELLS_COUNT_DESC = "The number of scanned mob cells";
++  String MOB_SCAN_CELLS_SIZE = "mobScanCellsSize";
++  String MOB_SCAN_CELLS_SIZE_DESC = "The total amount of scanned mob cells, in bytes";
++  String MOB_FILE_CACHE_ACCESS_COUNT = "mobFileCacheAccessCount";
++  String MOB_FILE_CACHE_ACCESS_COUNT_DESC = "The count of accesses to the mob file cache";
++  String MOB_FILE_CACHE_MISS_COUNT = "mobFileCacheMissCount";
++  String MOB_FILE_CACHE_MISS_COUNT_DESC = "The count of misses to the mob file cache";
++  String MOB_FILE_CACHE_HIT_PERCENT = "mobFileCacheHitPercent";
++  String MOB_FILE_CACHE_HIT_PERCENT_DESC = "The hit percent to the mob file cache";
++  String MOB_FILE_CACHE_EVICTED_COUNT = "mobFileCacheEvictedCount";
++  String MOB_FILE_CACHE_EVICTED_COUNT_DESC = "The number of items evicted from the mob file cache";
++  String MOB_FILE_CACHE_COUNT = "mobFileCacheCount";
++  String MOB_FILE_CACHE_COUNT_DESC = "The count of cached mob files";
+ 
+   String HEDGED_READS = "hedgedReads";
+   String HEDGED_READS_DESC = "The number of times we started a hedged read";
+diff --git a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapper.java b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapper.java
+index 263827b..755b7a1 100644
+--- a/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapper.java
++++ b/hbase-hadoop-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapper.java
+@@ -256,4 +256,74 @@ public interface MetricsRegionServerWrapper {
+    * @return Count of times a hedged read beat out the primary read.
+    */
+   public long getHedgedReadWins();
++
++  /**
++   * Gets the number of cells move to mob during compaction.
++   */
++  long getMobCompactedIntoMobCellsCount();
++
++  /**
++   * Gets the number of cells move from mob during compaction.
++   */
++  long getMobCompactedFromMobCellsCount();
++
++  /**
++   * Gets the total amount of cells move to mob during compaction, in bytes.
++   */
++  long getMobCompactedIntoMobCellsSize();
++
++  /**
++   * Gets the total amount of cells move from mob during compaction, in bytes.
++   */
++  long getMobCompactedFromMobCellsSize();
++
++  /**
++   * Gets the number of the flushes in mob-enabled stores.
++   */
++  long getMobFlushCount();
++
++  /**
++   * Gets the number of mob cells flushed to disk.
++   */
++  long getMobFlushedCellsCount();
++
++  /**
++   * Gets the total amount of mob cells flushed to disk, in bytes.
++   */
++  long getMobFlushedCellsSize();
++
++  /**
++   * Gets the number of scanned mob cells.
++   */
++  long getMobScanCellsCount();
++
++  /**
++   * Gets the total amount of scanned mob cells, in bytes.
++   */
++  long getMobScanCellsSize();
++
++  /**
++   * Gets the count of accesses to the mob file cache.
++   */
++  long getMobFileCacheAccessCount();
++
++  /**
++   * Gets the count of misses to the mob file cache.
++   */
++  long getMobFileCacheMissCount();
++
++  /**
++   * Gets the number of items evicted from the mob file cache.
++   */
++  long getMobFileCacheEvictedCount();
++
++  /**
++   * Gets the count of cached mob files.
++   */
++  long getMobFileCacheCount();
++
++  /**
++   * Gets the hit percent to the mob file cache.
++   */
++  int getMobFileCacheHitPercent();
+ }
+diff --git a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
+index 2de6a28..cf5d15a 100644
+--- a/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
++++ b/hbase-hadoop2-compat/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerSourceImpl.java
+@@ -224,6 +224,35 @@ public class MetricsRegionServerSourceImpl
+           .addCounter(Interns.info(HEDGED_READ_WINS, HEDGED_READ_WINS_DESC),
+               rsWrap.getHedgedReadWins())
+ 
++          .addCounter(Interns.info(MOB_COMPACTED_FROM_MOB_CELLS_COUNT, MOB_COMPACTED_FROM_MOB_CELLS_COUNT_DESC),
++              rsWrap.getMobCompactedFromMobCellsCount())
++          .addCounter(Interns.info(MOB_COMPACTED_INTO_MOB_CELLS_COUNT, MOB_COMPACTED_INTO_MOB_CELLS_COUNT_DESC),
++              rsWrap.getMobCompactedIntoMobCellsCount())
++          .addCounter(Interns.info(MOB_COMPACTED_FROM_MOB_CELLS_SIZE, MOB_COMPACTED_FROM_MOB_CELLS_SIZE_DESC),
++              rsWrap.getMobCompactedFromMobCellsSize())
++          .addCounter(Interns.info(MOB_COMPACTED_INTO_MOB_CELLS_SIZE, MOB_COMPACTED_INTO_MOB_CELLS_SIZE_DESC),
++              rsWrap.getMobCompactedIntoMobCellsSize())
++          .addCounter(Interns.info(MOB_FLUSH_COUNT, MOB_FLUSH_COUNT_DESC),
++              rsWrap.getMobFlushCount())
++          .addCounter(Interns.info(MOB_FLUSHED_CELLS_COUNT, MOB_FLUSHED_CELLS_COUNT_DESC),
++              rsWrap.getMobFlushedCellsCount())
++          .addCounter(Interns.info(MOB_FLUSHED_CELLS_SIZE, MOB_FLUSHED_CELLS_SIZE_DESC),
++              rsWrap.getMobFlushedCellsSize())
++          .addCounter(Interns.info(MOB_SCAN_CELLS_COUNT, MOB_SCAN_CELLS_COUNT_DESC),
++              rsWrap.getMobScanCellsCount())
++          .addCounter(Interns.info(MOB_SCAN_CELLS_SIZE, MOB_SCAN_CELLS_SIZE_DESC),
++              rsWrap.getMobScanCellsSize())
++          .addGauge(Interns.info(MOB_FILE_CACHE_COUNT, MOB_FILE_CACHE_COUNT_DESC),
++              rsWrap.getMobFileCacheCount())
++          .addCounter(Interns.info(MOB_FILE_CACHE_ACCESS_COUNT, MOB_FILE_CACHE_ACCESS_COUNT_DESC),
++              rsWrap.getMobFileCacheAccessCount())
++          .addCounter(Interns.info(MOB_FILE_CACHE_MISS_COUNT, MOB_FILE_CACHE_MISS_COUNT_DESC),
++              rsWrap.getMobFileCacheAccessCount())
++          .addCounter(
++              Interns.info(MOB_FILE_CACHE_EVICTED_COUNT, MOB_FILE_CACHE_EVICTED_COUNT_DESC),
++              rsWrap.getMobFileCacheEvictedCount())
++          .addGauge(Interns.info(MOB_FILE_CACHE_HIT_PERCENT, MOB_FILE_CACHE_HIT_PERCENT_DESC),
++              rsWrap.getMobFileCacheHitPercent())
+           .tag(Interns.info(ZOOKEEPER_QUORUM_NAME, ZOOKEEPER_QUORUM_DESC),
+               rsWrap.getZookeeperQuorum())
+           .tag(Interns.info(SERVER_NAME_NAME, SERVER_NAME_DESC), rsWrap.getServerName())
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+index 477def3..c0d9b78 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+@@ -125,6 +125,10 @@ public class DefaultMobCompactor extends DefaultCompactor {
+     long mobCells = 0;
+     Tag tableNameTag = new Tag(TagType.MOB_TABLE_NAME_TAG_TYPE, store.getTableName()
+             .getName());
++    long mobCompactedIntoMobCellsCount = 0;
++    long mobCompactedFromMobCellsCount = 0;
++    long mobCompactedIntoMobCellsSize = 0;
++    long mobCompactedFromMobCellsSize = 0;
+     try {
+       try {
+         // If the mob file writer could not be created, directly write the cell to the store file.
+@@ -173,6 +177,8 @@ public class DefaultMobCompactor extends DefaultCompactor {
+                   // next compaction.
+                   writer.append(kv);
+                 }
++                mobCompactedFromMobCellsCount++;
++                mobCompactedFromMobCellsSize += cell.getValueLength();
+               }
+             } else {
+               LOG.warn("The value format of the KeyValue " + kv
+@@ -192,6 +198,8 @@ public class DefaultMobCompactor extends DefaultCompactor {
+             KeyValue reference = MobUtils.createMobRefKeyValue(kv, fileName, tableNameTag);
+             // write the cell whose value is the path of a mob file to the store file.
+             writer.append(reference);
++            mobCompactedIntoMobCellsCount++;
++            mobCompactedIntoMobCellsSize += kv.getValueLength();
+           }
+           ++progress.currentCompactedKVs;
+ 
+@@ -227,6 +235,10 @@ public class DefaultMobCompactor extends DefaultCompactor {
+         }
+       }
+     }
++    mobStore.updateMobCompactedFromMobCellsCount(mobCompactedFromMobCellsCount);
++    mobStore.updateMobCompactedIntoMobCellsCount(mobCompactedIntoMobCellsCount);
++    mobStore.updateMobCompactedFromMobCellsSize(mobCompactedFromMobCellsSize);
++    mobStore.updateMobCompactedIntoMobCellsSize(mobCompactedIntoMobCellsSize);
+     progress.complete();
+     return true;
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
+index aba81ff..194e898 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobStoreFlusher.java
+@@ -155,7 +155,8 @@ public class DefaultMobStoreFlusher extends DefaultStoreFlusher {
+     StoreFile.Writer mobFileWriter = null;
+     int compactionKVMax = conf.getInt(HConstants.COMPACTION_KV_MAX,
+         HConstants.COMPACTION_KV_MAX_DEFAULT);
+-    long mobKVCount = 0;
++    long mobCount = 0;
++    long mobSize = 0;
+     long time = snapshot.getTimeRangeTracker().getMaximumTimestamp();
+     mobFileWriter = mobStore.createWriterInTmp(new Date(time), snapshot.getCellsCount(),
+         store.getFamily().getCompression(), store.getRegionInfo().getStartKey());
+@@ -181,7 +182,8 @@ public class DefaultMobStoreFlusher extends DefaultStoreFlusher {
+             } else {
+               // append the original keyValue in the mob file.
+               mobFileWriter.append(kv);
+-              mobKVCount++;
++              mobSize += kv.getValueLength();
++              mobCount++;
+ 
+               // append the tags to the KeyValue.
+               // The key is same, the value is the filename of the mob file
+@@ -199,12 +201,15 @@ public class DefaultMobStoreFlusher extends DefaultStoreFlusher {
+       mobFileWriter.close();
+     }
+ 
+-    if (mobKVCount > 0) {
++    if (mobCount > 0) {
+       // commit the mob file from temp folder to target folder.
+       // If the mob file is committed successfully but the store file is not,
+       // the committed mob file will be handled by the sweep tool as an unused
+       // file.
+       mobStore.commitFile(mobFileWriter.getPath(), targetPath);
++      mobStore.updateMobFlushCount();
++      mobStore.updateMobFlushedCellsCount(mobCount);
++      mobStore.updateMobFlushedCellsSize(mobSize);
+     } else {
+       try {
+         // If the mob file is empty, delete it instead of committing.
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobCacheConfig.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobCacheConfig.java
+index b160010..35d5f92 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobCacheConfig.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobCacheConfig.java
+@@ -36,14 +36,21 @@ public class MobCacheConfig extends CacheConfig {
+     instantiateMobFileCache(conf);
+   }
+ 
++  public MobCacheConfig(Configuration conf) {
++    super(conf);
++    instantiateMobFileCache(conf);
++  }
++
+   /**
+    * Instantiates the MobFileCache.
+    * @param conf The current configuration.
++   * @return The current instance of MobFileCache.
+    */
+-  public static synchronized void instantiateMobFileCache(Configuration conf) {
++  public static synchronized MobFileCache instantiateMobFileCache(Configuration conf) {
+     if (mobFileCache == null) {
+       mobFileCache = new MobFileCache(conf);
+     }
++    return mobFileCache;
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobFileCache.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobFileCache.java
+index 97530b1..cd08a98 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobFileCache.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobFileCache.java
+@@ -74,10 +74,12 @@ public class MobFileCache {
+   // a ConcurrentHashMap, accesses to this map are synchronized.
+   private Map<String, CachedMobFile> map = null;
+   // caches access count
+-  private final AtomicLong count;
+-  private long lastAccess;
+-  private final AtomicLong miss;
+-  private long lastMiss;
++  private final AtomicLong count = new AtomicLong(0);
++  private long lastAccess = 0;
++  private final AtomicLong miss = new AtomicLong(0);
++  private long lastMiss = 0;
++  private final AtomicLong evictedFileCount = new AtomicLong(0);
++  private long lastEvictedFileCount = 0;
+ 
+   // a lock to sync the evict to guarantee the eviction occurs in sequence.
+   // the method evictFile is not sync by this lock, the ConcurrentHashMap does the sync there.
+@@ -101,10 +103,6 @@ public class MobFileCache {
+         MobConstants.DEFAULT_MOB_FILE_CACHE_SIZE);
+     isCacheEnabled = (mobFileMaxCacheSize > 0);
+     map = new ConcurrentHashMap<String, CachedMobFile>(mobFileMaxCacheSize);
+-    this.count = new AtomicLong(0);
+-    this.miss = new AtomicLong(0);
+-    this.lastAccess = 0;
+-    this.lastMiss = 0;
+     if (isCacheEnabled) {
+       long period = conf.getLong(MobConstants.MOB_CACHE_EVICT_PERIOD,
+           MobConstants.DEFAULT_MOB_CACHE_EVICT_PERIOD); // in seconds
+@@ -159,6 +157,7 @@ public class MobFileCache {
+       for (CachedMobFile evictedFile : evictedFiles) {
+         closeFile(evictedFile);
+       }
++      evictedFileCount.addAndGet(evictedFiles.size());
+     }
+   }
+ 
+@@ -175,6 +174,7 @@ public class MobFileCache {
+         CachedMobFile evictedFile = map.remove(fileName);
+         if (evictedFile != null) {
+           evictedFile.close();
++          evictedFileCount.incrementAndGet();
+         }
+       } catch (IOException e) {
+         LOG.error("Fail to evict the file " + fileName, e);
+@@ -245,6 +245,26 @@ public class MobFileCache {
+     }
+   }
+ 
++  public void shutdown() {
++    this.scheduleThreadPool.shutdown();
++    for (int i = 0; i < 10; i++) {
++      if (!this.scheduleThreadPool.isShutdown()) {
++        try {
++          Thread.sleep(10);
++        } catch (InterruptedException e) {
++          LOG.warn("Interrupted while sleeping");
++          Thread.currentThread().interrupt();
++          break;
++        }
++      }
++    }
++
++    if (!this.scheduleThreadPool.isShutdown()) {
++      List<Runnable> runnables = this.scheduleThreadPool.shutdownNow();
++      LOG.debug("Still running " + runnables);
++    }
++  }
++
+   /**
+    * Gets the count of cached mob files.
+    * @return The count of the cached mob files.
+@@ -254,17 +274,50 @@ public class MobFileCache {
+   }
+ 
+   /**
++   * Gets the count of accesses to the mob file cache.
++   * @return The count of accesses to the mob file cache.
++   */
++  public long getAccessCount() {
++    return count.get();
++  }
++
++  /**
++   * Gets the count of misses to the mob file cache.
++   * @return The count of misses to the mob file cache.
++   */
++  public long getMissCount() {
++    return miss.get();
++  }
++
++  /**
++   * Gets the number of items evicted from the mob file cache.
++   * @return The number of items evicted from the mob file cache.
++   */
++  public long getEvictedFileCount() {
++    return evictedFileCount.get();
++  }
++
++  /**
++   * Gets the hit ratio to the mob file cache.
++   * @return The hit ratio to the mob file cache.
++   */
++  public double getHitRatio() {
++    return count.get() == 0 ? 0 : ((float) (count.get() - miss.get())) / (float) count.get();
++  }
++
++  /**
+    * Prints the statistics.
+    */
+   public void printStatistics() {
+     long access = count.get() - lastAccess;
+     long missed = miss.get() - lastMiss;
+-    long hitRate = (access - missed) * 100 / access;
++    long evicted = evictedFileCount.get() - lastEvictedFileCount;
++    int hitRatio = access == 0 ? 0 : (int) (((float) (access - missed)) / (float) access * 100);
+     LOG.info("MobFileCache Statistics, access: " + access + ", miss: " + missed + ", hit: "
+-        + (access - missed) + ", hit rate: "
+-        + ((access == 0) ? 0 : hitRate) + "%");
++        + (access - missed) + ", hit ratio: " + hitRatio + "%, evicted files: " + evicted);
+     lastAccess += access;
+     lastMiss += missed;
++    lastEvictedFileCount += evicted;
+   }
+ 
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+index fb12c8b..495b7d2 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+@@ -78,6 +78,15 @@ public class HMobStore extends HStore {
+   private MobCacheConfig mobCacheConfig;
+   private Path homePath;
+   private Path mobFamilyPath;
++  private volatile long mobCompactedIntoMobCellsCount = 0;
++  private volatile long mobCompactedFromMobCellsCount = 0;
++  private volatile long mobCompactedIntoMobCellsSize = 0;
++  private volatile long mobCompactedFromMobCellsSize = 0;
++  private volatile long mobFlushCount = 0;
++  private volatile long mobFlushedCellsCount = 0;
++  private volatile long mobFlushedCellsSize = 0;
++  private volatile long mobScanCellsCount = 0;
++  private volatile long mobScanCellsSize = 0;
+   private List<Path> mobDirLocations;
+ 
+   public HMobStore(final HRegion region, final HColumnDescriptor family,
+@@ -398,4 +407,76 @@ public class HMobStore extends HStore {
+       return super.compact(compaction);
+     }
+   }
++
++  public void updateMobCompactedIntoMobCellsCount(long count) {
++    mobCompactedIntoMobCellsCount += count;
++  }
++
++  public long getMobCompactedIntoMobCellsCount() {
++    return mobCompactedIntoMobCellsCount;
++  }
++
++  public void updateMobCompactedFromMobCellsCount(long count) {
++    mobCompactedFromMobCellsCount += count;
++  }
++
++  public long getMobCompactedFromMobCellsCount() {
++    return mobCompactedFromMobCellsCount;
++  }
++
++  public void updateMobCompactedIntoMobCellsSize(long size) {
++    mobCompactedIntoMobCellsSize += size;
++  }
++
++  public long getMobCompactedIntoMobCellsSize() {
++    return mobCompactedIntoMobCellsSize;
++  }
++
++  public void updateMobCompactedFromMobCellsSize(long size) {
++    mobCompactedFromMobCellsSize += size;
++  }
++
++  public long getMobCompactedFromMobCellsSize() {
++    return mobCompactedFromMobCellsSize;
++  }
++
++  public void updateMobFlushCount() {
++    mobFlushCount++;
++  }
++
++  public long getMobFlushCount() {
++    return mobFlushCount;
++  }
++
++  public void updateMobFlushedCellsCount(long count) {
++    mobFlushedCellsCount += count;
++  }
++
++  public long getMobFlushedCellsCount() {
++    return mobFlushedCellsCount;
++  }
++
++  public void updateMobFlushedCellsSize(long size) {
++    mobFlushedCellsSize += size;
++  }
++
++  public long getMobFlushedCellsSize() {
++    return mobFlushedCellsSize;
++  }
++
++  public void updateMobScanCellsCount(long count) {
++    mobScanCellsCount += count;
++  }
++
++  public long getMobScanCellsCount() {
++    return mobScanCellsCount;
++  }
++
++  public void updateMobScanCellsSize(long size) {
++    mobScanCellsSize += size;
++  }
++
++  public long getMobScanCellsSize() {
++    return mobScanCellsSize;
++  }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index ba2a7ec..564e97d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -124,6 +124,7 @@ import org.apache.hadoop.hbase.ipc.ServerNotRunningYetException;
+ import org.apache.hadoop.hbase.ipc.ServerRpcController;
+ import org.apache.hadoop.hbase.master.SplitLogManager;
+ import org.apache.hadoop.hbase.master.TableLockManager;
++import org.apache.hadoop.hbase.mob.MobCacheConfig;
+ import org.apache.hadoop.hbase.procedure.RegionServerProcedureManagerHost;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.RequestConverter;
+@@ -453,6 +454,8 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+ 
+   // Cache configuration and block cache reference
+   final CacheConfig cacheConfig;
++  // Cache configuration for mob
++  final MobCacheConfig mobCacheConfig;
+ 
+   /** The health check chore. */
+   private HealthCheckChore healthCheckChore;
+@@ -625,6 +628,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+       "hbase.regionserver.kerberos.principal", this.isa.getHostName());
+     regionServerAccounting = new RegionServerAccounting();
+     cacheConfig = new CacheConfig(conf);
++    mobCacheConfig = new MobCacheConfig(conf);
+     uncaughtExceptionHandler = new UncaughtExceptionHandler() {
+       @Override
+       public void uncaughtException(Thread t, Throwable e) {
+@@ -958,6 +962,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+     if (cacheConfig.isBlockCacheEnabled()) {
+       cacheConfig.getBlockCache().shutdown();
+     }
++    mobCacheConfig.getMobFileCache().shutdown();
+ 
+     if (movedRegionsCleaner != null) {
+       movedRegionsCleaner.stop("Region Server stopping");
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
+index 27acbdc..3ef33f7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
+@@ -33,6 +33,8 @@ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.io.hfile.BlockCache;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+ import org.apache.hadoop.hbase.io.hfile.CacheStats;
++import org.apache.hadoop.hbase.mob.MobCacheConfig;
++import org.apache.hadoop.hbase.mob.MobFileCache;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+@@ -51,6 +53,7 @@ class MetricsRegionServerWrapperImpl
+   private final HRegionServer regionServer;
+ 
+   private BlockCache blockCache;
++  private MobFileCache mobFileCache;
+ 
+   private volatile long numStores = 0;
+   private volatile long numHLogFiles = 0;
+@@ -75,6 +78,20 @@ class MetricsRegionServerWrapperImpl
+   private volatile long flushedCellsSize = 0;
+   private volatile long compactedCellsSize = 0;
+   private volatile long majorCompactedCellsSize = 0;
++  private volatile long mobCompactedIntoMobCellsCount = 0;
++  private volatile long mobCompactedFromMobCellsCount = 0;
++  private volatile long mobCompactedIntoMobCellsSize = 0;
++  private volatile long mobCompactedFromMobCellsSize = 0;
++  private volatile long mobFlushCount = 0;
++  private volatile long mobFlushedCellsCount = 0;
++  private volatile long mobFlushedCellsSize = 0;
++  private volatile long mobScanCellsCount = 0;
++  private volatile long mobScanCellsSize = 0;
++  private volatile long mobFileCacheAccessCount = 0;
++  private volatile long mobFileCacheMissCount = 0;
++  private volatile double mobFileCacheHitRatio = 0;
++  private volatile long mobFileCacheEvictedCount = 0;
++  private volatile long mobFileCacheCount = 0;
+ 
+   private CacheStats cacheStats;
+   private ScheduledExecutorService executor;
+@@ -89,6 +106,7 @@ class MetricsRegionServerWrapperImpl
+   public MetricsRegionServerWrapperImpl(final HRegionServer regionServer) {
+     this.regionServer = regionServer;
+     initBlockCache();
++    initMobFileCache();
+ 
+     this.period =
+         regionServer.conf.getLong(HConstants.REGIONSERVER_METRICS_PERIOD,
+@@ -125,6 +143,16 @@ class MetricsRegionServerWrapperImpl
+     }
+   }
+ 
++  /**
++   * Initializes the mob file cache.
++   */
++  private synchronized void initMobFileCache() {
++    MobCacheConfig mobCacheConfig = this.regionServer.mobCacheConfig;
++    if (mobCacheConfig != null && this.mobFileCache == null) {
++      this.mobFileCache = mobCacheConfig.getMobFileCache();
++    }
++  }
++
+   @Override
+   public String getClusterId() {
+     return regionServer.getClusterId();
+@@ -402,6 +430,76 @@ class MetricsRegionServerWrapperImpl
+     return majorCompactedCellsSize;
+   }
+ 
++  @Override
++  public long getMobCompactedFromMobCellsCount() {
++    return mobCompactedFromMobCellsCount;
++  }
++
++  @Override
++  public long getMobCompactedIntoMobCellsCount() {
++    return mobCompactedIntoMobCellsCount;
++  }
++
++  @Override
++  public long getMobCompactedFromMobCellsSize() {
++    return mobCompactedFromMobCellsSize;
++  }
++
++  @Override
++  public long getMobCompactedIntoMobCellsSize() {
++    return mobCompactedIntoMobCellsSize;
++  }
++
++  @Override
++  public long getMobFlushCount() {
++    return mobFlushCount;
++  }
++
++  @Override
++  public long getMobFlushedCellsCount() {
++    return mobFlushedCellsCount;
++  }
++
++  @Override
++  public long getMobFlushedCellsSize() {
++    return mobFlushedCellsSize;
++  }
++
++  @Override
++  public long getMobScanCellsCount() {
++    return mobScanCellsCount;
++  }
++
++  @Override
++  public long getMobScanCellsSize() {
++    return mobScanCellsSize;
++  }
++
++  @Override
++  public long getMobFileCacheAccessCount() {
++    return mobFileCacheAccessCount;
++  }
++
++  @Override
++  public long getMobFileCacheMissCount() {
++    return mobFileCacheMissCount;
++  }
++
++  @Override
++  public long getMobFileCacheCount() {
++    return mobFileCacheCount;
++  }
++
++  @Override
++  public long getMobFileCacheEvictedCount() {
++    return mobFileCacheEvictedCount;
++  }
++
++  @Override
++  public int getMobFileCacheHitPercent() {
++    return (int) (mobFileCacheHitRatio * 100);
++  }
++
+   /**
+    * This is the runnable that will be executed on the executor every PERIOD number of seconds
+    * It will take metrics/numbers from all of the regions and use them to compute point in
+@@ -415,6 +513,7 @@ class MetricsRegionServerWrapperImpl
+     @Override
+     synchronized public void run() {
+       initBlockCache();
++      initMobFileCache();
+       cacheStats = blockCache.getStats();
+ 
+       HDFSBlocksDistribution hdfsBlocksDistribution =
+@@ -440,6 +539,15 @@ class MetricsRegionServerWrapperImpl
+       long tempFlushedCellsSize = 0;
+       long tempCompactedCellsSize = 0;
+       long tempMajorCompactedCellsSize = 0;
++      long tempMobCompactedIntoMobCellsCount = 0;
++      long tempMobCompactedFromMobCellsCount = 0;
++      long tempMobCompactedIntoMobCellsSize = 0;
++      long testMobCompactedFromMobCellsSize = 0;
++      long tempMobFlushCount = 0;
++      long tempMobFlushedCellsCount = 0;
++      long tempMobFlushedCellsSize = 0;
++      long tempMobScanCellsCount = 0;
++      long tempMobScanCellsSize = 0;
+ 
+       for (HRegion r : regionServer.getOnlineRegionsLocalContext()) {
+         tempNumMutationsWithoutWAL += r.numMutationsWithoutWAL.get();
+@@ -462,6 +570,18 @@ class MetricsRegionServerWrapperImpl
+           tempFlushedCellsSize += store.getFlushedCellsSize();
+           tempCompactedCellsSize += store.getCompactedCellsSize();
+           tempMajorCompactedCellsSize += store.getMajorCompactedCellsSize();
++          if (store instanceof HMobStore) {
++            HMobStore mobStore = (HMobStore) store;
++            tempMobCompactedIntoMobCellsCount += mobStore.getMobCompactedIntoMobCellsCount();
++            tempMobCompactedFromMobCellsCount += mobStore.getMobCompactedFromMobCellsCount();
++            tempMobCompactedIntoMobCellsSize += mobStore.getMobCompactedIntoMobCellsSize();
++            testMobCompactedFromMobCellsSize += mobStore.getMobCompactedFromMobCellsSize();
++            tempMobFlushCount += mobStore.getMobFlushCount();
++            tempMobFlushedCellsCount += mobStore.getMobFlushedCellsCount();
++            tempMobFlushedCellsSize += mobStore.getMobFlushedCellsSize();
++            tempMobScanCellsCount += mobStore.getMobScanCellsCount();
++            tempMobScanCellsSize += mobStore.getMobScanCellsSize();
++          }
+         }
+ 
+         hdfsBlocksDistribution.add(r.getHDFSBlocksDistribution());
+@@ -524,6 +644,20 @@ class MetricsRegionServerWrapperImpl
+       flushedCellsSize = tempFlushedCellsSize;
+       compactedCellsSize = tempCompactedCellsSize;
+       majorCompactedCellsSize = tempMajorCompactedCellsSize;
++      mobCompactedIntoMobCellsCount = tempMobCompactedIntoMobCellsCount;
++      mobCompactedFromMobCellsCount = tempMobCompactedFromMobCellsCount;
++      mobCompactedIntoMobCellsSize = tempMobCompactedIntoMobCellsSize;
++      mobCompactedFromMobCellsSize = testMobCompactedFromMobCellsSize;
++      mobFlushCount = tempMobFlushCount;
++      mobFlushedCellsCount = tempMobFlushedCellsCount;
++      mobFlushedCellsSize = tempMobFlushedCellsSize;
++      mobScanCellsCount = tempMobScanCellsCount;
++      mobScanCellsSize = tempMobScanCellsSize;
++      mobFileCacheAccessCount = mobFileCache.getAccessCount();
++      mobFileCacheMissCount = mobFileCache.getMissCount();
++      mobFileCacheHitRatio = mobFileCache.getHitRatio();
++      mobFileCacheEvictedCount = mobFileCache.getEvictedFileCount();
++      mobFileCacheCount = mobFileCache.getCacheSize();
+     }
+   }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MobStoreScanner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MobStoreScanner.java
+index b4bcbe7..f7f0acd 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MobStoreScanner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MobStoreScanner.java
+@@ -36,11 +36,16 @@ import org.apache.hadoop.hbase.mob.MobUtils;
+ public class MobStoreScanner extends StoreScanner {
+ 
+   private boolean cacheMobBlocks = false;
++  private final HMobStore mobStore;
+ 
+   public MobStoreScanner(Store store, ScanInfo scanInfo, Scan scan,
+       final NavigableSet<byte[]> columns, long readPt) throws IOException {
+     super(store, scanInfo, scan, columns, readPt);
+     cacheMobBlocks = MobUtils.isCacheMobBlocks(scan);
++    if (!(store instanceof HMobStore)) {
++      throw new IllegalArgumentException("The store " + store + " is not a HMobStore");
++    }
++    mobStore = (HMobStore) store;
+   }
+ 
+   /**
+@@ -56,13 +61,19 @@ public class MobStoreScanner extends StoreScanner {
+       if (outResult.isEmpty()) {
+         return result;
+       }
+-      HMobStore mobStore = (HMobStore) store;
++      long mobKVCount = 0;
++      long mobKVSize = 0;
+       for (int i = 0; i < outResult.size(); i++) {
+         Cell cell = outResult.get(i);
+         if (MobUtils.isMobReferenceCell(cell)) {
+-          outResult.set(i, mobStore.resolve(cell, cacheMobBlocks));
++          Cell mobCell = mobStore.resolve(cell, cacheMobBlocks);
++          mobKVCount++;
++          mobKVSize += mobCell.getValueLength();
++          outResult.set(i, mobCell);
+         }
+       }
++      mobStore.updateMobScanCellsCount(mobKVCount);
++      mobStore.updateMobScanCellsSize(mobKVSize);
+     }
+     return result;
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ReversedMobStoreScanner.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ReversedMobStoreScanner.java
+index e384390..4c46218 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ReversedMobStoreScanner.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ReversedMobStoreScanner.java
+@@ -36,11 +36,16 @@ import org.apache.hadoop.hbase.mob.MobUtils;
+ public class ReversedMobStoreScanner extends ReversedStoreScanner {
+ 
+   private boolean cacheMobBlocks = false;
++  protected final HMobStore mobStore;
+ 
+   ReversedMobStoreScanner(Store store, ScanInfo scanInfo, Scan scan, NavigableSet<byte[]> columns,
+       long readPt) throws IOException {
+     super(store, scanInfo, scan, columns, readPt);
+     cacheMobBlocks = MobUtils.isCacheMobBlocks(scan);
++    if (!(store instanceof HMobStore)) {
++      throw new IllegalArgumentException("The store " + store + " is not a HMobStore");
++    }
++    mobStore = (HMobStore) store;
+   }
+ 
+   /**
+@@ -56,13 +61,19 @@ public class ReversedMobStoreScanner extends ReversedStoreScanner {
+       if (outResult.isEmpty()) {
+         return result;
+       }
+-      HMobStore mobStore = (HMobStore) store;
++      long mobKVCount = 0;
++      long mobKVSize = 0;
+       for (int i = 0; i < outResult.size(); i++) {
+         Cell cell = outResult.get(i);
+         if (MobUtils.isMobReferenceCell(cell)) {
+-          outResult.set(i, mobStore.resolve(cell, cacheMobBlocks));
++          Cell mobCell = mobStore.resolve(cell, cacheMobBlocks);
++          mobKVCount++;
++          mobKVSize += mobCell.getValueLength();
++          outResult.set(i, mobCell);
+         }
+       }
++      mobStore.updateMobScanCellsCount(mobKVCount);
++      mobStore.updateMobScanCellsSize(mobKVSize);
+     }
+     return result;
+   }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperStub.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperStub.java
+index a49c8ad..c895b9c 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperStub.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperStub.java
+@@ -243,11 +243,82 @@ public class MetricsRegionServerWrapperStub implements MetricsRegionServerWrappe
+ 
+   @Override
+   public long getHedgedReadOps() {
+-    return 100;
++      return 100;
+   }
+ 
+   @Override
+   public long getHedgedReadWins() {
++      return 10;
++  }
++
++  @Override
++  public long getMobCompactedIntoMobCellsCount() {
++    return 20;
++  }
++
++  @Override
++  public long getMobCompactedFromMobCellsCount() {
++    return 10;
++  }
++
++  @Override
++  public long getMobCompactedIntoMobCellsSize() {
++    return 200;
++  }
++
++  @Override
++  public long getMobCompactedFromMobCellsSize() {
++    return 100;
++  }
++
++  @Override
++  public long getMobFlushCount() {
++    return 1;
++  }
++
++  @Override
++  public long getMobFlushedCellsCount() {
++    return 10;
++  }
++
++  @Override
++  public long getMobFlushedCellsSize() {
++    return 1000;
++  }
++
++  @Override
++  public long getMobScanCellsCount() {
+     return 10;
+   }
++
++  @Override
++  public long getMobScanCellsSize() {
++    return 1000;
++  }
++
++  @Override
++  public long getMobFileCacheAccessCount() {
++    return 100;
++  }
++
++  @Override
++  public long getMobFileCacheMissCount() {
++    return 50;
++  }
++
++  @Override
++  public long getMobFileCacheEvictedCount() {
++    return 0;
++  }
++
++  @Override
++  public long getMobFileCacheCount() {
++    return 100;
++  }
++
++  @Override
++  public int getMobFileCacheHitPercent() {
++    return 50;
++  }
++
+ }
+\ No newline at end of file
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerMetrics.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerMetrics.java
+index dec36f9..d3e1b28 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerMetrics.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionServerMetrics.java
+@@ -63,6 +63,7 @@ public class TestRegionServerMetrics {
+     // Make the failure test faster
+     conf.setInt("zookeeper.recovery.retry", 0);
+     conf.setInt(HConstants.REGIONSERVER_INFO_PORT, -1);
++    conf.setInt("hfile.format.version", 3);
+ 
+     TEST_UTIL.startMiniCluster(1, 1);
+     cluster = TEST_UTIL.getHBaseCluster();
+@@ -387,4 +388,66 @@ public class TestRegionServerMetrics {
+       metricsHelper.assertCounter(prefix + "_scanNextNumOps", 30, agg);
+     }
+   }
++
++  @Test
++  public void testMobMetrics() throws IOException, InterruptedException {
++    String tableNameString = "testMobMetrics";
++    TableName tableName = TableName.valueOf(tableNameString);
++    byte[] cf = Bytes.toBytes("d");
++    byte[] qualifier = Bytes.toBytes("qual");
++    byte[] val = Bytes.toBytes("mobdata");
++    int compactionThreshold = conf.getInt("hbase.hstore.compactionThreshold", 3);
++    HTableDescriptor htd = new HTableDescriptor(tableName);
++    HColumnDescriptor hcd = new HColumnDescriptor(cf);
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(0);
++    htd.addFamily(hcd);
++    HBaseAdmin admin = new HBaseAdmin(conf);
++    HTable t = TEST_UTIL.createTable(htd, new byte[0][0], conf);
++    HRegion region = rs.getOnlineRegions(tableName).get(0);
++    t.setAutoFlush(true, true);
++    for (int insertCount = 0; insertCount < compactionThreshold; insertCount++) {
++      Put p = new Put(Bytes.toBytes(insertCount));
++      p.add(cf, qualifier, val);
++      t.put(p);
++      admin.flush(tableNameString);
++    }
++    metricsRegionServer.getRegionServerWrapper().forceRecompute();
++    metricsHelper.assertCounter("mobFlushCount", compactionThreshold, serverSource);
++    Scan scan = new Scan(Bytes.toBytes(0), Bytes.toBytes(2));
++    ResultScanner scanner = t.getScanner(scan);
++    scanner.next(100);
++    scanner.close();
++    metricsRegionServer.getRegionServerWrapper().forceRecompute();
++    metricsHelper.assertCounter("mobScanCellsCount", 2, serverSource);
++    region.getTableDesc().getFamily(cf).setMobThreshold(100);
++    region.initialize();
++    region.compactStores(true);
++    metricsRegionServer.getRegionServerWrapper().forceRecompute();
++    metricsHelper.assertCounter("mobCompactedFromMobCellsCount", compactionThreshold,
++        serverSource);
++    metricsHelper.assertCounter("mobCompactedIntoMobCellsCount", 0, serverSource);
++    scanner = t.getScanner(scan);
++    scanner.next(100);
++    metricsRegionServer.getRegionServerWrapper().forceRecompute();
++    // metrics are reset by the region initialization
++    metricsHelper.assertCounter("mobScanCellsCount", 0, serverSource);
++    for (int insertCount = compactionThreshold;
++        insertCount < 2 * compactionThreshold - 1; insertCount++) {
++      Put p = new Put(Bytes.toBytes(insertCount));
++      p.add(cf, qualifier, val);
++      t.put(p);
++      admin.flush(tableNameString);
++    }
++    region.getTableDesc().getFamily(cf).setMobThreshold(0);
++    region.initialize();
++    region.compactStores(true);
++    metricsRegionServer.getRegionServerWrapper().forceRecompute();
++    // metrics are reset by the region initialization
++    metricsHelper.assertCounter("mobCompactedFromMobCellsCount", 0, serverSource);
++    metricsHelper.assertCounter("mobCompactedIntoMobCellsCount", 2 * compactionThreshold - 1,
++        serverSource);
++    t.close();
++    admin.close();
++  }
+ }
+-- 
+1.7.0.4
+

@@ -1,0 +1,39 @@
+From 7331a9aa644df177f40562684472a42daa8ac7ab Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Wed, 13 Aug 2014 16:37:39 -0700
+Subject: [PATCH 13/82] HBASE-11349 [Thrift] support authentication/impersonation (addendum)
+
+Reason: Bug
+Author: Jimmy Xiang
+Ref: CDH-8934
+---
+ .../hadoop/hbase/thrift/TestThriftServer.java      |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-thrift/src/test/java/org/apache/hadoop/hbase/thrift/TestThriftServer.java b/hbase-thrift/src/test/java/org/apache/hadoop/hbase/thrift/TestThriftServer.java
+index 8f8f77a..aeb1dd9 100644
+--- a/hbase-thrift/src/test/java/org/apache/hadoop/hbase/thrift/TestThriftServer.java
++++ b/hbase-thrift/src/test/java/org/apache/hadoop/hbase/thrift/TestThriftServer.java
+@@ -638,7 +638,8 @@ public class TestThriftServer {
+    */
+   public static void doTestAppend() throws Exception {
+     ThriftServerRunner.HBaseHandler handler =
+-        new ThriftServerRunner.HBaseHandler(UTIL.getConfiguration());
++      new ThriftServerRunner.HBaseHandler(UTIL.getConfiguration(),
++        UserProvider.instantiate(UTIL.getConfiguration()));
+     handler.createTable(tableAname, getColumnDescriptors());
+     try {
+       List<Mutation> mutations = new ArrayList<Mutation>(1);
+@@ -671,7 +672,8 @@ public class TestThriftServer {
+    */
+   public static void doTestCheckAndPut() throws Exception {
+     ThriftServerRunner.HBaseHandler handler =
+-        new ThriftServerRunner.HBaseHandler(UTIL.getConfiguration());
++      new ThriftServerRunner.HBaseHandler(UTIL.getConfiguration(),
++        UserProvider.instantiate(UTIL.getConfiguration()));
+     handler.createTable(tableAname, getColumnDescriptors());
+     try {
+       List<Mutation> mutations = new ArrayList<Mutation>(1);
+-- 
+1.7.0.4
+

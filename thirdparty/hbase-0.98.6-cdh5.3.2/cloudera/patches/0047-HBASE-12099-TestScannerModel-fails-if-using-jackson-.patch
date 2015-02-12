@@ -1,0 +1,39 @@
+From 37724b177c62fd689c417434fdb8175073bf32c2 Mon Sep 17 00:00:00 2001
+From: Enis Soztutar <enis@apache.org>
+Date: Tue, 30 Sep 2014 11:33:58 -0700
+Subject: [PATCH 47/82] HBASE-12099 TestScannerModel fails if using jackson 1.9.13 (Esteban Gutierrez)
+
+---
+ .../hadoop/hbase/rest/model/ScannerModel.java      |    2 +-
+ .../hadoop/hbase/rest/model/TestScannerModel.java  |    2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/model/ScannerModel.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/model/ScannerModel.java
+index 1fc0a5d..b992498 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/model/ScannerModel.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/rest/model/ScannerModel.java
+@@ -640,7 +640,7 @@ public class ScannerModel implements ProtobufMessageHandler, Serializable {
+     return columns;
+   }
+   
+-  @XmlElement(name="label")
++  @XmlElement(name="labels")
+   public List<String> getLabels() {
+     return labels;
+   }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
+index 3102bfd..988872e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/rest/model/TestScannerModel.java
+@@ -44,7 +44,7 @@ public class TestScannerModel extends TestModelBase<ScannerModel> {
+         + "endTime=\"1245393318192\" maxVersions=\"2147483647\" startRow=\"YWJyYWNhZGFicmE=\" "
+         + "startTime=\"1245219839331\">"
+         + "<column>Y29sdW1uMQ==</column><column>Y29sdW1uMjpmb28=</column>"
+-        + "<label>private</label><label>public</label>"
++        + "<labels>private</labels><labels>public</labels>"
+         + "</Scanner>";
+ 
+     AS_JSON = "{\"batch\":100,\"caching\":1000,\"cacheBlocks\":false,\"endRow\":\"enp5eng=\","
+-- 
+1.7.0.4
+

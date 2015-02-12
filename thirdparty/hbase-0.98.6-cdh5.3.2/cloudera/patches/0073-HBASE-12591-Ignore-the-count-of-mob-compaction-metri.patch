@@ -1,0 +1,36 @@
+From 1a4f18139ab19e636c5bad886509e5be95d7a5f6 Mon Sep 17 00:00:00 2001
+From: anoopsjohn <anoopsamjohn@gmail.com>
+Date: Tue, 2 Dec 2014 07:14:39 +0530
+Subject: [PATCH 73/82] HBASE-12591 Ignore the count of mob compaction metrics when there is issue.(Jiajia Li)
+
+Reason: Bug
+Author: Li Jiajia
+Ref: CDH-23659
+---
+ .../hadoop/hbase/mob/DefaultMobCompactor.java      |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+index c0d9b78..b2b21b3 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/DefaultMobCompactor.java
+@@ -171,14 +171,14 @@ public class DefaultMobCompactor extends DefaultCompactor {
+                   KeyValue mobKv = KeyValueUtil.ensureKeyValue(cell);
+                   mobKv.setMvccVersion(kv.getMvccVersion());
+                   writer.append(mobKv);
++                  mobCompactedFromMobCellsCount++;
++                  mobCompactedFromMobCellsSize += cell.getValueLength();
+                 } else {
+                   // If the value of a file is empty, there might be issues when retrieving,
+                   // directly write the cell to the store file, and leave it to be handled by the
+                   // next compaction.
+                   writer.append(kv);
+                 }
+-                mobCompactedFromMobCellsCount++;
+-                mobCompactedFromMobCellsSize += cell.getValueLength();
+               }
+             } else {
+               LOG.warn("The value format of the KeyValue " + kv
+-- 
+1.7.0.4
+

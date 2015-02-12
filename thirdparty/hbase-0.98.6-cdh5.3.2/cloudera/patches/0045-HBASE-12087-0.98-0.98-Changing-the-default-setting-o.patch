@@ -1,0 +1,48 @@
+From fdde843496bb1990e7aa4b6341c9c5b605094947 Mon Sep 17 00:00:00 2001
+From: Andrew Purtell <apurtell@apache.org>
+Date: Fri, 26 Sep 2014 13:46:18 -0700
+Subject: [PATCH 45/82] HBASE-12087 [0.98] [0.98] Changing the default setting of hbase.security.access.early_out to true (Srikanth Srungarapu)
+
+Reason: Compatibility
+Author: Srikanth Srungarapu
+Ref: CDH-21945
+---
+ .../security/access/AccessControlConstants.java    |    4 ++--
+ .../hbase/security/access/AccessController.java    |    6 ++++++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlConstants.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlConstants.java
+index 76d112a..82bf6cd 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlConstants.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlConstants.java
+@@ -38,8 +38,8 @@ public interface AccessControlConstants {
+    * if table or CF permissions grant access. Pre-0.98 compatible behavior
+    */
+   public static final String CF_ATTRIBUTE_EARLY_OUT = "hbase.security.access.early_out";
+-  /** Default setting for hbase.security.access.early_out; false in 0.98 */
+-  public static final boolean DEFAULT_ATTRIBUTE_EARLY_OUT = false;
++  /** Default setting for hbase.security.access.early_out; true*/
++  public static final boolean DEFAULT_ATTRIBUTE_EARLY_OUT = true;
+ 
+   // Operation attributes for cell level security
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+index 528c2a9..7f444f5 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessController.java
+@@ -864,6 +864,12 @@ public class AccessController extends BaseMasterAndRegionObserver
+     } else {
+       throw new RuntimeException("Error obtaining TableAuthManager, zk found null.");
+     }
++
++    if(!compatibleEarlyTermination && !cellFeaturesEnabled) {
++      LOG.warn("A minimum HFile version of " + HFile.MIN_FORMAT_VERSION_WITH_TAGS
++          + " is required for " + AccessControlConstants.CF_ATTRIBUTE_EARLY_OUT
++          + " to have an effect");
++    }
+   }
+ 
+   public void stop(CoprocessorEnvironment env) {
+-- 
+1.7.0.4
+

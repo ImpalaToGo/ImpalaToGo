@@ -1,0 +1,87 @@
+From 7fbe9201a2c4e86e2aa8cc6ad860c9240f040abc Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Wed, 13 Aug 2014 11:07:52 -0700
+Subject: [PATCH 04/82] CLOUDERA-BUILD add safety check to build to ensure JDK7 is being used
+
+The default target is Java 6 but you must use JDK7 to compile
+
+Reason: Product Requirement (Compatibility)
+Author: Matteo Bertozzi
+---
+ pom.xml |   46 ++++++++++++++++++++++++++++++++++++++++++++--
+ 1 files changed, 44 insertions(+), 2 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index f0b4309..c2f7404 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -498,8 +498,8 @@
+           <artifactId>maven-compiler-plugin</artifactId>
+           <version>2.5.1</version>
+           <configuration>
+-            <source>${compileSource}</source>
+-            <target>${compileSource}</target>
++            <source>${sourceJavaVersion}</source>
++            <target>${targetJavaVersion}</target>
+             <showWarnings>true</showWarnings>
+             <showDeprecation>false</showDeprecation>
+             <compilerArgument>-Xlint:-options</compilerArgument>
+@@ -891,6 +891,45 @@
+       </plugin>
+       <plugin>
+         <groupId>org.apache.maven.plugins</groupId>
++        <artifactId>maven-enforcer-plugin</artifactId>
++        <version>1.0</version>
++        <inherited>false</inherited>
++        <configuration>
++          <rules>
++            <!--<requireMavenVersion>-->
++              <!--<version>[3.0.0,)</version>-->
++            <!--</requireMavenVersion>-->
++            <requireJavaVersion>
++              <version>[${javaVersion}.0,${javaVersion}.1000}]</version>
++            </requireJavaVersion>
++          </rules>
++        </configuration>
++        <executions>
++          <execution>
++            <id>clean</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-clean</phase>
++          </execution>
++          <execution>
++            <id>default</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>validate</phase>
++          </execution>
++          <execution>
++            <id>site</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-site</phase>
++          </execution>
++        </executions>
++      </plugin>
++      <plugin>
++        <groupId>org.apache.maven.plugins</groupId>
+         <artifactId>maven-site-plugin</artifactId>
+         <version>${maven.site.version}</version>
+         <inherited>false</inherited>
+@@ -919,6 +958,9 @@
+     <buildDate>${maven.build.timestamp}</buildDate>
+     <compileSource>1.6</compileSource>
+     <!-- Dependencies -->
++    <javaVersion>1.7</javaVersion>
++    <targetJavaVersion>1.6</targetJavaVersion>
++    <sourceJavaVersion>${targetJavaVersion}</sourceJavaVersion>
+     <hadoop-two.version>${cdh.hadoop.version}</hadoop-two.version>
+     <hadoop-one.version>1.2.1</hadoop-one.version>
+     <commons-cli.version>1.2</commons-cli.version>
+-- 
+1.7.0.4
+

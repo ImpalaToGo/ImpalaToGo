@@ -1,0 +1,45 @@
+From 2d6585cd17c96c8e1f8fdc1b4b76984643a96e52 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 11 Sep 2014 10:54:09 -0700
+Subject: [PATCH 21/82] HBASE-11813 CellScanner#advance may overflow stack (addendum)
+
+Reason: Bug
+Author: Michael Stack
+Ref: CDH-21031
+---
+ .../hadoop/hbase/ipc/SimpleRpcScheduler.java       |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
+index 2debe2e..5b13b1d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
+@@ -126,21 +126,21 @@ public class SimpleRpcScheduler extends RpcScheduler {
+       // multiple read/write queues
+       if (callQueueType.equals(CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE)) {
+         CallPriorityComparator callPriority = new CallPriorityComparator(conf, this.priority);
+-        callExecutor = new RWQueueRpcExecutor("default", handlerCount, numCallQueues,
++        callExecutor = new RWQueueRpcExecutor("RW.default", handlerCount, numCallQueues,
+             callqReadShare, callqScanShare, maxQueueLength,
+             BoundedPriorityBlockingQueue.class, callPriority);
+       } else {
+-        callExecutor = new RWQueueRpcExecutor("default", handlerCount, numCallQueues,
++        callExecutor = new RWQueueRpcExecutor("RW.default", handlerCount, numCallQueues,
+             callqReadShare, callqScanShare, maxQueueLength);
+       }
+     } else {
+       // multiple queues
+       if (callQueueType.equals(CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE)) {
+         CallPriorityComparator callPriority = new CallPriorityComparator(conf, this.priority);
+-        callExecutor = new BalancedQueueRpcExecutor("default", handlerCount, numCallQueues,
++        callExecutor = new BalancedQueueRpcExecutor("B.default", handlerCount, numCallQueues,
+             BoundedPriorityBlockingQueue.class, maxQueueLength, callPriority);
+       } else {
+-        callExecutor = new BalancedQueueRpcExecutor("default", handlerCount,
++        callExecutor = new BalancedQueueRpcExecutor("B.default", handlerCount,
+             numCallQueues, maxQueueLength);
+       }
+     }
+-- 
+1.7.0.4
+

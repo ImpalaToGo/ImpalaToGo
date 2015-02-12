@@ -1,0 +1,46 @@
+From 3fef38797a88ade9cf653cd6944dfb1792958828 Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 31 Oct 2014 15:00:17 +0530
+Subject: [PATCH 61/82] HBASE-12391 Correct a typo in the mob metrics (Jingcheng Du)
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-22448
+---
+ .../MetricsRegionServerWrapperImpl.java            |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
+index 3ef33f7..c587680 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/MetricsRegionServerWrapperImpl.java
+@@ -542,7 +542,7 @@ class MetricsRegionServerWrapperImpl
+       long tempMobCompactedIntoMobCellsCount = 0;
+       long tempMobCompactedFromMobCellsCount = 0;
+       long tempMobCompactedIntoMobCellsSize = 0;
+-      long testMobCompactedFromMobCellsSize = 0;
++      long tempMobCompactedFromMobCellsSize = 0;
+       long tempMobFlushCount = 0;
+       long tempMobFlushedCellsCount = 0;
+       long tempMobFlushedCellsSize = 0;
+@@ -575,7 +575,7 @@ class MetricsRegionServerWrapperImpl
+             tempMobCompactedIntoMobCellsCount += mobStore.getMobCompactedIntoMobCellsCount();
+             tempMobCompactedFromMobCellsCount += mobStore.getMobCompactedFromMobCellsCount();
+             tempMobCompactedIntoMobCellsSize += mobStore.getMobCompactedIntoMobCellsSize();
+-            testMobCompactedFromMobCellsSize += mobStore.getMobCompactedFromMobCellsSize();
++            tempMobCompactedFromMobCellsSize += mobStore.getMobCompactedFromMobCellsSize();
+             tempMobFlushCount += mobStore.getMobFlushCount();
+             tempMobFlushedCellsCount += mobStore.getMobFlushedCellsCount();
+             tempMobFlushedCellsSize += mobStore.getMobFlushedCellsSize();
+@@ -647,7 +647,7 @@ class MetricsRegionServerWrapperImpl
+       mobCompactedIntoMobCellsCount = tempMobCompactedIntoMobCellsCount;
+       mobCompactedFromMobCellsCount = tempMobCompactedFromMobCellsCount;
+       mobCompactedIntoMobCellsSize = tempMobCompactedIntoMobCellsSize;
+-      mobCompactedFromMobCellsSize = testMobCompactedFromMobCellsSize;
++      mobCompactedFromMobCellsSize = tempMobCompactedFromMobCellsSize;
+       mobFlushCount = tempMobFlushCount;
+       mobFlushedCellsCount = tempMobFlushedCellsCount;
+       mobFlushedCellsSize = tempMobFlushedCellsSize;
+-- 
+1.7.0.4
+

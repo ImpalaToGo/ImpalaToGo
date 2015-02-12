@@ -1,0 +1,76 @@
+From f02557d104f0b314b0736cb5cdd31b8c2006f911 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jon@cloudera.com>
+Date: Wed, 2 Jul 2014 15:13:54 -0700
+Subject: [PATCH 09/82] CDH-20117 Revert changes that introduced binary incompatiblity between 0.98 and 0.96
+
+HBASE-10452 unnecessarily changed the public stable api signature of Get|Scan.setTimeStamp to throw an IOException.
+We restored the old behavior that swallowed the impossible to trigger exception but keep the new warning message.
+
+HBASE-10339 restored a method to 0.98 that was initially removed.  The restoration had the incorrect method signature.
+We return a Map now instead of a NavigableMap to restore compiled code compatbility. (the modified code would work if recompiled).
+
+Reason: Backwards Compatibility
+Author: Jonathan Hsieh
+Ref: CDH-20117
+---
+ .../java/org/apache/hadoop/hbase/client/Get.java   |    4 +---
+ .../org/apache/hadoop/hbase/client/Mutation.java   |    2 +-
+ .../java/org/apache/hadoop/hbase/client/Scan.java  |    4 +---
+ 3 files changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
+index 81a31a4..c18512d 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
+@@ -179,14 +179,12 @@ public class Get extends Query
+    * @param timestamp version timestamp
+    * @return this for invocation chaining
+    */
+-  public Get setTimeStamp(long timestamp)
+-  throws IOException {
++  public Get setTimeStamp(long timestamp) {
+     try {
+       tr = new TimeRange(timestamp, timestamp+1);
+     } catch(IOException e) {
+       // This should never happen, unless integer overflow or something extremely wrong...
+       LOG.error("TimeRange failed, likely caused by integer overflow. ", e);
+-      throw e;
+     }
+     return this;
+   }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
+index 9e6dda0..5226aa7 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
+@@ -266,7 +266,7 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * @deprecated use {@link #getFamilyCellMap()} instead.
+    */
+   @Deprecated
+-  public NavigableMap<byte [], List<KeyValue>> getFamilyMap() {
++  public Map<byte [], List<KeyValue>> getFamilyMap() {
+     TreeMap<byte[], List<KeyValue>> fm =
+         new TreeMap<byte[], List<KeyValue>>(Bytes.BYTES_COMPARATOR);
+     for (Map.Entry<byte[], List<Cell>> e : familyMap.entrySet()) {
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
+index 4527d56..0e80069 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
+@@ -319,14 +319,12 @@ public class Scan extends Query {
+    * @see #setMaxVersions(int)
+    * @return this
+    */
+-  public Scan setTimeStamp(long timestamp)
+-  throws IOException {
++  public Scan setTimeStamp(long timestamp) {
+     try {
+       tr = new TimeRange(timestamp, timestamp+1);
+     } catch(IOException e) {
+       // This should never happen, unless integer overflow or something extremely wrong...
+       LOG.error("TimeRange failed, likely caused by integer overflow. ", e);
+-      throw e;
+     }
+     return this;
+   }
+-- 
+1.7.0.4
+

@@ -1,0 +1,194 @@
+From 20018cbb7d97aa5876770bf3ff07eaeb956796fc Mon Sep 17 00:00:00 2001
+From: Jeffrey Zhong <jeffreyz@apache.org>
+Date: Wed, 26 Nov 2014 16:23:11 -0800
+Subject: [PATCH 80/82] HBASE-12533: staging directories are not deleted after secure bulk load
+
+Reason: Bug
+Author: Jeffrey Zhong
+Ref: CDH-24885
+Conflicts:
+	hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+---
+ .../client/coprocessor/SecureBulkLoadClient.java   |   97 +++++++++-----------
+ .../security/access/SecureBulkLoadEndpoint.java    |    5 +-
+ .../hbase/mapreduce/TestLoadIncrementalHFiles.java |   12 +++
+ 3 files changed, 57 insertions(+), 57 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/coprocessor/SecureBulkLoadClient.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/coprocessor/SecureBulkLoadClient.java
+index 48986b1..519c937 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/coprocessor/SecureBulkLoadClient.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/coprocessor/SecureBulkLoadClient.java
+@@ -25,6 +25,7 @@ import org.apache.hadoop.hbase.util.ByteStringer;
+ 
+ import org.apache.hadoop.classification.InterfaceAudience;
+ import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.ipc.BlockingRpcCallback;
+@@ -55,33 +56,29 @@ public class SecureBulkLoadClient {
+ 
+   public String prepareBulkLoad(final TableName tableName) throws IOException {
+     try {
+-      return
+-        table.coprocessorService(SecureBulkLoadProtos.SecureBulkLoadService.class,
+-          EMPTY_START_ROW,
+-          LAST_ROW,
+-          new Batch.Call<SecureBulkLoadProtos.SecureBulkLoadService,String>() {
+-            @Override
+-            public String call(SecureBulkLoadProtos.SecureBulkLoadService instance) throws IOException {
+-              ServerRpcController controller = new ServerRpcController();
+-
+-              BlockingRpcCallback<SecureBulkLoadProtos.PrepareBulkLoadResponse> rpcCallback =
+-                  new BlockingRpcCallback<SecureBulkLoadProtos.PrepareBulkLoadResponse>();
+-
+-              SecureBulkLoadProtos.PrepareBulkLoadRequest request =
+-                  SecureBulkLoadProtos.PrepareBulkLoadRequest.newBuilder()
+-                  .setTableName(ProtobufUtil.toProtoTableName(tableName)).build();
+-
+-              instance.prepareBulkLoad(controller,
+-                  request,
+-                  rpcCallback);
+-
+-              SecureBulkLoadProtos.PrepareBulkLoadResponse response = rpcCallback.get();
+-              if (controller.failedOnException()) {
+-                throw controller.getFailedOn();
+-              }
+-              return response.getBulkToken();
+-            }
+-          }).entrySet().iterator().next().getValue();
++      CoprocessorRpcChannel channel = table.coprocessorService(HConstants.EMPTY_START_ROW);
++      SecureBulkLoadProtos.SecureBulkLoadService instance =
++          ProtobufUtil.newServiceStub(SecureBulkLoadProtos.SecureBulkLoadService.class, channel);
++
++      ServerRpcController controller = new ServerRpcController();
++
++      BlockingRpcCallback<SecureBulkLoadProtos.PrepareBulkLoadResponse> rpcCallback =
++          new BlockingRpcCallback<SecureBulkLoadProtos.PrepareBulkLoadResponse>();
++
++      SecureBulkLoadProtos.PrepareBulkLoadRequest request =
++          SecureBulkLoadProtos.PrepareBulkLoadRequest.newBuilder()
++          .setTableName(ProtobufUtil.toProtoTableName(tableName)).build();
++
++      instance.prepareBulkLoad(controller,
++          request,
++          rpcCallback);
++
++      SecureBulkLoadProtos.PrepareBulkLoadResponse response = rpcCallback.get();
++      if (controller.failedOnException()) {
++        throw controller.getFailedOn();
++      }
++      
++      return response.getBulkToken();
+     } catch (Throwable throwable) {
+       throw new IOException(throwable);
+     }
+@@ -89,32 +86,26 @@ public class SecureBulkLoadClient {
+ 
+   public void cleanupBulkLoad(final String bulkToken) throws IOException {
+     try {
+-        table.coprocessorService(SecureBulkLoadProtos.SecureBulkLoadService.class,
+-            EMPTY_START_ROW,
+-            LAST_ROW,
+-            new Batch.Call<SecureBulkLoadProtos.SecureBulkLoadService, String>() {
+-
+-              @Override
+-              public String call(SecureBulkLoadProtos.SecureBulkLoadService instance) throws IOException {
+-                ServerRpcController controller = new ServerRpcController();
+-
+-                BlockingRpcCallback<SecureBulkLoadProtos.CleanupBulkLoadResponse> rpcCallback =
+-                    new BlockingRpcCallback<SecureBulkLoadProtos.CleanupBulkLoadResponse>();
+-
+-                SecureBulkLoadProtos.CleanupBulkLoadRequest request =
+-                    SecureBulkLoadProtos.CleanupBulkLoadRequest.newBuilder()
+-                        .setBulkToken(bulkToken).build();
+-
+-                instance.cleanupBulkLoad(controller,
+-                    request,
+-                    rpcCallback);
+-
+-                if (controller.failedOnException()) {
+-                  throw controller.getFailedOn();
+-                }
+-                return null;
+-              }
+-            });
++      CoprocessorRpcChannel channel = table.coprocessorService(HConstants.EMPTY_START_ROW);
++      SecureBulkLoadProtos.SecureBulkLoadService instance =
++          ProtobufUtil.newServiceStub(SecureBulkLoadProtos.SecureBulkLoadService.class, channel);
++
++      ServerRpcController controller = new ServerRpcController();
++
++      BlockingRpcCallback<SecureBulkLoadProtos.CleanupBulkLoadResponse> rpcCallback =
++          new BlockingRpcCallback<SecureBulkLoadProtos.CleanupBulkLoadResponse>();
++
++      SecureBulkLoadProtos.CleanupBulkLoadRequest request =
++          SecureBulkLoadProtos.CleanupBulkLoadRequest.newBuilder()
++              .setBulkToken(bulkToken).build();
++
++      instance.cleanupBulkLoad(controller,
++          request,
++          rpcCallback);
++
++      if (controller.failedOnException()) {
++        throw controller.getFailedOn();
++      }
+     } catch (Throwable throwable) {
+       throw new IOException(throwable);
+     }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+index fcb9270..26bac7d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/SecureBulkLoadEndpoint.java
+@@ -172,10 +172,7 @@ public class SecureBulkLoadEndpoint extends SecureBulkLoadService
+                               RpcCallback<CleanupBulkLoadResponse> done) {
+     try {
+       getAccessController().preCleanupBulkLoad(env);
+-      fs.delete(createStagingDir(baseStagingDir,
+-          getActiveUser(),
+-          new Path(request.getBulkToken()).getName()),
+-          true);
++      fs.delete(new Path(request.getBulkToken()), true);
+       done.run(CleanupBulkLoadResponse.newBuilder().build());
+     } catch (IOException e) {
+       ResponseConverter.setControllerException(controller, e);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
+index 27c809a..7b2ceee 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestLoadIncrementalHFiles.java
+@@ -27,6 +27,7 @@ import java.io.IOException;
+ import java.util.TreeMap;
+ 
+ import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+@@ -47,6 +48,7 @@ import org.junit.AfterClass;
+ import org.junit.BeforeClass;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
++import org.apache.hadoop.hbase.security.SecureBulkLoadUtil;
+ 
+ /**
+  * Test cases for the "load" half of the HFileOutputFormat bulk load
+@@ -256,6 +258,16 @@ public class TestLoadIncrementalHFiles {
+       table.close();
+     }
+ 
++    // verify staging folder has been cleaned up
++    Path stagingBasePath = SecureBulkLoadUtil.getBaseStagingDir(util.getConfiguration());
++    if(fs.exists(stagingBasePath)) {
++      FileStatus[] files = fs.listStatus(stagingBasePath);
++      for(FileStatus file : files) {
++        assertTrue("Folder=" + file.getPath() + " is not cleaned up.",
++          file.getPath().getName() != "DONOTERASE");
++      }
++    }
++    
+     util.deleteTable(tableName);
+   }
+ 
+-- 
+1.7.0.4
+

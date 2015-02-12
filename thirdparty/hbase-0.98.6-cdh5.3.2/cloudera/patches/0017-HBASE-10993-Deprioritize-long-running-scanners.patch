@@ -1,0 +1,1125 @@
+From cf8e31191196009be4c8359909b2ddcec86c6c02 Mon Sep 17 00:00:00 2001
+From: mbertozzi <mbertozzi@unknown>
+Date: Wed, 7 May 2014 21:05:04 +0000
+Subject: [PATCH 17/82] HBASE-10993 Deprioritize long-running scanners
+
+Reason: New Feature
+Author: Matteo Bertozzi
+Ref: CDH-20515
+
+Conflicts:
+	hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
+---
+ .../apache/hadoop/hbase/ipc/PriorityFunction.java  |   11 +
+ .../hadoop/hbase/ipc/SimpleRpcScheduler.java       |   90 ++++--
+ .../AnnotationReadingPriorityFunction.java         |   45 +++-
+ .../hadoop/hbase/regionserver/HRegionServer.java   |   28 ++-
+ .../hbase/util/BoundedPriorityBlockingQueue.java   |  330 ++++++++++++++++++++
+ .../hadoop/hbase/MockRegionServerServices.java     |    7 +-
+ .../hadoop/hbase/ipc/TestSimpleRpcScheduler.java   |  119 +++++++
+ .../hadoop/hbase/master/MockRegionServer.java      |    5 +
+ .../hadoop/hbase/regionserver/TestQosFunction.java |   11 +-
+ .../util/TestBoundedPriorityBlockingQueue.java     |  178 +++++++++++
+ 10 files changed, 795 insertions(+), 29 deletions(-)
+ create mode 100644 hbase-server/src/main/java/org/apache/hadoop/hbase/util/BoundedPriorityBlockingQueue.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestBoundedPriorityBlockingQueue.java
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/PriorityFunction.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/PriorityFunction.java
+index 0df041e..4a9e2d2 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/PriorityFunction.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/PriorityFunction.java
+@@ -25,9 +25,20 @@ import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.RequestHeader;
+  */
+ public interface PriorityFunction {
+   /**
++   * Returns the 'priority type' of the specified request.
++   * The returned value is mainly used to select the dispatch queue.
+    * @param header
+    * @param param
+    * @return Priority of this request.
+    */
+   int getPriority(RequestHeader header, Message param);
++
++  /**
++   * Returns the deadline of the specified request.
++   * The returned value is used to sort the dispatch queue.
++   * @param header
++   * @param param
++   * @return Deadline of this request. 0 now, otherwise msec of 'delay'
++   */
++  long getDeadline(RequestHeader header, Message param);
+ }
+\ No newline at end of file
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
+index 97d85da..0458c00 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/ipc/SimpleRpcScheduler.java
+@@ -17,6 +17,9 @@
+  */
+ package org.apache.hadoop.hbase.ipc;
+ 
++
++import java.util.Comparator;
++
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.classification.InterfaceAudience;
+@@ -24,22 +27,59 @@ import org.apache.hadoop.classification.InterfaceStability;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseInterfaceAudience;
+ import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.util.BoundedPriorityBlockingQueue;
+ 
+ /**
+- * A scheduler that maintains isolated handler pools for general, high-priority and replication
+- * requests.
++ * A scheduler that maintains isolated handler pools for general,
++ * high-priority, and replication requests.
+  */
+ @InterfaceAudience.LimitedPrivate({HBaseInterfaceAudience.COPROC, HBaseInterfaceAudience.PHOENIX})
+ @InterfaceStability.Evolving
+ public class SimpleRpcScheduler extends RpcScheduler {
+   public static final Log LOG = LogFactory.getLog(SimpleRpcScheduler.class);
+ 
+-  public static final String CALL_QUEUE_READ_SHARE_CONF_KEY =
+-    "hbase.ipc.server.callqueue.read.share";
++  public static final String CALL_QUEUE_READ_SHARE_CONF_KEY = "hbase.ipc.server.callqueue.read.share";
+   public static final String CALL_QUEUE_HANDLER_FACTOR_CONF_KEY =
+-    "hbase.ipc.server.callqueue.handler.factor";
+-  public static final String CALL_QUEUE_MAX_LENGTH_CONF_KEY =
+-    "hbase.ipc.server.max.callqueue.length";
++      "hbase.ipc.server.callqueue.handler.factor";
++
++  /** If set to 'deadline', uses a priority queue and deprioritize long-running scans */
++  public static final String CALL_QUEUE_TYPE_CONF_KEY = "hbase.ipc.server.callqueue.type";
++  public static final String CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE = "deadline";
++  public static final String CALL_QUEUE_TYPE_FIFO_CONF_VALUE = "fifo";
++
++  /** max delay in msec used to bound the deprioritized requests */
++  public static final String QUEUE_MAX_CALL_DELAY_CONF_KEY
++      = "hbase.ipc.server.queue.max.call.delay";
++
++  /**
++   * Comparator used by the "normal callQueue" if DEADLINE_CALL_QUEUE_CONF_KEY is set to true.
++   * It uses the calculated "deadline" e.g. to deprioritize long-running job
++   *
++   * If multiple requests have the same deadline BoundedPriorityBlockingQueue will order them in
++   * FIFO (first-in-first-out) manner.
++   */
++  private static class CallPriorityComparator implements Comparator<CallRunner> {
++    private final static int DEFAULT_MAX_CALL_DELAY = 5000;
++
++    private final PriorityFunction priority;
++    private final int maxDelay;
++
++    public CallPriorityComparator(final Configuration conf, final PriorityFunction priority) {
++      this.priority = priority;
++      this.maxDelay = conf.getInt(QUEUE_MAX_CALL_DELAY_CONF_KEY, DEFAULT_MAX_CALL_DELAY);
++    }
++
++    @Override
++    public int compare(CallRunner a, CallRunner b) {
++      RpcServer.Call callA = a.getCall();
++      RpcServer.Call callB = b.getCall();
++      long deadlineA = priority.getDeadline(callA.getHeader(), callA.param);
++      long deadlineB = priority.getDeadline(callB.getHeader(), callB.param);
++      deadlineA = callA.timestamp + Math.min(deadlineA, maxDelay);
++      deadlineB = callB.timestamp + Math.min(deadlineB, maxDelay);
++      return (int)(deadlineA - deadlineB);
++    }
++  }
+ 
+   private int port;
+   private final PriorityFunction priority;
+@@ -65,29 +105,39 @@ public class SimpleRpcScheduler extends RpcScheduler {
+       int replicationHandlerCount,
+       PriorityFunction priority,
+       int highPriorityLevel) {
+-    int maxQueueLength = conf.getInt(CALL_QUEUE_MAX_LENGTH_CONF_KEY,
+-      conf.getInt("ipc.server.max.callqueue.length",
+-        handlerCount * RpcServer.DEFAULT_MAX_CALLQUEUE_LENGTH_PER_HANDLER));
++    int maxQueueLength = conf.getInt("hbase.ipc.server.max.callqueue.length",
++        handlerCount * RpcServer.DEFAULT_MAX_CALLQUEUE_LENGTH_PER_HANDLER);
+     this.priority = priority;
+     this.highPriorityLevel = highPriorityLevel;
+ 
+-    float callqReadShare = conf.getFloat(CALL_QUEUE_READ_SHARE_CONF_KEY,
+-      conf.getFloat("ipc.server.callqueue.read.share", 0));
++    String callQueueType = conf.get(CALL_QUEUE_TYPE_CONF_KEY, CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE);
++    float callqReadShare = conf.getFloat(CALL_QUEUE_READ_SHARE_CONF_KEY, 0);
+ 
+-    float callQueuesHandlersFactor = conf.getFloat(CALL_QUEUE_HANDLER_FACTOR_CONF_KEY,
+-      conf.getFloat("ipc.server.callqueue.handler.factor", 0));
++    float callQueuesHandlersFactor = conf.getFloat(CALL_QUEUE_HANDLER_FACTOR_CONF_KEY, 0);
+     int numCallQueues = Math.max(1, (int)Math.round(handlerCount * callQueuesHandlersFactor));
+ 
+-    LOG.info("Using default user call queue, count=" + numCallQueues);
++    LOG.info("Using " + callQueueType + " as user call queue, count=" + numCallQueues);
+ 
+     if (numCallQueues > 1 && callqReadShare > 0) {
+       // multiple read/write queues
+-      callExecutor = new RWQueueRpcExecutor("RW.Default", handlerCount, numCallQueues,
+-          callqReadShare, maxQueueLength);
++      if (callQueueType.equals(CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE)) {
++        CallPriorityComparator callPriority = new CallPriorityComparator(conf, this.priority);
++        callExecutor = new RWQueueRpcExecutor("default", handlerCount, numCallQueues,
++            callqReadShare, maxQueueLength, BoundedPriorityBlockingQueue.class, callPriority);
++      } else {
++        callExecutor = new RWQueueRpcExecutor("default", handlerCount, numCallQueues,
++            callqReadShare, maxQueueLength);
++      }
+     } else {
+       // multiple queues
+-      callExecutor = new BalancedQueueRpcExecutor("B.Default", handlerCount,
+-          numCallQueues, maxQueueLength);
++      if (callQueueType.equals(CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE)) {
++        CallPriorityComparator callPriority = new CallPriorityComparator(conf, this.priority);
++        callExecutor = new BalancedQueueRpcExecutor("default", handlerCount, numCallQueues,
++            BoundedPriorityBlockingQueue.class, maxQueueLength, callPriority);
++      } else {
++        callExecutor = new BalancedQueueRpcExecutor("default", handlerCount,
++            numCallQueues, maxQueueLength);
++      }
+     }
+ 
+    this.priorityExecutor =
+@@ -103,7 +153,7 @@ public class SimpleRpcScheduler extends RpcScheduler {
+     this.port = context.getListenerAddress().getPort();
+   }
+ 
+-    @Override
++  @Override
+   public void start() {
+     callExecutor.start(port);
+     if (priorityExecutor != null) priorityExecutor.start(port);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/AnnotationReadingPriorityFunction.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/AnnotationReadingPriorityFunction.java
+index 5904f49..ebd6d77 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/AnnotationReadingPriorityFunction.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/AnnotationReadingPriorityFunction.java
+@@ -23,6 +23,7 @@ import java.util.Map;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.NotServingRegionException;
+ import org.apache.hadoop.hbase.ipc.PriorityFunction;
+@@ -69,6 +70,10 @@ import com.google.protobuf.TextFormat;
+ class AnnotationReadingPriorityFunction implements PriorityFunction {
+   public static final Log LOG =
+     LogFactory.getLog(AnnotationReadingPriorityFunction.class.getName());
++
++  /** Used to control the scan delay, currently sqrt(numNextCall * weight) */
++  public static final String SCAN_VTIME_WEIGHT_CONF_KEY = "ipc.server.scan.vtime.weight";
++
+   private final Map<String, Integer> annotatedQos;
+   //We need to mock the regionserver instance for some unit tests (set via
+   //setRegionServer method.
+@@ -92,8 +97,9 @@ class AnnotationReadingPriorityFunction implements PriorityFunction {
+   private final Map<String, Map<Class<? extends Message>, Method>> methodMap =
+     new HashMap<String, Map<Class<? extends Message>, Method>>();
+ 
++  private final float scanVirtualTimeWeight;
++
+   AnnotationReadingPriorityFunction(final HRegionServer hrs) {
+-    this.hRegionServer = hrs;
+     Map<String, Integer> qosMap = new HashMap<String, Integer>();
+     for (Method m : HRegionServer.class.getMethods()) {
+       QosPriority p = m.getAnnotation(QosPriority.class);
+@@ -107,6 +113,7 @@ class AnnotationReadingPriorityFunction implements PriorityFunction {
+         qosMap.put(capitalizedMethodName, p.priority());
+       }
+     }
++    this.hRegionServer = hrs;
+     this.annotatedQos = qosMap;
+     if (methodMap.get("getRegion") == null) {
+       methodMap.put("hasRegion", new HashMap<Class<? extends Message>, Method>());
+@@ -121,6 +128,9 @@ class AnnotationReadingPriorityFunction implements PriorityFunction {
+         throw new RuntimeException(e);
+       }
+     }
++
++    Configuration conf = hRegionServer.getConfiguration();
++    scanVirtualTimeWeight = conf.getFloat(SCAN_VTIME_WEIGHT_CONF_KEY, 1.0f);
+   }
+ 
+   private String capitalize(final String s) {
+@@ -139,6 +149,14 @@ class AnnotationReadingPriorityFunction implements PriorityFunction {
+     return region.getRegionInfo().isMetaTable();
+   }
+ 
++  /**
++   * Returns a 'priority' based on the request type.
++   *
++   * Currently the returned priority is used for queue selection.
++   * See the SimpleRpcScheduler as example. It maintains a queue per 'priory type'
++   * HIGH_QOS (meta requests), REPLICATION_QOS (replication requests),
++   * NORMAL_QOS (user requests).
++   */
+   @Override
+   public int getPriority(RequestHeader header, Message param) {
+     String methodName = header.getMethodName();
+@@ -199,6 +217,31 @@ class AnnotationReadingPriorityFunction implements PriorityFunction {
+     return HConstants.NORMAL_QOS;
+   }
+ 
++  /**
++   * Based on the request content, returns the deadline of the request.
++   *
++   * @param header
++   * @param param
++   * @return Deadline of this request. 0 now, otherwise msec of 'delay'
++   */
++  @Override
++  public long getDeadline(RequestHeader header, Message param) {
++    String methodName = header.getMethodName();
++    if (methodName.equalsIgnoreCase("scan")) {
++      ScanRequest request = (ScanRequest)param;
++      if (!request.hasScannerId()) {
++        return 0;
++      }
++
++      // get the 'virtual time' of the scanner, and applies sqrt() to get a
++      // nice curve for the delay. More a scanner is used the less priority it gets.
++      // The weight is used to have more control on the delay.
++      long vtime = hRegionServer.getScannerVirtualTime(request.getScannerId());
++      return Math.round(Math.sqrt(vtime * scanVirtualTimeWeight));
++    }
++    return 0;
++  }
++
+   @VisibleForTesting
+   void setRegionServer(final HRegionServer hrs) {
+     this.hRegionServer = hrs;
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index a1bc4a3..362bd6d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -673,6 +673,11 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+     return priority.getPriority(header, param);
+   }
+ 
++  @Override
++  public long getDeadline(RequestHeader header, Message param) {
++    return priority.getDeadline(header, param);
++  }
++
+   @Retention(RetentionPolicy.RUNTIME)
+   protected @interface QosPriority {
+     int priority() default 0;
+@@ -692,6 +697,19 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+   }
+ 
+   /**
++   * Get the vtime associated with the scanner.
++   * Currently the vtime is the number of "next" calls.
++   */
++  long getScannerVirtualTime(long scannerId) {
++    String scannerIdString = Long.toString(scannerId);
++    RegionScannerHolder scannerHolder = scanners.get(scannerIdString);
++    if (scannerHolder != null) {
++      return scannerHolder.nextCallSeq;
++    }
++    return 0L;
++  }
++
++  /**
+    * All initialization needed before we go register with Master.
+    *
+    * @throws IOException
+@@ -2691,10 +2709,10 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+       String regionNameStr = regionName == null?
+         encodedRegionName: Bytes.toStringBinary(regionName);
+       if (isOpening != null && isOpening.booleanValue()) {
+-        throw new RegionOpeningException("Region " + regionNameStr + 
++        throw new RegionOpeningException("Region " + regionNameStr +
+           " is opening on " + this.serverNameFromMasterPOV);
+       }
+-      throw new NotServingRegionException("Region " + regionNameStr + 
++      throw new NotServingRegionException("Region " + regionNameStr +
+         " is not online on " + this.serverNameFromMasterPOV);
+     }
+     return region;
+@@ -3695,7 +3713,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+                 region.getEncodedName())) {
+             // check if current region open is for distributedLogReplay. This check is to support
+             // rolling restart/upgrade where we want to Master/RS see same configuration
+-            if (!regionOpenInfo.hasOpenForDistributedLogReplay() 
++            if (!regionOpenInfo.hasOpenForDistributedLogReplay()
+                   || regionOpenInfo.getOpenForDistributedLogReplay()) {
+               this.recoveringRegions.put(region.getEncodedName(), null);
+             } else {
+@@ -4602,7 +4620,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+         minSeqIdForLogReplay = storeSeqIdForReplay;
+       }
+     }
+-    
++
+     try {
+       long lastRecordedFlushedSequenceId = -1;
+       String nodePath = ZKUtil.joinZNode(this.zooKeeper.recoveringRegionsZNode,
+@@ -4626,7 +4644,7 @@ public class HRegionServer implements ClientProtos.ClientService.BlockingInterfa
+         LOG.warn("Can't find failed region server for recovering region " + region.getEncodedName());
+       }
+     } catch (NoNodeException ignore) {
+-      LOG.debug("Region " + region.getEncodedName() + 
++      LOG.debug("Region " + region.getEncodedName() +
+         " must have completed recovery because its recovery znode has been removed", ignore);
+     }
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/BoundedPriorityBlockingQueue.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/BoundedPriorityBlockingQueue.java
+new file mode 100644
+index 0000000..b525136
+--- /dev/null
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/BoundedPriorityBlockingQueue.java
+@@ -0,0 +1,330 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.util;
++
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.locks.Condition;
++import java.util.concurrent.locks.ReentrantLock;
++import java.util.concurrent.BlockingQueue;
++import java.util.concurrent.TimeUnit;
++import java.util.Collection;
++import java.util.Comparator;
++import java.util.Iterator;
++import java.util.NoSuchElementException;
++import java.util.AbstractQueue;
++
++import org.apache.hadoop.classification.InterfaceAudience;
++import org.apache.hadoop.classification.InterfaceStability;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++
++/**
++ * A generic bounded blocking Priority-Queue.
++ *
++ * The elements of the priority queue are ordered according to the Comparator
++ * provided at queue construction time.
++ *
++ * If multiple elements have the same priority this queue orders them in
++ * FIFO (first-in-first-out) manner.
++ * The head of this queue is the least element with respect to the specified
++ * ordering. If multiple elements are tied for least value, the head is the
++ * first one inserted.
++ * The queue retrieval operations poll, remove, peek, and element access the
++ * element at the head of the queue.
++ */
++@InterfaceAudience.Private
++@InterfaceStability.Stable
++public class BoundedPriorityBlockingQueue<E> extends AbstractQueue<E> implements BlockingQueue<E> {
++  private static class PriorityQueue<E> {
++    private final Comparator<? super E> comparator;
++    private final E[] objects;
++
++    private int head = 0;
++    private int tail = 0;
++
++    @SuppressWarnings("unchecked")
++    public PriorityQueue(int capacity, Comparator<? super E> comparator) {
++      this.objects = (E[])new Object[capacity];
++      this.comparator = comparator;
++    }
++
++    public void add(E elem) {
++      if (tail == objects.length) {
++        // shift down |-----AAAAAAA|
++        tail -= head;
++        System.arraycopy(objects, head, objects, 0, tail);
++        head = 0;
++      }
++
++      if (tail == head || comparator.compare(objects[tail - 1], elem) <= 0) {
++        // Append
++        objects[tail++] = elem;
++      } else if (head > 0 && comparator.compare(objects[head], elem) > 0) {
++        // Prepend
++        objects[--head] = elem;
++      } else {
++        // Insert in the middle
++        int index = upperBound(head, tail - 1, elem);
++        System.arraycopy(objects, index, objects, index + 1, tail - index);
++        objects[index] = elem;
++        tail++;
++      }
++    }
++
++    public E peek() {
++      return (head != tail) ? objects[head] : null;
++    }
++
++    public E poll() {
++      E elem = objects[head];
++      head = (head + 1) % objects.length;
++      if (head == 0) tail = 0;
++      return elem;
++    }
++
++    public int size() {
++      return tail - head;
++    }
++
++    public Comparator<? super E> comparator() {
++      return this.comparator;
++    }
++
++    public boolean contains(Object o) {
++      for (int i = head; i < tail; ++i) {
++        if (objects[i] == o) {
++          return true;
++        }
++      }
++      return false;
++    }
++
++    public int remainingCapacity() {
++      return this.objects.length - (tail - head);
++    }
++
++    private int upperBound(int start, int end, E key) {
++      while (start < end) {
++        int mid = (start + end) >>> 1;
++        E mitem = objects[mid];
++        int cmp = comparator.compare(mitem, key);
++        if (cmp > 0) {
++          end = mid;
++        } else {
++          start = mid + 1;
++        }
++      }
++      return start;
++    }
++  }
++
++
++  // Lock used for all operations
++  private final ReentrantLock lock = new ReentrantLock();
++
++  // Condition for blocking when empty
++  private final Condition notEmpty = lock.newCondition();
++
++  // Wait queue for waiting puts
++  private final Condition notFull = lock.newCondition();
++
++  private final PriorityQueue<E> queue;
++
++  /**
++   * Creates a PriorityQueue with the specified capacity that orders its
++   * elements according to the specified comparator.
++   * @param capacity the capacity of this queue
++   * @param comparator the comparator that will be used to order this priority queue
++   */
++  public BoundedPriorityBlockingQueue(int capacity,
++      Comparator<? super E> comparator) {
++    this.queue = new PriorityQueue<E>(capacity, comparator);
++  }
++
++  public boolean offer(E e) {
++    if (e == null) throw new NullPointerException();
++
++    lock.lock();
++    try {
++      if (queue.remainingCapacity() > 0) {
++        this.queue.add(e);
++        notEmpty.signal();
++        return true;
++      }
++    } finally {
++      lock.unlock();
++    }
++    return false;
++  }
++
++  public void put(E e) throws InterruptedException {
++    if (e == null) throw new NullPointerException();
++
++    lock.lock();
++    try {
++      while (queue.remainingCapacity() == 0) {
++        notFull.await();
++      }
++      this.queue.add(e);
++      notEmpty.signal();
++    } finally {
++      lock.unlock();
++    }
++  }
++
++  public boolean offer(E e, long timeout, TimeUnit unit)
++      throws InterruptedException {
++    if (e == null) throw new NullPointerException();
++    long nanos = unit.toNanos(timeout);
++
++    lock.lockInterruptibly();
++    try {
++      while (queue.remainingCapacity() == 0) {
++        if (nanos <= 0)
++          return false;
++        nanos = notFull.awaitNanos(nanos);
++      }
++      this.queue.add(e);
++      notEmpty.signal();
++    } finally {
++      lock.unlock();
++    }
++    return true;
++  }
++
++  public E take() throws InterruptedException {
++    E result = null;
++    lock.lockInterruptibly();
++    try {
++      while (queue.size() == 0) {
++        notEmpty.await();
++      }
++      result = queue.poll();
++      notFull.signal();
++    } finally {
++      lock.unlock();
++    }
++    return result;
++  }
++
++  public E poll() {
++    E result = null;
++    lock.lock();
++    try {
++      if (queue.size() > 0) {
++        result = queue.poll();
++        notFull.signal();
++      }
++    } finally {
++      lock.unlock();
++    }
++    return result;
++  }
++
++  public E poll(long timeout, TimeUnit unit)
++      throws InterruptedException {
++    long nanos = unit.toNanos(timeout);
++    lock.lockInterruptibly();
++    E result = null;
++    try {
++      while (queue.size() == 0 && nanos > 0) {
++        notEmpty.awaitNanos(nanos);
++      }
++      if (queue.size() > 0) {
++        result = queue.poll();
++      }
++      notFull.signal();
++    } finally {
++      lock.unlock();
++    }
++    return result;
++  }
++
++  public E peek() {
++    lock.lock();
++    try {
++      return queue.peek();
++    } finally {
++      lock.unlock();
++    }
++  }
++
++  public int size() {
++    lock.lock();
++    try {
++      return queue.size();
++    } finally {
++      lock.unlock();
++    }
++  }
++
++  public Iterator<E> iterator() {
++    throw new UnsupportedOperationException();
++  }
++
++  public Comparator<? super E> comparator() {
++    return queue.comparator();
++  }
++
++  public int remainingCapacity() {
++    lock.lock();
++    try {
++      return queue.remainingCapacity();
++    } finally {
++      lock.unlock();
++    }
++  }
++
++  public boolean remove(Object o) {
++    throw new UnsupportedOperationException();
++  }
++
++  public boolean contains(Object o) {
++    lock.lock();
++    try {
++      return queue.contains(o);
++    } finally {
++      lock.unlock();
++    }
++  }
++
++  public int drainTo(Collection<? super E> c) {
++    return drainTo(c, Integer.MAX_VALUE);
++  }
++
++  public int drainTo(Collection<? super E> c, int maxElements) {
++    if (c == null)
++        throw new NullPointerException();
++    if (c == this)
++        throw new IllegalArgumentException();
++    if (maxElements <= 0)
++        return 0;
++    lock.lock();
++    try {
++      int n = Math.min(queue.size(), maxElements);
++      for (int i = 0; i < n; ++i) {
++        c.add(queue.poll());
++      }
++      return n;
++    } finally {
++      lock.unlock();
++    }
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/MockRegionServerServices.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/MockRegionServerServices.java
+index 50ad030..95128d7 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/MockRegionServerServices.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/MockRegionServerServices.java
+@@ -111,7 +111,7 @@ class MockRegionServerServices implements RegionServerServices {
+   public void setRpcServer(RpcServerInterface rpc) {
+     this.rpcServer = rpc;
+   }
+-  
++
+   @Override
+   public ConcurrentSkipListMap<byte[], Boolean> getRegionsInTransitionInRS() {
+     return rit;
+@@ -223,6 +223,11 @@ class MockRegionServerServices implements RegionServerServices {
+   }
+ 
+   @Override
++  public long getDeadline(RPCProtos.RequestHeader header, Message param) {
++    return 0;
++  }
++
++  @Override
+   public ServerNonceManager getNonceManager() {
+     // TODO Auto-generated method stub
+     return null;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestSimpleRpcScheduler.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestSimpleRpcScheduler.java
+index c1ed778..d4a79b6 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestSimpleRpcScheduler.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/ipc/TestSimpleRpcScheduler.java
+@@ -21,6 +21,8 @@ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
+ import com.google.common.collect.ImmutableSet;
+ import com.google.common.collect.Maps;
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
+ import com.google.protobuf.Message;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+@@ -28,6 +30,8 @@ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.SmallTests;
+ import org.apache.hadoop.hbase.ipc.RpcServer.Call;
+ import org.apache.hadoop.hbase.protobuf.generated.RPCProtos;
++import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.RequestHeader;
++import org.apache.hadoop.hbase.util.Threads;
+ import org.junit.Before;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+@@ -36,12 +40,15 @@ import org.mockito.stubbing.Answer;
+ 
+ import java.io.IOException;
+ import java.net.InetSocketAddress;
++import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.CountDownLatch;
+ 
+ import static org.junit.Assert.assertEquals;
++import static org.mockito.Matchers.any;
+ import static org.mockito.Matchers.anyObject;
++import static org.mockito.Matchers.eq;
+ import static org.mockito.Mockito.doAnswer;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.timeout;
+@@ -50,6 +57,7 @@ import static org.mockito.Mockito.when;
+ 
+ @Category(SmallTests.class)
+ public class TestSimpleRpcScheduler {
++  public static final Log LOG = LogFactory.getLog(TestSimpleRpcScheduler.class);
+ 
+   private final RpcScheduler.Context CONTEXT = new RpcScheduler.Context() {
+     @Override
+@@ -134,4 +142,115 @@ public class TestSimpleRpcScheduler {
+     when(task.getCall()).thenReturn(call);
+     return task;
+   }
++
++  @Test
++  public void testRpcScheduler() throws Exception {
++    testRpcScheduler(SimpleRpcScheduler.CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE);
++    testRpcScheduler(SimpleRpcScheduler.CALL_QUEUE_TYPE_FIFO_CONF_VALUE);
++  }
++
++  private void testRpcScheduler(final String queueType) throws Exception {
++    Configuration schedConf = HBaseConfiguration.create();
++    schedConf.set(SimpleRpcScheduler.CALL_QUEUE_TYPE_CONF_KEY, queueType);
++
++    PriorityFunction priority = mock(PriorityFunction.class);
++    when(priority.getPriority(any(RequestHeader.class), any(Message.class)))
++      .thenReturn(HConstants.NORMAL_QOS);
++
++    RpcScheduler scheduler = new SimpleRpcScheduler(schedConf, 1, 1, 1, priority,
++                                                    HConstants.QOS_THRESHOLD);
++    try {
++      scheduler.start();
++
++      CallRunner smallCallTask = mock(CallRunner.class);
++      RpcServer.Call smallCall = mock(RpcServer.Call.class);
++      RequestHeader smallHead = RequestHeader.newBuilder().setCallId(1).build();
++      when(smallCallTask.getCall()).thenReturn(smallCall);
++      when(smallCall.getHeader()).thenReturn(smallHead);
++
++      CallRunner largeCallTask = mock(CallRunner.class);
++      RpcServer.Call largeCall = mock(RpcServer.Call.class);
++      RequestHeader largeHead = RequestHeader.newBuilder().setCallId(50).build();
++      when(largeCallTask.getCall()).thenReturn(largeCall);
++      when(largeCall.getHeader()).thenReturn(largeHead);
++
++      CallRunner hugeCallTask = mock(CallRunner.class);
++      RpcServer.Call hugeCall = mock(RpcServer.Call.class);
++      RequestHeader hugeHead = RequestHeader.newBuilder().setCallId(100).build();
++      when(hugeCallTask.getCall()).thenReturn(hugeCall);
++      when(hugeCall.getHeader()).thenReturn(hugeHead);
++
++      when(priority.getDeadline(eq(smallHead), any(Message.class))).thenReturn(0L);
++      when(priority.getDeadline(eq(largeHead), any(Message.class))).thenReturn(50L);
++      when(priority.getDeadline(eq(hugeHead), any(Message.class))).thenReturn(100L);
++
++      final ArrayList<Integer> work = new ArrayList<Integer>();
++
++      doAnswer(new Answer<Object>() {
++        @Override
++        public Object answer(InvocationOnMock invocation) {
++          synchronized (work) {
++            work.add(10);
++          }
++          Threads.sleepWithoutInterrupt(100);
++          return null;
++        }
++      }).when(smallCallTask).run();
++
++      doAnswer(new Answer<Object>() {
++        @Override
++        public Object answer(InvocationOnMock invocation) {
++          synchronized (work) {
++            work.add(50);
++          }
++          Threads.sleepWithoutInterrupt(100);
++          return null;
++        }
++      }).when(largeCallTask).run();
++
++      doAnswer(new Answer<Object>() {
++        @Override
++        public Object answer(InvocationOnMock invocation) {
++          synchronized (work) {
++            work.add(100);
++          }
++          Threads.sleepWithoutInterrupt(100);
++          return null;
++        }
++      }).when(hugeCallTask).run();
++
++      scheduler.dispatch(smallCallTask);
++      scheduler.dispatch(smallCallTask);
++      scheduler.dispatch(smallCallTask);
++      scheduler.dispatch(hugeCallTask);
++      scheduler.dispatch(smallCallTask);
++      scheduler.dispatch(largeCallTask);
++      scheduler.dispatch(smallCallTask);
++      scheduler.dispatch(smallCallTask);
++
++      while (work.size() < 8) {
++        Threads.sleepWithoutInterrupt(100);
++      }
++
++      int seqSum = 0;
++      int totalTime = 0;
++      for (int i = 0; i < work.size(); ++i) {
++        LOG.debug("Request i=" + i + " value=" + work.get(i));
++        seqSum += work.get(i);
++        totalTime += seqSum;
++      }
++      LOG.debug("Total Time: " + totalTime);
++
++      // -> [small small small huge small large small small]
++      // -> NO REORDER   [10 10 10 100 10 50 10 10] -> 930 (FIFO Queue)
++      // -> WITH REORDER [10 10 10 10 10 10 50 100] -> 530 (Deadline Queue)
++      if (queueType.equals(SimpleRpcScheduler.CALL_QUEUE_TYPE_DEADLINE_CONF_VALUE)) {
++        assertEquals(530, totalTime);
++      } else /* if (queueType.equals(SimpleRpcScheduler.CALL_QUEUE_TYPE_FIFO_CONF_VALUE)) */ {
++        assertEquals(930, totalTime);
++      }
++    } finally {
++      scheduler.stop();
++    }
++  }
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/MockRegionServer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/MockRegionServer.java
+index 45b9885..3a122ed 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/master/MockRegionServer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/master/MockRegionServer.java
+@@ -551,6 +551,11 @@ ClientProtos.ClientService.BlockingInterface, RegionServerServices {
+   }
+ 
+   @Override
++  public long getDeadline(RPCProtos.RequestHeader header, Message param) {
++    return 0;
++  }
++
++  @Override
+   public UpdateFavoredNodesResponse updateFavoredNodes(RpcController controller,
+       UpdateFavoredNodesRequest request) throws ServiceException {
+     return null;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestQosFunction.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestQosFunction.java
+index 873e3ca..7bc148f 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestQosFunction.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestQosFunction.java
+@@ -17,7 +17,10 @@ package org.apache.hadoop.hbase.regionserver;
+ * limitations under the License.
+ */
+ import static org.junit.Assert.assertEquals;
++import static org.mockito.Mockito.when;
+ 
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.SmallTests;
+ import org.apache.hadoop.hbase.protobuf.generated.ClientProtos.MultiRequest;
+@@ -36,8 +39,12 @@ import com.google.protobuf.Message;
+ public class TestQosFunction {
+   @Test
+   public void testPriority() {
+-    HRegionServer hrs = Mockito.mock(HRegionServer.class);
+-    AnnotationReadingPriorityFunction qosFunction = new AnnotationReadingPriorityFunction(hrs);
++    Configuration conf = HBaseConfiguration.create();
++    HRegionServer rpcServices = Mockito.mock(HRegionServer.class);
++    when(rpcServices.getConfiguration()).thenReturn(conf);
++
++    AnnotationReadingPriorityFunction qosFunction =
++      new AnnotationReadingPriorityFunction(rpcServices);
+ 
+     // Set method name in pb style with the method name capitalized.
+     checkMethod("ReplicateWALEntry", HConstants.REPLICATION_QOS, qosFunction);
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestBoundedPriorityBlockingQueue.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestBoundedPriorityBlockingQueue.java
+new file mode 100644
+index 0000000..f09c79c
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestBoundedPriorityBlockingQueue.java
+@@ -0,0 +1,178 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one or more
++ * contributor license agreements. See the NOTICE file distributed with this
++ * work for additional information regarding copyright ownership. The ASF
++ * licenses this file to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++ * License for the specific language governing permissions and limitations
++ * under the License.
++ */
++
++package org.apache.hadoop.hbase.util;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++import static org.junit.Assert.assertFalse;
++
++import java.util.Comparator;
++import java.util.concurrent.TimeUnit;
++
++import org.apache.hadoop.hbase.SmallTests;
++
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++@Category(SmallTests.class)
++public class TestBoundedPriorityBlockingQueue {
++  private final static int CAPACITY = 16;
++
++  class TestObject {
++    private final int priority;
++    private final int seqId;
++
++    public TestObject(final int priority, final int seqId) {
++      this.priority = priority;
++      this.seqId = seqId;
++    }
++
++    public int getSeqId() {
++      return this.seqId;
++    }
++
++    public int getPriority() {
++      return this.priority;
++    }
++  }
++
++  class TestObjectComparator implements Comparator<TestObject> {
++    public TestObjectComparator() {}
++
++    @Override
++    public int compare(TestObject a, TestObject b) {
++      return a.getPriority() - b.getPriority();
++    }
++  }
++
++  private BoundedPriorityBlockingQueue<TestObject> queue;
++
++  @Before
++  public void setUp() throws Exception {
++    this.queue = new BoundedPriorityBlockingQueue<TestObject>(CAPACITY, new TestObjectComparator());
++  }
++
++  @After
++  public void tearDown() throws Exception {
++  }
++
++  @Test
++  public void tesAppend() throws Exception {
++    // Push
++    for (int i = 1; i <= CAPACITY; ++i) {
++      assertTrue(queue.offer(new TestObject(i, i)));
++      assertEquals(i, queue.size());
++      assertEquals(CAPACITY - i, queue.remainingCapacity());
++    }
++    assertFalse(queue.offer(new TestObject(0, -1), 5, TimeUnit.MILLISECONDS));
++
++    // Pop
++    for (int i = 1; i <= CAPACITY; ++i) {
++      TestObject obj = queue.poll();
++      assertEquals(i, obj.getSeqId());
++      assertEquals(CAPACITY - i, queue.size());
++      assertEquals(i, queue.remainingCapacity());
++    }
++    assertEquals(null, queue.poll());
++  }
++
++  @Test
++  public void tesAppendSamePriority() throws Exception {
++    // Push
++    for (int i = 1; i <= CAPACITY; ++i) {
++      assertTrue(queue.offer(new TestObject(0, i)));
++      assertEquals(i, queue.size());
++      assertEquals(CAPACITY - i, queue.remainingCapacity());
++    }
++    assertFalse(queue.offer(new TestObject(0, -1), 5, TimeUnit.MILLISECONDS));
++
++    // Pop
++    for (int i = 1; i <= CAPACITY; ++i) {
++      TestObject obj = queue.poll();
++      assertEquals(i, obj.getSeqId());
++      assertEquals(CAPACITY - i, queue.size());
++      assertEquals(i, queue.remainingCapacity());
++    }
++    assertEquals(null, queue.poll());
++  }
++
++  @Test
++  public void testPrepend() throws Exception {
++    // Push
++    for (int i = 1; i <= CAPACITY; ++i) {
++      assertTrue(queue.offer(new TestObject(CAPACITY - i, i)));
++      assertEquals(i, queue.size());
++      assertEquals(CAPACITY - i, queue.remainingCapacity());
++    }
++
++    // Pop
++    for (int i = 1; i <= CAPACITY; ++i) {
++      TestObject obj = queue.poll();
++      assertEquals(CAPACITY - (i - 1), obj.getSeqId());
++      assertEquals(CAPACITY - i, queue.size());
++      assertEquals(i, queue.remainingCapacity());
++    }
++    assertEquals(null, queue.poll());
++  }
++
++  @Test
++  public void testInsert() throws Exception {
++    // Push
++    for (int i = 1; i <= CAPACITY; i += 2) {
++      assertTrue(queue.offer(new TestObject(i, i)));
++      assertEquals((1 + i) / 2, queue.size());
++    }
++    for (int i = 2; i <= CAPACITY; i += 2) {
++      assertTrue(queue.offer(new TestObject(i, i)));
++      assertEquals(CAPACITY / 2 + (i / 2), queue.size());
++    }
++    assertFalse(queue.offer(new TestObject(0, -1), 5, TimeUnit.MILLISECONDS));
++
++    // Pop
++    for (int i = 1; i <= CAPACITY; ++i) {
++      TestObject obj = queue.poll();
++      assertEquals(i, obj.getSeqId());
++      assertEquals(CAPACITY - i, queue.size());
++      assertEquals(i, queue.remainingCapacity());
++    }
++    assertEquals(null, queue.poll());
++  }
++
++  @Test
++  public void testFifoSamePriority() throws Exception {
++    assertTrue(CAPACITY >= 6);
++    for (int i = 0; i < 6; ++i) {
++      assertTrue(queue.offer(new TestObject((1 + (i % 2)) * 10, i)));
++    }
++
++    for (int i = 0; i < 6; i += 2) {
++      TestObject obj = queue.poll();
++      assertEquals(10, obj.getPriority());
++      assertEquals(i, obj.getSeqId());
++    }
++
++    for (int i = 1; i < 6; i += 2) {
++      TestObject obj = queue.poll();
++      assertEquals(20, obj.getPriority());
++      assertEquals(i, obj.getSeqId());
++    }
++    assertEquals(null, queue.poll());
++  }
++}
+-- 
+1.7.0.4
+

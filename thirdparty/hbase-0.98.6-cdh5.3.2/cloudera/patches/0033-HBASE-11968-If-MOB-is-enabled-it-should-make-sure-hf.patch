@@ -1,0 +1,40 @@
+From c3c7ae742f529f4ad09879bb70e28c5aed661034 Mon Sep 17 00:00:00 2001
+From: anoopsjohn <anoopsamjohn@gmail.com>
+Date: Sun, 14 Sep 2014 14:21:00 +0530
+Subject: [PATCH 33/82] HBASE-11968 If MOB is enabled, it should make sure hfile v3 is being used.
+
+Reason: MOB Feature
+Author: Anoop Sam John
+Ref: CDH-19420
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 2f3ccac..326c959 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -109,6 +109,7 @@ import org.apache.hadoop.hbase.io.HeapSize;
+ import org.apache.hadoop.hbase.io.TimeRange;
+ import org.apache.hadoop.hbase.io.hfile.BlockCache;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
++import org.apache.hadoop.hbase.io.hfile.HFile;
+ import org.apache.hadoop.hbase.ipc.CallerDisconnectedException;
+ import org.apache.hadoop.hbase.ipc.RpcCallContext;
+ import org.apache.hadoop.hbase.ipc.RpcServer;
+@@ -3395,6 +3396,12 @@ public class HRegion implements HeapSize { // , Writable{
+ 
+   protected HStore instantiateHStore(final HColumnDescriptor family) throws IOException {
+     if (MobUtils.isMobFamily(family)) {
++      if (HFile.getFormatVersion(this.conf) < HFile.MIN_FORMAT_VERSION_WITH_TAGS) {
++        throw new IOException("A minimum HFile version of "
++            + HFile.MIN_FORMAT_VERSION_WITH_TAGS
++            + " is required for MOB feature. Consider setting " + HFile.FORMAT_VERSION_KEY
++            + " accordingly.");
++      }
+       return new HMobStore(this, family, this.conf);
+     }
+     return new HStore(this, family, this.conf);
+-- 
+1.7.0.4
+
