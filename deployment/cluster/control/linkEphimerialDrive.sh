@@ -3,3 +3,7 @@ sudo mkdir /media/raid0/cache
 sudo ln -s /media/raid0/cache /var/cache/impalatogo
 sudo chown -R impala /var/cache/impalatogo
 sudo chown -R impala /media/raid0/cache
+
+sudo mkdir /media/raid0/tmp
+sudo chown -R impala /media/raid0/tmp
+
