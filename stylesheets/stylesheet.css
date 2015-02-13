@@ -346,6 +346,21 @@ Full-Width Styles
   margin-left: 10px;
 }
 
+.how_to_link {
+ display: block;
+  float: left;
+  width: 72px;
+  height:70px;
+  text-indent: -5000px;
+  overflow: hidden;
+background: url(../images/how-to-icon.png) no-repeat top left;
+ margin-left: 30px;
+}
+
+.how_to_link:hover {
+background: url(../images/how-to-icon.png) no-repeat top right
+}
+
 .zip_download_link:hover {
   background: url(../images/sprite_download.png) no-repeat top left;
 }
