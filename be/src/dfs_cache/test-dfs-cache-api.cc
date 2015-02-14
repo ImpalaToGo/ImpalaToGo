@@ -7,7 +7,6 @@
  */
 
 #include <string>
-#include <gtest/gtest.h>
 #include <fcntl.h>
 #include <future>
 #include <boost/thread/thread.hpp>
@@ -17,10 +16,8 @@
 
 namespace impala{
 
-FileSystemDescriptor CacheLayerTest::m_namenode1;
-FileSystemDescriptor CacheLayerTest::m_namenodeHdfs;
-FileSystemDescriptor CacheLayerTest::m_namenodeDefault;
-FileSystemDescriptor CacheLayerTest::m_namenodelocalFilesystem;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentityDefault;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentitylocalFilesystem;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;
@@ -29,33 +26,139 @@ SessionContext CacheLayerTest::m_ctx4 = nullptr;
 SessionContext CacheLayerTest::m_ctx5 = nullptr;
 SessionContext CacheLayerTest::m_ctx6 = nullptr;
 
-TEST_F(CacheLayerTest, DISABLED_ExplicitHostFlowFileOpenAutoloadTest){
-	const char* path = "hdfs://104.236.39.60:8020/test.txt";
+/** Collects the statistics about file handles usage during cache layer interaction
+ *  @param [in] file - file handle to collect the info for
+ *  @param [in/out]  - direct_handles counter
+ *  @param [in/out]  - cached_handles counter
+ *  @param [in/out]  - zero_handles counter
+ *  @param [in/out]  - total_handles counter
+ */
+static void collectFileHandleStat(dfsFile file,
+		std::atomic<long>& direct_handles,
+		std::atomic<long>& cached_handles,
+		std::atomic<long>& zero_handles,
+		std::atomic<long>& total_handles){
 
-	bool available;
-	dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
-	ASSERT_TRUE(file != nullptr);
-	ASSERT_TRUE(available);
+	if(file == NULL){
+		// increment zero handles
+		zero_handles.fetch_add(1l);
+		SCOPED_TRACE("Null file handle");
+		return;
+	}
+	// increment total handles
+	total_handles.fetch_add(1l);
+	// for direct file, increment the number of directly opened handles
+	if(file->direct){
+		direct_handles.fetch_add(1l);
+	}
+	else{
+		// increment total handles
+		cached_handles.fetch_add(1l);
+	}
 }
 
-TEST_F(CacheLayerTest, DISABLED_ExplicitHostFlowFileOpenCloseAutoloadTestFileDoesNotExist){
-	const char* path = "hdfs://104.236.39.60:8020/test.txt";
-
+/**
+ * File open-close-delete predicate to being run for multi client
+ * @param path         - file path to open/close it via cache layer API
+ * @param fsDescriptor - file system the file belongs to descriptor
+ *
+ * @param [in/out]  - direct_handles counter
+ * @param [in/out]  - cached_handles counter
+ * @param [in/out]  - zero_handles counter
+ * @param [in/out]  - total_handles counter
+ */
+static void close_open_file(const char* path, FileSystemDescriptor& fsDescriptor,
+		std::atomic<long>& direct_handles,
+		std::atomic<long>& cached_handles,
+		std::atomic<long>& zero_handles,
+		std::atomic<long>& total_handles){
 	bool available;
-	dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
+	dfsFile file = dfsOpenFile(fsDescriptor, path, O_RDONLY, 0, 0, 0, available);
+	collectFileHandleStat(file, direct_handles, cached_handles, zero_handles, total_handles);
 	ASSERT_TRUE(file != nullptr);
 	ASSERT_TRUE(available);
-	status::StatusInternal status = dfsCloseFile(m_namenodeHdfs, file);
+	status::StatusInternal status = dfsCloseFile(fsDescriptor, file);
 	ASSERT_TRUE(status == status::StatusInternal::OK);
-
-	// cleanup:
-	dfsDelete(m_namenodeHdfs, path, true);
 }
 
-TEST_F(CacheLayerTest, DISABLED_TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially){
-	const char* path = "hdfs://104.236.39.60:8020/test.txt";
+/**
+ * Run "open/close" scenario on one of the files selected in a random way from the given
+ * collection
+ *
+ * @param fsDescriptor - file system the file belongs to descriptor
+ * @param filenames    - list of filenames to shuffle among
+ *
+ * @param [in/out]  - direct_handles counter
+ * @param [in/out]  - cached_handles counter
+ * @param [in/out]  - zero_handles counter
+ * @param [in/out]  - total_handles counter
+ */
+static void close_open_file_sporadic(FileSystemDescriptor& fsDescriptor,
+		std::vector<std::string>& filenames,
+		std::atomic<long>& direct_handles,
+		std::atomic<long>& cached_handles,
+		std::atomic<long>& zero_handles,
+		std::atomic<long>& total_handles){
+    std::string path = getRandomFromVector(filenames);
+    ASSERT_TRUE(!path.empty());
+    SCOPED_TRACE(testing::Message() << "File selected : \"" << path << "\".");
+    // add the file:// suffix:
+    close_open_file((constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), fsDescriptor,
+    		direct_handles, cached_handles, zero_handles, total_handles);
+}
+
+static void rescan_dataset(const char* dataset_location, std::vector<std::string>& filenames){
+	boost::filesystem::recursive_directory_iterator end_iter;
+
+	// iterate the dataset and collect all file paths
+	if ( boost::filesystem::exists(dataset_location) && boost::filesystem::is_directory(dataset_location)){
+	  for( boost::filesystem::recursive_directory_iterator dir_iter(dataset_location) ; dir_iter != end_iter ; ++dir_iter){
+	    if (boost::filesystem::is_regular_file(dir_iter->status()) ){
+	    	filenames.push_back((*dir_iter).path().string());
+	    }
+	  }
+	}
+}
+
+/*
+ * Simultaneous file request arriving from two clients
+ *
+ * Scenario :
+ * 0. Cache is set with any size.
+ * 1. 2 requests are issued for the same file and are being fired simultaneously.
+ * 2. Test succeeds in case if both clients got the file handle and it is valid.
+ */
+TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially){
+	boost::system::error_code ec;
+
+	std::string data_location = m_dataset_path + constants::TEST_SINGLE_FILE_FROM_DATASET;
+	char path[256];
+	memset(path, 0, 256);
+	data_location.copy(path, data_location.length() + 1, 0);
+	ASSERT_TRUE(boost::filesystem::exists(path, ec));
+
+	char filename[256];
+	memset(filename, 0, 256);
+	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
+	data_location.copy(filename, data_location.length() + 1, 0);
+
+	SCOPED_TRACE("Test data is validated and is ready");
+
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+
+	status::StatusInternal status0 = status::StatusInternal::OK;
 	status::StatusInternal status1;
-	status::StatusInternal status2;
+	status::StatusInternal status2 = status::StatusInternal::OK;
+	status::StatusInternal status3;
 
 	std::mutex mux;
 	std::condition_variable condition;
@@ -68,10 +171,14 @@ TEST_F(CacheLayerTest, DISABLED_TwoClientsRequestSameFileForOpenWhichIsNotExists
 		std::unique_lock<std::mutex> lock(mux);
 		condition.wait(lock, [&] {return go;});
 
-		dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
-		CHECK(file != nullptr);
-		CHECK(available);
-		status1 = dfsCloseFile(m_namenodeHdfs, file);
+		dfsFile file = dfsOpenFile(m_dfsIdentitylocalFilesystem, filename, O_RDONLY, 0, 0, 0, available);
+		collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
+		EXPECT_TRUE(file != nullptr);
+		EXPECT_TRUE(available);
+		if((file == nullptr) || !available)
+			status0 = status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+
+		status1 = dfsCloseFile(m_dfsIdentitylocalFilesystem, file);
 		return status1;
 	});
 	auto future2 = std::async(std::launch::async,
@@ -81,10 +188,13 @@ TEST_F(CacheLayerTest, DISABLED_TwoClientsRequestSameFileForOpenWhichIsNotExists
 		std::unique_lock<std::mutex> lock(mux);
 		condition.wait(lock, [&] {return go;});
 
-		dfsFile file = dfsOpenFile(m_namenodeHdfs, path, O_RDONLY, 0, 0, 0, available);
-		CHECK(file != nullptr);
-		CHECK(available);
-		status2 = dfsCloseFile(m_namenodeHdfs, file);
+		dfsFile file = dfsOpenFile(m_dfsIdentitylocalFilesystem, filename, O_RDONLY, 0, 0, 0, available);
+		collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
+		EXPECT_TRUE(file != nullptr);
+		EXPECT_TRUE(available);
+		if((file == nullptr) || !available)
+					status2 = status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+		status3 = dfsCloseFile(m_dfsIdentitylocalFilesystem, file);
 		return status2;
 	});
 
@@ -95,42 +205,60 @@ TEST_F(CacheLayerTest, DISABLED_TwoClientsRequestSameFileForOpenWhichIsNotExists
 	status1 = future1.get();
     status2 = future2.get();
 
+    ASSERT_TRUE(status0 == status::StatusInternal::OK);
 	ASSERT_TRUE(status1 == status::StatusInternal::OK);
 	ASSERT_TRUE(status2 == status::StatusInternal::OK);
+	ASSERT_TRUE(status3 == status::StatusInternal::OK);
 
-	// cleanup:
-	dfsDelete(m_namenodeHdfs, path, true);
+	// be sure we worked directly with a cache:
+	ASSERT_TRUE(m_zero_handles.load() == 0);
+	ASSERT_TRUE(m_direct_handles.load() == 0);
+	ASSERT_TRUE(m_cached_handles.load() == 2);
+	ASSERT_TRUE(m_total_handles.load() == 2);
 }
 
-// file open-close predicate to being run for multi client
-void close_open_file(const char* path, FileSystemDescriptor& fsDescriptor){
-	bool available;
-	dfsFile file = dfsOpenFile(fsDescriptor, path, O_RDONLY, 0, 0, 0, available);
-	ASSERT_TRUE(file != nullptr);
-	ASSERT_TRUE(available);
-	status::StatusInternal status = dfsCloseFile(fsDescriptor, file);
-	ASSERT_TRUE(status == status::StatusInternal::OK);
+/**
+ * Simultaneous file request arriving from 50 clients
+ *
+ * Scenario :
+ * 0. Cache is set with a size = 1.5 cache limit.
+ * 1. 50 requests are issued, each for the file selected from dataset in random way.
+ * All clients are being fired simultaneously.
+ * 2. Test succeeds in case if all clients were able to complete scenario "open/close" with a sporadically selected file.
+ */
+TEST_F(CacheLayerTest, OpenCloseSporadicFileHeavyLoadManagedAsync) {
 
-	// cleanup:
-	dfsDelete(fsDescriptor, path, true);
-}
+	std::vector<std::string> dataset;
+	// rescan the dataset in order to get the collection of filenames.
+	rescan_dataset(m_dataset_path.c_str(), dataset);
+	ASSERT_TRUE(dataset.size() != 0);
 
-TEST_F(CacheLayerTest, DISABLED_OpenCloseHeavyLoadManagedAsync) {
-	m_flag = false;
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
 
-	const int CONTEXT_NUM = 100;
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
 
-	std::string path = "s3n://impalatogo/test2.txt";
+	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+
+	const int CONTEXT_NUM = 10;
 
 	using namespace std::placeholders;
 
-	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2);
+	auto f1 = std::bind(&close_open_file_sporadic, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6);
 
 	std::vector<std::future<void>> futures;
 	for (int i = 0; i < CONTEXT_NUM; i++) {
 		futures.push_back(
 				std::move(
-						spawn_task(f1, path.c_str(), std::ref(m_namenodeDefault))));
+						spawn_task(f1, std::ref(m_dfsIdentitylocalFilesystem), std::ref(dataset),
+								std::ref(m_direct_handles),
+								std::ref(m_cached_handles),
+								std::ref(m_zero_handles),
+								std::ref(m_total_handles))));
 	}
 
 	for (int i = 0; i < CONTEXT_NUM; i++) {
@@ -141,11 +269,155 @@ TEST_F(CacheLayerTest, DISABLED_OpenCloseHeavyLoadManagedAsync) {
 	EXPECT_EQ(futures.size(), CONTEXT_NUM);
 }
 
-TEST_F(CacheLayerTest, DISABLED_TestCopyRemoteFileToLocal){
-	const char* src = "/home/test/install.sh";
-	const char* dst = "/home/elenav/src/ImpalaToGo/analysis/install.sh";
-	status::StatusInternal status = dfsCopy(m_namenodeDefault, src, m_namenodelocalFilesystem, dst);
+/**
+ * Simultaneous file request arriving from 50 clients
+ *
+ * Scenario :
+ * 0. Cache is set with a size = 1.5 cache limit.
+ * 1. 50 requests are issued, each for the same file from the dataset.
+ * All clients are being fired simultaneously.
+ * 2. Test succeeds in case if all clients were able to complete scenario "open/close" with the same file.
+ */
+TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
+	boost::system::error_code ec;
+
+	std::string data_location = m_dataset_path + constants::TEST_SINGLE_FILE_FROM_DATASET;
+	char path[256];
+	memset(path, 0, 256);
+	data_location.copy(path, data_location.length() + 1, 0);
+
+	ASSERT_TRUE(boost::filesystem::exists(path, ec));
+
+	char filename[256];
+	memset(filename, 0, 256);
+	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
+	data_location.copy(filename, data_location.length() + 1, 0);
+
+
+	SCOPED_TRACE("Test data is validated and is ready");
+
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+
+	const int CONTEXT_NUM = 50;
+
+	using namespace std::placeholders;
+
+	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6);
+
+	std::vector<std::future<void>> futures;
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		futures.push_back(
+				std::move(
+						spawn_task(f1, filename, std::ref(m_dfsIdentitylocalFilesystem),
+								std::ref(m_direct_handles),
+								std::ref(m_cached_handles),
+								std::ref(m_zero_handles),
+								std::ref(m_total_handles))));
+	}
+
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		if (futures[i].valid())
+			futures[i].get();
+	}
+
+	EXPECT_EQ(futures.size(), CONTEXT_NUM);
+}
+
+/**
+ * Simple test that check dfsCopy API.
+ *
+ * Scenario:
+ * 0. Cache is configured with any size.
+ * 1. dfsCopy API is used in order to copy the file from dataset location to the cache.
+ * 2. Test succeeds if the API succeeds + byte-by-byte source and destination file read
+ * comparison succeeds.
+ */
+TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
+	boost::system::error_code ec;
+
+	std::string src_location = m_dataset_path + constants::TEST_SINGLE_FILE_FROM_DATASET;
+	char src[256];
+	memset(src, 0, 256);
+	src_location.copy(src, src_location.length() + 1, 0);
+
+	ASSERT_TRUE(boost::filesystem::exists(src, ec));
+
+	SCOPED_TRACE("Test data is validated and is ready");
+
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+
+	std::string dst_location = m_cache_path + constants::TEST_SINGLE_FILE_FROM_DATASET;
+	char dst[256];
+	memset(dst, 0, 256);
+	dst_location.copy(dst, dst_location.length() + 1, 0);
+
+	status::StatusInternal status = dfsCopy(m_dfsIdentitylocalFilesystem, src, m_dfsIdentitylocalFilesystem, dst);
 	ASSERT_TRUE(status == status::StatusInternal::OK);
+
+	// read both files and compare byte-by-byte their contents:
+	dfsFile source      = nullptr;
+	dfsFile destination = nullptr;
+
+#define BUFFER_SIZE 17408
+
+	// format source and destination filenames to fit the fs adaptor:
+	std::string path_source(src);
+	path_source = path_source.insert(0, constants::TEST_LOCALFS_PROTO_PREFFIX + "/");
+
+	std::string path_dest(dst);
+	path_dest = path_dest.insert(0, constants::TEST_LOCALFS_PROTO_PREFFIX + "/");
+
+	// open "source" file:
+	source = fsAdaptor.fileOpen(conn, path_source.c_str(), O_RDONLY, 0, 0, 0);
+	ASSERT_TRUE(source != NULL);
+
+	// open "destination" file:
+	destination = fsAdaptor.fileOpen(conn, path_dest.c_str(), O_RDONLY, 0, 0, 0);
+	ASSERT_TRUE(destination != NULL);
+
+	// now read by blocks and compare:
+	tSize last_read_local = 0;
+	tSize last_read_remote = 0;
+
+	char* buffer_remote = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+	char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+
+	last_read_remote = fsAdaptor.fileRead(conn, source, (void*)buffer_remote, BUFFER_SIZE);
+	last_read_local = fsAdaptor.fileRead(conn, destination, (void*)buffer_local, BUFFER_SIZE);
+
+	ASSERT_TRUE(last_read_remote == last_read_local);
+
+	for (; last_read_remote > 0;) {
+		// check read bytes count is equals:
+		ASSERT_TRUE(last_read_remote == last_read_local);
+		// compare memory contents we read from files:
+		ASSERT_TRUE((std::memcmp(buffer_remote, buffer_local, last_read_remote) == 0));
+
+		// read next data buffer:
+		last_read_remote = fsAdaptor.fileRead(conn, source, (void*)buffer_remote, BUFFER_SIZE);
+		last_read_local = fsAdaptor.fileRead(conn, destination, (void*)buffer_local, BUFFER_SIZE);
+	}
+	// close file handles, local and remote:
+	ASSERT_TRUE(fsAdaptor.fileClose(conn, source) == 0);
+	ASSERT_TRUE(fsAdaptor.fileClose(conn, destination) == 0);
 }
 
 /**
@@ -165,34 +437,9 @@ TEST_F(CacheLayerTest, DISABLED_TestCopyRemoteFileToLocal){
  * 5. Test succeeded in case if all byte-comparisons passed successfully.
  */
 TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
-	const char* target      = m_dataset_path.c_str();
-	const char* destination = m_cache_path.c_str();
-
-	boost::system::error_code ec;
-
-	SCOPED_TRACE(testing::Message() << "Reset the cache... \"" << m_cache_path << "\"");
-
-	// clean cache directory before usage:
-	boost::filesystem::remove_all(m_cache_path, ec);
-	SCOPED_TRACE(ec.message());
-    ASSERT_TRUE(!ec);
-
-	boost::filesystem::create_directory(m_cache_path, ec);
-	ASSERT_TRUE(!ec);
-
-	SCOPED_TRACE(testing::Message() << "Check dataset location exist... \"" << m_dataset_path << "\"");
-    // first check working directories exist:
-	ASSERT_TRUE(boost::filesystem::exists(target, ec));
-	SCOPED_TRACE(ec.message());
-	ASSERT_TRUE(!ec);
-	ASSERT_TRUE(boost::filesystem::exists(destination, ec));
-	SCOPED_TRACE(ec.message());
-	ASSERT_TRUE(!ec);
-
-	SCOPED_TRACE("Working directories exist.");
 
 	// check dataset size it least of 1.5 of configured cache size:
-    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(target);
+    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(m_dataset_path.c_str());
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
@@ -200,10 +447,10 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
-	cacheConfigureFileSystem(m_namenodelocalFilesystem);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
 
 	// get the connection to local file system:
-	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
@@ -211,7 +458,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 
 	// get the list of all files within the specified dataset:
 	int entries;
-    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, m_dataset_path.c_str(), &entries);
     ASSERT_TRUE((files != NULL) && (entries != 0));
     for(int i = 0; i < entries; i++){
     	std::cout << files[i].mName << std::endl;
@@ -230,7 +477,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 
 			// open file, say its local one:
 			bool available;
-			file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+			file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
 			ASSERT_TRUE((file != NULL) && available);
 
 			// open "target" file:
@@ -246,7 +493,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 			char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 
 			last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-			last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+			last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 
 			ASSERT_TRUE(last_read_remote == last_read_local);
 
@@ -258,11 +505,11 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 
 				// read next data buffer:
 				last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-				last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+				last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 			}
 			// close file handles, local and remote:
 			ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
-			ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+			ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
 		}
 	};
 
@@ -304,29 +551,8 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 	// age bucket time slice:
 	m_timeslice = constants::TEST_CACHE_REDUCED_TIMESLICE;
 
-	const char* target      = m_dataset_path.c_str();
-	const char* destination = m_cache_path.c_str();
-
-	boost::system::error_code ec;
-
-	SCOPED_TRACE("Reset the cache...");
-
-	// clean cache directory before usage:
-	boost::filesystem::remove_all(m_cache_path, ec);
-	SCOPED_TRACE(ec.message());
-    ASSERT_TRUE(!ec);
-
-	boost::filesystem::create_directory(m_cache_path, ec);
-	ASSERT_TRUE(!ec);
-
-    // first check working directories exist:
-	ASSERT_TRUE(boost::filesystem::exists(target));
-	ASSERT_TRUE(boost::filesystem::exists(destination));
-
-	SCOPED_TRACE("Working directories exist.");
-
 	// check dataset size it least of 1.5 of configured cache size:
-    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(target);
+    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(m_dataset_path.c_str());
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
@@ -337,10 +563,10 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 			boost::posix_time::seconds(m_timeslice), constants::TEST_CACHE_FIXED_SIZE);
 
 	// configure local filesystem:
-	cacheConfigureFileSystem(m_namenodelocalFilesystem);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
 
 	// get the connection to local file system:
-	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
@@ -348,7 +574,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 
 	// get the list of all files within the specified dataset:
 	int entries;
-    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, m_dataset_path.c_str(), &entries);
     ASSERT_TRUE((files != NULL) && (entries != 0));
 
     dfsFile file       = nullptr;
@@ -374,7 +600,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     	std::string path(files[i].mName);
     	path = path.insert(path.find_first_of("/"), "/");
 
-    	file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str() , O_RDONLY, 0, 0, 0, available);
+    	file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str() , O_RDONLY, 0, 0, 0, available);
     	ASSERT_TRUE((file != NULL) && available);
 
     	// increase cached data size
@@ -393,7 +619,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     	char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 
     	last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-    	last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+    	last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 
     	ASSERT_TRUE(last_read_remote == last_read_local);
 
@@ -405,7 +631,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 
     		// read next data buffer:
     		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-    		last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+    		last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
     	}
     };
 
@@ -423,7 +649,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     		ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
     		// previously opened local handle should not be closed in extra scenario
     		if(!extrascenario)
-    			ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+    			ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
     		else{
     			// preserve the previously opened file handle we left non-closed
     			preserved_handle    = file;
@@ -446,12 +672,12 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
 
     ASSERT_TRUE(file != nullptr);
-    ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+    ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
 
     // here, we passed the cache cleanup already.
     // close preserved file and check we can access it.
     ASSERT_TRUE(preserved_handle != nullptr);
-    ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, preserved_handle) == 0);
+    ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, preserved_handle) == 0);
 
     SCOPED_TRACE("Going to run comparison for preserved file");
 
@@ -468,7 +694,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
         ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
 
         ASSERT_TRUE(file != nullptr);
-        ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+        ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
     }
 
     SCOPED_TRACE("Test is near to complete, cleanup...");
@@ -478,29 +704,9 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 }
 
 TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
-	const char* target      = m_dataset_path.c_str();
-	const char* destination = m_cache_path.c_str();
-
-	boost::system::error_code ec;
-
-	SCOPED_TRACE("Reset the cache...");
-
-	// clean cache directory before usage:
-	boost::filesystem::remove_all(m_cache_path, ec);
-	SCOPED_TRACE(ec.message());
-    ASSERT_TRUE(!ec);
-
-	boost::filesystem::create_directory(m_cache_path, ec);
-	ASSERT_TRUE(!ec);
-
-    // first check working directories exist:
-	ASSERT_TRUE(boost::filesystem::exists(target));
-	ASSERT_TRUE(boost::filesystem::exists(destination));
-
-	SCOPED_TRACE("Working directories exist.");
 
 	// check dataset size it least of 1.5 of configured cache size:
-    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(target);
+    boost::uintmax_t dataset_size = utilities::get_dir_busy_space(m_dataset_path.c_str());
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
@@ -508,10 +714,10 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
-	cacheConfigureFileSystem(m_namenodelocalFilesystem);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
 
 	// get the connection to local file system:
-	FileSystemDescriptorBound fsAdaptor(m_namenodelocalFilesystem);
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentitylocalFilesystem);
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
@@ -519,7 +725,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 
 	// get the list of all files within the specified dataset:
 	int entries;
-    dfsFileInfo* files = fsAdaptor.listDirectory(conn, target, &entries);
+    dfsFileInfo* files = fsAdaptor.listDirectory(conn, m_dataset_path.c_str(), &entries);
     ASSERT_TRUE((files != NULL) && (entries != 0));
     for(int i = 0; i < entries; i++){
     	std::cout << files[i].mName << std::endl;
@@ -543,7 +749,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 
 		// open file, say its local one:
 		bool available;
-		file = dfsOpenFile(m_namenodelocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+		file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
 		ASSERT_TRUE((file != NULL) && available);
 
 		// preserve opened handle
@@ -565,7 +771,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 		char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 
 		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-		last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+		last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 
 		ASSERT_TRUE(last_read_remote == last_read_local);
 
@@ -577,7 +783,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 
 			// read next data buffer:
 			last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-			last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+			last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 		}
 		// close only "target" handle
 		ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
@@ -592,7 +798,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	    		path = path.insert(path.find_first_of("/"), "/");
   				bool available;
 
-  				file = dfsOpenFile(m_namenodelocalFilesystem, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0, available);
+  				file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0, available);
 	    		// check that we got direct handle to the file:
 	    		ASSERT_TRUE((file != NULL) && available && file->direct);
 
@@ -608,7 +814,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	    		char* buffer_local = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 
 	    		last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-	    		last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+	    		last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 
 	    		ASSERT_TRUE(last_read_remote == last_read_local);
 
@@ -620,10 +826,10 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 
 	    			// read next data buffer:
 	    			last_read_remote = fsAdaptor.fileRead(conn, remotefile, (void*)buffer_remote, BUFFER_SIZE);
-	    			last_read_local = dfsRead(m_namenodelocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
+	    			last_read_local = dfsRead(m_dfsIdentitylocalFilesystem, file, (void*)buffer_local, BUFFER_SIZE);
 	    		}
 	    		// close both handles:
-	    		ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, file) == 0);
+	    		ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
 	    		ASSERT_TRUE(fsAdaptor.fileClose(conn, remotefile) == 0);
 	    		break;
 	    	}
@@ -634,7 +840,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	// close all file handles we preserved before:
 	for(auto handle : opened_handles)
 		if(handle != NULL)
-			ASSERT_TRUE(dfsCloseFile(m_namenodelocalFilesystem, handle) == 0);
+			ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, handle) == 0);
 
 	SCOPED_TRACE("Test is near to complete, cleanup...");
 

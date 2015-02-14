@@ -237,16 +237,16 @@ private:
          * @return node underlying value-item. If no node exists, rise and invalid_argument exception
          */
         const ItemType_* operator [](KeyType_ key) const{
-        	INode* node = getNode(key);
+        	boost::shared_ptr<INode> node = getNode(key);
+
+    		ItemType_* item;
+    		bool success = false;
+    		bool duplicate = false;
 
         	if(!node){
         		// if autoload is configured, invoke it to get the item into the cache
         		if(!m_loadItem || !m_constructItemPredicate)
         			return nullptr;
-
-        		ItemType_* item;
-        		bool success = false;
-        		bool duplicate = false;
 
         		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
         			loader(key, m_constructItemPredicate, m_loadItem);
@@ -255,16 +255,21 @@ private:
         			if(item == nullptr)
         				return nullptr;
         			node = m_owner->addInternal(item, success, duplicate);
+        			// if node was not acquired by some reason, no chance to add new item
         			if(!node){
         				// destroy the newly allocated item
         				delete item;
         				item = nullptr;
+        				return nullptr;
+        			}
+        			if(duplicate){
+        				if(node->value() != nullptr)
+        					node->touch();
+        				return node->value();
         			}
         		}
-        		// here,
-        		if(!node)
-        			return nullptr;
         	}
+
         	// check node value. It may be lazy-erased
         	if(node->value() == nullptr)
         		return nullptr;
@@ -279,41 +284,47 @@ private:
          *  @return node underlying value-item. If no node exists, rise and invalid_argument exception
          */
         ItemType_* operator [](KeyType_ key){
-        	boost::shared_ptr<INode> node = getNode(key);
+			boost::shared_ptr<INode> node = getNode(key);
 
-        	if(!node){
-        		// if autoload is configured, invoke it to get the item into the cache
-        		if(!m_loadItem || !m_constructItemPredicate)
-        			return nullptr;
+			ItemType_* item;
+			bool success = false;
+			bool duplicate = false;
 
-        		ItemType_* item;
-        		bool success   = false;
-        		bool duplicate = false;
+			if (!node) {
+				// if autoload is configured, invoke it to get the item into the cache
+				if (!m_loadItem || !m_constructItemPredicate)
+					return nullptr;
 
-        		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
-        			loader(key, m_constructItemPredicate, m_loadItem);
-        		while(loader(item)){
-        			// if object construction was non-successful, reply nullptr
-        			if(item == nullptr)
-        				return nullptr;
-        			node = m_owner->addInternal(item, success, duplicate);
-        			if(!node){
-        				// destroy the newly allocated item
-        				delete item;
-        				item = nullptr;
-        				return nullptr;
-        			}
-        		}
-    			if(!node)
-    				return nullptr;
-        	}
-        	// check node value. It may be lazy-erased
-        	if(node->value() == nullptr)
-        		return nullptr;
+				item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>,
+						LoadItemFunc<KeyType_> > loader(key,
+						m_constructItemPredicate, m_loadItem);
+				while (loader(item)) {
+					// if object construction was non-successful, reply nullptr
+					if (item == nullptr)
+						return nullptr;
+					node = m_owner->addInternal(item, success, duplicate);
+					// if node was not acquired by some reason, no chance to add new item
+					if (!node) {
+						// destroy the newly allocated item
+						delete item;
+						item = nullptr;
+						return nullptr;
+					}
+					if (duplicate) {
+						if (node->value() != nullptr)
+							node->touch();
+						return node->value();
+					}
+				}
+			}
 
-        	node->touch();
-        	return node->value();
-        }
+			// check node value. It may be lazy-erased
+			if (node->value() == nullptr)
+				return nullptr;
+
+			node->touch();
+			return node->value();
+		}
 
         /**
          * Delete object that matches key from cache
@@ -1177,6 +1188,7 @@ private:
 	                                                           For Indexes cleanup scenario  */
 
 	const unsigned _max_limit_of_forbidden_items = 200;  /**< limit of forbidden items in particular Index. Forbidden = deleted from cache node */
+    boost::mutex m_unique_item_guard;                    /**< guard to protect index lookup and adding the item into the cache scenario */
 
 	/** external call to get the item weight */
     long long tellWeight(ItemType_* item){
@@ -1230,36 +1242,38 @@ private:
          // see if item is already in index
          boost::shared_ptr<INode> node = nullPtr;
 
-         for(auto idx : (*m_indexList)){
-        	 if((node = idx.second->findItem(item)))
-        		 break;
-         }
+         boost::unique_lock<boost::mutex> scoped_lock(m_unique_item_guard);
 
-         // duplicate is prevented from being added into the cache
-         duplicate = (node && (*node->value() == (*item)));
-         if( duplicate ){
-        	 LOG(WARNING) << "Duplicate found within the registry.\n";
-        	 // reassign the link just in case is somebody uses it now outside
-        	 ItemType_* _item = item;
-        	 item = node->value();
-        	 // delete the reference to the item requested to add
-        	 delete _item;
-        	 succeed = true;
-        	 return node;
-         }
+		for(auto idx : (*m_indexList)) {
+			if((node = idx.second->findItem(item)))
+			break;
+		}
 
-         node = m_lifeSpan->add(item);
-         if(!node){
-        	 // Unable to add new node, the cache is full, and no items could be removed to free space enough
-        	 LOG (WARNING) << "new node could not be added into the cache, reason : no free space available.\n";
-        	 succeed = false;
-        	 return node;
-         }
+		// duplicate is prevented from being added into the cache
+		duplicate = (node && (*node->value() == (*item)));
+		if( duplicate ) {
+			LOG(WARNING) << "Duplicate found within the registry.\n";
+			// reassign the link just in case is somebody uses it now outside
+			ItemType_* _item = item;
+			item = node->value();
+			// delete the reference to the item requested to add
+			delete _item;
+			succeed = true;
+			return node;
+		}
 
-         // make sure node gets inserted into all indexes
-         for(auto item : (*m_indexList)){
-        	 item.second->add(node);
-         }
+		node = m_lifeSpan->add(item);
+		if(!node) {
+			// Unable to add new node, the cache is full, and no items could be removed to free space enough
+			LOG (WARNING) << "new node could not be added into the cache, reason : no free space available.\n";
+			succeed = false;
+			return node;
+		}
+
+		// make sure node gets inserted into all indexes
+		for(auto item : (*m_indexList)) {
+			item.second->add(node);
+		}
 
          // whenever we add new item, we increment both hard and soft items amount:
          std::atomic_fetch_add_explicit (&m_numberOfHardItems, 1u, std::memory_order_relaxed);

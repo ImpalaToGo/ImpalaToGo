@@ -28,6 +28,12 @@ namespace constants{
 
 	/** reduced age bucket timeslice */
 	const int TEST_CACHE_REDUCED_TIMESLICE = 10;
+
+	/** dataset single file for tests operating with a single file */
+	const std::string TEST_SINGLE_FILE_FROM_DATASET = "output1.dat";
+
+	/** protocol prefix represents local fs */
+	const std::string TEST_LOCALFS_PROTO_PREFFIX = "file:/";
 }
 
 int stringLength = sizeof(alphanum) - 1;

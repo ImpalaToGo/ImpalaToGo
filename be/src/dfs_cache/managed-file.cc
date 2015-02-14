@@ -174,7 +174,8 @@ status::StatusInternal File::open( int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
-	if(m_state != State::FILE_IS_FORBIDDEN)
+	// don't change 2 states below:
+	if((m_state != State::FILE_IS_FORBIDDEN) && (m_state != State::FILE_IS_IN_USE_BY_SYNC))
 		m_state = State::FILE_HAS_CLIENTS;
 	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_relaxed);
 	LOG (INFO) << "File open \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << std::endl;

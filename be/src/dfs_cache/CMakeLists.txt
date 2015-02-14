@@ -37,7 +37,5 @@ add_library(dfs_cache
   filesystem-lru-cache.cc
 )
 
-ADD_BE_TEST(test-filesystem-mgr)
 ADD_BE_TEST(test-cache-manager)
 ADD_BE_TEST(test-dfs-cache-api)
-ADD_BE_TEST(test-hadoop-fs-adaptive)

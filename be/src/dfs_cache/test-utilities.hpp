@@ -19,6 +19,7 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <vector>
 
 namespace impala{
 namespace constants{
@@ -39,6 +40,12 @@ namespace constants{
 
 	/** reduced age bucket timeslice */
 	extern const int TEST_CACHE_REDUCED_TIMESLICE;
+
+	/** dataset single file for tests operating with a single file */
+	extern const std::string TEST_SINGLE_FILE_FROM_DATASET;
+
+	/** protocol prefix represents local fs */
+	extern const std::string TEST_LOCALFS_PROTO_PREFFIX;
 }
 
 
@@ -103,6 +110,12 @@ extern int stringLength;
 extern char genRandomChar();
 extern std::string genRandomString(size_t len);
 
+template<typename Item>
+Item getRandomFromVector(std::vector<Item>& dataset ){
+	size_t len = dataset.size() - 1;
+    srand(time(0));
+    return dataset[rand() % len];
+}
 }
 
 

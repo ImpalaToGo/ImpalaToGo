@@ -150,7 +150,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
 
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if(fsAdaptor == nullptr){
+	if(!fsAdaptor){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -282,7 +282,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 
 		// open the file directly from target:
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-		if (fsAdaptor == nullptr) {
+		if (!fsAdaptor ) {
 			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 					fsDescriptor.host << "\"" << "\n";
 			// no namenode adaptor configured
@@ -309,6 +309,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 
 	// subscribe for file status updates if file is under sync just now:
 	if ((managed_file->state() == managed_file::State::FILE_IS_IN_USE_BY_SYNC)){
+		LOG (INFO)<< "File \"" << path << "\" is under sync right now. File status = \"" << managed_file->state() << "\"\n";
+
 		if(!managed_file->subscribe_for_updates(condition, mux)){
 			LOG (ERROR) << "Failed to subscribe for file \"" << path << "\" status updates, unable to proceed." << "\n";
 			managed_file->close();
@@ -320,6 +322,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 				[&] {return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC;});
 		lock.unlock();
 
+		LOG (INFO)<< "Wait for sync is finished for \"" << path << "\". File status = \"" << managed_file->state() << "\"\n";
 		// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
 		managed_file->unsubscribe_from_updates();
     }
@@ -327,7 +330,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	// so as the file is available locally, just open it:
 	if (!managed_file->exists()) {
 		// and reply no data available otherwise
-		LOG (ERROR)<< "File \"" << path << "\" is not available locally." << "\n";
+		LOG (ERROR)<< "File \"" << path << "\" is not available locally. File status = \"" << managed_file->state() << "\"\n";
 		managed_file->close();
 		return NULL;
 	}
@@ -335,12 +338,12 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	handle = filemgmt::FileSystemManager::instance()->dfsOpenFile(
 			fsDescriptor, fqp.c_str(), flags, bufferSize, replication,
 			blocksize, available);
-	if (handle != nullptr && available) {
+	if (handle != NULL && available) {
 		// file is available locally, just reply it back:
 		LOG (INFO) << "dfsOpenFile() : \"" << path << "\" is opened successfully.";
 		return handle;
 	}
-	LOG (ERROR)<< "File \"" << path << "\" is not available" << "\n";
+	LOG (ERROR)<< "File \"" << path << "\" is not available. File status = \"" << managed_file->state() << "\"\n";
 	// no close will be performed on non-successful open
 	managed_file->close();
 	return handle;
@@ -377,7 +380,7 @@ static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescrip
 
 	// locate the remote filesystem adaptor:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if (fsAdaptor == nullptr) {
+	if (!fsAdaptor) {
 		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 		fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -410,7 +413,7 @@ status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, d
 	// handle scenario with "directly opened" handle:
 	if(file->direct){
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-		if(fsAdaptor == nullptr){
+		if(!fsAdaptor){
 			LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 					fsDescriptor.host << "\"" << "\n";
 			// no namenode adaptor configured
@@ -468,7 +471,7 @@ status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, cons
 	// try look for file remotely:
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if(fsAdaptor == nullptr){
+	if(!fsAdaptor){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -503,7 +506,7 @@ tSize dfsRead(const FileSystemDescriptor & fsDescriptor, dfsFile file, void* buf
 	// handle scenario with "directly opened" handle:
 	if(file->direct){
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-		if(fsAdaptor == nullptr){
+		if(!fsAdaptor){
 			LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 					fsDescriptor.host << "\"" << "\n";
 			// no namenode adaptor configured
@@ -525,7 +528,7 @@ tSize dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset 
 	// handle scenario with "directly opened" handle:
 	if(file->direct){
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-		if(fsAdaptor == nullptr){
+		if(!fsAdaptor){
 			LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 					fsDescriptor.host << "\"" << "\n";
 			// no namenode adaptor configured
@@ -561,7 +564,7 @@ tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const vo
 
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if(fsAdaptor == nullptr){
+	if(!fsAdaptor){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -606,7 +609,7 @@ status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const
 	// locate the remote filesystem adaptor for source host:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorSource =
 			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor1));
-	if(fsAdaptorSource == nullptr){
+	if(!fsAdaptorSource){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
 				fsDescriptor1.host << "\"" << "\n";
 		// no file system adaptor configured
@@ -623,7 +626,7 @@ status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const
 	// locate the remote filesystem adaptor for source host:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorDestination =
 			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor2));
-	if(fsAdaptorDestination == nullptr){
+	if(!fsAdaptorDestination){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
 				fsDescriptor1.host << "\"" << "\n";
 		// no file system adaptor configured
@@ -661,7 +664,7 @@ status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, cons
 
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if(fsAdaptor == nullptr){
+	if(!fsAdaptor){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -707,7 +710,7 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 
 	// locate the remote filesystem adaptor:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if (fsAdaptor == nullptr) {
+	if (!fsAdaptor) {
 		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 		fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -767,7 +770,7 @@ dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const cha
 	LOG (INFO) << "getPathInfo() for \"" << path << "\".\n";
 	// We always get statistics from remote side:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
-	if (fsAdaptor == nullptr) {
+	if (!fsAdaptor) {
 		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 		fsDescriptor.host << "\"" << "\n";
 		// no namenode adaptor configured
@@ -831,7 +834,7 @@ void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct
 int64_t getDefaultBlockSize(const FileSystemDescriptor& fsDescriptor){
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 
-	if (fsAdaptor == nullptr) {
+	if (!fsAdaptor) {
 		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
 		// no remote fs adaptor configured
