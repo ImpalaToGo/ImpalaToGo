@@ -15,7 +15,8 @@ How to try: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
 
 Short presentation on ImpalaToGo architecture: http://www.slideshare.net/DavidGroozman/impala-togo-introduction
 
-
+###  What we add to Cloudera Impala?
+We are developing caching layer which use local drives to cache access to remote storage. Its advantage can be easy to be seen when working with S3.
 
 Development environment prerequisites (Ubuntu)
 ----
