@@ -5,13 +5,11 @@ A standalone distribution of Impala, optimized to work with cloud storage, bypas
 
 ### Why ImpalaToGo
 ----
->1. Remove the hard dependency to hdfs for those who want impala running for other distributed filesystems.
-2. Run fast queries on your machine without any extra setup. Hive metastore service is enough prerequisite to start work with impala, no extra installations/configurations required.
-3. No dependency on hdfs, thus, data locality is emulated via new layer, the cache, and is achieved via adaptive algorithms to map remote dfs data to impala cluster nodes cache.
-4. Transparent interaction with user via new set of commands. All operations are user-driven and user-friendly. 
-5. All shell commands along with impala cluster statistics are available via web interface.
-6. Potential integration with any distributed file system via the compatible plugin.
-7. ImpalaToGo has a lot of ideas so far to make impala usage simple!
+>1. It is Impala without hadoop. You can take advantage of its fast query engine without managing whole hadoop stack.
+2. Optimized work with S3. ImpalaToGo transparently cache data on local drives.
+3. Actually only open source MPP database written in C++
+4. It gives you almost the same capabilities as Hive over S3, but much faster.
+
  
 
 
