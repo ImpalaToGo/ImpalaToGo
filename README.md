@@ -1,7 +1,7 @@
 ImpalaToGo
 ==========
 
-A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.
+Fork of Cloudera Impala, separated from hadoop. It is optimized to work with S3 storage by caching data locally.
 
 ### Why ImpalaToGo
 ----
@@ -11,6 +11,10 @@ A standalone distribution of Impala, optimized to work with cloud storage, bypas
 4. It gives you almost the same capabilities as Hive over S3, but much faster.
 
  
+How to try: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
+
+Short presentation on ImpalaToGo architecture: http://www.slideshare.net/DavidGroozman/impala-togo-introduction
+
 
 
 Development environment prerequisites (Ubuntu)
