@@ -22,11 +22,8 @@
           <h2 id="project_tagline">A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.</h2>
 
             <section id="downloads">
-	      <a class="how_to_link" href="https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try">How To Try</a>
-<!--
               <a class="zip_download_link" href="https://github.com/ImpalaToGo/ImpalaToGo/zipball/master">Download this project as a .zip file</a>
               <a class="tar_download_link" href="https://github.com/ImpalaToGo/ImpalaToGo/tarball/master">Download this project as a tar.gz file</a>
--->
             </section>
         </header>
     </div>
@@ -37,7 +34,7 @@
         <h1>
 <a id="impalatogo" class="anchor" href="#impalatogo" aria-hidden="true"><span class="octicon octicon-link"></span></a>ImpalaToGo</h1>
 
-<p>A standalone distribution of Impala, optimized to work with cloud storage, bypassing HDFS completely.</p>
+<p>Fork of Cloudera Impala, separated from hadoop. It is optimized to work with S3 storage by caching data locally.</p>
 
 <h3>
 <a id="why-impalatogo" class="anchor" href="#why-impalatogo" aria-hidden="true"><span class="octicon octicon-link"></span></a>Why ImpalaToGo</h3>
@@ -46,22 +43,22 @@
 
 <blockquote>
 <ol>
-<li>Remove the hard dependency to hdfs for those who want impala running for other distributed filesystems.</li>
-<li>Run fast queries on your machine without any extra setup. Hive metastore service is enough prerequisite to start work with impala, no extra installations/configurations required.</li>
-<li>No dependency on hdfs, thus, data locality is emulated via new layer, the cache, and is achieved via adaptive algorithms to map remote dfs data to impala cluster nodes cache.</li>
-<li>Transparent interaction with user via new set of commands. All operations are user-driven and user-friendly. </li>
-<li>All shell commands along with impala cluster statistics are available via web interface.</li>
-<li>Potential integration with any distributed file system via the compatible plugin.</li>
-<li>ImpalaToGo has a lot of ideas so far to make impala usage simple!</li>
+<li>It is Impala without hadoop. You can take advantage of its fast query engine without managing whole hadoop stack.</li>
+<li>Optimized work with S3. ImpalaToGo transparently cache data on local drives.</li>
+<li>Actually only open source MPP database written in C++</li>
+<li>It gives you almost the same capabilities as Hive over S3, but much faster.</li>
 </ol>
 </blockquote>
-<h2>
 
-<a id="how-to-try" class="anchor"href="#how-to-try" aria-hidden="true">
-<span class="octicon octicon-link"></span></a>How To Try
-</h2>
-<div > It's easy! Just follow instructions on <a href="https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try"> Wiki</a>
-</div>
+<p>How to try: <a href="https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try">https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try</a></p>
+
+<p>Short presentation on ImpalaToGo architecture: <a href="http://www.slideshare.net/DavidGroozman/impala-togo-introduction">http://www.slideshare.net/DavidGroozman/impala-togo-introduction</a></p>
+
+<h3>
+<a id="what-we-add-to-cloudera-impala" class="anchor" href="#what-we-add-to-cloudera-impala" aria-hidden="true"><span class="octicon octicon-link"></span></a>What we add to Cloudera Impala?</h3>
+
+<p>We are developing caching layer which use local drives to cache access to remote storage. Its advantage can be easy to be seen when working with S3.</p>
+
 <h2>
 <a id="development-environment-prerequisites-ubuntu" class="anchor" href="#development-environment-prerequisites-ubuntu" aria-hidden="true"><span class="octicon octicon-link"></span></a>Development environment prerequisites (Ubuntu)</h2>
 
@@ -189,7 +186,8 @@ mvn -version</pre></div>
 <div class="highlight highlight-sh"><pre><span class="pl-s">export</span> JAVA_HOME=/usr/lib/jvm/java-7-oracle
 <span class="pl-s">export</span> IMPALA_HOME=YOUR_PATH/ImpalaToGo
 <span class="pl-s">export</span> BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
-<span class="pl-s">export</span> LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu</pre></div>
+<span class="pl-s">export</span> LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+<span class="pl-s">export</span> LC_ALL=<span class="pl-s1"><span class="pl-pds">"</span>en_US.UTF-8<span class="pl-pds">"</span></span></pre></div>
 
 <p>and then run</p>
 
@@ -320,7 +318,7 @@ bin/hive --service metastore</pre></div>
 <p><a href="http://www.apache.org/licenses/LICENSE-2.0.htm">Apache License</a></p>
 
 <h4>
-<a id="2014" class="anchor" href="#2014" aria-hidden="true"><span class="octicon octicon-link"></span></a>2014</h4>
+<a id="2014-2015" class="anchor" href="#2014-2015" aria-hidden="true"><span class="octicon octicon-link"></span></a>2014-2015</h4>
       </section>
     </div>
 
