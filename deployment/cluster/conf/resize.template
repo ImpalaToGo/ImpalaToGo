@@ -1,13 +1,16 @@
-IMAGE_ID=ami-da8ec8b2
+IMAGE_ID=ami-b48ac0dc
 SECURITY_GROUP_IDS=sg-0f43ba62
-INSTANCE_TYPE=m3.2xlarge
-KEY_NAME=ImpalaToGo
-PRIVATE_KEY=ImpalaToGo.pem
-SECURITY_GROUP=impala2go-slave
+INSTANCE_TYPE=m3.large
+KEY_NAME=KEY_NAME_PLACE
+PRIVATE_KEY=KEY_FILE_NAME_PLACE
+SECURITY_GROUP_SLAVE=impala2go-slave
+SECURITY_GROUP_MASTER=impala2go-master
 ACCESS_KEY=ACCESS_KEY_PLACE
 SECRET_KEY=SECRET_KEY_PLACE
+S3_BUCKET=S3_BUCKET_PLACE
 
-
+MASTER_PORTS="80 22 22000 23000 25000 25010 25020 24000 28000 15002 26000 15000 15001"
+SLAVE_PORTS="21050 22000 21000 25000"
 
 BASE_NAME=impala2go
 IMPALA_TO_GO_CACHE=/var/cache/$BASE_NAME
@@ -56,8 +59,10 @@ function wait_lock(){
 }
 
 function take_lock(){
+	echo taking lock $LOCK_FILE
 	wait_lock
 	touch $LOCK_FILE
+	echo lock acquired
 }
 
 function release_lock(){
@@ -71,4 +76,4 @@ function handle_external_termination(){
 	exit 1
 }
 trap handle_external_termination SIGHUP SIGINT SIGTERM
-echo $($LOG_PREFIX) ------------------------Staring cluster $BATCH_ID manipulation-------------------------- |$LOG_APPEND
+echo $($LOG_PREFIX) ------------------------Staring cluster manipulation |$LOG_APPEND

@@ -18,7 +18,18 @@ function create_group(){
 	echo $id
 }
 function get_or_create_security_group(){
-	GROUP_NAME=$1
+	local GROUP_NAME=$1
+        
+	local _MASTER=$2
+	if [ -z "$_MASTER" ]
+	then	
+        	local REQUIRED_PORTS=$MASTER_PORTS
+	else
+        	local REQUIRED_PORTS=$SLAVE_PORTS
+	fi
+
+#	echo get_or_create_security_group called for group name$GROUP_NAME=   and ports $REQUIRED_PORTS
+
 	shift
 	if [ -z $GROUP_NAME -o ! -z "$DRY_RUN" ]; then
 	        echo error
@@ -29,8 +40,7 @@ function get_or_create_security_group(){
 		GROUP_ID=$(create_group)
 	fi
 
-	local ALLOWED_PORTS=$($AWS_CMD describe-security-groups --group-names $GROUP_NAME|grep IPPERMISSIONS|grep tcp|cut -f4)
-	local REQUIRED_PORTS="80 22 22000 23000 25000 25010 25020 24000 28000 15002 26000 15000 15001"
+        local ALLOWED_PORTS=$($AWS_CMD describe-security-groups --group-names $GROUP_NAME|grep IPPERMISSIONS|grep tcp|cut -f4)
 
 	for port in $REQUIRED_PORTS; do
 		if [ -z "$(echo "$ALLOWED_PORTS" |grep $port)" ];

@@ -19,15 +19,22 @@ eval sed -e 's/ACCESS_KEY/${ACCESS_KEY}/g' -e 's/SECRET_KEY/${SECRET_KEY}/g' -e 
 eval sed -e 's/ACCESS_KEY/${ACCESS_KEY}/g' -e 's/SECRET_KEY/${SECRET_KEY}/g' $SCRIPTPATH/conf/hive-site.template > hive-site.xml
 eval sed 's/MASTER_DNS/${MASTER_DNS}/g' $SCRIPTPATH/conf/impala_defaults.template >impala
 
+eval sed -e 's/ACCESS_KEY/${ACCESS_KEY}/g' -e 's/SECRET_KEY/${SECRET_KEY}/g' -e 's/S3_BACKET/${S3_BACKET}/g'  $SCRIPTPATH/conf/core-site.template > core-site.xml
+eval sed -e 's/ACCESS_KEY_PLACE/${ACCESS_KEY}/g' -e 's/SECRET_KEY_PLACE/${SECRET_KEY}/g'  -e 's/S3_BACKET_PLACE/${S3_BACKET}/g'  $SCRIPTPATH/conf/resize.template > $SCRIPTPATH/cluster/resize.config
 
 sudo cp hdfs-site.xml /etc/impala/conf
 sudo cp hive-site.xml /etc/hive/conf/
+sudo cp hive-site.xml /etc/impala/conf/
+
 sudo cp hive-site.xml /etc/alternatives/hive-conf/
 sudo cp impala /etc/default/
+sudo cp core-site.xml /etc/impala/
+
 
 rm hdfs-site.xml
 rm hive-site.xml
 rm impala
+rm core-site.xml
 
 
 $SCRIPTPATH/linkEphimerialDrive.sh
