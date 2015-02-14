@@ -3,6 +3,7 @@
 DEVICES="$(ls /dev/xvd[b-z])"
 RAID_DEVICE=raid0
 MOUNTPOINT=/dbcache
+FSTYPE=ext4
 function unmount_device(){
         local device=$1
         local mounted=$(mount|grep -o $device)
@@ -32,7 +33,7 @@ function prepare_mount_point(){
 function format_device()
 {
 	local device=$1
-	mkfs.ext4 -c $device
+	mkfs.$FSTYPE -c $device
 }
 
 function create_array()
@@ -41,6 +42,7 @@ function create_array()
 	yes|mdadm --create --level=0 -n $COUNT $RAID_DEVICE $DEVICES
 
 }
+mount -a
 raid_mounted=$(mount|grep -o $RAID_DEVICE)
 if [ ! -z "$raid_mounted" ]
 then
@@ -60,9 +62,10 @@ prepare_mount_point $MOUNTPOINT
 NUMBER_ATTACHED_DEVICES=$(ls $DEVICES 2>/dev/null|wc -w)
 if [ $NUMBER_ATTACHED_DEVICES -gt 1 ];
 then
-	#Create raid if more than one device mounted
+	#Create raid if more than one device attached
 	create_array
-	DEVICE_PATH=/dev/md/$RAID_DEVICE
+	#TODO: Fix this to be generic. i.e. support more than one raid device (WHY ?)
+	DEVICE_PATH=$(ls /dev/md/md*|head -1)
 else
 	#There is at most one device in the list, 
 	#discover which one and use it for mounting
@@ -73,6 +76,9 @@ if [ ! -z "$DEVICE_PATH" ];
 then
 	format_device $DEVICE_PATH
 	mount -t auto $DEVICE_PATH $MOUNTPOINT
+	#Create a record in FSTAB and delete obsolete ephemeral records
+	sed -i s/".*ephemeral.*"/""/ /etc/fstab 
+	echo "$DEVICE_PATH $MOUNTPOINT $FSTYPE defaults 0 0"|tee -a /etc/fstab
 fi
 
 ls $MOUNTPOINT

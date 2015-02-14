@@ -1,0 +1,22 @@
+function run_cmd_on_all()
+{
+local _CMD="$1"
+for _host in $(cat $CLUSTER_HOSTS);
+do
+	echo $_host
+	ssh $SSH_PARAMS ec2-user@$_host "$_CMD" &
+done
+wait
+}
+
+function copy_to_all()
+{
+local _src="$1"
+local _dest="$2"
+for _host in $(cat $CLUSTER_HOSTS);
+do
+        echo $_host
+        scp -v $SCP_PARAMS "$_src" ec2-user@$_host:$_dest 
+done
+wait
+}
