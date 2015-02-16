@@ -247,7 +247,7 @@ bool FileSystemLRUCache::reload(const std::string& root){
     return true;
 }
 
-managed_file::File* FileSystemLRUCache::find(std::string path) {
+managed_file::File* FileSystemLRUCache::find(const std::string& path) {
     	// first find the file within the registry
     	managed_file::File* file = m_idxFileLocalPath->operator [](path);
 
@@ -296,7 +296,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	return file;
     }
 
-bool FileSystemLRUCache::add(std::string path, managed_file::File*& file, managed_file::NatureFlag creationFlag){
+bool FileSystemLRUCache::add(const std::string& path, managed_file::File*& file, managed_file::NatureFlag creationFlag){
     	bool duplicate = false;
     	bool success   = false;
 
