@@ -87,14 +87,14 @@ class CacheLayerTest : public ::testing::Test {
     }
 
     inline void printStat(){
-  	  SCOPED_TRACE(testing::Message() << "Tear down\n***********************\n Total number of opened file handles : \"" <<
+    	std::cout << "Tear down\n***********************\n Total number of opened file handles : \"" <<
   			  std::to_string(m_total_handles.load()) << "\";\n" <<
   			  "Number of direct file handles : \"" <<
   			  std::to_string(m_direct_handles.load()) << "\";\n" <<
   			  "Number of zero handles : \"" <<
   			  std::to_string(m_zero_handles.load()) << "\";\n" <<
   			  "Number of cached handles : \"" <<
-  			  std::to_string(m_cached_handles.load()) << "\".");
+  			  std::to_string(m_cached_handles.load()) << "\".";
     }
 
 	virtual void SetUp() {
@@ -113,7 +113,7 @@ class CacheLayerTest : public ::testing::Test {
 
 		boost::system::error_code ec;
 
-		SCOPED_TRACE(testing::Message() << "Reset the cache... \"" << m_cache_path << "\"");
+		std::cout << "Reset the cache... \"" << m_cache_path << "\"";
 
 		// clean cache directory before usage:
 		boost::filesystem::remove_all(m_cache_path, ec);
@@ -123,7 +123,7 @@ class CacheLayerTest : public ::testing::Test {
 		boost::filesystem::create_directory(m_cache_path, ec);
 		ASSERT_TRUE(!ec);
 
-		SCOPED_TRACE(testing::Message() << "Check dataset location exist... \"" << m_dataset_path << "\"");
+		std::cout << "Check dataset location exist... \"" << m_dataset_path << "\"";
 	    // first check working directories exist:
 		ASSERT_TRUE(boost::filesystem::exists(m_dataset_path.c_str(), ec));
 		SCOPED_TRACE(ec.message());
@@ -132,12 +132,12 @@ class CacheLayerTest : public ::testing::Test {
 		SCOPED_TRACE(ec.message());
 		ASSERT_TRUE(!ec);
 
-		SCOPED_TRACE("Working directories exist.");
+		std::cout << "Working directories exist.";
 
 		m_direct_handles.store(0l);
 		m_cached_handles.store(0l);
 		m_zero_handles.store(0l);
-		m_total_handles.store(0l);
+		m_total_handles.store(0l );
   }
 
   virtual void TearDown() {

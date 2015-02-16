@@ -42,7 +42,7 @@ static void collectFileHandleStat(dfsFile file,
 	if(file == NULL){
 		// increment zero handles
 		zero_handles.fetch_add(1l);
-		SCOPED_TRACE("Null file handle");
+		std::cout << "Null file handle";
 		return;
 	}
 	// increment total handles
@@ -142,7 +142,7 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
 	data_location.copy(filename, data_location.length() + 1, 0);
 
-	SCOPED_TRACE("Test data is validated and is ready");
+	std::cout << "Test data is validated and is ready";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -153,7 +153,7 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	status::StatusInternal status0 = status::StatusInternal::OK;
 	status::StatusInternal status1;
@@ -242,7 +242,7 @@ TEST_F(CacheLayerTest, OpenCloseSporadicFileHeavyLoadManagedAsync) {
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	const int CONTEXT_NUM = 10;
 
@@ -294,7 +294,7 @@ TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
 	data_location.copy(filename, data_location.length() + 1, 0);
 
 
-	SCOPED_TRACE("Test data is validated and is ready");
+	std::cout << "Test data is validated and is ready";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -305,7 +305,7 @@ TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	const int CONTEXT_NUM = 50;
 
@@ -351,7 +351,7 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 
 	ASSERT_TRUE(boost::filesystem::exists(src, ec));
 
-	SCOPED_TRACE("Test data is validated and is ready");
+	std::cout << "Test data is validated and is ready";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -362,7 +362,7 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	std::string dst_location = m_cache_path + constants::TEST_SINGLE_FILE_FROM_DATASET;
 	char dst[256];
@@ -421,6 +421,37 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 }
 
 /**
+ * Test opening of non-existing file.
+ * Test succeeds in case if file handle is NULL and file is marked as "not available"
+ */
+TEST_F(CacheLayerTest, OpenNonExistingFile) {
+	boost::system::error_code ec;
+
+	// compose non-existing path:
+	std::string data_location = m_dataset_path + constants::TEST_SINGLE_FILE_FROM_DATASET + "_";
+	char path[256];
+	memset(path, 0, 256);
+	data_location.copy(path, data_location.length() + 1, 0);
+
+	char filename[256];
+	memset(filename, 0, 256);
+	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
+	data_location.copy(filename, data_location.length() + 1, 0);
+
+    std::cout << "Test data is validated and is ready" << std::endl;
+	SCOPED_TRACE("Test data is validated and is ready");
+
+	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
+			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
+	cacheConfigureFileSystem(m_dfsIdentitylocalFilesystem);
+
+	bool available;
+	dfsFile file = dfsOpenFile(m_dfsIdentitylocalFilesystem, filename, O_RDONLY, 0, 0, 0, available);
+    // check that the file handle is not available
+	ASSERT_TRUE(!available && (file == NULL));
+}
+
+/**
  * General validation for data accessed via cache layer.
  *
  * Scenario :
@@ -443,7 +474,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
-    SCOPED_TRACE("Dataset is validated and is ready");
+    std::cout << "Dataset is validated and is ready";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -454,7 +485,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	// get the list of all files within the specified dataset:
 	int entries;
@@ -478,6 +509,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 			// open file, say its local one:
 			bool available;
 			file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+			collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
 			ASSERT_TRUE((file != NULL) && available);
 
 			// open "target" file:
@@ -517,7 +549,7 @@ TEST_F(CacheLayerTest, TestPrepareDataSetCompareResult){
 	for(int iteration = 0; iteration < 2; iteration++)
 		scenario();
 
-	SCOPED_TRACE("Test is near to complete, cleanup...");
+	std::cout << "Test is near to complete, cleanup...";
 
     // free file info:
     fsAdaptor.freeFileInfo(files, entries);
@@ -556,7 +588,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
-    SCOPED_TRACE("Dataset is validated and is ready");
+    std::cout << "Dataset is validated and is ready";
 
 	// Initialize cache with 1 Mb
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
@@ -570,7 +602,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	// get the list of all files within the specified dataset:
 	int entries;
@@ -601,6 +633,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     	path = path.insert(path.find_first_of("/"), "/");
 
     	file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str() , O_RDONLY, 0, 0, 0, available);
+    	collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
     	ASSERT_TRUE((file != NULL) && available);
 
     	// increase cached data size
@@ -679,12 +712,12 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
     ASSERT_TRUE(preserved_handle != nullptr);
     ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, preserved_handle) == 0);
 
-    SCOPED_TRACE("Going to run comparison for preserved file");
+    std::cout << "Going to run comparison for preserved file";
 
     // run the file comparison for preserved iteration:
     scenario(preserved_iteration);
 
-    SCOPED_TRACE("Going to run second dataset validation iteration");
+    std::cout << "Going to run second dataset validation iteration";
 
     // and re-run all dataset check completely (another one cache reload):
     for(int i = 0 ; i < entries; i++){
@@ -697,7 +730,7 @@ TEST_F(CacheLayerTest, TestCacheAgebucketSpanReduction){
         ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, file) == 0);
     }
 
-    SCOPED_TRACE("Test is near to complete, cleanup...");
+    std::cout << "Test is near to complete, cleanup...";
 
     // free file info:
     fsAdaptor.freeFileInfo(files, entries);
@@ -710,7 +743,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
     double overlap_ratio = 1.5;
     ASSERT_TRUE(dataset_size / overlap_ratio >= constants::TEST_CACHE_FIXED_SIZE);
 
-    SCOPED_TRACE("Dataset is validated and is ready");
+    std::cout << "Dataset is validated and is ready";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, constants::TEST_CACHE_DEFAULT_LOCATION,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -721,7 +754,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	SCOPED_TRACE("Localhost filesystem adaptor is ready");
+	std::cout << "Localhost filesystem adaptor is ready";
 
 	// get the list of all files within the specified dataset:
 	int entries;
@@ -750,6 +783,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 		// open file, say its local one:
 		bool available;
 		file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.c_str(), O_RDONLY, 0, 0, 0, available);
+		collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
 		ASSERT_TRUE((file != NULL) && available);
 
 		// preserve opened handle
@@ -799,6 +833,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
   				bool available;
 
   				file = dfsOpenFile(m_dfsIdentitylocalFilesystem, path.insert(path.find_first_of("/"), "/").c_str(), O_RDONLY, 0, 0, 0, available);
+  				collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
 	    		// check that we got direct handle to the file:
 	    		ASSERT_TRUE((file != NULL) && available && file->direct);
 
@@ -842,7 +877,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 		if(handle != NULL)
 			ASSERT_TRUE(dfsCloseFile(m_dfsIdentitylocalFilesystem, handle) == 0);
 
-	SCOPED_TRACE("Test is near to complete, cleanup...");
+	std::cout << "Test is near to complete, cleanup...";
 
     // free file info:
     fsAdaptor.freeFileInfo(files, entries);
