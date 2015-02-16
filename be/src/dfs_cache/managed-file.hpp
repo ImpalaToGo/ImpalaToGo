@@ -226,7 +226,8 @@ namespace managed_file {
 
 	   /** flag, indicates that the file is in valid state and can be used */
 	   inline bool exists() {
-		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
+		   return ((m_state == State::FILE_HAS_CLIENTS) || (m_state == State::FILE_IS_IDLE)) &&
+				   ((m_filenature == NatureFlag::PHYSICAL) || (m_filenature == NatureFlag::FOR_WRITE));
 	   }
 
 	   /** flag, indicates whether the file was resolved by registry */
@@ -300,7 +301,7 @@ namespace managed_file {
 		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
 			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
 		   // fire the condition variable for whoever waits for file status to be changed:
-		   m_state.store(state, std::memory_order_release);
+		   m_state.exchange(state, std::memory_order_release);
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);
 		   m_state_changed_condition.notify_all();
 	   }
