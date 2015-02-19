@@ -25,7 +25,7 @@ bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 		std::lock_guard<std::mutex> lock(m_deletionsmux);
 
 		// add the item into deletions list
-		m_deletionList.push_back(file->fqp());
+		m_deletionList.push_back(path);
 	}
 	// notify deletion action is scheduled
 	m_deletionHappensCondition.notify_all();
@@ -241,8 +241,10 @@ bool FileSystemLRUCache::reload(const std::string& root){
         managed_file::File* file;
     	// and add it into the cache
     	add(lp, file, managed_file::NatureFlag::PHYSICAL);
-    	// and mark the file as "idle":
-    	file->state(managed_file::State::FILE_IS_IDLE);
+    	if(file != nullptr){
+    		// and mark the file as "idle":
+    		file->state(managed_file::State::FILE_IS_IDLE);
+    	}
     }
     return true;
 }
@@ -273,6 +275,7 @@ managed_file::File* FileSystemLRUCache::find(const std::string& path) {
         	);
         	lock.unlock();
 
+        	LOG(WARNING) << "File \"" << path << "\" is going to be reclaimed. " << "\n";
         	// reclaim the file:
         	file = m_idxFileLocalPath->operator [](path);
         	if(file == nullptr)
@@ -310,12 +313,12 @@ bool FileSystemLRUCache::add(const std::string& path, managed_file::File*& file,
     	success = LRUCache<managed_file::File>::add(file, duplicate);
     	if(duplicate){
     		LOG(WARNING) << "Attempt to add the duplicate to the cache, path = \"" << path << "\"\n";
-    		// no need for this file, get the rid of
-    		delete file;
     	}
 
-    	if(!success)
+    	if(!success){
     		LOG (WARNING) << "new file \"" << path << "\" could not be added into the cache, reason : no free space available.\n";
+    		file = nullptr;
+    	}
     	return success;
 }
 

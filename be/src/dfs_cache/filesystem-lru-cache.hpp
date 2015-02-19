@@ -121,7 +121,7 @@ private:
      *
      * @return constructed file object if its has correct configuration and nullptr otherwise
      */
-    managed_file::File* constructNew(const std::string& path){
+    managed_file::File* constructNew(const std::string path){
     	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate,
     			managed_file::NatureFlag::AMORPHOUS, m_getFileInfoPredicate, m_freeFileInfoPredicate);
      	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){

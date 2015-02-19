@@ -280,6 +280,11 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 			|| !managed_file->valid()) {
 		LOG (WARNING)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 
+		std::string direct_path(path);
+		direct_path.insert(direct_path.find_first_of("/"), "/");
+
+		LOG (INFO)<< "File \"/" << "/" << direct_path << "\" will be opened directly." << "\n";
+
 		// open the file directly from target:
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 		if (!fsAdaptor ) {
@@ -295,7 +300,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 					fsDescriptor.host << "\"" << "\n";
 			return NULL;
 		}
-		handle = fsAdaptor->fileOpen(connection, path, flags, bufferSize, replication, blocksize);
+
+		handle = fsAdaptor->fileOpen(connection, direct_path.c_str(), flags, bufferSize, replication, blocksize);
 		if(handle != NULL){
 			// mark this handle as "direct"
 			handle->direct = true;
@@ -495,10 +501,53 @@ status::StatusInternal dfsExists(const FileSystemDescriptor & fsDescriptor, cons
 }
 
 status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset desiredPos) {
+	if(file->direct){
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+		if(!fsAdaptor){
+			LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+					fsDescriptor.host << "\"" << "\n";
+			// no namenode adaptor configured
+			return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+		}
+
+	    raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	    if(!connection.valid()) {
+	    	LOG (ERROR) << "No connection to dfs available, unable to seek the file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+	    			fsDescriptor.host << "\"" << "\n";
+	    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+	    }
+
+	    int ret = fsAdaptor->fileSeek(connection, file, desiredPos);
+		if(ret != 0){
+			LOG (INFO) << "File seek failed on FileSystem \""
+					<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+		}
+		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+	}
 	return filemgmt::FileSystemManager::instance()->dfsSeek(fsDescriptor, file, desiredPos);
 }
 
 tOffset dfsTell(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	if (file->direct) {
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor =
+				(*CacheLayerRegistry::instance()->getFileSystemDescriptor(
+						fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no namenode adaptor configured
+			return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to seek the file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+		}
+		return fsAdaptor->fileTell(connection, file);
+	}
+
 	return filemgmt::FileSystemManager::instance()->dfsTell(fsDescriptor, file);
 }
 
