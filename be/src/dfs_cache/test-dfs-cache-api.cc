@@ -148,10 +148,11 @@ static void open_seek_read_compare_close_file(std::string& path,
 	ASSERT_TRUE(conn.connection() != NULL);
 
 	// open "cached" file:
+	std::string cache_path = constants::TEST_LOCALFS_PROTO_PREFFIX + path;
 	bool available;
-	dfsFile file = dfsOpenFile(fsDescriptor, (constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), O_RDONLY, 0, 0, 0, available);
+	dfsFile file = dfsOpenFile(fsDescriptor, cache_path.c_str(), O_RDONLY, 0, 0, 0, available);
 	collectFileHandleStat(file, direct_handles, cached_handles, zero_handles, total_handles);
-	ASSERT_TRUE((file != nullptr) && !available);
+	ASSERT_TRUE((file != NULL) && available);
 
 	// open "target" file:
 	// and add an extra slash to have the uri "file:///path"
@@ -282,7 +283,6 @@ static void open_seek_read_compare_close_file_sporadic(const FileSystemDescripto
     ASSERT_TRUE(!path.empty());
     std::cout << "osrcc : file selected : \"" << path << "\"." << std::endl;
 
-    // add the file:// suffix:
     open_seek_read_compare_close_file(path, fsDescriptor,
     		direct_handles, cached_handles, zero_handles, total_handles);
 }

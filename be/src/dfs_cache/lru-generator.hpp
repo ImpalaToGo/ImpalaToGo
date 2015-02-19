@@ -57,11 +57,8 @@ $generator(lru_gen)
 		m_currentItem = m_predicateNext(m_idx, m_currentItem);
 
 		if(m_currentItem){
-			LOG(INFO) << "lru_gen : current item is yield" << ".\n";
 			$yield(m_currentItem);
 		}
-		else
-			LOG(INFO) << "lru_gen : current item is nullptr" << ".\n";
 	} while(m_currentItem); // and then until we have valid items produced
 
 	$stop; // stop. End of coroutine body.

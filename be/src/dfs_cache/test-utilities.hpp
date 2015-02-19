@@ -124,7 +124,7 @@ Item getRandomFromVector(const std::vector<Item>& dataset ){
 	// Also do not assume the system clock has that accuracy.
 	srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
 
-	size_t len = dataset.size() - 1;
+	size_t len = dataset.size();
     return dataset[rand() % len];
 }
 
