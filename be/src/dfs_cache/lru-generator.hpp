@@ -52,12 +52,14 @@ $generator(lru_gen)
 
 	$emit(ItemType_) // declare that we are going to emit items of type ItemType_
 
-	{
+	do{
 		// first go with default current item
 		m_currentItem = m_predicateNext(m_idx, m_currentItem);
-		if(m_currentItem != m_predicateGetGuard())
+
+		if(m_currentItem){
 			$yield(m_currentItem);
-	} while(m_currentItem != m_predicateGetGuard()); // and then until we have valid items produced
+		}
+	} while(m_currentItem); // and then until we have valid items produced
 
 	$stop; // stop. End of coroutine body.
 };

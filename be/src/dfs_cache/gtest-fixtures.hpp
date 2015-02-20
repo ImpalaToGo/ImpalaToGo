@@ -61,7 +61,6 @@ class CacheLayerTest : public ::testing::Test {
 	/**< number of zero handles received during the test */
 	std::atomic<long> m_zero_handles;
 
-
     static void SetUpTestCase() {
   	  impala::InitGoogleLoggingSafe("Test_dfs_cache");
   	  impala::InitThreading();
@@ -87,7 +86,7 @@ class CacheLayerTest : public ::testing::Test {
     }
 
     inline void printStat(){
-    	std::cout << "Tear down\n***********************\n Total number of opened file handles : \"" <<
+  	  std::cout << "Tear down\n***********************\n Total number of opened file handles : \"" <<
   			  std::to_string(m_total_handles.load()) << "\";\n" <<
   			  "Number of direct file handles : \"" <<
   			  std::to_string(m_direct_handles.load()) << "\";\n" <<
@@ -96,7 +95,6 @@ class CacheLayerTest : public ::testing::Test {
   			  "Number of cached handles : \"" <<
   			  std::to_string(m_cached_handles.load()) << "\".";
     }
-
 	virtual void SetUp() {
 		m_cache_path   = constants::TEST_CACHE_DEFAULT_LOCATION;
 
@@ -137,7 +135,7 @@ class CacheLayerTest : public ::testing::Test {
 		m_direct_handles.store(0l);
 		m_cached_handles.store(0l);
 		m_zero_handles.store(0l);
-		m_total_handles.store(0l );
+		m_total_handles.store(0l);
   }
 
   virtual void TearDown() {

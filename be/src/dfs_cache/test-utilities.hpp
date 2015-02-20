@@ -20,6 +20,10 @@
 #include <cstdlib>
 #include <ctime>
 #include <vector>
+#include <sys/time.h>
+
+#include <boost/function.hpp>
+#include "dfs_cache/common-include.hpp"
 
 namespace impala{
 namespace constants{
@@ -111,11 +115,32 @@ extern char genRandomChar();
 extern std::string genRandomString(size_t len);
 
 template<typename Item>
-Item getRandomFromVector(std::vector<Item>& dataset ){
-	size_t len = dataset.size() - 1;
-    srand(time(0));
+Item getRandomFromVector(const std::vector<Item>& dataset ){
+	struct timeval time;
+	gettimeofday(&time,NULL);
+
+	// microsecond has 1 000 000
+	// Assuming you did not need quite that accuracy
+	// Also do not assume the system clock has that accuracy.
+	srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
+
+	size_t len = dataset.size();
     return dataset[rand() % len];
 }
+
+typedef boost::function<void(
+			const FileSystemDescriptor& fsDescriptor,
+			const std::vector<std::string>& dataset,
+			std::atomic<long>& direct_handles,
+			std::atomic<long>& cached_handles,
+			std::atomic<long>& zero_handles,
+			std::atomic<long>& total_handles)> Scenario;
+
+struct ScenarioCase{
+	Scenario scenario;
+	std::string name;
+};
+
 }
 
 

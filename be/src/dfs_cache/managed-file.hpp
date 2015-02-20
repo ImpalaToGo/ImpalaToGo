@@ -45,6 +45,12 @@ namespace managed_file {
                                          * this status to whatever next status, we count "file state changed" event subscribers.
       	  	  	  	  	  	  	  	     */
 
+      FILE_SYNC_JUST_HAPPEN,             /**< Status indicates that file sync just happen. As sync is triggered by client request,
+       	   	   	   	   	   	   	   	   	 * the client waits for sync result, thus, the file need to be available for awaiting client
+       	   	   	   	   	   	   	   	   	 * till the moment the client will "open" it. Such file couldn't be deleted by cleanup mechanism
+       	   	   	   	   	   	   	   	   	 * despite it does not have attached clients yet.
+       	   	   	   	   	   	   	   	   	 */
+
       FILE_HAS_CLIENTS,                  /**< File is being processed in client(s) context(s).
       	  	  	  	  	  	  	  	  	 * This state equals to lock for Sync manager.
       	  	  	  	  	  	  	  	     * Once all clients are finished with the file, this state will be triggered to
@@ -226,7 +232,7 @@ namespace managed_file {
 
 	   /** flag, indicates that the file is in valid state and can be used */
 	   inline bool exists() {
-		   return ((m_state == State::FILE_HAS_CLIENTS) || (m_state == State::FILE_IS_IDLE)) &&
+		   return ((m_state == State::FILE_HAS_CLIENTS) || (m_state == State::FILE_IS_IDLE) || (m_state == State::FILE_SYNC_JUST_HAPPEN)) &&
 				   ((m_filenature == NatureFlag::PHYSICAL) || (m_filenature == NatureFlag::FOR_WRITE));
 	   }
 
@@ -300,6 +306,7 @@ namespace managed_file {
 
 		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
 			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
+
 		   // fire the condition variable for whoever waits for file status to be changed:
 		   m_state.exchange(state, std::memory_order_release);
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);

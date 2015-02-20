@@ -20,12 +20,12 @@ namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// preserve path for future usage:
-	std::string path = file->fqp();
+	const std::string path = file->fqp();
 	{
 		std::lock_guard<std::mutex> lock(m_deletionsmux);
 
 		// add the item into deletions list
-		m_deletionList.push_back(file->fqp());
+		m_deletionList.push_back(path);
 	}
 	// notify deletion action is scheduled
 	m_deletionHappensCondition.notify_all();
@@ -241,13 +241,15 @@ bool FileSystemLRUCache::reload(const std::string& root){
         managed_file::File* file;
     	// and add it into the cache
     	add(lp, file, managed_file::NatureFlag::PHYSICAL);
-    	// and mark the file as "idle":
-    	file->state(managed_file::State::FILE_IS_IDLE);
+    	if(file != nullptr){
+    		// and mark the file as "idle":
+    		file->state(managed_file::State::FILE_IS_IDLE);
+    	}
     }
     return true;
 }
 
-managed_file::File* FileSystemLRUCache::find(std::string path) {
+managed_file::File* FileSystemLRUCache::find(const std::string& path) {
     	// first find the file within the registry
     	managed_file::File* file = m_idxFileLocalPath->operator [](path);
 
@@ -260,7 +262,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
 
     	// if file is under finalization already or was unable to be opened, wait while it will be finalized
     	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
-        if(under_finalization || (file->open() != status::StatusInternal::OK)){
+        if(under_finalization || (file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION)){
         	LOG(WARNING) << "File \"" << path << "\" is under finalization and cannot be used. "
         		<< 	"Waiting for it to be removed before to reinvoke its preparation.\n";
 
@@ -273,6 +275,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
         	);
         	lock.unlock();
 
+        	LOG(WARNING) << "File \"" << path << "\" is going to be reclaimed. " << "\n";
         	// reclaim the file:
         	file = m_idxFileLocalPath->operator [](path);
         	if(file == nullptr)
@@ -296,7 +299,7 @@ managed_file::File* FileSystemLRUCache::find(std::string path) {
     	return file;
     }
 
-bool FileSystemLRUCache::add(std::string path, managed_file::File*& file, managed_file::NatureFlag creationFlag){
+bool FileSystemLRUCache::add(const std::string& path, managed_file::File*& file, managed_file::NatureFlag creationFlag){
     	bool duplicate = false;
     	bool success   = false;
 
@@ -310,12 +313,12 @@ bool FileSystemLRUCache::add(std::string path, managed_file::File*& file, manage
     	success = LRUCache<managed_file::File>::add(file, duplicate);
     	if(duplicate){
     		LOG(WARNING) << "Attempt to add the duplicate to the cache, path = \"" << path << "\"\n";
-    		// no need for this file, get the rid of
-    		delete file;
     	}
 
-    	if(!success)
+    	if(!success){
     		LOG (WARNING) << "new file \"" << path << "\" could not be added into the cache, reason : no free space available.\n";
+    		file = nullptr;
+    	}
     	return success;
 }
 

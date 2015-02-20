@@ -44,7 +44,7 @@ private:
     std::string          m_root;                       /**< root directory to manage */
 
     std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
-    std::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+    std::mutex              m_deletionsmux;                /**< mux to protect deletions list */
 
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
@@ -121,7 +121,7 @@ private:
      *
      * @return constructed file object if its has correct configuration and nullptr otherwise
      */
-    managed_file::File* constructNew(std::string path){
+    managed_file::File* constructNew(const std::string path){
     	managed_file::File* file = new managed_file::File(path.c_str(), m_weightChangedPredicate,
     			managed_file::NatureFlag::AMORPHOUS, m_getFileInfoPredicate, m_freeFileInfoPredicate);
      	if(file->state() == managed_file::State::FILE_IS_FORBIDDEN){
@@ -218,7 +218,7 @@ public:
      *
      * @return file if one found, nullptr otherwise
      */
-    managed_file::File* find(std::string path);
+    managed_file::File* find(const std::string& path);
 
     /** reset the cache */
     void reset() {
@@ -232,7 +232,7 @@ public:
      *
      * @return indication of fact that file is in the registry
      */
-    bool add(std::string path, managed_file::File*& file, managed_file::NatureFlag creationFlag);
+    bool add(const std::string& path, managed_file::File*& file, managed_file::NatureFlag creationFlag);
 
     /** remove the file from cache by its local path
      * @param path - local path of file to be removed from cache
