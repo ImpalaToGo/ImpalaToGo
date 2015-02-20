@@ -20,7 +20,7 @@ namespace impala{
 
 bool FileSystemLRUCache::deleteFile(managed_file::File* file, bool physically){
 	// preserve path for future usage:
-	std::string path = file->fqp();
+	const std::string path = file->fqp();
 	{
 		std::lock_guard<std::mutex> lock(m_deletionsmux);
 
@@ -262,7 +262,7 @@ managed_file::File* FileSystemLRUCache::find(const std::string& path) {
 
     	// if file is under finalization already or was unable to be opened, wait while it will be finalized
     	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
-        if(under_finalization || (file->open() != status::StatusInternal::OK)){
+        if(under_finalization || (file->state() == managed_file::State::FILE_IS_MARKED_FOR_DELETION)){
         	LOG(WARNING) << "File \"" << path << "\" is under finalization and cannot be used. "
         		<< 	"Waiting for it to be removed before to reinvoke its preparation.\n";
 

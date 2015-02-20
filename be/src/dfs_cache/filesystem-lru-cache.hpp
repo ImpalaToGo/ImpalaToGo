@@ -44,7 +44,7 @@ private:
     std::string          m_root;                       /**< root directory to manage */
 
     std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
-    std::mutex           m_deletionsmux;                /**< mux to protect deletions list */
+    std::mutex              m_deletionsmux;                /**< mux to protect deletions list */
 
     std::list<std::string> m_deletionList;                /**< list of pending deletion */
 
