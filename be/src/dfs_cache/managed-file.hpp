@@ -249,6 +249,9 @@ namespace managed_file {
 	   /** change the file nature */
 	   inline void nature(NatureFlag nature = NatureFlag::PHYSICAL){ m_filenature = nature; }
 
+	   /** getter for file nature */
+	   inline NatureFlag getnature() { return m_filenature; }
+
 	   /**
 	    * Try mark the file for deletion. Only few file states permit this operation to happen.
 	    *

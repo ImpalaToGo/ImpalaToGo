@@ -337,7 +337,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	if (!managed_file->exists()) {
 		// and reply no data available otherwise
 		LOG (ERROR)<< "File \"" << path << "\" is not available locally. File status = \"" << managed_file->state() <<
-				"\"; file nature = \"" << managed_file->nature() << "\"\n";
+				"\"; file nature = \"" << managed_file->getnature() << "\"\n.";
 		managed_file->close();
 		return NULL;
 	}
