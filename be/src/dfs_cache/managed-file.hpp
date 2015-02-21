@@ -133,6 +133,10 @@ namespace managed_file {
 	   boost::condition_variable m_state_changed_condition;   /**< condition variable for those who waits for file state changed */
 	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
+	   boost::mutex m_closure_mux;                            /**< protector of final object detach from clients. Is required in order
+	    													  * to guard the close() remainder right after last client detaches
+	    													  **/
+
 	   WeightChangedEvent m_weightIsChangedcallback;          /**< "weight is changed" event callback */
 	   GetFileInfo     m_getFielInfoCb;                       /**< "get file info" callback */
 	   FreeFileInfo    m_freeFileInfoCb;                      /**< "free file info" callback */
@@ -260,11 +264,18 @@ namespace managed_file {
 	    */
 	   inline bool mark_for_deletion(){
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+
+		   bool marked = false;
+		   // lock the closure mux
+		   boost::mutex::scoped_lock c_lock(m_closure_mux);
 		   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() << "\" is requested for deletion." <<
 				   "subscribers # = " <<  m_subscribers.load(std::memory_order_acquire) << "\n";
 		   // check all states that allow to mark the file for deletion:
 		   State expected = State::FILE_IS_IDLE;
-           bool marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+		   // compare "idle marker" under the closure mux
+           marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+           c_lock.unlock();
 
            if(marked){
         	   m_state_changed_condition.notify_all();

@@ -187,6 +187,10 @@ status::StatusInternal File::close(int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
+	// protect all the flow below to guarantee the whole method will be executed even if the object
+	// is being watched by cleanup right now, when the last client is detaching the ownership from
+	// this object and running this flow in its context
+	boost::unique_lock<boost::mutex> lock(m_closure_mux);
     if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == ref_count ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
 		if((m_state != State::FILE_IS_IN_USE_BY_SYNC) && (m_state != State::FILE_SYNC_JUST_HAPPEN))
