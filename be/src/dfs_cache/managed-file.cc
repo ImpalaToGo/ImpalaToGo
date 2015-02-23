@@ -6,6 +6,11 @@
  * @author elenav
  */
 
+#include <boost/regex.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+
 #include "dfs_cache/cache-layer-registry.hpp"
 #include "dfs_cache/managed-file.hpp"
 #include "dfs_cache/utilities.hpp"
@@ -177,7 +182,7 @@ status::StatusInternal File::open( int ref_count) {
 	// don't change 2 states below:
 	if((m_state != State::FILE_IS_FORBIDDEN) && (m_state != State::FILE_IS_IN_USE_BY_SYNC))
 		m_state = State::FILE_HAS_CLIENTS;
-	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_relaxed);
+	std::atomic_fetch_add_explicit (&m_users, ref_count, std::memory_order_release);
 	LOG (INFO) << "File open \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) << " ; File status = \""
 			<< m_state << "\"" << std::endl;
 	return status::OK;
@@ -187,16 +192,38 @@ status::StatusInternal File::close(int ref_count) {
 	if(m_state == State::FILE_IS_MARKED_FOR_DELETION)
 		return status::StatusInternal::CACHE_OBJECT_UNDER_FINALIZATION;
 
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	std::string detaching_client = boost::lexical_cast<std::string>(uuid);
+
+	boost::mutex::scoped_lock lock(m_detaching_mux_guard);
+	m_detaching_clients.push_back(detaching_client);
+	lock.unlock();
+
+	// protect all the flow below to guarantee the whole method will be executed even if the object
+	// is being watched by cleanup right now, when the last client is detaching the ownership from
+	// this object and running this flow in its context
+    bool no_clients_remained = false;
     if ( std::atomic_fetch_sub_explicit (&m_users, ref_count, std::memory_order_release) == ref_count ) {
 		std::atomic_thread_fence(std::memory_order_acquire);
-		if((m_state != State::FILE_IS_IN_USE_BY_SYNC) && (m_state != State::FILE_SYNC_JUST_HAPPEN))
-			// don't change the state!
-			m_state = State::FILE_IS_IDLE;
-
-		LOG (INFO) << "File \"" << fqp() << "\" is no more referenced. refs = " << m_users.load(std::memory_order_acquire) << std::endl;
+		if((m_state != State::FILE_IS_IN_USE_BY_SYNC) && (m_state != State::FILE_SYNC_JUST_HAPPEN)){
+			no_clients_remained = true;
+			LOG (INFO) << "File \"" << fqp() << "\" is no more referenced. refs = " << m_users.load(std::memory_order_acquire) << std::endl;
+		}
 	}
-	LOG (INFO) << "File close \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) <<
-			" ; File status = \"" << m_state << "\"" << std::endl;
+    else
+    	LOG (INFO) << "File close \"" << fqp() << "\" refs = " << m_users.load(std::memory_order_acquire) <<
+		" ; File status = \"" << m_state << "\"" << std::endl;
+	if (no_clients_remained) {
+		m_state.exchange(State::FILE_IS_IDLE, std::memory_order_release);
+	}
+
+	// re-acquire the lock on the mux
+	lock.lock();
+	// remove detaching client from the detaching list
+	m_detaching_clients.erase(std::remove(m_detaching_clients.begin(), m_detaching_clients.end(), detaching_client), m_detaching_clients.end());
+	// and notify the client is detached:
+	m_detaching_condition.notify_all();
+	lock.unlock();
 	return status::OK;
 }
 

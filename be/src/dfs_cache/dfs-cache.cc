@@ -328,7 +328,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 				[&] {return managed_file->state() != managed_file::State::FILE_IS_IN_USE_BY_SYNC;});
 		lock.unlock();
 
-		LOG (INFO)<< "Wait for sync is finished for \"" << path << "\". File status = \"" << managed_file->state() << "\"\n";
+		LOG (INFO)<< "Wait for sync is finished for \"" << path << "\". File status = \"" << managed_file->state() <<
+				"\"; file nature = \"" << managed_file->getnature() << "\"\n";
 		// un-subscribe from updates (and further file usage), safe here as the file is "opened" or will not be used more
 		managed_file->unsubscribe_from_updates();
     }
@@ -336,7 +337,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 	// so as the file is available locally, just open it:
 	if (!managed_file->exists()) {
 		// and reply no data available otherwise
-		LOG (ERROR)<< "File \"" << path << "\" is not available locally. File status = \"" << managed_file->state() << "\"\n";
+		LOG (ERROR)<< "File \"" << path << "\" is not available locally. File status = \"" << managed_file->state() <<
+				"\"; file nature = \"" << managed_file->getnature() << "\"\n.";
 		managed_file->close();
 		return NULL;
 	}

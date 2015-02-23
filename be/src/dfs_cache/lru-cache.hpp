@@ -254,7 +254,6 @@ private:
 			if(node){
 				if(!node->pin()){
 					LOG(WARNING) << "Node was located but cannot be pinned as just finalized, resetting...\n";
-					node.reset();
 				}
 			}
 			if (!node) {
@@ -573,7 +572,7 @@ private:
 				if(!valid)
 				return false;
 
-				if(bucket == m_ageBucket) {
+				if((bucket != nullptr ) && (bucket == m_ageBucket)) {
 					// just do nothing, we are still in correct bucket
 				}
 				// no bucket exist, create new one:
@@ -587,25 +586,35 @@ private:
 					// Acquire the corresponding bucket from Lifespan Manager.
 					// This is done basing on timestamp so that it should be correct.
 					boost::posix_time::ptime initial_timestamp = timestamp;
-					m_ageBucket = m_mgr->openBucket(timestamp);
+
+					bucket = m_mgr->openBucket(timestamp);
+					// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
+					if(bucket == nullptr) {
+						LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
+						return valid;
+					}
+
 					// if timestamp was changed by Lifespan Manager, update the bound item about that:
 					if(initial_timestamp != timestamp) {
 						LOG (INFO) << "Timestamp was changed by Manager, updated : \"" <<
 						std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
 						m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 					}
-					// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
-					if(m_ageBucket == nullptr) {
-						LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
-						return valid;
-					}
 
-					boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
-					// assign own "next" bag to be the one from the manager current bucket:
-					m_next = m_ageBucket->first;
-					// and assign myself to be the first one in the current bucket
-					m_ageBucket->first = sh;
-					lock.unlock();
+					if(m_ageBucket == nullptr) {
+						LOG (INFO) << "Current node is not assigned to any bucket, assign it to newly created bucket as a first node.\n";
+						// assign itself to the newly created bucket:
+						boost::shared_ptr<Node> sh = makeShared();
+						boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
+						// assign own "next" bag to be the one from the manager current bucket:
+						boost::shared_ptr<Node> next = bucket->first;
+						// and assign myself to be the first one in the current bucket
+						bucket->first = sh;
+						// start pointing next Node from the managed bucket
+						m_next = next;
+						lock.unlock();
+					}
+					m_ageBucket = bucket;
 					return valid;
 				}
 				else {
@@ -1230,6 +1239,7 @@ private:
 
         	// say current bucket is a new one:
         	m_currentBucket = newBucket;
+        	LOG(INFO) << "Open new bucket completed for bucket key \"" << std::to_string(idx) << "\"" ;
         	return newBucket;
         }
 
@@ -1372,12 +1382,13 @@ private:
          boost::unique_lock<boost::mutex> scoped_lock(m_unique_item_guard);
 
 		for(auto idx : (*m_indexList)) {
+			// check that node exists for requested item
 			if((node = idx.second->findItem(item)))
 			break;
 		}
 
 		// duplicate is prevented from being added into the cache
-		duplicate = (node && (*node->value() == (*item)));
+		duplicate = (node && (node->value() != nullptr) && (*node->value() == (*item)));
 		if( duplicate ) {
 			LOG(WARNING) << "Duplicate found within the registry.\n";
 			delete item;
