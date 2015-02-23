@@ -254,7 +254,6 @@ private:
 			if(node){
 				if(!node->pin()){
 					LOG(WARNING) << "Node was located but cannot be pinned as just finalized, resetting...\n";
-					node.reset();
 				}
 			}
 			if (!node) {
@@ -1383,12 +1382,13 @@ private:
          boost::unique_lock<boost::mutex> scoped_lock(m_unique_item_guard);
 
 		for(auto idx : (*m_indexList)) {
+			// check that node exists for requested item
 			if((node = idx.second->findItem(item)))
 			break;
 		}
 
 		// duplicate is prevented from being added into the cache
-		duplicate = (node && (*node->value() == (*item)));
+		duplicate = (node && (node->value() != nullptr) && (*node->value() == (*item)));
 		if( duplicate ) {
 			LOG(WARNING) << "Duplicate found within the registry.\n";
 			delete item;

@@ -504,7 +504,7 @@ TEST_F(CacheLayerTest, SporadicFileSporadicTestScenarioHeavyLoadManagedAsync) {
 	std::cout << "Localhost filesystem adaptor is ready" << std::endl;
 
 	const int CONTEXT_NUM = 50;
-    const int ITERATIONS = 100;
+    const int ITERATIONS = 100000;
 
 	using namespace std::placeholders;
 
