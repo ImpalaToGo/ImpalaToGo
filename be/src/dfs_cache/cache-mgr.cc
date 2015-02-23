@@ -346,6 +346,11 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
     historical->succeed     = (request->status() == taskOverallStatus::COMPLETED_OK);
 
     boost::unique_lock<boost::mutex> historyLock(m_HistoryMux);
+    // check that the history size limit is not exceeded
+    if(m_HistoryRequests.size() >= constants::HISTORY_ENTRIES_LIMIT * 2){
+    	// remove half of history requests content:
+    	m_HistoryRequests.erase(m_HistoryRequests.begin(), m_HistoryRequests.end() + constants::HISTORY_ENTRIES_LIMIT);
+    }
     // now add it to History, add it first as most recent:
     m_HistoryRequests.push_front(std::move(historical));
     historyLock.unlock();

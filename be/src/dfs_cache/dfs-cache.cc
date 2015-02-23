@@ -61,6 +61,9 @@ namespace constants
 
      /** separator we use to divide the source host and the port in the file path */
      const char HOST_PORT_SEPARATOR = '_';
+
+     /** limit of history requests archive */
+     const int HISTORY_ENTRIES_LIMIT = 100;
 }
 
 namespace ph = std::placeholders;

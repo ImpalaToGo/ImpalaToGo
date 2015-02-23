@@ -59,6 +59,8 @@ namespace constants
     /** separator we use to divide the source host and the port in the file path */
     extern const char HOST_PORT_SEPARATOR;
 
+    /** limit of history requests archive */
+    extern const int HISTORY_ENTRIES_LIMIT;
 }
 
 /**
