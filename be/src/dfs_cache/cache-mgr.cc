@@ -349,7 +349,12 @@ void CacheManager::finalizeUserRequest(const requestIdentity& requestIdentity, c
     // check that the history size limit is not exceeded
     if(m_HistoryRequests.size() >= constants::HISTORY_ENTRIES_LIMIT * 2){
     	// remove half of history requests content:
-    	m_HistoryRequests.erase(m_HistoryRequests.begin(), m_HistoryRequests.end() + constants::HISTORY_ENTRIES_LIMIT);
+    	int iterations = 0;
+    	for(auto iter = m_HistoryRequests.begin();
+    			(iterations <= constants::HISTORY_ENTRIES_LIMIT) && (iter != m_HistoryRequests.end()); iterations++){
+    		m_HistoryRequests.erase(iter);
+    		iter++;
+    	}
     }
     // now add it to History, add it first as most recent:
     m_HistoryRequests.push_front(std::move(historical));
