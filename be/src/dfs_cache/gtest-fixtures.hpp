@@ -142,9 +142,9 @@ class CacheLayerTest : public ::testing::Test {
 	  // shutdown the cache
 	  cacheShutdown();
 	  // clean the cache:
-	  // boost::system::error_code ec;
-	  //boost::filesystem::remove_all(m_cache_path, ec);
-	  //ASSERT_TRUE(!ec);
+	  boost::system::error_code ec;
+	  boost::filesystem::remove_all(m_cache_path, ec);
+	  ASSERT_TRUE(!ec);
 
 	  // print some statistics:
       printStat();

@@ -59,10 +59,19 @@ typedef std::map<std::string, TInsertPartitionStatus> PartitionStatusMap;
 // Stats per partition for insert queries. They key is the same as for PartitionRowCount
 typedef std::map<std::string, TInsertStats> PartitionInsertStats;
 
-// Tracks files to move from a temporary (key) to a final destination (value) as
-// part of query finalization. If the destination is empty, the file is to be
-// deleted.
-typedef std::map<std::string, std::string> FileMoveMap;
+/** define "move" dataset within some single location */
+typedef std::map<std::string, std::string> MoveDataSet;
+
+/** Tracks files to move from a temporary (key) to a final destination (value) as
+ *  part of query finalization. If the destination is empty, the file is to be
+ *  deleted.
+ *  Key   : backend number the dataset was produced on.
+ *  Value : dataset to remove, key-value of old_name and new_name of files to remove.
+ */
+typedef std::map<int, MoveDataSet > FileMoveMap;
+
+/** map where key is backend index and the value is the set of dfs operations */
+typedef std::map<int, TRemoteShortCommand>  dfsBatch;
 
 // A collection of items that are part of the global state of a
 // query and shared across all execution nodes of that query.
@@ -141,7 +150,7 @@ class RuntimeState {
   MemTracker* query_mem_tracker() { return query_mem_tracker_.get(); }
   ThreadResourceMgr::ResourcePool* resource_pool() { return resource_pool_; }
 
-  FileMoveMap* hdfs_files_to_move() { return &hdfs_files_to_move_; }
+  MoveDataSet* hdfs_files_to_move() { return &hdfs_files_to_move_; }
   std::vector<DiskIoMgr::RequestContext*>* reader_contexts() { return &reader_contexts_; }
 
   void set_fragment_root_id(PlanNodeId id) {
@@ -318,7 +327,7 @@ class RuntimeState {
 
   // Temporary Hdfs files created, and where they should be moved to ultimately.
   // Mapping a filename to a blank destination causes it to be deleted.
-  FileMoveMap hdfs_files_to_move_;
+  MoveDataSet hdfs_files_to_move_;
 
   // Records summary statistics for the results of inserts into Hdfs partitions.
   PartitionStatusMap per_partition_status_;

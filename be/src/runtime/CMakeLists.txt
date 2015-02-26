@@ -24,11 +24,13 @@ add_library(Runtime
   buffered-tuple-stream.cc
   buffered-tuple-stream-ir.cc
   client-cache.cc
+  command-executor.cc
   coordinator.cc
   data-stream-mgr.cc
   data-stream-sender.cc
   data-stream-recvr.cc
   descriptors.cc
+  descriptors-command.cc
   disk-io-mgr.cc
   disk-io-mgr-reader-context.cc
   disk-io-mgr-scan-range.cc
@@ -54,7 +56,7 @@ add_library(Runtime
   timestamp-value.cc
   tuple.cc
   tuple-row.cc
-  tmp-file-mgr.cc
+  tmp-file-mgr.cc  
 )
 
 # This test runs forever so should not be part of 'make test'

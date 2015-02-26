@@ -203,6 +203,25 @@ struct TPlanFragmentInstanceCtx {
   5: required i32 backend_num
 }
 
+// Context of a command instance, including its unique id, the total number
+// of command instances, the query context, the coordinator address, etc.
+struct TCommandInstanceCtx {
+  // TODO: determine whether we can get this somehow via the Thrift rpc mechanism.
+  1: optional Types.TNetworkAddress coord_address
+
+  // the globally unique command instance id
+  2: required Types.TUniqueId command_instance_id
+
+  // ordinal of this command instance, range [0, num_command_instances)
+  3: required i32 command_instance_idx
+
+  // total number of instances of this command
+  4: required i32 num_command_instances
+
+  // backend number assigned by coordinator to identify backend
+  5: required i32 backend_num
+}
+
 // A scan range plus the parameters needed to execute that scan.
 struct TScanRangeParams {
   1: required PlanNodes.TScanRange scan_range
@@ -283,6 +302,78 @@ struct TExecPlanFragmentParams {
 
 struct TExecPlanFragmentResult {
   // required in V1
+  1: optional Status.TStatus status
+}
+
+
+// ExecRemoteComand
+
+// Type of remote command to issue
+enum TRemoteShortCommandType {
+  RENAME,
+  DELETE, 
+  CHECK_RESOURCE_EXISTS
+}
+
+// TRemoteCommand encapsulates info needed to execute  short command
+struct TRemoteShortCommand {	
+    // display name to be shown in the runtime profile
+    1: required string display_name
+    
+    // command type
+    2: required TRemoteShortCommandType type
+
+    // dfs path 
+    3: optional string dfs_path
+    
+    // rename set of paths
+    4: optional map<string, string> rename_set
+    
+    // deletion set of paths
+    5: optional list<string> delete_set
+}
+
+struct TRemoteShortCommandResult {
+  // overall command status 
+  1: optional Status.TStatus status
+}
+
+// remote command parameters
+struct TExecRemoteCommandParams {
+  1: required ImpalaInternalServiceVersion protocol_version
+
+  // the command to execute on remote side
+  2: required TRemoteShortCommand command
+
+  // Context of this command, including its instance id, the total number command
+  // instances, query context, etc.
+  3: optional TCommandInstanceCtx command_instance_ctx
+}
+
+struct TReportCommandStatusParams {
+  1: required ImpalaInternalServiceVersion protocol_version
+
+  2: optional Types.TUniqueId query_id
+
+  // passed into ExecShortCommand() as TCommandInstanceCtx.backend_num
+  3: optional i32 backend_num
+
+  4: optional Types.TUniqueId command_instance_id
+
+  // Status of command execution; any error status means it's done.
+  5: optional Status.TStatus status
+
+  // If true, command finished executing.
+  6: optional bool done
+
+  // cumulative profile
+  7: optional RuntimeProfile.TRuntimeProfileTree profile
+
+  // New errors that have not been reported to the coordinator
+  8: optional list<string> error_log
+}
+
+struct TReportCommandStatusResult {
   1: optional Status.TStatus status
 }
 
@@ -470,4 +561,11 @@ service ImpalaInternalService {
   // Called by sender to transmit single row batch. Returns error indication
   // if params.fragmentId or params.destNodeId are unknown or if data couldn't be read.
   TTransmitDataResult TransmitData(1:TTransmitDataParams params);
+  
+  // Called by coordinator to issue remote handler to run the command specified
+  TRemoteShortCommandResult ExecShortCommand(1:TExecRemoteCommandParams params);
+     
+  // Periodically called by backend to report status of command execution
+  // back to coordinator; also called when execution is finished, for whatever reason.
+  TReportCommandStatusResult ReportCommandStatus(1:TReportCommandStatusParams params);
 }

@@ -56,6 +56,7 @@ struct FragmentExecParams {
   // N = hosts.size (i.e. N = number of fragment instances)
   int sender_id_base;
 };
+
 // A QuerySchedule contains all necessary information for a query coordinator to
 // generate fragment execution requests and start query execution. If resource management
 // is enabled, then a schedule also contains the resource reservation request

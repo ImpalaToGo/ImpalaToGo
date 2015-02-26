@@ -354,7 +354,7 @@ status::StatusInternal dfsMove(const FileSystemDescriptor & namenode, const char
  *
  * @return Operation status
  */
-status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive);
+status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive = 1);
 
 /**
  * Rename the file.
@@ -374,10 +374,11 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
  *
  * @param fsDescriptor  - fs file belongs to
  * @param path          - The path of the directory.
+ * @param direct        - flag, indicates whether direct dfs interaction is required, in addition to the local cache
  *
  * @return Returns 0 on success, -1 on error.
  */
-status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path);
+status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path, bool direct = false);
 
 /**
  * Set the replication of the specified

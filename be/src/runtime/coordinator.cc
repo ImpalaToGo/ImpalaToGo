@@ -16,6 +16,7 @@
 
 #include <limits>
 #include <map>
+#include <string>
 #include <thrift/protocol/TDebugProtocol.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/accumulators/accumulators.hpp>
@@ -40,11 +41,13 @@
 #include "runtime/client-cache.h"
 #include "runtime/data-stream-sender.h"
 #include "runtime/data-stream-mgr.h"
+#include "runtime/descriptors.h"
 #include "runtime/exec-env.h"
 #include "runtime/hdfs-fs-cache.h"
 #include "runtime/plan-fragment-executor.h"
 #include "runtime/row-batch.h"
 #include "runtime/parallel-executor.h"
+
 #include "statestore/scheduler.h"
 #include "exec/data-sink.h"
 #include "exec/scan-node.h"
@@ -178,6 +181,67 @@ class Coordinator::BackendExecState {
   // the delta since the last time this was called.
   // lock must be taken before calling this.
   int64_t UpdateNumScanRangesCompleted();
+};
+
+
+/**
+ * Execution state of a particular command.
+ * Concurrent accesses:
+ * updates through UpdateFragmentExecStatus()
+ */
+class Coordinator::BackendCommandState {
+ public:
+  TUniqueId             command_instance_id; /**< command instance unique id */
+  MonotonicStopWatch    stopwatch;   		 /**< wall clock timer for this command */
+  const TNetworkAddress backend_address;     /**< address of ImpalaInternalService of backend-command-runner */
+
+  TExecRemoteCommandParams rpc_params;       /**< remote command parameters */
+
+  int command_fragment_idx;                  /**< Command ragment idx for this Backend ExecState */
+  int instance_idx;                          /**< The 0-based instance idx. */
+
+  /** protector for fields below.
+   * lock ordering: Coordinator::lock_ can only get obtained *prior* to lock
+   */
+  boost::mutex lock;
+
+  /** If the status indicates an error status, execution of this command
+   *  had either been aborted by the remote backend (which then reported the error)
+   *  or cancellation has been initiated; either way, execution must not be cancelled */
+  Status status;
+
+  bool initiated;              /**< flag, if true, the command execution RPC has been sent */
+  bool done;                   /**< flag, if true, execution terminated; cancellation is restricted in this case */
+  bool profile_created;        /**< flag, true after the first call to profile->Update() */
+
+  RuntimeProfile*          profile;     /**< owned by obj_pool() */
+  std::vector<std::string> error_log;   /**< errors reported by this backend */
+
+  BackendCommandState(Coordinator* coord,
+      const TNetworkAddress& coord_address,
+      int backend_num, const TRemoteShortCommand& command, int command_idx,
+      const FragmentExecParams& params, int instance_idx, ObjectPool* obj_pool)
+    : command_instance_id(params.instance_ids[instance_idx]),
+      backend_address(params.hosts[instance_idx]),
+      command_fragment_idx(command_idx),
+      instance_idx(instance_idx),
+      initiated(false),
+      done(false),
+      profile_created(false) {
+
+    stringstream ss;
+    ss << "Instance " << PrintId(command_instance_id)
+       << " (host = " << backend_address << ")";
+
+    LOG(INFO) << "Constructing backend command state. Backend addr = \"" << backend_address << "\";" <<
+    		" instance idx = \"" << instance_idx << "\".\n";
+
+    profile = obj_pool->Add(new RuntimeProfile(obj_pool, ss.str()));
+    coord->SetExecCommandParams(backend_num, command, command_idx,
+        params, instance_idx, coord_address, &rpc_params);
+
+    LOG(INFO) << "Backend command state constructed. Backend addr = \"" << backend_address << "\"\n";
+  }
 };
 
 void Coordinator::BackendExecState::ComputeTotalSplitSize() {
@@ -317,7 +381,8 @@ Status Coordinator::Exec(QuerySchedule& schedule,
 
   SCOPED_TIMER(query_profile_->total_time_counter());
 
-  vector<FragmentExecParams>* fragment_exec_params = schedule.exec_params();
+  fragment_exec_params = *(schedule.exec_params());
+  // print them now
   TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
   // to keep things simple, make async Cancel() calls wait until plan fragment
@@ -330,6 +395,8 @@ Status Coordinator::Exec(QuerySchedule& schedule,
       request.fragments[0].partition.type == TPartitionType::UNPARTITIONED;
 
   if (has_coordinator_fragment) {
+	  LOG (INFO) << "Coordinator has a fragment, host : \"" <<
+			  fragment_exec_params[0].hosts[0] << "\"\n.";
     executor_.reset(new PlanFragmentExecutor(
             exec_env_, PlanFragmentExecutor::ReportStatusCallback()));
     // If a coordinator fragment is requested (for most queries this
@@ -339,7 +406,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
     // had a chance to register with the stream mgr.
     TExecPlanFragmentParams rpc_params;
     SetExecPlanFragmentParams(schedule, 0, request.fragments[0], 0,
-        (*fragment_exec_params)[0], 0, coord, &rpc_params);
+        (fragment_exec_params)[0], 0, coord, &rpc_params);
     RETURN_IF_ERROR(executor_->Prepare(rpc_params));
 
     // Prepare output_expr_ctxs before optimizing the LLVM module. The other exprs of this
@@ -379,6 +446,9 @@ Status Coordinator::Exec(QuerySchedule& schedule,
 
   // start fragment instances from left to right, so that receivers have
   // Prepare()'d before senders start sending
+
+  // remember number of scheduled backends:
+  num_backends_initial = schedule.num_backends();
   backend_exec_states_.resize(schedule.num_backends());
   num_remaining_backends_ = schedule.num_backends();
   VLOG_QUERY << "starting " << schedule.num_backends()
@@ -389,7 +459,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
   StatsMetric<double> latencies("fragment-latencies", TUnit::TIME_NS);
   for (int fragment_idx = (has_coordinator_fragment ? 1 : 0);
        fragment_idx < request.fragments.size(); ++fragment_idx) {
-    const FragmentExecParams& params = (*fragment_exec_params)[fragment_idx];
+    const FragmentExecParams& params = (fragment_exec_params)[fragment_idx];
 
     // set up exec states
     int num_hosts = params.hosts.size();
@@ -572,7 +642,7 @@ Status Coordinator::FinalizeSuccessfulInsert() {
     // Look up the partition in the descriptor table.
     stringstream part_path_ss;
     if (partition.second.id == -1) {
-      // If this is a non-existant partition, use the default partition location of
+      // If this is a non-existent partition, use the default partition location of
       // <base_dir>/part_key_1=val/part_key_2=val/...
       part_path_ss << finalize_params_.hdfs_base_dir << "/" << partition.first;
     } else {
@@ -651,48 +721,82 @@ Status Coordinator::FinalizeSuccessfulInsert() {
   }
 
   // 3. Move all tmp files
-  HdfsOperationSet move_ops(&hdfs_connection);
-  HdfsOperationSet dir_deletion_ops(&hdfs_connection);
+  // batch operations collected to be executed on correct backend.
+  // Key is the backend index, value is the dfs operations batch
+  std::map<int, TRemoteShortCommand> batch_deletion;
+  std::map<int, TRemoteShortCommand> batch_move;
 
   BOOST_FOREACH(FileMoveMap::value_type& move, files_to_move_) {
-    // Empty destination means delete, so this is a directory. These get deleted in a
-    // separate pass to ensure that we have moved all the contents of the directory first.
-    if (move.second.empty()) {
-    	// for s3 or other block-based filesystem, where we don't want moves due its non-efficiency,
-    	// we don't create any temporary folders and so don't need to delete them
-    	VLOG_ROW << "Deleting file: " << move.first;
-    	dir_deletion_ops.Add(DELETE, move.first);
-    } else {
-    	// if destination path is equals to temporary path, don't rename anything
-    	if(move.first.compare(move.second) != 0){
-    		VLOG_ROW << "Moving tmp file: " << move.first << " to " << move.second;
-    		move_ops.Add(RENAME, move.first, move.second);
-    	}
-    }
+	  TRemoteShortCommand command_delete;
+	  TRemoteShortCommand command_move;
+
+	  command_delete.display_name = "delete";
+	  command_delete.type = TRemoteShortCommandType::DELETE;
+	  command_delete.dfs_path = finalize_params_.hdfs_base_dir;
+
+	  command_move.display_name = "move";
+	  command_delete.type = TRemoteShortCommandType::RENAME;
+	  command_move.dfs_path = finalize_params_.hdfs_base_dir;
+
+	  // Empty destination means delete, so this is a directory. These get deleted in a
+	  // separate pass to ensure that we have moved all the contents of the directory first.
+	  // For each backend specified in the move map, construct the command per operation.
+	  // Currently remote commands are not being run as a batch (TODO in the proto)
+
+	  BOOST_FOREACH(const MoveDataSet::value_type& item, move.second){
+		  if (item.second.empty()) {
+			  // for s3 or other block-based filesystem, where we don't want moves due its non-efficiency,
+			  // we don't create any temporary folders and so don't need to delete them
+			  VLOG_ROW << "Deleting file: " << item.first;
+			  command_delete.delete_set.push_back(item.first);
+		  } else {
+			  // if destination path is equals to temporary path, don't rename anything
+			  if(item.first.compare(item.second) != 0){
+				  VLOG_ROW << "Moving tmp file: " << item.first << " to " << item.second;
+				  command_move.rename_set.insert(std::pair<std::string, std::string> (item.first, item.second));
+			  }
+		  }
+	  }
+	  // If there's some operations of "DELETE" or "MOVE" nature, collect them according
+	  // to backend where they are relevant, to be batch-executed later
+	  if(command_delete.__isset.delete_set && !command_delete.delete_set.empty())
+		  batch_deletion.insert(std::pair<int, TRemoteShortCommand>(move.first, command_delete));
+	  if(command_move.__isset.rename_set && !command_move.rename_set.empty())
+		  batch_move.insert(std::pair<int, TRemoteShortCommand>(move.first, command_move));
   }
+
 
   {
     SCOPED_TIMER(ADD_CHILD_TIMER(query_profile_, "FileMoveTimer", "FinalizationTimer"));
-    if (!move_ops.Execute(exec_env_->hdfs_op_thread_pool(), false)) {
-      stringstream ss;
-      ss << "Error(s) moving partition files. First error (of "
-         << move_ops.errors().size() << ") was: " << move_ops.errors()[0].second;
-      return Status(ss.str());
+
+    // run "MOVE" batch
+    RunBatchOnRemoteBackends(batch_move, "MOVE");
+    WaitForAllBackends();
+
+    // check for possible errors came from "move" phase
+    if(!query_status_.ok()){
+    	stringstream ss;
+    	ss << "Error(s) moving partition files.";
+    	return Status(ss.str());
     }
   }
 
   // 4. Delete temp directories
   {
-    SCOPED_TIMER(ADD_CHILD_TIMER(query_profile_, "FileDeletionTimer",
-         "FinalizationTimer"));
-    if (!dir_deletion_ops.Execute(exec_env_->hdfs_op_thread_pool(), false)) {
-      stringstream ss;
-      ss << "Error(s) deleting staging directories. First error (of "
-         << dir_deletion_ops.errors().size() << ") was: "
-         << dir_deletion_ops.errors()[0].second;
-      return Status(ss.str());
-    }
+	  SCOPED_TIMER(ADD_CHILD_TIMER(query_profile_, "FileDeletionTimer",
+			  "FinalizationTimer"));
+	  // run "DELETE" batch:
+	  RunBatchOnRemoteBackends(batch_deletion, "DELETE");
+	  WaitForAllBackends();
+
+	  // check for possible errors came from "delete" phase
+	  if(!query_status_.ok()){
+		  stringstream ss;
+		  ss << "Error(s) deleting staging directories.";
+		  return Status(ss.str());
+	  }
   }
+
 
   // 5. Optionally update the permissions of the created partition directories
   // Do this last in case we make the dirs unwriteable.
@@ -739,10 +843,57 @@ Status Coordinator::FinalizeQuery() {
 
   dfsFS hdfs_conn;
   RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(staging_dir.str(), &hdfs_conn));
-  VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
-  dfsDelete(hdfs_conn, staging_dir.str().c_str(), 1);
-
+  if(hdfs_conn.dfs_type != s3n){
+	  VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
+	  dfsDelete(hdfs_conn, staging_dir.str().c_str(), 1);
+  }
   return return_status;
+}
+
+Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::string& context){
+	// compose commands and execute them all in parallel:
+	StatsMetric<double> latencies("command-latencies", TUnit::TIME_NS);
+
+	TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
+
+	LOG (INFO) << "RunBatchOnRemoteBackends() : \"" << context << "\" context. initial backends num = \"" <<
+			num_backends_initial << "\". On query completion \"" <<
+			query_id_ << "\". Batches set size = \"" << batch.size() << "\".";
+
+	if(batch.size() == 0)
+		return Status::OK;
+
+	backend_command_states_.resize(num_backends_initial);
+	num_remaining_backends_ = num_backends_initial;
+
+	BOOST_FOREACH(const dfsBatch::value_type& item, batch){
+		const FragmentExecParams& params = (fragment_exec_params)[item.first];
+		BackendCommandState* exec_state =
+				obj_pool()->Add(new BackendCommandState(this, coord, item.first,
+						item.second, item.first, params, item.first, obj_pool()));
+		backend_command_states_[item.first] = exec_state;
+		LOG(INFO) << "RunBatchOnRemoteBackends(): running instance: command_idx = \"" << item.first
+	              << " instance_id = \"" << params.instance_ids[item.first] << "\".";
+	    }
+
+	Status commands_exec_status = Status::OK;
+    size_t batches_fragments = backend_command_states_.size();
+
+	// Issue all rpcs in parallel if there's something in the batch:
+	if(batches_fragments > 0){
+		LOG (INFO) << "Batch size is \"" << batches_fragments << "\" in context " << context << ".\n";
+        commands_exec_status = ParallelExecutor::Exec(
+        		bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
+				reinterpret_cast<void**>(&backend_command_states_),
+				num_backends_initial, &latencies);
+	}
+	if (!commands_exec_status.ok()) {
+	      DCHECK(query_status_.ok());  // nobody should have been able to cancel
+	      query_status_ = commands_exec_status;
+	      // tear down running commands (TODO) and return
+	      // CancelInternal();
+	    }
+	return commands_exec_status;
 }
 
 Status Coordinator::WaitForAllBackends() {
@@ -783,8 +934,9 @@ Status Coordinator::Wait() {
       DCHECK_EQ(files_to_move_.size(), 0);
       DCHECK_EQ(per_partition_status_.size(), 0);
 
-      // Because there are no other updates, safe to copy the maps rather than merge them.
-      files_to_move_ = *state->hdfs_files_to_move();
+      // Because there are no other updates, we insert the coordinator's fragment result
+      // under the index "0" within the "move" set.
+      files_to_move_.insert(std::pair<int, MoveDataSet>(0, *state->hdfs_files_to_move()));;
       per_partition_status_ = *state->per_partition_status();
     }
   } else {
@@ -1109,6 +1261,53 @@ Status Coordinator::ExecRemoteFragment(void* exec_state_arg) {
   return exec_state->status;
 }
 
+Status Coordinator::ExecRemoteCommand(void* exec_state_arg) {
+  BackendCommandState* exec_state = reinterpret_cast<BackendCommandState*>(exec_state_arg);
+  LOG(INFO) << "making rpc: ExecRemoteCommand query_id = \"" << query_id_
+            << "\"; instance_id = \"" << exec_state->command_instance_id
+            << "\"; host = \"" << exec_state->backend_address << "\".";
+  lock_guard<mutex> l(exec_state->lock);
+
+  Status status;
+  ImpalaInternalServiceConnection backend_client(
+      exec_env_->impalad_client_cache(), exec_state->backend_address, &status);
+  RETURN_IF_ERROR(status);
+
+  TRemoteShortCommandResult thrift_result;
+  try {
+    try {
+      backend_client->ExecShortCommand(thrift_result, exec_state->rpc_params);
+    } catch (const TException& e) {
+      // If a backend has stopped and restarted (without the failure detector
+      // picking it up), an existing backend client may still think it is
+      // connected. To avoid failing the first query after every failure, catch
+      // the first failure and force a reopen of the transport.
+      // TODO: Improve client-cache so that we don't need to do this.
+      LOG(WARNING) << "Retrying ExecRemoteCommand: " << e.what();
+      Status status = backend_client.Reopen();
+      if (!status.ok()) {
+        exec_state->status = status;
+        return status;
+      }
+      backend_client->ExecShortCommand(thrift_result, exec_state->rpc_params);
+    }
+  } catch (const TException& e) {
+    stringstream msg;
+    msg << "ExecRemoteCommand rpc query_id = \"" << query_id_
+        << "\"; instance_id = \"" << exec_state->command_instance_id
+        << "\" failed: " << e.what();
+    LOG(INFO) << msg.str();
+    exec_state->status = Status(msg.str());
+    return exec_state->status;
+  }
+  exec_state->status = thrift_result.status;
+  if (exec_state->status.ok()) {
+    exec_state->initiated = true;
+    exec_state->stopwatch.Start();
+  }
+  return exec_state->status;
+}
+
 void Coordinator::Cancel(const Status* cause) {
   lock_guard<mutex> l(lock_);
   // if the query status indicates an error, cancellation has already been initiated
@@ -1257,6 +1456,7 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
     progress_.Update(exec_state->UpdateNumScanRangesCompleted());
   }
 
+  // below section is for parallel insert statements
   if (params.done && params.__isset.insert_exec_status) {
     lock_guard<mutex> l(lock_);
     // Merge in table update data (partitions written to, files to be moved as part of
@@ -1269,9 +1469,20 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
       if (!status->__isset.stats) status->__set_stats(TInsertStats());
       DataSink::MergeInsertStats(partition.second.stats, &status->stats);
     }
-    files_to_move_.insert(
-        params.insert_exec_status.files_to_move.begin(),
-        params.insert_exec_status.files_to_move.end());
+    // save the dataset to be renamed as well as bound backend where rename should be run
+    MoveDataSet backend_rename_set;
+    backend_rename_set.insert(params.insert_exec_status.files_to_move.begin(),
+            params.insert_exec_status.files_to_move.end());
+
+    // update the "move set" with the backend's update (merge update):
+    FileMoveMap::iterator it =  files_to_move_.lower_bound(params.backend_num);
+    if(it != files_to_move_.end() && !(files_to_move_.key_comp()(params.backend_num, it->first)))
+    	// backend is already registered within the "move set", update it with new dataset
+    	it->second.insert(backend_rename_set.begin(), backend_rename_set.end());
+    else
+        // the backend is not registered yet in "move set". Register now. Reuse iterator to avoid yet
+    	// another lookup:
+    	files_to_move_.insert(it, FileMoveMap::value_type(params.backend_num, backend_rename_set));
   }
 
   if (VLOG_FILE_IS_ON) {
@@ -1323,6 +1534,86 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
   }
 
   return Status::OK;
+}
+
+Status Coordinator::UpdateCommandExecStatus(const TReportCommandStatusParams& params){
+	VLOG_FILE << "UpdateCommandExecStatus() query_id = \"" << query_id_
+	            << "\"; status = \"" << params.status.status_code
+	            << "\"; done = \"" << (params.done ? "true" : "false") << "\".";
+	  if (params.backend_num >= backend_exec_states_.size()) {
+	    return Status(TStatusCode::INTERNAL_ERROR, "unknown backend number");
+	  }
+	  BackendCommandState* exec_state = backend_command_states_[params.backend_num];
+
+	  const TRuntimeProfileTree& cumulative_profile = params.profile;
+	  Status status(params.status);
+	  {
+	    lock_guard<mutex> l(exec_state->lock);
+	    if (!status.ok()) {
+	      // During query cancellation, exec_state is set to CANCELLED. However, we might
+	      // process a non-error message from a fragment executor that is sent
+	      // before query cancellation is invoked. Make sure we don't go from error status to
+	      // OK.
+	      exec_state->status = status;
+	    }
+	    exec_state->done = params.done;
+	    if (exec_state->status.ok()) {
+	      exec_state->profile->Update(cumulative_profile);
+
+	      // Update the average profile for the command corresponding to this instance.
+	      exec_state->profile->ComputeTimeInProfile();
+	    }
+
+	    exec_state->profile_created = true;
+
+	    if (params.__isset.error_log && params.error_log.size() > 0) {
+	      exec_state->error_log.insert(exec_state->error_log.end(), params.error_log.begin(),
+	          params.error_log.end());
+	      VLOG_FILE << "instance_id = \"" << exec_state->command_instance_id
+	                << "\" error log: " << join(exec_state->error_log, "\n");
+	    }
+	  }
+
+	  if (VLOG_FILE_IS_ON) {
+	    stringstream s;
+	    exec_state->profile->PrettyPrint(&s);
+	    VLOG_FILE << "profile for query_id = \"" << query_id_
+	               << "; command instance_id = \"" << exec_state->command_instance_id
+	               << "\"\n" << s.str();
+	  }
+	  // for now, abort the query if we see any error except if the error is cancelled
+	  // and returned_all_results_ is true.
+	  // (UpdateStatus() initiates cancellation, if it hasn't already been initiated)
+	  if (!(returned_all_results_ && status.IsCancelled()) && !status.ok()) {
+	    UpdateStatus(status, &exec_state->command_instance_id);
+	    return Status::OK;
+	  }
+
+	  if (params.done) {
+	    lock_guard<mutex> l(lock_);
+	    exec_state->stopwatch.Stop();
+	    DCHECK_GT(num_remaining_backends_, 0);
+	    VLOG_QUERY << "Command batch execution. Backend " << params.backend_num << " completed, "
+	               << num_remaining_backends_ - 1 << " remaining: query_id=" << query_id_;
+	    if (VLOG_QUERY_IS_ON && num_remaining_backends_ > 1) {
+	      // print host/port info for the first backend that's still in progress as a
+	      // debugging aid for backend deadlocks
+	      for (int i = 0; i < backend_exec_states_.size(); ++i) {
+	        BackendExecState* exec_state = backend_exec_states_[i];
+	        lock_guard<mutex> l2(exec_state->lock);
+	        if (!exec_state->done) {
+	          VLOG_QUERY << "query_id=" << query_id_ << ": first in-progress backend: "
+	                     << exec_state->backend_address;
+	          break;
+	        }
+	      }
+	    }
+	    if (--num_remaining_backends_ == 0) {
+	      backend_completion_cv_.notify_all();
+	    }
+	  }
+
+	  return Status::OK;
 }
 
 const RowDescriptor& Coordinator::row_desc() const {
@@ -1580,6 +1871,28 @@ void Coordinator::SetExecPlanFragmentParams(
   rpc_params->fragment_instance_ctx.num_fragment_instances = params.instance_ids.size();
   rpc_params->fragment_instance_ctx.backend_num = backend_num;
   rpc_params->__isset.fragment_instance_ctx = true;
+}
+
+void Coordinator::SetExecCommandParams(int backend_num, const TRemoteShortCommand& command,
+    int fragment_idx, const FragmentExecParams& params, int instance_idx,
+    const TNetworkAddress& coord, TExecRemoteCommandParams* rpc_params) {
+
+	// set protocol:
+	rpc_params->__set_protocol_version(ImpalaInternalServiceVersion::V1);
+	// set command:
+	rpc_params->__set_command(command);
+
+	TNetworkAddress exec_host = params.hosts[instance_idx];
+	// set command instance context:
+	rpc_params->command_instance_ctx.command_instance_id = params.instance_ids[instance_idx];
+	rpc_params->command_instance_ctx.command_instance_idx = instance_idx;
+	rpc_params->command_instance_ctx.num_command_instances = params.instance_ids.size();
+	rpc_params->command_instance_ctx.backend_num = backend_num;
+
+	// set coordinator address:
+	rpc_params->command_instance_ctx.coord_address = coord;
+
+	rpc_params->__isset.command_instance_ctx = true;
 }
 
 }

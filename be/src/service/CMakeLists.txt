@@ -23,6 +23,8 @@ add_library(Service
   fe-support.cc
   fragment-exec-state.cc
   fragment-mgr.cc
+  command-exec-state.cc
+  command-mgr.cc
   hs2-util.cc
   impala-server.cc
   impala-server-callbacks.cc
@@ -31,6 +33,8 @@ add_library(Service
   query-exec-state.cc
   query-options.cc
   child-query.cc
+  command-exec-state.cc
+  command-mgr.cc
 )
 
 # this shared library provides Impala executor functionality to FE test.

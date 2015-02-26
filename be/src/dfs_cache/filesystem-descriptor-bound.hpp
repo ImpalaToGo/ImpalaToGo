@@ -225,6 +225,16 @@ public:
 	dfsFileInfo* listDirectory(raiiDfsConnection& conn, const char* path, int *numEntries);
 
 	/**
+	 * Create directory with a given path.
+	 *
+	 * @param [in]  conn       - wrapped managed connection
+	 * @param [in]  path       - path of the directory to create.
+	 *
+	 * @return operation status, 0 on success.
+	 */
+	int createDirectory(raiiDfsConnection& conn, const char* path);
+
+	/**
 	 * Free file info
 	 *
 	 * @param fileInfo     - file info set to free
