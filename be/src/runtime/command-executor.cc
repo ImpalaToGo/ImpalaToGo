@@ -14,7 +14,7 @@
 
 #include "common/logging.h"
 
-DEFINE_int32(status_report_interval, 5, "interval between profile reports; in seconds");
+DEFINE_int32(c_status_report_interval, 5, "interval between profile reports; in seconds");
 
 namespace impala{
 
@@ -84,7 +84,7 @@ Status CommandExecutor::runInternal(){
 Status CommandExecutor::run() {
   LOG(INFO) << "run(): command instance_id = \"" << PrintId(command_id_) << "\".";
   // we need to start the profile-reporting thread before calling run(), since it may block
-  if (!report_status_cb_.empty() && FLAGS_status_report_interval > 0) {
+  if (!report_status_cb_.empty() && FLAGS_c_status_report_interval > 0) {
     boost::unique_lock<boost::mutex> l(report_thread_lock_);
     report_thread_.reset(
         new Thread("command-executor", "report-profile",
@@ -116,7 +116,7 @@ void CommandExecutor::reportProfile() {
   // 0 and the report_interval.  This way, the coordinator doesn't get all the
   // updates at once so its better for contention as well as smoother progress
   // reporting.
-  int report_cmd_offset = rand() % FLAGS_status_report_interval;
+  int report_cmd_offset = rand() % FLAGS_c_status_report_interval;
   boost::system_time timeout = boost::get_system_time()
       + boost::posix_time::seconds(report_cmd_offset);
   // We don't want to wait longer than it takes to run the command:
@@ -124,7 +124,7 @@ void CommandExecutor::reportProfile() {
 
   while (report_thread_active_) {
     boost::system_time timeout = boost::get_system_time()
-        + boost::posix_time::seconds(FLAGS_status_report_interval);
+        + boost::posix_time::seconds(FLAGS_c_status_report_interval);
 
     // timed_wait can return because the timeout occurred or the condition variable
     // was signaled.  We can't rely on its return value to distinguish between the
