@@ -16,6 +16,7 @@
 
 #include <limits>
 #include <map>
+#include <string>
 #include <thrift/protocol/TDebugProtocol.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/accumulators/accumulators.hpp>
@@ -233,16 +234,13 @@ class Coordinator::BackendCommandState {
        << " (host = " << backend_address << ")";
 
     LOG(INFO) << "Constructing backend command state. Backend addr = \"" << backend_address << "\";" <<
-    		" instance idx = \"" << std::to_string(instance_idx) << "\"; command idx = \"" <<
-			std::to_string(command_idx) << "\".\n";
+    		" instance idx = \"" << instance_idx << "\".\n";
 
     profile = obj_pool->Add(new RuntimeProfile(obj_pool, ss.str()));
     coord->SetExecCommandParams(backend_num, command, command_idx,
         params, instance_idx, coord_address, &rpc_params);
 
-    LOG(INFO) << "Backend command state constructed. Backend addr = \"" << backend_address << "\";" <<
-    		" instance idx = \"" << std::to_string(instance_idx) << "\"; command idx = \"" <<
-			std::to_string(command_idx) << "\".\n";
+    LOG(INFO) << "Backend command state constructed. Backend addr = \"" << backend_address << "\"\n";
   }
 };
 
@@ -383,7 +381,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
 
   SCOPED_TIMER(query_profile_->total_time_counter());
 
-  fragment_exec_params(schedule.exec_params()->begin(), schedule.exec_params()->end());
+  fragment_exec_params = *(schedule.exec_params());
   TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
   // to keep things simple, make async Cancel() calls wait until plan fragment
@@ -856,8 +854,8 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 	TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
 	LOG (INFO) << "RunBatchOnRemoteBackends() : \"" << context << "\" context. initial backends num = \"" <<
-			std::to_string(num_backends_initial) << "\". On query completion \"" <<
-			query_id_ << "\". Batches set size = \"" << std::to_string(batch.size()) << "\".";
+			num_backends_initial << "\". On query completion \"" <<
+			query_id_ << "\". Batches set size = \"" << batch.size() << "\".";
 
 	backend_command_states_.resize(num_backends_initial);
 	num_remaining_backends_ = num_backends_initial;
@@ -877,7 +875,7 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 
 	// Issue all rpcs in parallel if there's something in the batch:
 	if(batches_fragments > 0){
-		LOG (INFO) << "Batch size is \"" << std::to_string(batches_fragments) << "\" in context " << context << ".\n";
+		LOG (INFO) << "Batch size is \"" << batches_fragments << "\" in context " << context << ".\n";
         commands_exec_status = ParallelExecutor::Exec(
         		bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
 				reinterpret_cast<void**>(&backend_command_states_),
