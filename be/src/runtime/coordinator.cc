@@ -877,7 +877,7 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 
 	// Issue all rpcs in parallel if there's something in the batch:
 	if(batches_fragments > 0){
-		LOG (INFO) << "Batch size is \"" << std::to_string(batches_fragments) << "\" in context " << context << ".\n"';
+		LOG (INFO) << "Batch size is \"" << std::to_string(batches_fragments) << "\" in context " << context << ".\n";
         commands_exec_status = ParallelExecutor::Exec(
         		bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
 				reinterpret_cast<void**>(&backend_command_states_),
