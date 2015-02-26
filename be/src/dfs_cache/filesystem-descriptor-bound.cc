@@ -176,6 +176,10 @@ dfsFileInfo* FileSystemDescriptorBound::listDirectory(raiiDfsConnection& conn, c
 	return _dfsListDirectory(conn.connection()->connection, path, numEntries);
 }
 
+int FileSystemDescriptorBound::createDirectory(raiiDfsConnection& conn, const char* path){
+	return _dfsCreateDirectory(conn.connection()->connection, path);
+}
+
 void FileSystemDescriptorBound::freeFileInfo(dfsFileInfo* fileInfo, int numOfEntries){
 	return _dfsFreeFileInfo(fileInfo, numOfEntries);
 }

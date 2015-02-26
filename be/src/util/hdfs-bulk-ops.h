@@ -115,6 +115,9 @@ class HdfsOperationSet {
 
   dfsFS* hdfs_connection() const { return hdfs_connection_; }
 
+  /** reply the dfs operations set size */
+  int64_t count() { return num_ops_.Read(); }
+
  private:
   // The set of operations to be submitted to HDFS
   std::vector<HdfsOp> ops_;

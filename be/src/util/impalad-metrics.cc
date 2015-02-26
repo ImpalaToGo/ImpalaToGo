@@ -86,6 +86,7 @@ const char* ImpaladMetricKeys::RESULTSET_CACHE_TOTAL_BYTES =
 // Counters
 IntGauge* ImpaladMetrics::HASH_TABLE_TOTAL_BYTES = NULL;
 IntCounter* ImpaladMetrics::IMPALA_SERVER_NUM_FRAGMENTS = NULL;
+IntCounter* ImpaladMetrics::IMPALA_SERVER_NUM_COMMANDS = NULL;
 IntCounter* ImpaladMetrics::IMPALA_SERVER_NUM_QUERIES = NULL;
 IntCounter* ImpaladMetrics::NUM_QUERIES_EXPIRED = NULL;
 IntCounter* ImpaladMetrics::NUM_QUERIES_SPILLED = NULL;

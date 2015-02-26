@@ -703,15 +703,14 @@ status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const 
 	return filemgmt::FileSystemManager::instance()->dfsMove(fsDescriptor, src, dst);
 }
 
-status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive = 1) {
+status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive) {
 	LOG (INFO) << "dfsDelete() : path = \"" << path << "\"\n";
 
 	// Remove the file from registry if it is there:
 	Uri uri = Uri::Parse(path);
 
 	if (!CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str())){
-		LOG (ERROR) << "Path \"" << path << "\" was not deleted from registry." << "\n";
-		return status::StatusInternal::CACHE_OBJECT_OPERATION_FAILURE;
+		LOG (WARNING) << "Path \"" << path << "\" was not deleted from registry." << "\n";
 	}
 
 	LOG (INFO) << "Path \"" << path << "\" successfully deleted from registry." << "\n";
@@ -805,9 +804,35 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     return status;
 }
 
-status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path) {
+status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path, bool direct) {
 	LOG (INFO) << "dfsCreateDirectory() for path \"" << path << "\" within the filesystem \"" <<
 			fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"n";
+	if(direct){
+		// locate the remote filesystem adaptor:
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to create the directory \"" << path << "\" on FileSystem \""
+					<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+		}
+
+		// list remote directory:
+		int ret = fsAdaptor->createDirectory(connection, path);
+
+	    if(ret != 0){
+	    	LOG (ERROR) << "Failed to create remote directory \"" << path << "\" on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+	    			fsDescriptor.host << "\"" << "\n";
+	    	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+	    }
+	}
 	return filemgmt::FileSystemManager::instance()->dfsCreateDirectory(fsDescriptor, path);
 }
 
@@ -817,7 +842,31 @@ status::StatusInternal dfsSetReplication(const FileSystemDescriptor & fsDescript
 
 dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
 		int *numEntries) {
-	return filemgmt::FileSystemManager::instance()->dfsListDirectory(fsDescriptor, path, numEntries);
+	// locate the remote filesystem adaptor:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (!fsAdaptor) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no dfs adaptor configured
+		return NULL;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable to list directory \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return NULL;
+	}
+
+	// list remote directory:
+	dfsFileInfo* info = fsAdaptor->listDirectory(connection, path, numEntries);
+
+    if(info == NULL){
+    	LOG (ERROR) << "Failed to list directory \"" << path << "\" on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+    			fsDescriptor.host << "\"" << "\n";
+    	return NULL;
+    }
+    return info;
 }
 
 dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const char* path) {

@@ -207,6 +207,9 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   void TransmitData(TTransmitDataResult& return_val,
       const TTransmitDataParams& params);
 
+  void ReportCommandStatus(TReportCommandStatusResult& return_val,
+      const TReportCommandStatusParams& params);
+
   // Generates a unique id for this query and sets it in the given query context.
   // Prepares the given query context by populating fields required for evaluating
   // certain expressions, such as now(), pid(), etc. Should be called before handing

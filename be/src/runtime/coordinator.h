@@ -54,6 +54,7 @@ class ImpalaInternalServiceClient;
 class Expr;
 class ExprContext;
 class ExecEnv;
+
 class TUpdateCatalogRequest;
 class TQueryExecRequest;
 class TReportExecStatusParams;
@@ -136,6 +137,13 @@ class Coordinator {
   // to CancelInternal().
   Status UpdateFragmentExecStatus(const TReportExecStatusParams& params);
 
+  /** Updates status of a command execution. if 'status' is an error status or if 'done' is true,
+   * consider the command to have finished execution. Assumes
+   * that calls to UpdateCommandExecStatus() won't happen concurrently for the same backend.
+   * If 'status' is an error status, the query is invalidated (set to error)
+   */
+  Status UpdateCommandExecStatus(const TReportCommandStatusParams& params);
+
   // only valid *after* calling Exec(), and may return NULL if there is no executor
   RuntimeState* runtime_state();
   const RowDescriptor& row_desc() const;
@@ -177,7 +185,10 @@ class Coordinator {
   SpinLock* GetExecSummaryLock() const { return &exec_summary_lock_; }
 
  private:
+  /** depicts the plan fragment execution state on particular backend */
   class BackendExecState;
+  /** depicts the command execution state on particular backend */
+  class BackendCommandState;
 
   // Typedef for boost utility to compute averaged stats
   // TODO: including the median doesn't compile, looks like some includes are missing
@@ -214,6 +225,11 @@ class Coordinator {
   // BackendExecStates owned by obj_pool()
   std::vector<BackendExecState*> backend_exec_states_;
 
+  // BackendCommandState owned by obj_pool()
+  std::vector<BackendCommandState*> backend_command_states_;
+
+  std::vector<FragmentExecParams>* fragment_exec_params;
+
   // True if the query needs a post-execution step to tidy up
   bool needs_finalization_;
 
@@ -234,6 +250,9 @@ class Coordinator {
   // Overall status of the entire query; set to the first reported fragment error
   // status or to CANCELLED, if Cancel() is called.
   Status query_status_;
+
+  // Overall status last run commands batch.
+  Status cmd_batch_status_;
 
   // If true, the query is done returning all results.  It is possible that the
   // coordinator still needs to wait for cleanup on remote fragments (e.g. queries
@@ -271,6 +290,9 @@ class Coordinator {
   // backends report completion by notifying on backend_completion_cv_.
   // Tied to lock_.
   boost::condition_variable backend_completion_cv_;
+
+  /** initial number of backends, as specified by current query schedule */
+  int num_backends_initial;
 
   // Count of the number of backends for which done != true. When this
   // hits 0, any Wait()'ing thread is notified
@@ -346,11 +368,16 @@ class Coordinator {
   // Total time spent in finalization (typically 0 except for INSERT into hdfs tables)
   RuntimeProfile::Counter* finalization_timer_;
 
-  // Fill in rpc_params based on parameters.
+  /** Fill in Fragment Execution RPC_params based on parameters. */
   void SetExecPlanFragmentParams(QuerySchedule& schedule,
       int backend_num, const TPlanFragment& fragment,
       int fragment_idx, const FragmentExecParams& params, int instance_idx,
       const TNetworkAddress& coord, TExecPlanFragmentParams* rpc_params);
+
+  /** Fill in Command Execution RPC params based on parameters */
+  void SetExecCommandParams(int backend_num, const TRemoteShortCommand& command,
+      int fragment_idx, const FragmentExecParams& params, int instance_idx,
+      const TNetworkAddress& coord, TExecRemoteCommandParams* rpc_params);
 
   // Wrapper for ExecPlanFragment() rpc.  This function will be called in parallel
   // from multiple threads.
@@ -360,6 +387,11 @@ class Coordinator {
   // 'coordinator' will always be an instance to this class and 'exec_state' will
   // always be an instance of BackendExecState.
   Status ExecRemoteFragment(void* exec_state);
+
+  /** Executes remote command as specified, will be called in parallel from multiple threads */
+  Status ExecRemoteCommand(void* exec_command);
+
+  Status RunBatchOnRemoteBackends(const dfsBatch& batch, const std::string& context);
 
   // Determine fragment number, given fragment id.
   int GetFragmentNum(const TUniqueId& fragment_id);

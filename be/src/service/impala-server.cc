@@ -454,7 +454,7 @@ Status ImpalaServer::GetRuntimeProfileStr(const TUniqueId& query_id,
 Status ImpalaServer::GetExecSummary(const TUniqueId& query_id, TExecSummary* result) {
   // Search for the query id in the active query map
   {
-    shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+    boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
     if (exec_state != NULL) {
       lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
       if (exec_state->coord() != NULL) {
@@ -542,8 +542,8 @@ void ImpalaServer::ArchiveQuery(const QueryExecState& query) {
 ImpalaServer::~ImpalaServer() {}
 
 Status ImpalaServer::Execute(TQueryCtx* query_ctx,
-    shared_ptr<SessionState> session_state,
-    shared_ptr<QueryExecState>* exec_state) {
+		boost::shared_ptr<SessionState> session_state,
+		boost::shared_ptr<QueryExecState>* exec_state) {
   PrepareQueryContext(query_ctx);
   bool registered_exec_state;
   ImpaladMetrics::IMPALA_SERVER_NUM_QUERIES->Increment(1L);
@@ -557,9 +557,9 @@ Status ImpalaServer::Execute(TQueryCtx* query_ctx,
 
 Status ImpalaServer::ExecuteInternal(
     const TQueryCtx& query_ctx,
-    shared_ptr<SessionState> session_state,
+    boost::shared_ptr<SessionState> session_state,
     bool* registered_exec_state,
-    shared_ptr<QueryExecState>* exec_state) {
+    boost::shared_ptr<QueryExecState>* exec_state) {
   DCHECK(session_state != NULL);
   *registered_exec_state = false;
   if (IsOffline()) {
@@ -640,8 +640,8 @@ void ImpalaServer::PrepareQueryContext(TQueryCtx* query_ctx) {
   UUIDToTUniqueId(query_uuid, &query_ctx->query_id);
 }
 
-Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
-    const shared_ptr<QueryExecState>& exec_state) {
+Status ImpalaServer::RegisterQuery(boost::shared_ptr<SessionState> session_state,
+    const boost::shared_ptr<QueryExecState>& exec_state) {
   lock_guard<mutex> l2(session_state->lock);
   // The session wasn't expired at the time it was checked out and it isn't allowed to
   // expire while checked out, so it must not be expired.
@@ -664,8 +664,8 @@ Status ImpalaServer::RegisterQuery(shared_ptr<SessionState> session_state,
   return Status::OK;
 }
 
-Status ImpalaServer::SetQueryInflight(shared_ptr<SessionState> session_state,
-    const shared_ptr<QueryExecState>& exec_state) {
+Status ImpalaServer::SetQueryInflight(boost::shared_ptr<SessionState> session_state,
+    const boost::shared_ptr<QueryExecState>& exec_state) {
   const TUniqueId& query_id = exec_state->query_id();
   lock_guard<mutex> l(session_state->lock);
   // The session wasn't expired at the time it was checked out and it isn't allowed to
@@ -701,7 +701,7 @@ Status ImpalaServer::UnregisterQuery(const TUniqueId& query_id, bool check_infli
 
   RETURN_IF_ERROR(CancelInternal(query_id, check_inflight, cause));
 
-  shared_ptr<QueryExecState> exec_state;
+  boost::shared_ptr<QueryExecState> exec_state;
   {
     lock_guard<mutex> l(query_exec_state_map_lock_);
     QueryExecStateMap::iterator entry = query_exec_state_map_.find(query_id);
@@ -771,7 +771,7 @@ Status ImpalaServer::UpdateCatalogMetrics() {
 Status ImpalaServer::CancelInternal(const TUniqueId& query_id, bool check_inflight,
     const Status* cause) {
   VLOG_QUERY << "Cancel(): query_id=" << PrintId(query_id);
-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+  boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
   if (exec_state == NULL) return Status("Invalid or unknown query handle");
   lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
   if (check_inflight) {
@@ -789,7 +789,7 @@ Status ImpalaServer::CancelInternal(const TUniqueId& query_id, bool check_inflig
 Status ImpalaServer::CloseSessionInternal(const TUniqueId& session_id,
     bool ignore_if_absent) {
   // Find the session_state and remove it from the map.
-  shared_ptr<SessionState> session_state;
+  boost::shared_ptr<SessionState> session_state;
   {
     lock_guard<mutex> l(session_state_map_lock_);
     SessionStateMap::iterator entry = session_state_map_.find(session_id);
@@ -827,7 +827,7 @@ Status ImpalaServer::CloseSessionInternal(const TUniqueId& session_id,
 }
 
 Status ImpalaServer::GetSessionState(const TUniqueId& session_id,
-    shared_ptr<SessionState>* session_state, bool mark_active) {
+  boost::shared_ptr<SessionState>* session_state, bool mark_active) {
   lock_guard<mutex> l(session_state_map_lock_);
   SessionStateMap::iterator i = session_state_map_.find(session_id);
   if (i == session_state_map_.end()) {
@@ -861,7 +861,7 @@ void ImpalaServer::ReportExecStatus(
   // acquiring/releasing the map lock and doing a map lookup for
   // every report (assign each query a local int32_t id and use that to index into a
   // vector of QueryExecStates, w/o lookup or locking?)
-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(params.query_id, false);
+  boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(params.query_id, false);
   // TODO: This is expected occasionally (since a report RPC might be in flight while
   // cancellation is happening), but repeated instances for the same query are a bug
   // (which we have occasionally seen). Consider keeping query exec states around for a
@@ -877,6 +877,34 @@ void ImpalaServer::ReportExecStatus(
     return;
   }
   exec_state->coord()->UpdateFragmentExecStatus(params).SetTStatus(&return_val);
+}
+
+void ImpalaServer::ReportCommandStatus(TReportCommandStatusResult& return_val,
+      const TReportCommandStatusParams& params){
+	 VLOG_FILE << "ReportCommandStatus() query_id = \"" << params.query_id
+	            << "\"; backend # = \"" << params.backend_num
+	            << "\"; instance_id = \"" << params.command_instance_id
+	            << "\"; done = \"" << (params.done ? "true" : "false") << "\".";
+	  // TODO: implement something more efficient here, we're currently
+	  // acquiring/releasing the map lock and doing a map lookup for
+	  // every report (assign each query a local int32_t id and use that to index into a
+	  // vector of QueryExecStates, w/o lookup or locking?)
+	  boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(params.query_id, false);
+	  // TODO: This is expected occasionally (since a report RPC might be in flight while
+	  // cancellation is happening), but repeated instances for the same query are a bug
+	  // (which we have occasionally seen). Consider keeping query exec states around for a
+	  // little longer (until all reports have been received).
+	  if (exec_state.get() == NULL) {
+	    return_val.status.__set_status_code(TStatusCode::INTERNAL_ERROR);
+	    const string& err = Substitute("ReportExecStatus(): Received report for unknown "
+	        "query ID (probably closed or cancelled). (query_id: $0, backend: $1, instance:"
+	        " $2 done: $3)", PrintId(params.query_id), params.backend_num,
+	        PrintId(params.command_instance_id), params.done);
+	    return_val.status.error_msgs.push_back(err);
+	    VLOG_QUERY << err;
+	    return;
+	  }
+	  exec_state->coord()->UpdateCommandExecStatus(params).SetTStatus(&return_val);
 }
 
 void ImpalaServer::TransmitData(
@@ -1322,7 +1350,7 @@ void ImpalaServer::ConnectionStart(
     // Beeswax only allows for one session per connection, so we can share the session ID
     // with the connection ID
     const TUniqueId& session_id = connection_context.connection_id;
-    shared_ptr<SessionState> session_state;
+    boost::shared_ptr<SessionState> session_state;
     session_state.reset(new SessionState);
     session_state->closed = false;
     session_state->start_time = TimestampValue::local_time();
@@ -1339,7 +1367,7 @@ void ImpalaServer::ConnectionStart(
     {
       lock_guard<mutex> l(session_state_map_lock_);
       bool success =
-          session_state_map_.insert(make_pair(session_id, session_state)).second;
+          session_state_map_.insert(std::make_pair(session_id, session_state)).second;
       // The session should not have already existed.
       DCHECK(success);
     }
@@ -1438,7 +1466,7 @@ void ImpalaServer::ExpireQueries() {
         // know that the true expiration time will be at least that far off. So we can
         // break here and sleep.
         if (expiration_event->first > now) break;
-        shared_ptr<QueryExecState> query_state =
+        boost::shared_ptr<QueryExecState> query_state =
             GetQueryExecState(expiration_event->second, false);
         if (query_state.get() == NULL) {
           // Query was deleted some other way.
@@ -1504,13 +1532,13 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
   DCHECK((hs2_port == 0) == (hs2_server == NULL));
   DCHECK((be_port == 0) == (be_server == NULL));
 
-  shared_ptr<ImpalaServer> handler(new ImpalaServer(exec_env));
+  boost::shared_ptr<ImpalaServer> handler(new ImpalaServer(exec_env));
 
   if (beeswax_port != 0 && beeswax_server != NULL) {
     // Beeswax FE must be a TThreadPoolServer because ODBC and Hue only support
     // TThreadPoolServer.
-    shared_ptr<TProcessor> beeswax_processor(new ImpalaServiceProcessor(handler));
-    shared_ptr<TProcessorEventHandler> event_handler(
+    boost::shared_ptr<TProcessor> beeswax_processor(new ImpalaServiceProcessor(handler));
+    boost::shared_ptr<TProcessorEventHandler> event_handler(
         new RpcEventHandler("beeswax", exec_env->metrics()));
     beeswax_processor->setEventHandler(event_handler);
     *beeswax_server = new ThriftServer(BEESWAX_SERVER_NAME, beeswax_processor,
@@ -1528,11 +1556,11 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
   }
 
   if (hs2_port != 0 && hs2_server != NULL) {
-    // HiveServer2 JDBC driver does not support non-blocking server.
-    shared_ptr<TProcessor> hs2_fe_processor(
-        new ImpalaHiveServer2ServiceProcessor(handler));
-    shared_ptr<TProcessorEventHandler> event_handler(
-        new RpcEventHandler("hs2", exec_env->metrics()));
+	  // HiveServer2 JDBC driver does not support non-blocking server.
+	  boost::shared_ptr<TProcessor> hs2_fe_processor(
+			  new ImpalaHiveServer2ServiceProcessor(handler));
+	  boost::shared_ptr<TProcessorEventHandler> event_handler(
+			  new RpcEventHandler("hs2", exec_env->metrics()));
     hs2_fe_processor->setEventHandler(event_handler);
 
     *hs2_server = new ThriftServer(HS2_SERVER_NAME, hs2_fe_processor, hs2_port,
@@ -1550,11 +1578,12 @@ Status CreateImpalaServer(ExecEnv* exec_env, int beeswax_port, int hs2_port, int
   }
 
   if (be_port != 0 && be_server != NULL) {
-    shared_ptr<FragmentMgr> fragment_mgr(new FragmentMgr());
-    shared_ptr<ImpalaInternalService> thrift_if(
-        new ImpalaInternalService(handler, fragment_mgr));
-    shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(thrift_if));
-    shared_ptr<TProcessorEventHandler> event_handler(
+	  boost::shared_ptr<FragmentMgr> fragment_mgr(new FragmentMgr());
+	  boost::shared_ptr<CommandMgr> command_mgr(new CommandMgr());
+	  boost::shared_ptr<ImpalaInternalService> thrift_if(
+        new ImpalaInternalService(handler, fragment_mgr, command_mgr));
+	  boost::shared_ptr<TProcessor> be_processor(new ImpalaInternalServiceProcessor(thrift_if));
+	  boost::shared_ptr<TProcessorEventHandler> event_handler(
         new RpcEventHandler("backend", exec_env->metrics()));
     be_processor->setEventHandler(event_handler);
 
@@ -1581,12 +1610,12 @@ bool ImpalaServer::GetSessionIdForQuery(const TUniqueId& query_id,
   }
 }
 
-shared_ptr<ImpalaServer::QueryExecState> ImpalaServer::GetQueryExecState(
+boost::shared_ptr<ImpalaServer::QueryExecState> ImpalaServer::GetQueryExecState(
     const TUniqueId& query_id, bool lock) {
   lock_guard<mutex> l(query_exec_state_map_lock_);
   QueryExecStateMap::iterator i = query_exec_state_map_.find(query_id);
   if (i == query_exec_state_map_.end()) {
-    return shared_ptr<QueryExecState>();
+    return boost::shared_ptr<QueryExecState>();
   } else {
     if (lock) i->second->lock()->lock();
     return i->second;

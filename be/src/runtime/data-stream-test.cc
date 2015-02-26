@@ -85,6 +85,14 @@ class ImpalaTestBackend : public ImpalaInternalServiceIf {
     }
   }
 
+  virtual void ExecShortCommand(TRemoteShortCommandResult& _return, const TExecRemoteCommandParams& params){
+
+  }
+
+  virtual void ReportCommandStatus(TReportCommandStatusResult& _return, const TReportCommandStatusParams& params){
+
+  }
+
  private:
   DataStreamMgr* mgr_;
 };
@@ -212,7 +220,7 @@ class DataStreamTest : public testing::Test {
     int receiver_num;
 
     thread* thread_handle;
-    shared_ptr<DataStreamRecvr> stream_recvr;
+    boost::shared_ptr<DataStreamRecvr> stream_recvr;
     Status status;
     int num_rows_received;
     multiset<int64_t> data_values;
@@ -436,8 +444,8 @@ class DataStreamTest : public testing::Test {
 
   // Start backend in separate thread.
   void StartBackend() {
-    shared_ptr<ImpalaTestBackend> handler(new ImpalaTestBackend(stream_mgr_));
-    shared_ptr<TProcessor> processor(new ImpalaInternalServiceProcessor(handler));
+    boost::shared_ptr<ImpalaTestBackend> handler(new ImpalaTestBackend(stream_mgr_));
+    boost::shared_ptr<TProcessor> processor(new ImpalaInternalServiceProcessor(handler));
     server_ = new ThriftServer("DataStreamTest backend", processor, FLAGS_port, NULL);
     server_->Start();
   }

@@ -21,16 +21,20 @@
 #include "gen-cpp/ImpalaInternalService_types.h"
 #include "service/impala-server.h"
 #include "service/fragment-mgr.h"
+#include "service/command-mgr.h"
 
 namespace impala {
 
-// Proxies Thrift RPC requests onto their implementing objects for the
-// ImpalaInternalService service.
+/**
+ * Proxies Thrift RPC requests onto their implementing objects for the
+ * ImpalaInternalService service.
+ */
 class ImpalaInternalService : public ImpalaInternalServiceIf {
  public:
   ImpalaInternalService(const boost::shared_ptr<ImpalaServer>& impala_server,
-      const boost::shared_ptr<FragmentMgr>& fragment_mgr)
-      : impala_server_(impala_server), fragment_mgr_(fragment_mgr) { }
+      const boost::shared_ptr<FragmentMgr>& fragment_mgr,
+	  const boost::shared_ptr<CommandMgr>& command_mgr)
+      : impala_server_(impala_server), fragment_mgr_(fragment_mgr), command_mgr_(command_mgr) { }
 
   virtual void ExecPlanFragment(TExecPlanFragmentResult& return_val,
       const TExecPlanFragmentParams& params) {
@@ -52,12 +56,36 @@ class ImpalaInternalService : public ImpalaInternalServiceIf {
     impala_server_->TransmitData(return_val, params);
   }
 
+  /** Execute the short command. Mostly is introduced to execute the remote dfs commands by
+   * nodes that are responsible to cache the part of remote dfs content.
+   *
+   * @param [in/out] return_val - return value, operation synchronous result
+   * @param [in]     params     - command parameters
+   */
+  virtual void ExecShortCommand(TRemoteShortCommandResult& return_val,
+		  const TExecRemoteCommandParams& params){
+	  command_mgr_->ExecCommand(params).SetTStatus(&return_val);
+  }
+
+  /** Polling method to request the command execution triggered by preseding
+   * ExecShortCommand() RPC.
+   *
+   * @param [in/out] return_val - command status
+   * @param [in]     params     - monitoring request parameters
+   */
+  virtual void ReportCommandStatus(TReportCommandStatusResult& return_val,
+		  const TReportCommandStatusParams& params){
+
+  }
  private:
   // Manages fragment reporting and data transmission
   boost::shared_ptr<ImpalaServer> impala_server_;
 
   // Manages fragment execution
   boost::shared_ptr<FragmentMgr> fragment_mgr_;
+
+  // Manages command execution
+  boost::shared_ptr<CommandMgr> command_mgr_;
 };
 
 }
