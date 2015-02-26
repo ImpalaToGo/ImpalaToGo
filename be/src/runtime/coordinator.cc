@@ -382,6 +382,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
   SCOPED_TIMER(query_profile_->total_time_counter());
 
   fragment_exec_params = *(schedule.exec_params());
+  // print them now
   TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
   // to keep things simple, make async Cancel() calls wait until plan fragment
@@ -394,6 +395,8 @@ Status Coordinator::Exec(QuerySchedule& schedule,
       request.fragments[0].partition.type == TPartitionType::UNPARTITIONED;
 
   if (has_coordinator_fragment) {
+	  LOG (INFO) << "Coordinator has a fragment, host : \"" <<
+			  fragment_exec_params[0].hosts[0] << "\"\n.";
     executor_.reset(new PlanFragmentExecutor(
             exec_env_, PlanFragmentExecutor::ReportStatusCallback()));
     // If a coordinator fragment is requested (for most queries this
@@ -856,6 +859,9 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 	LOG (INFO) << "RunBatchOnRemoteBackends() : \"" << context << "\" context. initial backends num = \"" <<
 			num_backends_initial << "\". On query completion \"" <<
 			query_id_ << "\". Batches set size = \"" << batch.size() << "\".";
+
+	if(batch.size() == 0)
+		return Status::OK;
 
 	backend_command_states_.resize(num_backends_initial);
 	num_remaining_backends_ = num_backends_initial;
