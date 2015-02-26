@@ -228,7 +228,7 @@ class Coordinator {
   // BackendCommandState owned by obj_pool()
   std::vector<BackendCommandState*> backend_command_states_;
 
-  std::vector<FragmentExecParams>* fragment_exec_params;
+  std::vector<FragmentExecParams> fragment_exec_params;
 
   // True if the query needs a post-execution step to tidy up
   bool needs_finalization_;

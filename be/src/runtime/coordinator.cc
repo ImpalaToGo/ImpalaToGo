@@ -231,20 +231,19 @@ class Coordinator::BackendCommandState {
     stringstream ss;
     ss << "Instance " << PrintId(command_instance_id)
        << " (host = " << backend_address << ")";
+
+    LOG(INFO) << "Constructing backend command state. Backend addr = \"" << backend_address << "\";" <<
+    		" instance idx = \"" << std::to_string(instance_idx) << "\"; command idx = \"" <<
+			std::to_string(command_idx) << "\".\n";
+
     profile = obj_pool->Add(new RuntimeProfile(obj_pool, ss.str()));
     coord->SetExecCommandParams(backend_num, command, command_idx,
         params, instance_idx, coord_address, &rpc_params);
+
+    LOG(INFO) << "Backend command state constructed. Backend addr = \"" << backend_address << "\";" <<
+    		" instance idx = \"" << std::to_string(instance_idx) << "\"; command idx = \"" <<
+			std::to_string(command_idx) << "\".\n";
   }
-
-  // Return number of completed scan ranges for plan_node_id, or 0 if that node
-  // doesn't exist.
-  // Thread-safe.
-  int64_t GetNumScanRangesCompleted(int plan_node_id);
-
-  // Updates the total number of scan ranges complete for this fragment.  Returns
-  // the delta since the last time this was called.
-  // lock must be taken before calling this.
-  int64_t UpdateNumScanRangesCompleted();
 };
 
 void Coordinator::BackendExecState::ComputeTotalSplitSize() {
@@ -384,7 +383,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
 
   SCOPED_TIMER(query_profile_->total_time_counter());
 
-  fragment_exec_params = schedule.exec_params();
+  fragment_exec_params(schedule.exec_params()->begin(), schedule.exec_params()->end());
   TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
   // to keep things simple, make async Cancel() calls wait until plan fragment
@@ -406,7 +405,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
     // had a chance to register with the stream mgr.
     TExecPlanFragmentParams rpc_params;
     SetExecPlanFragmentParams(schedule, 0, request.fragments[0], 0,
-        (*fragment_exec_params)[0], 0, coord, &rpc_params);
+        (fragment_exec_params)[0], 0, coord, &rpc_params);
     RETURN_IF_ERROR(executor_->Prepare(rpc_params));
 
     // Prepare output_expr_ctxs before optimizing the LLVM module. The other exprs of this
@@ -459,7 +458,7 @@ Status Coordinator::Exec(QuerySchedule& schedule,
   StatsMetric<double> latencies("fragment-latencies", TUnit::TIME_NS);
   for (int fragment_idx = (has_coordinator_fragment ? 1 : 0);
        fragment_idx < request.fragments.size(); ++fragment_idx) {
-    const FragmentExecParams& params = (*fragment_exec_params)[fragment_idx];
+    const FragmentExecParams& params = (fragment_exec_params)[fragment_idx];
 
     // set up exec states
     int num_hosts = params.hosts.size();
@@ -856,27 +855,34 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 
 	TNetworkAddress coord = MakeNetworkAddress(FLAGS_hostname, FLAGS_be_port);
 
+	LOG (INFO) << "RunBatchOnRemoteBackends() : \"" << context << "\" context. initial backends num = \"" <<
+			std::to_string(num_backends_initial) << "\". On query completion \"" <<
+			query_id_ << "\". Batches set size = \"" << std::to_string(batch.size()) << "\".";
+
 	backend_command_states_.resize(num_backends_initial);
 	num_remaining_backends_ = num_backends_initial;
-	VLOG_QUERY << "run " << context << " batches on \"" << num_backends_initial
-			<< " backends for completion on query \"" << query_id_ << "\".";
 
 	BOOST_FOREACH(const dfsBatch::value_type& item, batch){
-		const FragmentExecParams& params = (*fragment_exec_params)[item.first];
+		const FragmentExecParams& params = (fragment_exec_params)[item.first];
 		BackendCommandState* exec_state =
 				obj_pool()->Add(new BackendCommandState(this, coord, item.first,
 						item.second, item.first, params, item.first, obj_pool()));
 		backend_command_states_[item.first] = exec_state;
-		VLOG(2) << "RunBatchOnRemoteBackends(): running instance: command_idx = \"" << item.first
+		LOG(INFO) << "RunBatchOnRemoteBackends(): running instance: command_idx = \"" << item.first
 	              << " instance_id = \"" << params.instance_ids[item.first] << "\".";
 	    }
 
-    // Issue all rpcs in parallel
-    Status commands_exec_status = ParallelExecutor::Exec(
-        bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
-        reinterpret_cast<void**>(&backend_command_states_),
-		num_backends_initial, &latencies);
+	Status commands_exec_status = Status::OK;
+    size_t batches_fragments = backend_command_states_.size();
 
+	// Issue all rpcs in parallel if there's something in the batch:
+	if(batches_fragments > 0){
+		LOG (INFO) << "Batch size is \"" << std::to_string(batches_fragments) << "\" in context " << context << ".\n"';
+        commands_exec_status = ParallelExecutor::Exec(
+        		bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
+				reinterpret_cast<void**>(&backend_command_states_),
+				num_backends_initial, &latencies);
+	}
 	if (!commands_exec_status.ok()) {
 	      DCHECK(query_status_.ok());  // nobody should have been able to cancel
 	      query_status_ = commands_exec_status;
@@ -1253,7 +1259,7 @@ Status Coordinator::ExecRemoteFragment(void* exec_state_arg) {
 
 Status Coordinator::ExecRemoteCommand(void* exec_state_arg) {
   BackendCommandState* exec_state = reinterpret_cast<BackendCommandState*>(exec_state_arg);
-  VLOG_FILE << "making rpc: ExecRemoteCommand query_id = \"" << query_id_
+  LOG(INFO) << "making rpc: ExecRemoteCommand query_id = \"" << query_id_
             << "\"; instance_id = \"" << exec_state->command_instance_id
             << "\"; host = \"" << exec_state->backend_address << "\".";
   lock_guard<mutex> l(exec_state->lock);
@@ -1273,7 +1279,7 @@ Status Coordinator::ExecRemoteCommand(void* exec_state_arg) {
       // connected. To avoid failing the first query after every failure, catch
       // the first failure and force a reopen of the transport.
       // TODO: Improve client-cache so that we don't need to do this.
-      VLOG_RPC << "Retrying ExecRemoteCommand: " << e.what();
+      LOG(WARNING) << "Retrying ExecRemoteCommand: " << e.what();
       Status status = backend_client.Reopen();
       if (!status.ok()) {
         exec_state->status = status;
@@ -1286,7 +1292,7 @@ Status Coordinator::ExecRemoteCommand(void* exec_state_arg) {
     msg << "ExecRemoteCommand rpc query_id = \"" << query_id_
         << "\"; instance_id = \"" << exec_state->command_instance_id
         << "\" failed: " << e.what();
-    VLOG_QUERY << msg.str();
+    LOG(INFO) << msg.str();
     exec_state->status = Status(msg.str());
     return exec_state->status;
   }
