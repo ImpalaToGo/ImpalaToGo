@@ -18,9 +18,9 @@
 
 namespace impala {
 
-DEFINE_int32(log_mem_usage_interval, 0,
+DEFINE_int32(log_c_mem_usage_interval, 0,
 		"If non-zero, impalad will output memory usage "
-				"every log_mem_usage_interval'th command completion.");
+				"every log_c_mem_usage_interval'th command completion.");
 
 Status CommandMgr::init(){
 	// acquire resources (here, threads) pool from exec, typically 3 number of threads per core
@@ -88,10 +88,10 @@ void CommandMgr::CommandExecThread(CommandExecState* exec_state) {
 	}
 #ifndef ADDRESS_SANITIZER
 	// tcmalloc and address sanitizer can not be used together
-	if (FLAGS_log_mem_usage_interval > 0) {
+	if (FLAGS_log_c_mem_usage_interval > 0) {
 		uint64_t num_complete =
 				ImpaladMetrics::IMPALA_SERVER_NUM_COMMANDS->value();
-		if (num_complete % FLAGS_log_mem_usage_interval == 0) {
+		if (num_complete % FLAGS_log_c_mem_usage_interval == 0) {
 			char buf[2048];
 			// This outputs how much memory is currently being used by this impalad
 			MallocExtension::instance()->GetStats(buf, 2048);
