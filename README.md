@@ -246,6 +246,144 @@ create external table test_table (name string, category string, score double) RO
 select * from test_table where category="xyz";
 ```
 
+To run Impala on Tachyon:
+----
+
+1. ####Change core-site.xml (hdfs-site.xml):
+```xml
+  <property>
+    <name>fs.defaultFS</name>
+    <value>tachyon://localhost:19998</value>
+  </property>
+  <property>
+    <name>fs.default.name</name>
+    <value>tachyon://localhost:19998</value>
+    <description>The name of the default file system.  A URI whose scheme and authority determine the FileSystem implementation.</description>
+  </property>
+  <property>
+    <name>fs.tachyon.impl</name>
+    <value>tachyon.hadoop.TFS</value>
+  </property>
+```
+
+2. ####Edit tachyon/conf/tachyon-env.sh :
+change **TACHYON_UNDERFS_ADDRESS** - set to the underlying dfs address
+For s3, add key id and secret key to **TACHYON_JAVA_OPTS** :
+```bash
+  -Dfs.s3n.awsAccessKeyId=123
+  -Dfs.s3n.awsSecretAccessKey=456
+
+```   
+Example of tachyon-env.sh:
+
+```bash
+!/usr/bin/env bash
+
+# This file contains environment variables required to run Tachyon. Copy it as tachyon-env.sh and
+# edit that to configure Tachyon for your site. At a minimum,
+# the following variables should be set:
+#
+# - JAVA_HOME, to point to your JAVA installation
+# - TACHYON_MASTER_ADDRESS, to bind the master to a different IP address or hostname
+# - TACHYON_UNDERFS_ADDRESS, to set the under filesystem address.
+# - TACHYON_WORKER_MEMORY_SIZE, to set how much memory to use (e.g. 1000mb, 2gb) per worker
+# - TACHYON_RAM_FOLDER, to set where worker stores in memory data
+# - TACHYON_UNDERFS_HDFS_IMPL, to set which HDFS implementation to use (e.g. com.mapr.fs.MapRFileSystem,
+#   org.apache.hadoop.hdfs.DistributedFileSystem)
+
+# The following gives an example:
+
+if [[ `uname -a` == Darwin* ]]; then
+  # Assuming Mac OS X
+  export JAVA_HOME=${JAVA_HOME:-$(/usr/libexec/java_home)}
+  export TACHYON_RAM_FOLDER=/Volumes/ramdisk
+  export TACHYON_JAVA_OPTS="-Djava.security.krb5.realm= -Djava.security.krb5.kdc="
+else
+  # Assuming Linux
+  if [ -z "$JAVA_HOME" ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64
+  fi
+  export TACHYON_RAM_FOLDER=/mnt/ramdisk
+fi
+
+export JAVA="$JAVA_HOME/bin/java"
+export TACHYON_MASTER_ADDRESS=localhost
+export TACHYON_UNDERFS_ADDRESS=s3n://amazon_bucket
+# for hdfs, uncomment this --> export TACHYON_UNDERFS_ADDRESS=hdfs://localhost:9000
+export TACHYON_WORKER_MEMORY_SIZE=0.5GB
+export TACHYON_UNDERFS_HDFS_IMPL=org.apache.hadoop.hdfs.DistributedFileSystem
+
+CONF_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+export TACHYON_JAVA_OPTS+="
+  -Dlog4j.configuration=file:$CONF_DIR/log4j.properties
+  -Dtachyon.debug=false
+  -Dtachyon.underfs.address=$TACHYON_UNDERFS_ADDRESS
+  -Dtachyon.underfs.hdfs.impl=$TACHYON_UNDERFS_HDFS_IMPL
+  -Dtachyon.data.folder=$TACHYON_UNDERFS_ADDRESS/tmp/tachyon/data
+  -Dtachyon.workers.folder=$TACHYON_UNDERFS_ADDRESS/tmp/tachyon/workers
+  -Dtachyon.worker.memory.size=$TACHYON_WORKER_MEMORY_SIZE
+  -Dtachyon.worker.data.folder=$TACHYON_RAM_FOLDER/tachyonworker/
+  -Dtachyon.master.worker.timeout.ms=60000
+  -Dtachyon.master.hostname=$TACHYON_MASTER_ADDRESS
+  -Dtachyon.master.journal.folder=$TACHYON_HOME/journal/
+  -Dorg.apache.jasper.compiler.disablejsr199=true
+  -Djava.net.preferIPv4Stack=true
+  -Dfs.s3n.awsAccessKeyId=123
+  -Dfs.s3n.awsSecretAccessKey=456
+"
+
+# Master specific parameters. Default to TACHYON_JAVA_OPTS.
+export TACHYON_MASTER_JAVA_OPTS="$TACHYON_JAVA_OPTS"
+
+# Worker specific parameters that will be shared to all workers. Default to TACHYON_JAVA_OPTS.
+export TACHYON_WORKER_JAVA_OPTS="$TACHYON_JAVA_OPTS"
+```
+
+3. For s3, an extra dependecnies are required.
+The **hadoop-client** package requires the jets3t package to use S3, but for some reason doesn't pull it in as a depedency.One way to fix this is to repackage Tachyon, adding jets3t as a dependency. For example, the following should work with hadoop version 2.5.0, although depending on your version of Hadoop, you may need an older version of jets3t:
+```xml
+<dependency>
+  <groupId>net.java.dev.jets3t</groupId>
+  <artifactId>jets3t</artifactId>
+  <version>0.9.0</version>
+  <exclusions>
+    <exclusion>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <!-- <version>1.3</version> -->
+    </exclusion>
+  </exclusions>
+</dependency>
+```
+
+For tachyon 0.6.0 to work with hadoop 2.5.0, you'll have to export first paths to : 
+- * jets3:0.9.0 
+- * commons-httpclient:3.1
+
+```bash
+export TACHYON_CLASSPATH=~/.m2/repository/commons-httpclient/commons-httpclient/3.1/commons-httpclient-3.1.jar:~/.m2/repository/net/java/dev/jets3t/jets3t/0.9.0/jets3t-0.9.0.jar
+```
+
+Note that Impala thirdparty contains these dependencies in hadoop snapshot: 
+```bash
+${IMPALA_HOME}/thirdparty/cdh5.2.0/hadoop-2.5.0-cdh5.2.0/share/hadoop/tools/lib
+```
+
+4. Run Tachyon:
+```bash
+$ cd tachyon
+$ ./bin/format.sh
+$ ./bin/start.sh all
+```
+
+5. Export tachyon client location to Impala. For production, edit /etc/bin/impalad and add the path to tachyon client there
+```bash
+export CLASSPATH=/pathToTachyon/client/target/tachyon-client-{{site.TACHYON_RELEASED_VERSION}}-jar-with-dependencies.jar:$CLASSPATH
+```
+
+6. Run ImpalaToGo
+
 License
 ----
 
