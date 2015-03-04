@@ -90,6 +90,10 @@ status::StatusInternal cacheInit(int mem_limit_percent,
 	if(!CacheLayerRegistry::init(mem_limit_percent, root, timeslice, size_hard_limit))
 		return status::StatusInternal::CACHE_IS_NOT_READY;
 
+	// Skip other managers creation and configuration in case if direct DFS access is requested
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::OK;
+
     CacheManager::init();
     filemgmt::FileSystemManager::init();
 
@@ -104,6 +108,9 @@ status::StatusInternal cacheConfigureFileSystem(FileSystemDescriptor& fsDescript
 }
 
 status::StatusInternal cacheShutdown(bool force, bool updateClients) {
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::OK;
+
 	CacheManager::instance()->shutdown(force, updateClients);
 	return status::StatusInternal::OK;
 }
@@ -111,21 +118,41 @@ status::StatusInternal cacheShutdown(bool force, bool updateClients) {
 status::StatusInternal cacheEstimate(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, time_t & time, CacheEstimationCompletedCallback callback,
 		requestIdentity & requestIdentity, bool async) {
+
+	// is not supported on direct DFS access configuration
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::NOT_IMPLEMENTED;
+
 	return CacheManager::instance()->cacheEstimate(session, fsDescriptor, files, time, callback,
 			requestIdentity, async);
 }
 
 status::StatusInternal cachePrepareData(SessionContext session, const FileSystemDescriptor & fsDescriptor,
 		const DataSet& files, PrepareCompletedCallback callback, requestIdentity & requestIdentity) {
+
+	// is not supported on direct DFS access configuration
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::NOT_IMPLEMENTED;
+
 	return CacheManager::instance()->cachePrepareData(session, fsDescriptor, files, callback, requestIdentity);
 }
 
 status::StatusInternal cacheCancelPrepareData(const requestIdentity & requestIdentity) {
+
+	// is not supported on direct DFS access configuration
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::NOT_IMPLEMENTED;
+
 	return CacheManager::instance()->cacheCancelPrepareData(requestIdentity);
 }
 
 status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestIdentity,
 		std::list<boost::shared_ptr<FileProgress> >& progress, request_performance& performance) {
+
+	// is not supported on direct DFS access configuration
+	if(CacheLayerRegistry::instance()->directDFSAccess())
+		return status::StatusInternal::NOT_IMPLEMENTED;
+
 	return CacheManager::instance()->cacheCheckPrepareStatus(requestIdentity, progress, performance);
 }
 
@@ -284,7 +311,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 		LOG (WARNING)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 
 		std::string direct_path(path);
-		direct_path.insert(direct_path.find_first_of("/"), "/");
+		if(fsDescriptor.dfs_type == DFS_TYPE::local)
+			direct_path.insert(direct_path.find_first_of("/"), "/");
 
 		LOG (INFO)<< "File \"/" << "/" << direct_path << "\" will be opened directly." << "\n";
 
@@ -299,7 +327,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 
 		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
 		if (!connection.valid()) {
-			LOG (ERROR)<< "No connection to dfs available, unable to close file for write on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			LOG (ERROR)<< "No connection to dfs available, unable to open or create file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 					fsDescriptor.host << "\"" << "\n";
 			return NULL;
 		}
@@ -363,6 +391,39 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available) {
 	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
+
+	// handle direct dfs operation if direct access is configured:
+	if(CacheLayerRegistry::instance()->directDFSAccess()){
+		dfsFile handle = NULL;
+
+		std::string direct_path(path);
+		if(fsDescriptor.dfs_type == DFS_TYPE::local)
+			direct_path.insert(direct_path.find_first_of("/"), "/");
+
+		// open the file directly from target:
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+		if (!fsAdaptor ) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+					fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return NULL;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to open file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+					fsDescriptor.host << "\"" << "\n";
+			return NULL;
+		}
+
+		handle = fsAdaptor->fileOpen(connection, direct_path.c_str(), flags, bufferSize, replication, blocksize);
+		if(handle != NULL){
+			// mark this handle as "direct"
+			handle->direct = true;
+			available = true;
+		}
+		return handle;
+	}
 
 	// check whether the file is opened for write:
     if(flags == O_WRONLY){
@@ -607,6 +668,32 @@ tSize dfsPread(const FileSystemDescriptor & fsDescriptor, dfsFile file, tOffset 
 }
 
 tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const void* buffer, tSize length) {
+	if(file->direct){
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor =
+				(*CacheLayerRegistry::instance()->getFileSystemDescriptor(
+						fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return -1;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to write into file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			return -1;
+		}
+
+		size_t written = fsAdaptor->fileWrite(connection, file, buffer, length);
+		if (written == -1) {
+			LOG (INFO)<< "Failure while write into file handle opened for direct write on FileSystem \""
+			<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+		}
+		return written;
+	}
+
 	// First check the scenario, if one is "CREATE FROM SELECT", extra actions are required:
 	bool available;
 
@@ -621,7 +708,7 @@ tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const vo
 	if(!fsAdaptor){
 		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
 				fsDescriptor.host << "\"" << "\n";
-		// no namenode adaptor configured
+		// no dfs adaptor configured
 		return -1;
 	}
 
@@ -645,10 +732,63 @@ tSize dfsWrite(const FileSystemDescriptor & fsDescriptor, dfsFile file, const vo
 }
 
 status::StatusInternal dfsFlush(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	if(file->direct){
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor =
+				(*CacheLayerRegistry::instance()->getFileSystemDescriptor(
+						fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to write into file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+		}
+
+		int ret = fsAdaptor->fileFlush(connection, file);
+		if (!ret) {
+			LOG (INFO)<< "Failure while flush the data for file handle opened for direct write on FileSystem \""
+			<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+		}
+		return status::StatusInternal::OK;
+	}
+
 	return filemgmt::FileSystemManager::instance()->dfsFlush(fsDescriptor, file);
 }
 
 tOffset dfsAvailable(const FileSystemDescriptor & fsDescriptor, dfsFile file) {
+	if(file->direct){
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor =
+				(*CacheLayerRegistry::instance()->getFileSystemDescriptor(
+						fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return -1;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to estimate non-blocking read bytes for file on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			return -1;
+		}
+
+		tOffset bytes = fsAdaptor->fileAvailable(connection, file);
+		if (bytes == -1) {
+			LOG (INFO)<< "Failure while getting available non-blocking bytes for file handle opened for read directly on FileSystem \""
+			<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+		}
+		return bytes;
+	}
+
 	return filemgmt::FileSystemManager::instance()->dfsAvailable(fsDescriptor, file);
 }
 
@@ -699,21 +839,66 @@ status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const
     return (ret ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE);
 }
 
-status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor, const char* src, const char* dst) {
-	return filemgmt::FileSystemManager::instance()->dfsMove(fsDescriptor, src, dst);
+status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor1, const char* src,
+		const FileSystemDescriptor & fsDescriptor2, const char* dst) {
+
+	LOG (INFO) << "dfsMove() for source fs \"" << fsDescriptor1.dfs_type << ":" <<
+			fsDescriptor1.host << "\", file \"" << src << "\";" << "dest fs \"" <<
+			fsDescriptor2.dfs_type << ":" <<
+						fsDescriptor2.host << "\", file \"" << dst << "\".\n";
+
+	// locate the remote filesystem adaptor for source host:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorSource =
+			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor1));
+	if(!fsAdaptorSource){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+				fsDescriptor1.host << "\"" << "\n";
+		// no file system adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connectionSource(fsAdaptorSource->getFreeConnection());
+    if(!connectionSource.valid()) {
+    	LOG (ERROR) << "No connection to dfs available, file will not be moved from FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+    			fsDescriptor1.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+	// locate the remote filesystem adaptor for source host:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptorDestination =
+			(*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor2));
+	if(!fsAdaptorDestination){
+		LOG (ERROR) << "No filesystem adaptor configured for FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+				fsDescriptor1.host << "\"" << "\n";
+		// no file system adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+    raiiDfsConnection connectionDest(fsAdaptorDestination->getFreeConnection());
+    if(!connectionDest.valid()) {
+    	LOG (ERROR) << "No connection to destination dfs available, file will not be moved to FileSystem \"" << fsDescriptor1.dfs_type << ":" <<
+    			fsDescriptor1.host << "\"" << "\n";
+    	return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+    }
+
+    // ask source adaptor to do the copy to target adaptor:
+    bool ret = FileSystemDescriptorBound::fsMove(connectionSource, src, connectionDest, dst);
+    return (ret ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE);
 }
 
 status::StatusInternal dfsDelete(const FileSystemDescriptor & fsDescriptor, const char* path, int recursive) {
 	LOG (INFO) << "dfsDelete() : path = \"" << path << "\"\n";
 
-	// Remove the file from registry if it is there:
-	Uri uri = Uri::Parse(path);
+	// if direct dfs access is not configured, delete the path from the cache registry
+	if(!CacheLayerRegistry::instance()->directDFSAccess()){
+		// Remove the file from registry if it is there:
+		Uri uri = Uri::Parse(path);
 
-	if (!CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str())){
-		LOG (WARNING) << "Path \"" << path << "\" was not deleted from registry." << "\n";
+		if (!CacheLayerRegistry::instance()->deletePath(fsDescriptor, uri.FilePath.c_str()))
+			LOG (WARNING) << "Path \"" << path << "\" was not deleted from registry." << "\n";
+		else
+			LOG (INFO) << "Path \"" << path << "\" successfully deleted from registry." << "\n";
 	}
-
-	LOG (INFO) << "Path \"" << path << "\" successfully deleted from registry." << "\n";
 
 	// locate the remote filesystem adapter:
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
@@ -756,9 +941,11 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 	Uri uriOld = Uri::Parse(oldPath);
 	Uri uriNew = Uri::Parse(newPath);
 
-	// drop old file from registry. Instruction below just clean the file reference from registry, without physical affect
-	if(!CacheLayerRegistry::instance()->deleteFile(fsDescriptor, uriOld.FilePath.c_str(), false)){
-		LOG (WARNING) << "Failed to delete old temp file \"" << oldPath << "\" from cache.\n";
+	if(!CacheLayerRegistry::instance()->directDFSAccess()){
+		// drop old file from registry. Instruction below just clean the file reference from registry, without physical affect
+		if(!CacheLayerRegistry::instance()->deleteFile(fsDescriptor, uriOld.FilePath.c_str(), false)){
+			LOG (WARNING) << "Failed to delete old temp file \"" << oldPath << "\" from cache.\n";
+		}
 	}
 
 	// locate the remote filesystem adaptor:
@@ -786,6 +973,11 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     	return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
     }
 
+    // if direct dfs access is configured, don't deal with the cache registry
+    if(!CacheLayerRegistry::instance()->directDFSAccess()){
+    	return status::StatusInternal::OK;
+    }
+
     // rename local file:
     status::StatusInternal status = filemgmt::FileSystemManager::instance()->dfsRename(fsDescriptor,
     		uriOld.FilePath.c_str(), uriNew.FilePath.c_str());
@@ -807,7 +999,10 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
 status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescriptor, const char* path, bool direct) {
 	LOG (INFO) << "dfsCreateDirectory() for path \"" << path << "\" within the filesystem \"" <<
 			fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"n";
-	if(direct){
+
+	// deal with remote dfs directly if direct flag is specified in API call or
+	// if direct access is globally configured within the cache layer
+	if(direct || CacheLayerRegistry::instance()->directDFSAccess()){
 		// locate the remote filesystem adaptor:
 		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 		if (!fsAdaptor) {
@@ -837,7 +1032,35 @@ status::StatusInternal dfsCreateDirectory(const FileSystemDescriptor & fsDescrip
 }
 
 status::StatusInternal dfsSetReplication(const FileSystemDescriptor & fsDescriptor, const char* path, int16_t replication) {
-	return filemgmt::FileSystemManager::instance()->dfsSetReplication(fsDescriptor, path, replication);
+	if(CacheLayerRegistry::instance()->directDFSAccess()){
+		// locate the remote filesystem adaptor:
+		boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor =
+				(*CacheLayerRegistry::instance()->getFileSystemDescriptor(
+						fsDescriptor));
+		if (!fsAdaptor) {
+			LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			// no dfs adaptor configured
+			return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+		}
+
+		raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+		if (!connection.valid()) {
+			LOG (ERROR)<< "No connection to dfs available, unable to set the replication for path \"" << path << "\" on FileSystem \""
+			<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+		}
+
+		// set remote path replication:
+		int ret = fsAdaptor->fsSetReplication(connection, path, replication);
+
+		if (ret != 0) {
+			LOG (ERROR)<< "Failed to set the replication for path \"" << path << "\" on FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+			fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+		}
+	}
+	return status::StatusInternal::OK;
 }
 
 dfsFileInfo *dfsListDirectory(const FileSystemDescriptor & fsDescriptor, const char* path,
@@ -905,21 +1128,105 @@ void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfs
 	FileSystemDescriptorBound::freeFileInfo(dfsFileInfo, numEntries);
 }
 
-tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host) {
-	return filemgmt::FileSystemManager::instance()->dfsGetCapacity(fsDescriptor, host);
+tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor) {
+	LOG (INFO) << "dfsGetCapacity() \n";
+	// We always get statistics from remote side:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (!fsAdaptor) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no dfs adaptor configured
+		return -1;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable get capacity on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return -1;
+	}
+
+	// get filesystem raw capacity:
+	return fsAdaptor->fsGetCapacity(connection);
 }
 
 tOffset dfsGetUsed(const FileSystemDescriptor & fsDescriptor, const char* host) {
-	return filemgmt::FileSystemManager::instance()->dfsGetUsed(fsDescriptor, host);
+	LOG (INFO) << "dfsGetUsed() for \"" << host << "\".\n";
+	// We always get statistics from remote side:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (!fsAdaptor) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no namenode adaptor configured
+		return -1;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable get used bytes on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return -1;
+	}
+
+	// get filesystem used bytes:
+	return fsAdaptor->fsGetUsed(connection);
 }
 
 status::StatusInternal dfsChown(const FileSystemDescriptor & fsDescriptor, const char* path,
 		const char *owner, const char *group) {
-	return filemgmt::FileSystemManager::instance()->dfsChown(fsDescriptor, path, owner, group);
+	LOG (INFO) << "dfsChown() for path \"" << path << "\".\n";
+	// We always get statistics from remote side:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (!fsAdaptor) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no dfs adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable to change owner on path \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+	}
+
+	// change owner on remote dfs path:
+	int ret = fsAdaptor->fsChown(connection, path, owner, group);
+	if(!ret){
+		LOG (ERROR) << "Chown operation failed on remote dfs for path \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+	}
+	return status::StatusInternal::OK;
 }
 
 status::StatusInternal dfsChmod(const FileSystemDescriptor & fsDescriptor, const char* path, short mode) {
-	return filemgmt::FileSystemManager::instance()->dfsChmod(fsDescriptor, path, mode);
+	LOG (INFO) << "dfsChmod() for path \"" << path << "\".\n";
+	// We always get statistics from remote side:
+	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
+	if (!fsAdaptor) {
+		LOG (ERROR)<< "No filesystem adaptor configured for FileSystem \"" << fsDescriptor.dfs_type << ":" <<
+		fsDescriptor.host << "\"" << "\n";
+		// no dfs adaptor configured
+		return status::StatusInternal::DFS_ADAPTOR_IS_NOT_CONFIGURED;
+	}
+
+	raiiDfsConnection connection(fsAdaptor->getFreeConnection());
+	if (!connection.valid()) {
+		LOG (ERROR)<< "No connection to dfs available, unable to change mode on path \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_NAMENODE_IS_NOT_REACHABLE;
+	}
+
+	// change mode on remote dfs path:
+	int ret = fsAdaptor->fsChmod(connection, path, mode);
+	if(!ret){
+		LOG (ERROR) << "Chmod operation failed on remote dfs for path \"" << path << "\" on FileSystem \""
+				<< fsDescriptor.dfs_type << ":" << fsDescriptor.host << "\"" << "\n";
+		return status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE;
+	}
+	return status::StatusInternal::OK;
 }
 
 int dfsFileGetReadStatistics(const FileSystemDescriptor & fsDescriptor, dfsFile file,
@@ -935,6 +1242,7 @@ void dfsFileFreeReadStatistics(const FileSystemDescriptor & fsDescriptor, struct
 }
 
 int64_t getDefaultBlockSize(const FileSystemDescriptor& fsDescriptor){
+	LOG (INFO) << "getDefaultBlockSize()\n";
 	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(fsDescriptor));
 
 	if (!fsAdaptor) {

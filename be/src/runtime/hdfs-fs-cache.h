@@ -46,7 +46,12 @@ class HdfsFsCache {
   // Get connection to the local filesystem.
   Status GetLocalConnection(dfsFS* fs );
 
-  // Get connection to specific fs by specifying a path.
+  /**
+   * Get connection to specific fs by specifying a path and provider type
+   *
+   * @param [in/out]       path     - path to connect to
+   * @param [in]           fs       - file system handle
+   */
   Status GetConnection(const std::string& path, dfsFS* fs);
 
  private:
