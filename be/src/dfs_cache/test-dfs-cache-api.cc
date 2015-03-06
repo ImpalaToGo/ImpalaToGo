@@ -18,6 +18,7 @@ namespace impala{
 
 FileSystemDescriptor CacheLayerTest::m_dfsIdentityDefault;
 FileSystemDescriptor CacheLayerTest::m_dfsIdentitylocalFilesystem;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentityTachyon;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;
@@ -219,7 +220,8 @@ static void close_open_file_sporadic(const FileSystemDescriptor& fsDescriptor,
     ASSERT_TRUE(!path.empty());
     std::cout << "open-close sporadic, File selected : \"" << path << "\"." << std::endl;
     // add the file:// suffix:
-    close_open_file((constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), fsDescriptor,
+    // close_open_file((constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), fsDescriptor,
+    close_open_file(path.c_str(), fsDescriptor,
     		direct_handles, cached_handles, zero_handles, total_handles);
 }
 
@@ -298,6 +300,63 @@ static void rescan_dataset(const char* dataset_location, std::vector<std::string
 	    }
 	  }
 	}
+}
+
+TEST_F(CacheLayerTest, TachyonTest) {
+
+	std::vector<std::string> dataset;
+	dataset.push_back("tachyon://localhost:19998/eventsSmall/demo_20140629000000000016.csv");
+	// rescan the dataset in order to get the collection of filenames.
+	//rescan_dataset(m_dataset_path.c_str(), dataset);
+	ASSERT_TRUE(dataset.size() != 0);
+
+	// create the list of scenario to run within the test :
+	std::vector< ScenarioCase > scenarios;
+
+	// add "open-close" scenario:
+	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6),
+		"Close-Open-Sporadic"});
+
+	// initialize default cache layer (direct access to remote dfs):
+    cacheInit();
+	cacheConfigureFileSystem(m_dfsIdentityTachyon);
+
+	// get the connection to local file system:
+	FileSystemDescriptorBound fsAdaptor(m_dfsIdentityTachyon);
+	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
+	ASSERT_TRUE(conn.connection() != NULL);
+
+	std::cout << "Tachyon filesystem adaptor is ready" << std::endl;
+
+	const int CONTEXT_NUM = 1;
+    const int ITERATIONS = 1;
+
+	using namespace std::placeholders;
+
+	auto f1 = std::bind(&run_random_scenario, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7, ph::_8);
+
+	std::vector<std::future<void>> futures;
+
+	// go with workers
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		futures.push_back(
+				std::move(
+						spawn_task(f1, std::cref(scenarios),
+								std::cref(m_dfsIdentityTachyon),
+								std::cref(dataset),
+								std::ref(m_direct_handles),
+								std::ref(m_cached_handles),
+								std::ref(m_zero_handles),
+								std::ref(m_total_handles),
+								ITERATIONS)));
+	}
+
+	for (int i = 0; i < CONTEXT_NUM; i++) {
+		if (futures[i].valid())
+			futures[i].get();
+	}
+
+	EXPECT_EQ(futures.size(), CONTEXT_NUM);
 }
 
 /*
