@@ -34,4 +34,6 @@ if [ -e $TACHYON_CONF_DIR/tachyon-env.sh ] ; then
   . $TACHYON_CONF_DIR/tachyon-env.sh
 fi
 
-export CLASSPATH="$TACHYON_CONF_DIR/:$TACHYON_CLASSPATH:$TACHYON_JAR"
+export TACHYON_CLASSPATH=/home/elenav/src/ImpalaToGo/thirdparty/hadoop-2.5.0-cdh5.4.0-SNAPSHOT/share/hadoop/common/lib/commons-httpclient-3.1.jar:/home/elenav/src/ImpalaToGo/thirdparty/hadoop-2.5.0-cdh5.4.0-SNAPSHOT/share/hadoop/common/lib/jets3t-0.9.0.jar:
+
+export CLASSPATH="$TACHYON_CONF_DIR/:$TACHYON_JAR:$TACHYON_CLASSPATH"

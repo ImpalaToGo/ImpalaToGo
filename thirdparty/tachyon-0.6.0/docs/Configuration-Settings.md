@@ -159,12 +159,12 @@ number.
 <tr>
   <td>tachyon.master.keytab.file</td>
   <td></td>
-  <td> keytab file for Tachyon master.</td>
+  <td>Kerberos keytab file for Tachyon master.</td>
 </tr>
 <tr>
   <td>tachyon.master.principal</td>
   <td></td>
-  <td> principal for Tachyon master.</td>
+  <td>Kerberos principal for Tachyon master.</td>
 </tr>
 </table>
 
@@ -278,12 +278,12 @@ number.
 <tr>
   <td>tachyon.worker.keytab.file</td>
   <td></td>
-  <td> keytab file for Tachyon worker.</td>
+  <td>Kerberos keytab file for Tachyon worker.</td>
 </tr>
 <tr>
   <td>tachyon.worker.principal</td>
   <td></td>
-  <td> principal for Tachyon worker.</td>
+  <td>Kerberos principal for Tachyon worker.</td>
 </tr>
 </table>
 

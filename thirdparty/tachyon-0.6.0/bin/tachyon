@@ -90,7 +90,7 @@ function killAll {
 
   keyword=$1
   count=0
-  for pid in `ps -A -o pid,command | grep -i "[j]ava" | grep $keyword | awk '{print $1}'`; do
+  for pid in `ps -Aww -o pid,command | grep -i "[j]ava" | grep $keyword | awk '{print $1}'`; do
     kill -15 "$pid" > /dev/null 2>&1
     local cnt=30
     while kill -0 "$pid" > /dev/null 2>&1; do
@@ -106,7 +106,7 @@ function killAll {
     done
     count=`expr $count + 1`
   done
-  echo "Killed $count processes"
+  echo "Killed $count processes on `hostname`"
 }
 
 function copyDir {
@@ -163,7 +163,7 @@ PARAMETER=""
 if [ "$COMMAND" == "format" ]; then
   if [ $# -eq 1 ]; then
     if [ "$1" == "-s" ]; then
-      if [ -e $TACHYON_UNDERFS_ADDRESS ] || [[ $TACHYON_UNDERFS_ADDRESS == hdfs://* ]] || [[ $TACHYON_UNDERFS_ADDRESS == s3n://* ]] || [[ $TACHYON_UNDERFS_ADDRESS == glusterfs://* ]]; then
+      if [ -e $TACHYON_UNDERFS_ADDRESS ] || [[ $TACHYON_UNDERFS_ADDRESS == hdfs://* ]] || [[ $TACHYON_UNDERFS_ADDRESS == s3://* ]] || [[ $TACHYON_UNDERFS_ADDRESS == glusterfs://* ]]; then
         # already exists, hdfs, or s3, don't format
         exit 0
       else
@@ -240,4 +240,6 @@ else
   exit 1
 fi
 
-$JAVA -cp $TACHYON_CLASSPATH:$CLASSPATH -Dtachyon.home=$TACHYON_HOME -Dtachyon.master.hostname=$TACHYON_MASTER_ADDRESS -Dtachyon.logger.type=USER_LOGGER $TACHYON_JAVA_OPTS $CLASS $PARAMETER $@
+echo $CLASSPATH
+
+$JAVA -cp $CLASSPATH -Dtachyon.home=$TACHYON_HOME -Dtachyon.master.hostname=$TACHYON_MASTER_ADDRESS -Dtachyon.logger.type=USER_LOGGER $TACHYON_JAVA_OPTS $CLASS $PARAMETER $@
