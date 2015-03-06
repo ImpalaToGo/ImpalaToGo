@@ -34,6 +34,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.MockClassLoader;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.Logger;
@@ -46,7 +47,8 @@ import tachyon.conf.TachyonConf;
 /**
  * Unit tests for TFS
  */
-@PowerMockIgnore({"sun.misc.*", "javax.security.auth.*"})
+//@PowerMockIgnore({"sun.misc.JavaxSecurityAuthKerberosAccess", "javax.security.auth.kerberos.JavaxSecurityAuthKerberosAccessImpl"})
+  @PowerMockIgnore({"sun.misc.*", "javax.security.auth.*"})
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({TachyonFS.class, UserGroupInformation.class})
 public class TFSTest {

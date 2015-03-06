@@ -26,6 +26,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tachyon.Constants;
 import tachyon.TachyonURI;
 import tachyon.TestUtils;
@@ -35,6 +37,8 @@ import tachyon.master.LocalTachyonCluster;
 import tachyon.thrift.ClientFileInfo;
 
 public class HdfsFileInputStreamTest {
+  private static final Logger LOG = LoggerFactory.getLogger(HdfsFileInputStreamTest.class.getName());
+
   private static final int USER_QUOTA_UNIT_BYTES = 100;
   private static final int WORKER_CAPACITY = 10000;
   private static final int FILE_LEN = 255;
@@ -47,28 +51,35 @@ public class HdfsFileInputStreamTest {
 
   @AfterClass
   public static final void afterClass() throws Exception {
+    LOG.info("Running AFTER_CLASS");
+
     mLocalTachyonCluster.stop();
     System.clearProperty("tachyon.user.quota.unit.bytes");
   }
 
   @BeforeClass
   public static final void beforeClass() throws IOException {
+    LOG.info("Running BEFORE_CLASS");
     mLocalTachyonCluster = new LocalTachyonCluster(WORKER_CAPACITY, USER_QUOTA_UNIT_BYTES,
         Constants.GB);
     mLocalTachyonCluster.start();
     mTfs = mLocalTachyonCluster.getClient();
     TestUtils.createByteFile(mTfs, "/testFile1", WriteType.CACHE_THROUGH, FILE_LEN);
     TestUtils.createByteFile(mTfs, "/testFile2", WriteType.THROUGH, FILE_LEN);
+    LOG.info("End of BEFORE_CLASS");
   }
 
   @After
   public final void after() throws Exception {
+    LOG.info("Running after");
     mInMemInputStream.close();
     mUfsInputStream.close();
+    LOG.info("End of after");
   }
 
   @Before
   public final void before() throws IOException {
+    LOG.info("Running before");
     ClientFileInfo fileInfo = mTfs.getFileStatus(-1, new TachyonURI("/testFile1"));
     mInMemInputStream = new HdfsFileInputStream(mTfs, fileInfo.getId(),
         new Path(fileInfo.getUfsPath()), new Configuration(), BUFFER_SIZE,
@@ -78,6 +89,8 @@ public class HdfsFileInputStreamTest {
     mUfsInputStream = new HdfsFileInputStream(mTfs, fileInfo.getId(),
         new Path(fileInfo.getUfsPath()), new Configuration(), BUFFER_SIZE,
         mLocalTachyonCluster.getMasterTachyonConf());
+
+    LOG.info("End of before");
   }
 
   /**
@@ -85,6 +98,7 @@ public class HdfsFileInputStreamTest {
    */
   @Test
   public void readTest1() throws IOException {
+    LOG.info("Running readTest1");
     for (int i = 0; i < FILE_LEN; i ++) {
       int value = mInMemInputStream.read();
       Assert.assertEquals(i & 0x00ff, value);
@@ -98,6 +112,7 @@ public class HdfsFileInputStreamTest {
     Assert.assertEquals(-1, value);
     value = mUfsInputStream.read();
     Assert.assertEquals(-1, value);
+    LOG.info("End of readTest1");
   }
 
   /**
@@ -105,6 +120,7 @@ public class HdfsFileInputStreamTest {
    */
   @Test
   public void readTest2() throws IOException {
+    LOG.info("Running readTest3");
     byte[] buf = new byte[FILE_LEN];
     int length = mInMemInputStream.read(buf, 0, FILE_LEN);
     Assert.assertEquals(FILE_LEN, length);
@@ -120,6 +136,7 @@ public class HdfsFileInputStreamTest {
     Assert.assertEquals(-1, length);
     length = mUfsInputStream.read(buf, 0, 1);
     Assert.assertEquals(-1, length);
+    LOG.info("End of readTest2");
   }
 
   /**
@@ -127,6 +144,7 @@ public class HdfsFileInputStreamTest {
    */
   @Test
   public void readTest3() throws IOException {
+    LOG.info("Running readTest3");
     byte[] buf = new byte[FILE_LEN];
     int length = mInMemInputStream.read(0, buf, 0, FILE_LEN);
     Assert.assertEquals(FILE_LEN, length);
@@ -161,10 +179,12 @@ public class HdfsFileInputStreamTest {
     Assert.assertEquals(-1, length);
     length = mUfsInputStream.read(FILE_LEN, buf, 0, FILE_LEN);
     Assert.assertEquals(-1, length);
+    LOG.info("End of readTest3");
   }
 
   @Test
   public void seekTest() throws IOException {
+    LOG.info("Running seekTest");
     mInMemInputStream.seek(0);
     Assert.assertEquals(0, mInMemInputStream.getPos());
     IllegalArgumentException exception = null;
@@ -197,5 +217,7 @@ public class HdfsFileInputStreamTest {
     }
     Assert.assertEquals("Seek position is past EOF: " + (FILE_LEN + 1) + ", fileSize = " +
         FILE_LEN, exception.getMessage());
+
+    LOG.info("End of seekTest");
   }
 }

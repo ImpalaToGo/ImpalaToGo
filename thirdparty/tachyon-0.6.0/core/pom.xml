@@ -210,6 +210,18 @@
           <version>3.0.1</version>
           <scope>test</scope>
         </dependency>
+	<dependency>
+  <groupId>net.java.dev.jets3t</groupId>
+  <artifactId>jets3t</artifactId>
+  <version>0.9.0</version>
+  <exclusions>
+    <exclusion>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <!-- <version>1.3</version> -->
+    </exclusion>
+  </exclusions>
+</dependency>
       </dependencies>
     </profile>
 
