@@ -46,6 +46,7 @@ import tachyon.conf.TachyonConf;
 /**
  * Unit tests for TFS
  */
+@PowerMockIgnore({"sun.misc.*", "javax.security.auth.*"})
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({TachyonFS.class, UserGroupInformation.class})
 public class TFSTest {
