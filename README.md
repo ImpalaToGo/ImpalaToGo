@@ -252,7 +252,7 @@ To run Impala on Tachyon
 Impala should integrate with Tachyon as with a new filesystem (tachyon)
 
 1. ####Make changes in configuration files.
-    > In core-site.xml, following properties should be set to tachyon://...
+    > In core-site.xml, filesystem should be set to tachyon:// and the tachyon implementation of hadoop.FileSystem       should be specified
    ```xml
      <property>
        <name>fs.defaultFS</name>
@@ -277,7 +277,7 @@ Impala should integrate with Tachyon as with a new filesystem (tachyon)
      -Dfs.s3n.awsAccessKeyId=123
      -Dfs.s3n.awsSecretAccessKey=456
    ```   
-   Example of tachyon-env.sh:
+   Example of tachyon-env.sh.
 
    ```bash
    !/usr/bin/env bash
@@ -363,6 +363,8 @@ Impala should integrate with Tachyon as with a new filesystem (tachyon)
     > For tachyon 0.6.0 to work with hadoop 2.5.0, you'll have to export first paths to : 
    - * jets3:0.9.0 
    - * commons-httpclient:3.1
+   
+   in tachyon/libexec/tachyon-config.sh before to configure final classpath add:
 
    ```bash
    export TACHYON_CLASSPATH=~/.m2/repository/commons-httpclient/commons-httpclient/3.1/commons-httpclient-3.1.jar:~/.m2/repository/net/java/dev/jets3t/jets3t/0.9.0/jets3t-0.9.0.jar
@@ -373,13 +375,19 @@ Impala should integrate with Tachyon as with a new filesystem (tachyon)
    ${IMPALA_HOME}/thirdparty/cdh5.2.0/hadoop-2.5.0-cdh5.2.0/share/hadoop/tools/lib
    ```
 
-4. ####Run Tachyon:
+4. ####Run Tachyon locally (master and 1 worker):
    ```bash
    $ cd tachyon
-   $ ./bin/format.sh
-   $ ./bin/start.sh all
+   $ cp conf/tachyon-env.sh.template conf/tachyon-env.sh
+   $ ./bin/tachyon format
+   $ ./bin/tachyon-start.sh local
    ```
-
+   Check Tachyon alivness :
+   - via web interface:
+     http://localhost:19999
+   - logs :
+     tachyon/logs
+   
 5. ####Export tachyon client location to Impala. 
     > For production, edit /etc/bin/impalad and add the path to tachyon client there
    ```bash
