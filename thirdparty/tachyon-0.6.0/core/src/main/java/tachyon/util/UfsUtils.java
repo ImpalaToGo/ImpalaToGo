@@ -93,17 +93,18 @@ public class UfsUtils {
       PrefixList excludePathPrefix, TachyonConf tachyonConf) throws IOException {
     LOG.info("Loading to " + tachyonPath + " " + ufsAddrRootPath + " " + excludePathPrefix);
 
-    try {
+    //try {
       // resolve and replace hostname embedded in the given ufsAddress
-      TachyonURI oldPath = ufsAddrRootPath;
-      ufsAddrRootPath = NetworkUtils.replaceHostName(ufsAddrRootPath);
-      if (!ufsAddrRootPath.getHost().equalsIgnoreCase(oldPath.getHost())) {
+    TachyonURI oldPath = ufsAddrRootPath;
+   //   ufsAddrRootPath = NetworkUtils.replaceHostName(ufsAddrRootPath);        
+            
+  /*    if (!ufsAddrRootPath.getHost().equalsIgnoreCase(oldPath.getHost())) {
         System.out.println("UnderFS hostname resolved: " + ufsAddrRootPath);
-      }
-    } catch (UnknownHostException e) {
+      } */
+    /*} catch (UnknownHostException e) {
       LOG.info("hostname cannot be resolved in given UFS path: " + ufsAddrRootPath);
       throw new IOException(e);
-    }
+    }*/
 
     Pair<String, String> ufsPair = UnderFileSystem.parse(ufsAddrRootPath, tachyonConf);
     String ufsAddress = ufsPair.getFirst();
