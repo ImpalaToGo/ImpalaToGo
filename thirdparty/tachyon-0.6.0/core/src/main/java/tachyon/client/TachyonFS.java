@@ -1001,6 +1001,19 @@ public class TachyonFS extends AbstractTachyonFS {
    * @param uri The uri to validate
    */
   private void validateUri(TachyonURI uri) throws IOException {
+    if (!uri.isPathAbsolute() && !TachyonURI.EMPTY_URI.equals(uri)) {
+      System.out.println("URL is invalid because of Absolute");
+    }
+    if (uri.hasScheme() && !mRootUri.getScheme().equals(uri.getScheme())) {
+      System.out.println("URL is invalid because of schema");
+    }
+
+    if (uri.hasAuthority() && !mRootUri.getAuthority().equals(uri.getAuthority())) {
+      System.out.println("URL is invalid because of authority. URI has authoring "
+              + uri.hasAuthority() + " root authoring " + mRootUri.getAuthority()
+              + " uri authority " + uri.getAuthority());
+    }
+
     if (uri == null || (!uri.isPathAbsolute() && !TachyonURI.EMPTY_URI.equals(uri))
         || (uri.hasScheme() && !mRootUri.getScheme().equals(uri.getScheme()))
         || (uri.hasAuthority() && !mRootUri.getAuthority().equals(uri.getAuthority()))) {

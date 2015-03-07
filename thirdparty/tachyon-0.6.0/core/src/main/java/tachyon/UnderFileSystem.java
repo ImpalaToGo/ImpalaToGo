@@ -113,6 +113,9 @@ public abstract class UnderFileSystem {
     if (path.hasScheme()) {
       String header = path.getScheme() + "://";
       String authority = (path.hasAuthority()) ? path.getAuthority() : "";
+      
+      System.out.println("Authority is " + authority);
+      
       if (header.equals(Constants.HEADER) || header.equals(Constants.HEADER_FT)
           || isHadoopUnderFS(header, tachyonConf)) {
         if (path.getPath().isEmpty()) {
