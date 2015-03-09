@@ -21,6 +21,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.InputStream;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Collections;
@@ -28,8 +30,14 @@ import java.util.List;
 
 import com.google.common.io.Closer;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import tachyon.Constants;
 import tachyon.TachyonURI;
+import tachyon.UnderFileSystem;
 import tachyon.client.InStream;
 import tachyon.client.OutStream;
 import tachyon.client.ReadType;
@@ -37,6 +45,8 @@ import tachyon.client.TachyonFile;
 import tachyon.client.TachyonFS;
 import tachyon.client.WriteType;
 import tachyon.conf.TachyonConf;
+import tachyon.hadoop.TFS;
+import tachyon.hadoop.TFSFT;
 import tachyon.thrift.ClientBlockInfo;
 import tachyon.thrift.ClientFileInfo;
 import tachyon.thrift.FileDoesNotExistException;
@@ -612,6 +622,8 @@ public class TFsShell implements Closeable {
         exitCode = copyFromLocal(argv);
       } else if (cmd.equals("copyToLocal")) {
         exitCode = copyToLocal(argv);
+      } else if (cmd.equals("openFile")) {
+        exitCode = openFile(argv);
       } else if (cmd.equals("fileinfo")) {
         exitCode = fileinfo(argv);
       } else if (cmd.equals("location")) {

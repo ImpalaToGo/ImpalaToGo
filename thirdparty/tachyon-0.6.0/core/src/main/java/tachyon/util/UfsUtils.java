@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +94,27 @@ public class UfsUtils {
   public static void loadUnderFs(TachyonFS tfs, TachyonURI tachyonPath, TachyonURI ufsAddrRootPath,
       PrefixList excludePathPrefix, TachyonConf tachyonConf) throws IOException {
     LOG.info("Loading to " + tachyonPath + " " + ufsAddrRootPath + " " + excludePathPrefix);
+    System.out.println("Loading to " + tachyonPath + " " + ufsAddrRootPath
+            + " " + excludePathPrefix);
+
+    String uriRegex =
+            "/(?:([^\\:]*)\\:\\/\\/)?(?:([^\\:\\@]*)(?:\\:([^\\@]*))?\\@)?"
+                    + "(?:([^\\/\\:]*)\\.(?=[^\\.\\/\\:]*\\.[^\\.\\/\\:]*))?([^\\.\\/\\:]*)"
+                    + "(?:\\.([^\\/\\.\\:]*))?(?:\\:([0-9]*))?(\\/[^\\?#]*(?=.*?\\/)\\/)?"
+                    + "([^\\?#]*)?(?:\\?([^#]*))?(?:#(.*))?/";
+
+    String dataDirectoryName = null;
+    Pattern pattern = Pattern.compile(uriRegex);
+
+    Matcher matcher = pattern.matcher(ufsAddrRootPath.toString());
+    if (matcher.find()) {
+      dataDirectoryName = TachyonURI.SEPARATOR + matcher.group(9);
+      System.out.println("Data directory name : '" + dataDirectoryName + "'");
+    } else {
+      System.out.println("Invalid uri in remote target path : '"
+              + ufsAddrRootPath.toString());
+      return;
+    }
 
     //try {
       // resolve and replace hostname embedded in the given ufsAddress
@@ -110,8 +133,13 @@ public class UfsUtils {
     String ufsAddress = ufsPair.getFirst();
     String ufsRootPath = ufsPair.getSecond();
 
+    System.out.println("Loading ufs. ufs address = " + ufsAddress
+            + "; ufs root path = " + ufsRootPath + ".");
+
     if (!tfs.exist(tachyonPath)) {
-      tfs.mkdir(tachyonPath);
+      System.out.println("Loading ufs. Make dir if needed for '" + dataDirectoryName + "'.");
+
+      tfs.mkdir(new TachyonURI(dataDirectoryName));
       // TODO Add the following.
       // if (tfs.mkdir(tfsRootPath)) {
       // LOG.info("directory " + tfsRootPath + " does not exist in Tachyon: created");
@@ -132,7 +160,9 @@ public class UfsUtils {
       TachyonURI ufsPath = ufsPathQueue.poll(); // this is the absolute path
       LOG.info("Loading: " + ufsPath);
       if (ufs.isFile(ufsPath.toString())) {
-        TachyonURI tfsPath = buildTFSPath(tachyonPath, ufsAddrRootPath, ufsPath);
+        TachyonURI tfsPath = buildTFSPath(new TachyonURI(dataDirectoryName), ufsAddrRootPath,
+                ufsPath);
+        System.out.println("Loading ufs. tfs path = " + tfsPath + ".");
         if (tfs.exist(tfsPath)) {
           LOG.info("File " + tfsPath + " already exists in Tachyon.");
           continue;
@@ -145,6 +175,7 @@ public class UfsUtils {
               + "checkpoint location " + ufsPath);
         }
       } else { // ufsPath is a directory
+        System.out.println("Loading ufs. ufs path is a directory.");
         String[] files = ufs.list(ufsPath.toString()); // ufs.list() returns relative path
         if (files != null) {
           for (String filePath : files) {
@@ -164,7 +195,10 @@ public class UfsUtils {
         // ufsPath is a directory, so only concat the tfsRoot with the relative path
         TachyonURI tfsPath = new TachyonURI(CommonUtils.concat(
             tachyonPath, ufsPath.getPath().substring(ufsAddrRootPath.getPath().length())));
+        System.out.println("Loading ufs. ufs path is a directory. tfsPath = " + tfsPath + ".");
         if (!tfs.exist(tfsPath)) {
+          System.out.println("Loading ufs. ufs path is a directory. make dir = "
+                  + tfsPath + ".");
           tfs.mkdir(tfsPath);
           // TODO Add the following.
           // if (tfs.mkdir(tfsPath)) {
