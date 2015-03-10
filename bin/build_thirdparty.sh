@@ -119,6 +119,8 @@ function build_preamble() {
   fi
 }
 
+mvn clean install -f $IMPALA_HOME/thirdparty/tachyon-0.6.0/pom.xml -DskipTests=true
+ 
 # Build Sasl
 if [ $BUILD_ALL -eq 1 ] || [ $BUILD_SASL -eq 1 ]; then
   build_preamble $IMPALA_HOME/thirdparty/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION} Sasl

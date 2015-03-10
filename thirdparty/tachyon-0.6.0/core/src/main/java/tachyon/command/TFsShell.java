@@ -235,6 +235,49 @@ public class TFsShell implements Closeable {
   }
 
   /**
+   * Open the file specified by argv
+   *
+   * @param argv [] Array of arguments given by the user's input from the terminal
+   * @return 0 if command is successful, -1 if an error occurred.
+   * @throws IOException
+   */
+  public int openFile(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs openFile <src>");
+      return -1;
+    }
+
+    String path = argv[1];
+    TachyonURI srcPathT = new TachyonURI(argv[1]);
+    final Configuration conf = new Configuration();
+    conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
+
+    final URI uri =
+            URI.create("tachyon://localhost:19998/eventsSmall/demo_20140629000000000009.csv");
+
+    mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
+    mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
+    mTachyonConf.set(Constants.USE_ZOOKEEPER, "true");
+    FileSystem ufs =
+            FileSystem.get(uri,
+                    conf);
+    if (ufs instanceof TFS) {
+      System.out.println("Instance of TFS");
+    } else {
+      System.out.println("NOT Instance of TFS");
+    }
+
+    InputStream open = ufs.open(new Path(path));
+    if (open == null) {
+      System.out.println("Unable to open file \"" + path + ".");
+      return -1;
+    }
+
+    System.out.println("Open is done.");
+    return 0;
+  }
+
+  /**
    * Displays the number of folders and files matching the specified prefix in argv.
    *
    * @param argv [] Array of arguments given by the user's input from the terminal
