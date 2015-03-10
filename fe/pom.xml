@@ -39,6 +39,7 @@
     <impala.extdatasrc.api.version>1.0-SNAPSHOT</impala.extdatasrc.api.version>
     <!-- Impala does not currently support the Hive .13 JDBC driver -->
     <hive-jdbc.version>0.13.1-cdh5.2.0-SNAPSHOT</hive-jdbc.version>
+    <tachyon.version>${env.IMPALA_TACHYON_VERSION}</tachyon.version>
   </properties>
 
   <dependencies>
@@ -327,12 +328,14 @@
       <version>4.8.2</version>
       <scope>test</scope>
     </dependency>
-    
+  
     <!-- Tachyon -->
     <dependency>
       <groupId>org.tachyonproject</groupId>
       <artifactId>tachyon-client</artifactId>
-      <version>0.6.0</version>
+      <version>${tachyon.version}</version>
+      <scope>system</scope>
+      <systemPath>${env.IMPALA_HOME}/thirdparty/tachyon-${tachyon.version}/client/target/tachyon-client-${tachyon.version}-jar-with-dependencies.jar</systemPath>
     </dependency>
 
   </dependencies>
