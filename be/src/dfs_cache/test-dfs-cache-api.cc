@@ -575,7 +575,7 @@ TEST_F(CacheLayerTest, SporadicFileSporadicTestScenarioHeavyLoadManagedAsync) {
 
 	using namespace std::placeholders;
 
-	auto f1 = std::bind(&run_random_scenario, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7, ph::_8);
+	auto f1 = std::bind(&run_random_scenario, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7, ph::_8, ph::_9);
 
 	std::vector<std::future<void>> futures;
 
