@@ -34,6 +34,9 @@ namespace constants{
 
 	/** protocol prefix represents local fs */
 	const std::string TEST_LOCALFS_PROTO_PREFFIX = "file:/";
+
+	/** protocol prefix representing Tachyon fs */
+	const std::string TEST_TACHYONFS_PROTO_PREFIX = "tachyon://";
 }
 
 int stringLength = sizeof(alphanum) - 1;

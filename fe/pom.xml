@@ -334,8 +334,6 @@
       <groupId>org.tachyonproject</groupId>
       <artifactId>tachyon-client</artifactId>
       <version>${tachyon.version}</version>
-      <scope>system</scope>
-      <systemPath>${env.IMPALA_HOME}/thirdparty/tachyon-${tachyon.version}/client/target/tachyon-client-${tachyon.version}-jar-with-dependencies.jar</systemPath>
     </dependency>
 
   </dependencies>
