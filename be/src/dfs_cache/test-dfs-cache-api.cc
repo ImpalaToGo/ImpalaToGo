@@ -319,7 +319,7 @@ TEST_F(CacheLayerTest, TachyonTest) {
 	std::vector< ScenarioCase > scenarios;
 
 	// add "open-close" scenario:
-	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7, _8),
+	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
 		"Close-Open-Sporadic"});
 
 	// initialize default cache layer (direct access to remote dfs):
@@ -545,15 +545,15 @@ TEST_F(CacheLayerTest, SporadicFileSporadicTestScenarioHeavyLoadManagedAsync) {
 	std::vector< ScenarioCase > scenarios;
 
 	// add "open-close" scenario:
-	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6),
+	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
 		"Close-Open-Sporadic"});
 
 	// add "open-read-compare-byte-by-byte" scenario:
-    scenarios.push_back({boost::bind(open_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6),
+    scenarios.push_back({boost::bind(open_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
     	"Open-Read-Compare-Close-Sporadic"});
 
 	// add "file seek" scenario:
-    scenarios.push_back({boost::bind(open_seek_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6),
+    scenarios.push_back({boost::bind(open_seek_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
     	"Open-Read-Seek-Compare-Close"});
 
 	// add "file write" scenario:
@@ -575,7 +575,7 @@ TEST_F(CacheLayerTest, SporadicFileSporadicTestScenarioHeavyLoadManagedAsync) {
 
 	using namespace std::placeholders;
 
-	auto f1 = std::bind(&run_random_scenario, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7, ph::_8);
+	auto f1 = std::bind(&run_random_scenario, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7, ph::_8, ph::_9);
 
 	std::vector<std::future<void>> futures;
 
@@ -644,14 +644,13 @@ TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
 
 	using namespace std::placeholders;
 
-	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
+	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6);
 
 	std::vector<std::future<void>> futures;
 	for (int i = 0; i < CONTEXT_NUM; i++) {
 		futures.push_back(
 				std::move(
 						spawn_task(f1, filename, std::ref(m_dfsIdentitylocalFilesystem),
-								std::cref(constants::TEST_LOCALFS_PROTO_PREFFIX),
 								std::ref(m_direct_handles),
 								std::ref(m_cached_handles),
 								std::ref(m_zero_handles),
