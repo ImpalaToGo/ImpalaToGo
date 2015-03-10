@@ -319,7 +319,7 @@ TEST_F(CacheLayerTest, TachyonTest) {
 	std::vector< ScenarioCase > scenarios;
 
 	// add "open-close" scenario:
-	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7, _8),
+	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
 		"Close-Open-Sporadic"});
 
 	// initialize default cache layer (direct access to remote dfs):
@@ -545,15 +545,15 @@ TEST_F(CacheLayerTest, SporadicFileSporadicTestScenarioHeavyLoadManagedAsync) {
 	std::vector< ScenarioCase > scenarios;
 
 	// add "open-close" scenario:
-	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6),
+	scenarios.push_back({boost::bind(close_open_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
 		"Close-Open-Sporadic"});
 
 	// add "open-read-compare-byte-by-byte" scenario:
-    scenarios.push_back({boost::bind(open_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6),
+    scenarios.push_back({boost::bind(open_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
     	"Open-Read-Compare-Close-Sporadic"});
 
 	// add "file seek" scenario:
-    scenarios.push_back({boost::bind(open_seek_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6),
+    scenarios.push_back({boost::bind(open_seek_read_compare_close_file_sporadic, _1, _2, _3, _4, _5, _6, _7),
     	"Open-Read-Seek-Compare-Close"});
 
 	// add "file write" scenario:
