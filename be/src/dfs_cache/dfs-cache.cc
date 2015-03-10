@@ -587,8 +587,9 @@ status::StatusInternal dfsSeek(const FileSystemDescriptor & fsDescriptor, dfsFil
 		if(ret != 0){
 			LOG (INFO) << "File seek failed on FileSystem \""
 					<< fsDescriptor.dfs_type << "://" << fsDescriptor.host << "\"" << "\n";
+			return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
 		}
-		return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
+		return status::StatusInternal::OK;
 	}
 	return filemgmt::FileSystemManager::instance()->dfsSeek(fsDescriptor, file, desiredPos);
 }
