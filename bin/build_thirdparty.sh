@@ -120,7 +120,8 @@ function build_preamble() {
 }
 
 mvn clean install -f $IMPALA_HOME/thirdparty/tachyon-${IMPALA_TACHYON_VERSION}/pom.xml -DskipTests=true
- 
+mvn install:install-file -Dfile=$IMPALA_HOME/thirdparty/tachyon-${IMPALA_TACHYON_VERSION}/client/target/tachyon-client-${IMPALA_TACHYON_VERSION}-jar-with-dependencies.jar -DpomFile=$IMPALA_HOME/thirdparty/tachyon-${IMPALA_TACHYON_VERSION}/client/pom.xml
+
 # Build Sasl
 if [ $BUILD_ALL -eq 1 ] || [ $BUILD_SASL -eq 1 ]; then
   build_preamble $IMPALA_HOME/thirdparty/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION} Sasl
