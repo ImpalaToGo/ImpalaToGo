@@ -644,14 +644,13 @@ TEST_F(CacheLayerTest, OpenCloseHeavyLoadManagedAsync) {
 
 	using namespace std::placeholders;
 
-	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
+	auto f1 = std::bind(&close_open_file, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6);
 
 	std::vector<std::future<void>> futures;
 	for (int i = 0; i < CONTEXT_NUM; i++) {
 		futures.push_back(
 				std::move(
 						spawn_task(f1, filename, std::ref(m_dfsIdentitylocalFilesystem),
-								std::cref(constants::TEST_LOCALFS_PROTO_PREFFIX),
 								std::ref(m_direct_handles),
 								std::ref(m_cached_handles),
 								std::ref(m_zero_handles),
