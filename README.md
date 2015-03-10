@@ -389,9 +389,9 @@ Impala should integrate with Tachyon as with a new filesystem (tachyon)
      tachyon/logs
    
 5. ####Export tachyon client location to Impala. 
-    > For production, edit /etc/bin/impalad and add the path to tachyon client there
+    > For production, edit /usr/bin/impalad and add the path to tachyon client there
    ```bash
-   export CLASSPATH=/pathToTachyon/client/target/tachyon-client-{{site.TACHYON_RELEASED_VERSION}}-jar-with-dependencies.jar:$CLASSPATH
+   export CLASSPATH=${IMPALA_HOME}/lib/tachyon-client-${TACHYON_VERSION}.jar:$CLASSPATH
    ```
 
 6. ####Run ImpalaToGo
