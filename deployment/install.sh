@@ -4,6 +4,10 @@ cp -f be/* /usr/lib/impala/sbin/
 sudo cp fe/*.jar /usr/lib/impala/lib/
 
 sudo cp fe/dependency/* /usr/lib/impala/lib/
+
+sudo cp tachyon/client/target/*.jar /usr/lib/impala/lib/
+sudo cp tachyon/core/target/*.jar /usr/lib/impala/lib/
+
 sudo cp $(eval echo ~${SUDO_USER})/build/lib/* /usr/lib/impala/lib/
 sudo ln -sfn /usr/lib/impala/lib/libboost_thread.so.1.54.0 /usr/lib/impala/lib/libboost_thread.so
 sudo ln -sfn /usr/lib/impala/lib/libboost_regex.so.1.54.0 /usr/lib/impala/lib/libboost_regex.so
