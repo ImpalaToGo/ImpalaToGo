@@ -124,7 +124,7 @@ public class UfsUtils {
     // directory name, is calculated for case when current method is invoked for file
     String directoryName = null;
 
-    if(isFile){
+    if(isFile) {
       if ((ufsRootPath == null) || ufsRootPath.isEmpty() || ufsRootPath.equals("/")) {
         directoryName = "";
       }
@@ -134,6 +134,7 @@ public class UfsUtils {
       } else {
         directoryName = "";
       }
+    }
 
     if (!tfs.exist(tachyonPath)) {
       System.out.println("Loading ufs. Make dir if needed for '" + directoryName + "'.");
