@@ -155,8 +155,8 @@ public class UfsUtils {
       TachyonURI ufsPath = ufsPathQueue.poll(); // this is the absolute path
       LOG.info("Loading: " + ufsPath);
       if (ufs.isFile(ufsPath.toString())) {
-        TachyonURI tfsPath = buildTFSPath(isFile ?
-                        new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
+        TachyonURI tfsPath = buildTFSPath(isFile
+                        ? new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
                 ufsPath);
         System.out.println("Loading ufs. tfs path = " + tfsPath + ".");
         if (tfs.exist(tfsPath)) {
