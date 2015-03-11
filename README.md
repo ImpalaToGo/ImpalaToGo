@@ -1,22 +1,22 @@
 ImpalaToGo
 ==========
 
-Fork of Cloudera Impala, separated from hadoop. It is optimized to work with S3 storage by caching data locally.
+ImpalaToGo is a fork of Cloudera Impala, separated from Hadoop. It is optimized to work with S3 storage by caching data locally.
 
-### Why ImpalaToGo
+### Why Choose ImpalaToGo
 ----
->1. It is Impala without hadoop. You can take advantage of its fast query engine without managing whole hadoop stack.
-2. Optimized work with S3. ImpalaToGo transparently cache data on local drives.
-3. Actually only open source MPP database written in C++
-4. It gives you almost the same capabilities as Hive over S3, but much faster.
+>1. It is Impala without Hadoop. You can take advantage of its fast query engine without managing the whole Hadoop stack.
+2. It is optimized to work with S3. ImpalaToGo transparently caches data on local drives.
+3. It is actually the only open source MPP database written in C++.
+4. It gives you almost the same capabilities as Hive over S3, but is much faster.
 
  
-How to try: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
+How to try it: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
 
-Short presentation on ImpalaToGo architecture: http://www.slideshare.net/DavidGroozman/impala-togo-introduction
+A short presentation on ImpalaToGo's architecture can be found at: http://www.slideshare.net/DavidGroozman/impala-togo-introduction
 
-###  What we add to Cloudera Impala?
-We are developing caching layer which use local drives to cache access to remote storage. Its advantage can be easy to be seen when working with S3.
+###  What have we added to Cloudera Impala?
+We have developed a caching layer which uses local drives to provide cache access for remote storage. Its advantages can  easily be seen when working with S3.
 
 Development environment prerequisites (Ubuntu)
 ----
