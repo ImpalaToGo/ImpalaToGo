@@ -18,6 +18,7 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value) {
 		INSERT_ELEMENT(hdfs);
 		INSERT_ELEMENT(s3n);
 		INSERT_ELEMENT(local);
+		INSERT_ELEMENT(tachyon);
 		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);
 		INSERT_ELEMENT(OTHER);
 		INSERT_ELEMENT(NON_SPECIFIED);
@@ -160,6 +161,10 @@ tSize FileSystemDescriptorBound::fileWrite(raiiDfsConnection& conn, dfsFile file
 	return _dfsWrite(conn.connection()->connection, file, buffer, length);
 }
 
+int FileSystemDescriptorBound::fileFlush(raiiDfsConnection& conn, dfsFile file){
+	return _dfsFlush(conn.connection()->connection, file);
+}
+
 int FileSystemDescriptorBound::fileRename(raiiDfsConnection& conn, const char* oldPath, const char* newPath){
 	return _dfsRename(conn.connection()->connection, oldPath, newPath);
 }
@@ -189,11 +194,40 @@ bool FileSystemDescriptorBound::pathExists(raiiDfsConnection& conn, const char* 
 }
 
 int FileSystemDescriptorBound::fileCopy(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst){
-	return (_dfsCopy(conn_src.connection()->connection, src, conn_dest.connection()->connection, dst) == 0 ? true : false);
+	return _dfsCopy(conn_src.connection()->connection, src, conn_dest.connection()->connection, dst);
+}
+
+int FileSystemDescriptorBound::fsMove(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst){
+	return _dfsMove(conn_src.connection()->connection, src, conn_dest.connection()->connection, dst);
 }
 
 int64_t FileSystemDescriptorBound::getDefaultBlockSize(raiiDfsConnection& conn){
 	return _dfsGetDefaultBlockSize(conn.connection()->connection);
+}
+
+int FileSystemDescriptorBound::fileAvailable(raiiDfsConnection& conn, dfsFile file){
+	return _dfsAvailable(conn.connection()->connection, file);
+}
+
+int FileSystemDescriptorBound::fsSetReplication(raiiDfsConnection& conn, const char* path, int16_t replication){
+	return _dfsSetReplication(conn.connection()->connection, path, replication);
+}
+
+tOffset FileSystemDescriptorBound::fsGetCapacity(raiiDfsConnection& conn){
+	return _dfsGetCapacity(conn.connection()->connection);
+}
+
+tOffset FileSystemDescriptorBound::fsGetUsed(raiiDfsConnection& conn){
+	return _dfsGetUsed(conn.connection()->connection);
+}
+
+int FileSystemDescriptorBound::fsChown(raiiDfsConnection& conn, const char* path, const char *owner,
+		const char *group){
+	return _dfsChown(conn.connection()->connection, path, owner, group);
+}
+
+int FileSystemDescriptorBound::fsChmod(raiiDfsConnection& conn, const char* path, short mode){
+	return _dfsChmod(conn.connection()->connection, path, mode);
 }
 
 struct hadoopRzOptions* FileSystemDescriptorBound::_hadoopRzOptionsAlloc(void){

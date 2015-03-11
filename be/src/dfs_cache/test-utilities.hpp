@@ -50,6 +50,9 @@ namespace constants{
 
 	/** protocol prefix represents local fs */
 	extern const std::string TEST_LOCALFS_PROTO_PREFFIX;
+
+	/** protocol prefix representing Tachyon fs */
+	extern const std::string TEST_TACHYONFS_PROTO_PREFIX;
 }
 
 
@@ -130,6 +133,7 @@ Item getRandomFromVector(const std::vector<Item>& dataset ){
 
 typedef boost::function<void(
 			const FileSystemDescriptor& fsDescriptor,
+			const std::string& fsPath,
 			const std::vector<std::string>& dataset,
 			std::atomic<long>& direct_handles,
 			std::atomic<long>& cached_handles,

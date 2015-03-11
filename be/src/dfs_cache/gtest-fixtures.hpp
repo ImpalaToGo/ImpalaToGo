@@ -30,6 +30,7 @@ class CacheLayerTest : public ::testing::Test {
  protected:
 	static FileSystemDescriptor m_dfsIdentityDefault;         /**< default file system as from core-site.xml */
 	static FileSystemDescriptor m_dfsIdentitylocalFilesystem; /**< local file system */
+	static FileSystemDescriptor m_dfsIdentityTachyon;         /**< tachyon file system */
 
 	static SessionContext m_ctx1;  /**< session context 1 (shell/web client 1) */
 	static SessionContext m_ctx2;  /**< session context 2 (shell/web client 2) */
@@ -78,6 +79,13 @@ class CacheLayerTest : public ::testing::Test {
 	  m_dfsIdentitylocalFilesystem.credentials = "";
 	  m_dfsIdentitylocalFilesystem.password = "";
 	  m_dfsIdentitylocalFilesystem.valid = true;
+
+	  m_dfsIdentityTachyon.dfs_type = DFS_TYPE::tachyon;
+	  m_dfsIdentityTachyon.host = "localhost";
+	  m_dfsIdentityTachyon.port = 19998;
+	  m_dfsIdentityTachyon.credentials = "";
+	  m_dfsIdentityTachyon.password = "";
+	  m_dfsIdentityTachyon.valid = true;
 
 	  // reset session contexts
 	  m_ctx1 = nullptr;

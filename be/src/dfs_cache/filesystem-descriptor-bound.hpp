@@ -52,9 +52,8 @@ private:
 public:
 	~FileSystemDescriptorBound();
 
-	inline FileSystemDescriptorBound(const FileSystemDescriptor & fsDescriptor) {
-		// copy the FileSystem configuration
-		m_fsDescriptor = fsDescriptor;
+	inline FileSystemDescriptorBound(const FileSystemDescriptor & fsDescriptor) :
+		m_fsDescriptor(fsDescriptor){
 	}
 
 	/** Resolve the address of file system using Hadoop File System class.
@@ -167,6 +166,16 @@ public:
 	tSize fileWrite(raiiDfsConnection& conn, dfsFile file, const void* buffer, tSize length);
 
 	/**
+	 * Flush the data.
+	 *
+	 * @param conn  - wrapped managed connection
+	 * @param file  - file handle.
+	 *
+	 * @return Returns 0 on success, -1 on error.
+	 */
+    int fileFlush(raiiDfsConnection& conn, dfsFile file);
+
+	/**
 	 * Rename the file, specified by @a oldPath, to @a newPath
 	 *
 	 * @param conn    - wrapped managed connection
@@ -189,6 +198,18 @@ public:
 	 * @return operation status, 0 is "success"
 	 */
 	static int fileCopy(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst);
+
+	/**
+	 * Move file from one filesystem to another.
+	 *
+	 * @param conn_src  - wrapped managed connection to source fs
+	 * @param src   - path of source file.
+	 * @param conn_dest - wrapped managed connection to target fs
+	 * @param dst   - path of destination file.
+	 *
+	 * @return Returns 0 on success, -1 on error.
+	 */
+	static int fsMove(raiiDfsConnection& conn_src, const char* src, raiiDfsConnection& conn_dest, const char* dst);
 
 	/**
 	 * Delete specified path.
@@ -258,6 +279,68 @@ public:
 	 * @return default block size
 	 */
 	int64_t getDefaultBlockSize(raiiDfsConnection& conn);
+
+	/**
+	 * Return number of bytes that can be read from this input stream without blocking.
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param file - file handle.
+	 *
+	 * @return Returns available bytes; -1 on error.
+	 */
+	int fileAvailable(raiiDfsConnection& conn, dfsFile file);
+
+	/**
+	 * Set the replication of the specified file to the supplied value
+	 *
+	 * @param conn - wrapped managed connection
+	 * @param path - file path.
+	 *
+	 * @return Returns 0 on success, -1 on error.
+	 */
+	int fsSetReplication(raiiDfsConnection& conn, const char* path, int16_t replication);
+
+	/**
+	 * Return the raw capacity of the filesystem.
+	 *
+	 * @param conn - wrapped managed connection
+	 *
+	 * @return Returns the raw-capacity; -1 on error.
+	 */
+	tOffset fsGetCapacity(raiiDfsConnection& conn);
+
+	/**
+	 * Return the total raw size of all files in the filesystem.
+	 *
+	 * @param conn - wrapped managed connection
+	 *
+	 * @return Returns the total-size; -1 on error.
+	 */
+	tOffset fsGetUsed(raiiDfsConnection& conn);
+
+	/**
+	 * Change the user and/or group of a file or directory.
+	 *
+	 * @param conn  - wrapped managed connection
+	 * @param path  - the path to the file or directory
+	 * @param owner - user string.  Set to NULL for 'no change'
+	 * @param group - group string.  Set to NULL for 'no change'
+	 *
+	 * @return 0 on success else -1
+	 */
+	int fsChown(raiiDfsConnection& conn, const char* path, const char *owner,
+			const char *group);
+
+	/**
+	 * change mode of file system object described by @a path to
+	 * required by @a mode
+	 * @param conn - wrapped managed connection
+	 * @param path - path to the file or directory
+	 * @param mode - bitmask to set it to
+	 *
+	 * @return 0 on success else -1
+	 */
+	int fsChmod(raiiDfsConnection& conn, const char* path, short mode);
 
 	/**
 	 * Allocate a zero-copy options structure.
