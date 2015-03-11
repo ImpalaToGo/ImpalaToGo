@@ -16,11 +16,8 @@
 package tachyon.util;
 
 import java.io.IOException;
-import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,25 +94,6 @@ public class UfsUtils {
     System.out.println("Loading to " + tachyonPath + " " + ufsAddrRootPath
             + " " + excludePathPrefix);
 
-    String uriRegex =
-            "/(?:([^\\:]*)\\:\\/\\/)?(?:([^\\:\\@]*)(?:\\:([^\\@]*))?\\@)?"
-                    + "(?:([^\\/\\:]*)\\.(?=[^\\.\\/\\:]*\\.[^\\.\\/\\:]*))?([^\\.\\/\\:]*)"
-                    + "(?:\\.([^\\/\\.\\:]*))?(?:\\:([0-9]*))?(\\/[^\\?#]*(?=.*?\\/)\\/)?"
-                    + "([^\\?#]*)?(?:\\?([^#]*))?(?:#(.*))?/";
-
-    String dataDirectoryName = null;
-    Pattern pattern = Pattern.compile(uriRegex);
-
-    Matcher matcher = pattern.matcher(ufsAddrRootPath.toString());
-    if (matcher.find()) {
-      dataDirectoryName = TachyonURI.SEPARATOR + matcher.group(9);
-      System.out.println("Data directory name : '" + dataDirectoryName + "'");
-    } else {
-      System.out.println("Invalid uri in remote target path : '"
-              + ufsAddrRootPath.toString());
-      return;
-    }
-
     //try {
       // resolve and replace hostname embedded in the given ufsAddress
     TachyonURI oldPath = ufsAddrRootPath;
@@ -134,12 +112,32 @@ public class UfsUtils {
     String ufsRootPath = ufsPair.getSecond();
 
     System.out.println("Loading ufs. ufs address = " + ufsAddress
-            + "; ufs root path = " + ufsRootPath + ".");
+            + "; ufs root path = " +
+            ufsRootPath + ".");
+
+    // create the under FS handler (e.g. hdfs, local FS, s3 etc.)
+    UnderFileSystem ufs = UnderFileSystem.get(ufsAddress, tachyonConf);
+
+    // flag, indicates that the path requested for load represents a file
+    boolean isFile = ufs.isFile(ufsAddrRootPath.toString());
+
+    // directory name, is calculated for case when current method is invoked for file
+    String directoryName = null;
+
+    if(isFile){
+      if ((ufsRootPath == null) || ufsRootPath.isEmpty() || ufsRootPath.equals("/")) {
+        directoryName = "";
+      }
+      int lastSlashPos = ufsRootPath.lastIndexOf('/');
+      if (lastSlashPos >= 0) {
+        directoryName = ufsRootPath.substring(0, lastSlashPos); // trim the slash
+      } else {
+        directoryName = "";
+      }
 
     if (!tfs.exist(tachyonPath)) {
-      System.out.println("Loading ufs. Make dir if needed for '" + dataDirectoryName + "'.");
-
-      tfs.mkdir(new TachyonURI(dataDirectoryName));
+      System.out.println("Loading ufs. Make dir if needed for '" + directoryName + "'.");
+      tfs.mkdir(isFile ? new TachyonURI(directoryName) : tachyonPath);
       // TODO Add the following.
       // if (tfs.mkdir(tfsRootPath)) {
       // LOG.info("directory " + tfsRootPath + " does not exist in Tachyon: created");
@@ -147,9 +145,6 @@ public class UfsUtils {
       // throw new IOException("Failed to create folder in Tachyon: " + tfsRootPath);
       // }
     }
-
-    // create the under FS handler (e.g. hdfs, local FS, s3 etc.)
-    UnderFileSystem ufs = UnderFileSystem.get(ufsAddress, tachyonConf);
 
     Queue<TachyonURI> ufsPathQueue = new LinkedList<TachyonURI>();
     if (excludePathPrefix.outList(ufsRootPath)) {
@@ -160,7 +155,7 @@ public class UfsUtils {
       TachyonURI ufsPath = ufsPathQueue.poll(); // this is the absolute path
       LOG.info("Loading: " + ufsPath);
       if (ufs.isFile(ufsPath.toString())) {
-        TachyonURI tfsPath = buildTFSPath(new TachyonURI(dataDirectoryName), ufsAddrRootPath,
+        TachyonURI tfsPath = buildTFSPath(isFile ? new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
                 ufsPath);
         System.out.println("Loading ufs. tfs path = " + tfsPath + ".");
         if (tfs.exist(tfsPath)) {
