@@ -8,6 +8,7 @@ BASE_DIR=/root/ImpalaToGo/
 
 #tachyon deployment 
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/target/'
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/src/main/webapp/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/client/target/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/assembly/target/'
@@ -16,6 +17,7 @@ ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/bin/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/libexec/'
 
 scp -rp -i $KEY /root/ImpalaToGo/thirdparty/tachyon-0.7.0-SNAPSHOT/core/target/*.jar ec2-user@$TARGET_HOST:/home/ec2-user/build/tachyon/core/target/
+scp -rp -i $KEY /root/ImpalaToGo/thirdparty/tachyon-0.7.0-SNAPSHOT/core/src/main/webapp/* ec2-user@$TARGET_HOST:/home/ec2-user/build/tachyon/core/src/main/webapp/
 scp -rp -i $KEY /root/ImpalaToGo/thirdparty/tachyon-0.7.0-SNAPSHOT/client/target/*.jar ec2-user@$TARGET_HOST:/home/ec2-user/build/tachyon/client/target/
 scp -rp -i $KEY /root/ImpalaToGo/thirdparty/tachyon-0.7.0-SNAPSHOT/assembly/target/*.jar ec2-user@$TARGET_HOST:/home/ec2-user/build/tachyon/assembly/target/
 
