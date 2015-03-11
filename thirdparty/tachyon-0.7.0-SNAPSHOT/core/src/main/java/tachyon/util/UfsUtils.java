@@ -112,8 +112,7 @@ public class UfsUtils {
     String ufsRootPath = ufsPair.getSecond();
 
     System.out.println("Loading ufs. ufs address = " + ufsAddress
-            + "; ufs root path = " +
-            ufsRootPath + ".");
+            + "; ufs root path = " + ufsRootPath + ".");
 
     // create the under FS handler (e.g. hdfs, local FS, s3 etc.)
     UnderFileSystem ufs = UnderFileSystem.get(ufsAddress, tachyonConf);
@@ -124,7 +123,7 @@ public class UfsUtils {
     // directory name, is calculated for case when current method is invoked for file
     String directoryName = null;
 
-    if(isFile) {
+    if (isFile) {
       if ((ufsRootPath == null) || ufsRootPath.isEmpty() || ufsRootPath.equals("/")) {
         directoryName = "";
       }
@@ -156,7 +155,8 @@ public class UfsUtils {
       TachyonURI ufsPath = ufsPathQueue.poll(); // this is the absolute path
       LOG.info("Loading: " + ufsPath);
       if (ufs.isFile(ufsPath.toString())) {
-        TachyonURI tfsPath = buildTFSPath(isFile ? new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
+        TachyonURI tfsPath = buildTFSPath(isFile ?
+                        new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
                 ufsPath);
         System.out.println("Loading ufs. tfs path = " + tfsPath + ".");
         if (tfs.exist(tfsPath)) {
