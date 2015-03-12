@@ -40,7 +40,6 @@ namespace impala {
 
 FileSystemDescriptor CacheLayerTest::m_dfsIdentityDefault;
 FileSystemDescriptor CacheLayerTest::m_dfsIdentitylocalFilesystem;
-FileSystemDescriptor CacheLayerTest::m_dfsIdentityTachyon;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;

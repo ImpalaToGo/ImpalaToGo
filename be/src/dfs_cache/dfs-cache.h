@@ -57,8 +57,8 @@ status::StatusInternal cacheInit(int mem_limit_percent = 0, const std::string& r
  * @fn StatusInternal cacheConfigureNameNode(const FileSystemDescriptor & adaptor)
  * @brief Configure DFS NameNode (with connection details)
  *
- * @param [In/out] fs       - FS connection details
- *  *
+ * @param [In] fs - FS connection details
+ *
  * @return operation status
  */
 status::StatusInternal cacheConfigureFileSystem(FileSystemDescriptor & fs);
@@ -295,6 +295,7 @@ status::StatusInternal dfsHFlush(const FileSystemDescriptor & fsDescriptor, dfsF
 
 /**
  * Number of bytes that can be read from this input stream without blocking.
+ * TODO: remove this comment when DFS adaptors are designed.
  * Comment: Useful function to estimate file readiness and progress in "Prepare"
  *
  * @param fsDescriptor - fs file belongs to
@@ -334,15 +335,13 @@ status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor, const 
  * Move file from one filesystem to another.
  * Is available inside single cluster (because of credentials only)
  *
- * @param fsDescriptor1 - fs src belongs to
- * @param src           - The path of source file.
- * @param fsDescriptor2 - fs destimation belongs to
- * @param dst           - The path of destination file.
+ * @param fsDescriptor - fs file belongs to
+ * @param src          - The path of source file.
+ * @param dst          - The path of destination file.
  *
  * @return Operation status
  */
-status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor1, const char* src, const FileSystemDescriptor & fsDescriptor2,
-		const char* dst);
+status::StatusInternal dfsMove(const FileSystemDescriptor & namenode, const char* src, const char* dst);
 
 /**
  * Delete file.
@@ -431,14 +430,15 @@ dfsFileInfo *dfsGetPathInfo(const FileSystemDescriptor & fsDescriptor, const cha
 void dfsFreeFileInfo(const FileSystemDescriptor & fsDescriptor, dfsFileInfo *dfsFileInfo, int numEntries);
 
 /**
- * @fn tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor)
+ * @fn tOffset dfsGetCapacity(const FileSystemDescriptor & namenode, const char* host)
  * @brief Return the raw capacity of the local filesystem.
  *
- * @param fsDescriptor - fs descriptor
+ * @param fsDescriptor - fs file belongs to
+ * @param host         - hostname
  *
  * @return Returns the raw-capacity; -1 on error.
  */
-tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor);
+tOffset dfsGetCapacity(const FileSystemDescriptor & fsDescriptor, const char* host);
 
 /**
  * Return the total raw size of all files in the filesystem.
