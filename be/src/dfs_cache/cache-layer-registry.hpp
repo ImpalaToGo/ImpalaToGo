@@ -73,7 +73,6 @@ typedef std::unordered_map<dfsFile, dfsFile>::iterator itCreateFromSelect;
 
 /**
  * Represent cache data registry.
- * Thread safe
  */
 class CacheLayerRegistry{
 private:
@@ -95,17 +94,10 @@ private:
 	boost::mutex m_adaptorsmux;        /**< mutex for adapters collection */
 
 	volatile bool m_valid;             /**< flag, indicates that registry is in the valid state */
-	bool          m_directDFSAccess;   /**< flag, indicates direct dfs access is configured (bypassing impalatogo cache) */
 
 	const double m_available_capacity_ratio = 0.85; /**< ratio for setting "cache capacity", percent from available
 	 	 	 	 	 	 	 	 	 	 	 	     * root storage space */
 
-	/**
-	 * Predicate to define "get file info" handler, being invoked from underlying cache
-	 *
-	 * @param path       - file path to retrieve info for
-	 * @param descriptor - file system descriptor for fs the file belongs to
-	 */
     dfsFileInfo* getFileInfo(const char* path, FileSystemDescriptor descriptor){
     	boost::shared_ptr<FileSystemDescriptorBound> fsAdaptor = (*CacheLayerRegistry::instance()->getFileSystemDescriptor(descriptor));
 
@@ -131,12 +123,6 @@ private:
     	return info;
     }
 
-	/**
-	 * Predicate to define "free file info" handler, being invoked from underlying cache
-	 *
-	 * @param info - file info structure pointer
-	 * @param num  - number of "file info" records to be released
-	 */
     void freeFileInfo(dfsFileInfo* info, int num){
   	   // free file info:
   	   FileSystemDescriptorBound::freeFileInfo(info, num);
@@ -152,30 +138,19 @@ private:
      */
 	CacheLayerRegistry(int mem_limit_percent = 0, const std::string& root = "",
 			boost::posix_time::time_duration timeslice = boost::posix_time::hours(-1),
-			uintmax_t size_hard_limit = 0) : m_cache(nullptr) {
+			uintmax_t size_hard_limit = 0) {
 		m_valid = false;
+		// flag, indicates that fixed hard cache size is configured, only needed is to guarantee we have space enough
+		// according to requested cache size
+		bool hardsize = size_hard_limit != 0;
 
-		// DFS direct access is configured in case if no memory limits specified (memory limits are default-zero)
-		m_directDFSAccess = (size_hard_limit == 0) && (mem_limit_percent == 0);
-
-    	// do not construct impalatogo cache in case if direct DFS access is configured
-		if(m_directDFSAccess){
-			m_valid = true;
-			LOG (INFO) << "Direct DFS access is configured.\n";
-			return;
-		}
-
-		std::string _root = root;
+        std::string _root = root;
 
 		if(_root.empty())
 			_root = constants::DEFAULT_CACHE_ROOT;
 		if(!localstorage(_root)){
 			LOG (ERROR) << "Cache Layer is not initialized due to invalid cache location \"" << root << "\"";
 		}
-
-		// flag, indicates that fixed hard cache size is configured, only needed is to guarantee we have space enough
-		// according to requested cache size
-		bool hardsize = size_hard_limit != 0;
 
 		uintmax_t covered = utilities::get_dir_busy_space(m_localstorageRoot);
 		LOG (INFO) << "Cache load : busy space : \"" << std::to_string(covered) << "\"\n";
@@ -292,13 +267,10 @@ public:
     /** Getter for Local storage root file system path */
     inline std::string localstorage() {return m_localstorageRoot;}
 
-    /** Getter for "direct DFS access" configuration flag */
-    inline bool directDFSAccess() { return m_directDFSAccess; }
-
     /**
 	 * Setup namenode
 	 *
-	 * @param [In/Out] fsDescriptor - file system connection details
+	 * @param[In/Out] fsDescriptor - file system connection details
 	 *
 	 * @return Operation status
 	 */

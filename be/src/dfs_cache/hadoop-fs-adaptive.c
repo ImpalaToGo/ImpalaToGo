@@ -41,10 +41,9 @@
 #define URI_SCHEME_LENGTH 10;
 
 /** Scheme definitions */
-#define SCHEME_HDFS    "hdfs"
-#define SCHEME_S3N     "s3n"
-#define SCHEME_LOCAL   "file"
-#define SCHEME_TACHYON "tachyon"
+#define SCHEME_HDFS  "hdfs"
+#define SCHEME_S3N   "s3n"
+#define SCHEME_LOCAL "file"
 
 #define JAVA_VOID       "V"
 
@@ -67,8 +66,6 @@ DFS_TYPE fsTypeFromScheme(const char* scheme){
     	return s3n;
     if(strcmp(scheme, SCHEME_LOCAL) == 0)
     	return local;
-    if(strcmp(scheme, SCHEME_TACHYON) == 0)
-    	return tachyon;
 	return NON_SPECIFIED;
 }
 
@@ -723,9 +720,6 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
     	break;
     case local:
     	explicitScheme = "file://";
-    	break;
-    case tachyon:
-    	explicitScheme = "tachyon://";
     	break;
     default:
     	explicitScheme = "file://";
