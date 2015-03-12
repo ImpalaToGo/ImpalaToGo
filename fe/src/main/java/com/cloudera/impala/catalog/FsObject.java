@@ -134,7 +134,7 @@ public class FsObject {
    * @return statistics for child whether one found, null otherwise
    */
   public FileStatus getChildMetadata(String path){
-    if(_children.containsKey(path))
+    if(_children.containsKey(path) && _children.get(path) != null)
       return _children.get(path).getMetadata();
     return null;
   }

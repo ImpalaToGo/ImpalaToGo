@@ -251,8 +251,10 @@ public final class MasterClient implements Closeable {
         LOG.info("getFileStatus for path '" + path + "'");
         return mClient.getFileStatus(fileId, path);
       } catch (InvalidPathException e) {
+        LOG.error("getFileStatus rise IO exception for path '" + path + "'");
         throw new IOException(e);
       } catch (TException e) {
+        LOG.error("getFileStatus rise transport exception for path '" + path + "'");
         LOG.error(e.getMessage(), e);
         mConnected = false;
       }
