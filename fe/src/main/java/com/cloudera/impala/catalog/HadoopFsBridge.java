@@ -441,6 +441,8 @@ public class HadoopFsBridge {
       final List<BlockLocation> blocks){
     AtomicReference<BridgeOpResult<BlockStorageLocation[]>> result = new AtomicReference<BridgeOpResult<BlockStorageLocation[]>>();
 
+    LOG.info("\"FileSystem.getFileBlockStorageLocations\"");
+
     //declaration of the anonymous class
     InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>("DistributedFileSystem.getFileBlockStorageLocations") {
       @Override

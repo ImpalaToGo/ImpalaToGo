@@ -262,7 +262,7 @@ public class HdfsTable extends Table {
               // no way to proceed, we did not sync with remote FS, throw the exception
               throw new IOException(fileStatRes.getError());
             }
-
+            LOG.info("Block locations retrieved for \"" + p + "\" on table \"" + name_ + "\"");
             BlockLocation[] locations = fileBlockLocationRes.getResult();
             Preconditions.checkNotNull(locations);
             blockLocations.addAll(Arrays.asList(locations));
@@ -311,10 +311,12 @@ public class HdfsTable extends Table {
           }
         }
       }
-      LOG.trace("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
+      LOG.info("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
           numCachedBlocks + "/" + blockLocations.size() + " cached blocks.");
 
       if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
+        LOG.info("loading disk ids for \"" + getFullName() + ""
+            + ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
         LOG.trace("loading disk ids for: " + getFullName() +
             ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
         loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
