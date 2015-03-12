@@ -350,9 +350,11 @@ public class HadoopFsBridge {
    */
   public static BridgeOpResult<FileStatus> getFileStatus(final FsKey fs, final Path path){
 
+    LOG.info("\"FileSystem.getFileStatus\" is invoked on \"" + path + "\"");
     // check within the cache for requested result:
     FileStatus statistic = fsCache.getFileStat(fs, path);
-    LOG.info("\"FileSystem.getFileStatus\" is invoked on \"" + path + "\"");
+
+    LOG.info("\"FileSystem.getFileStatus\" statistics requested from cache for \"" + path + "\"");
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
