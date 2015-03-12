@@ -352,6 +352,7 @@ public class HadoopFsBridge {
 
     // check within the cache for requested result:
     FileStatus statistic = fsCache.getFileStat(fs, path);
+    LOG.info("\"FileSystem.getFileStatus\" is invoked on \"" + path + "\"");
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
@@ -405,6 +406,8 @@ public class HadoopFsBridge {
   public static BridgeOpResult<BlockLocation[]> getFileBlockLocations(final FileSystem fs, final FileStatus file,
       final long start, final long len){
     AtomicReference<BridgeOpResult<BlockLocation[]>> result = new AtomicReference<BridgeOpResult<BlockLocation[]>>();
+
+    LOG.info("\"FileSystem.getFileBlockLocations\" is invoked for \"" + file.getPath() + "\".");
 
     //declaration of the anonymous class
     InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>("FileSystem.getFileBlockLocations") {

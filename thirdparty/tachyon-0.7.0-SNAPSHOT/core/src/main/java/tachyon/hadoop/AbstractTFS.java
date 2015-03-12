@@ -233,6 +233,8 @@ abstract class AbstractTFS extends FileSystem {
   private void fromHdfsToTachyon(TachyonURI path) throws IOException {
     if (!mTFS.exist(path)) {
       Path hdfsPath = Utils.getHDFSPath(path, mUnderFSAddress);
+      System.out.println("fromHdfsToTachyon hdfspath = " + path + "");
+
       Configuration conf = new Configuration(getConf());
       if (conf.get("fs.defaultFS") == null) {
         conf.set("fs.defaultFS", mUnderFSAddress);
@@ -242,6 +244,7 @@ abstract class AbstractTFS extends FileSystem {
         TachyonURI ufsUri = new TachyonURI(mUnderFSAddress);
         TachyonURI ufsAddrPath = new TachyonURI(ufsUri.getScheme(), ufsUri.getAuthority(),
             path.getPath());
+        System.out.println("fromHdfsToTachyon ufs addr path = " + ufsAddrPath + "");
         // Set the path as the TFS root path.
         UfsUtils.loadUnderFs(mTFS, path, ufsAddrPath, new PrefixList(null), mTachyonConf);
       }
@@ -299,8 +302,13 @@ abstract class AbstractTFS extends FileSystem {
    */
   @Override
   public FileStatus getFileStatus(Path path) throws IOException {
+    LOG.info("getFileStatus received by AbstractTFS: Path = '" + path + "'.");
     TachyonURI tPath = new TachyonURI(Utils.getPathWithoutScheme(path));
+    LOG.info("getFileStatus going to retrieve hdfsPath for original Path = '" + path + "'.");
     Path hdfsPath = Utils.getHDFSPath(tPath, mUnderFSAddress);
+
+    LOG.info("getFileStatus constructed hdfsPath '" + hdfsPath + "'; Path = '" + path + "'.");
+    LOG.info("getFileStatus : tachyon header : '" + mTachyonHeader + "'; Path = '" + path + "'.");
 
     LOG.info("getFileStatus(" + path + "): HDFS Path: " + hdfsPath + " TPath: " + mTachyonHeader
         + tPath);

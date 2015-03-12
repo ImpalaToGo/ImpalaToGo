@@ -595,6 +595,11 @@ public class TachyonFS extends AbstractTachyonFS {
     }
 
     info = mMasterClient.getFileStatus(fileId, path);
+    if (info == null) {
+      LOG.error("null file info retrieved for path '" + path + "'.");
+      system.out.println("null file info retrieved for path '" + path + "'.");
+      return null;
+    }
     fileId = info.getId();
     if (fileId == -1) {
       cache.remove(key);
