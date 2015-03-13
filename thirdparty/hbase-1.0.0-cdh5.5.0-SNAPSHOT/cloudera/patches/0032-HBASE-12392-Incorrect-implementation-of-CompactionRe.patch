@@ -1,0 +1,28 @@
+From 020cf23d05a93d4b88079aa851f98649d18e9987 Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 31 Oct 2014 15:43:58 +0530
+Subject: [PATCH 032/110] HBASE-12392 Incorrect implementation of CompactionRequest.isRetainDeleteMarkers(Jingcheng Du)
+
+Reason: Bug
+Author: Jingcheng Du
+Ref: CDH-19420
+---
+ .../compactions/CompactionRequest.java             |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/CompactionRequest.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/CompactionRequest.java
+index 194f2d3..b5b0316 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/CompactionRequest.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/compactions/CompactionRequest.java
+@@ -216,7 +216,7 @@ public class CompactionRequest implements Comparable<CompactionRequest> {
+    */
+   public boolean isRetainDeleteMarkers() {
+     return (this.retainDeleteMarkers != null) ? this.retainDeleteMarkers.booleanValue()
+-        : isAllFiles();
++        : !isAllFiles();
+   }
+ 
+   @Override
+-- 
+1.7.0.4
+

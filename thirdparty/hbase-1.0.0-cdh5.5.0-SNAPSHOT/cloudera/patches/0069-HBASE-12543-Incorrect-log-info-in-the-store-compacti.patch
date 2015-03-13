@@ -1,0 +1,28 @@
+From c21c9f67646ed03c72f548c38efe16988cdfedd6 Mon Sep 17 00:00:00 2001
+From: Ramkrishna <ramkrishna.s.vasudevan@intel.com>
+Date: Fri, 21 Nov 2014 15:28:37 +0530
+Subject: [PATCH 069/110] HBASE-12543 Incorrect log info in the store compaction of mob (Jiajia Li)
+
+Reason: MOB feature
+Author: Jiajia Li
+Ref: CDH-20651
+---
+ .../hadoop/hbase/regionserver/HMobStore.java       |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+index d51fc11..569ad06 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+@@ -404,7 +404,7 @@ public class HMobStore extends HStore {
+         if (zk.lockColumnFamily(getTableName().getNameAsString(), getFamily().getNameAsString())) {
+           try {
+             LOG.info("Obtain the lock for the store[" + this
+-                + "], forcing the delete markers to be retained");
++                + "], ready to perform the major compaction");
+             // check the sweeping node to find out whether the sweeping is in progress.
+             boolean hasSweeper = zk.isSweeperZNodeExist(getTableName().getNameAsString(),
+                 getFamily().getNameAsString());
+-- 
+1.7.0.4
+

@@ -1,0 +1,352 @@
+From b858d8e49a15b9e7c0222fdd554dccdd19d677ab Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jon@cloudera.com>
+Date: Tue, 3 Mar 2015 17:15:26 -0800
+Subject: [PATCH 091/110] HBASE-13157 Add Mob compaction actions and monkeys to Chaos Monkey
+
+Reason: Mob Testing
+Author: Jonathan Hsieh
+Ref: CDH-23959
+---
+ .../hbase/chaos/actions/CompactMobAction.java      |   65 ++++++++
+ .../chaos/factories/MobNoKillMonkeyFactory.java    |   70 +++++++++
+ .../MobSlowDeterministicMonkeyFactory.java         |  156 ++++++++++++++++++++
+ .../hbase/chaos/factories/MonkeyFactory.java       |    4 +
+ 4 files changed, 295 insertions(+), 0 deletions(-)
+ create mode 100644 hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/CompactMobAction.java
+ create mode 100644 hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobNoKillMonkeyFactory.java
+ create mode 100644 hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobSlowDeterministicMonkeyFactory.java
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/CompactMobAction.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/CompactMobAction.java
+new file mode 100644
+index 0000000..a349d3d
+--- /dev/null
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/CompactMobAction.java
+@@ -0,0 +1,65 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.chaos.actions;
++
++import org.apache.commons.lang.math.RandomUtils;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.client.Admin;
++
++/**
++ * Action that queues a table compaction.
++ */
++public class CompactMobAction extends Action {
++  private final TableName tableName;
++  private final int majorRatio;
++  private final long sleepTime;
++
++  public CompactMobAction(TableName tableName, float majorRatio) {
++    this(-1, tableName, majorRatio);
++  }
++
++  public CompactMobAction(
++          int sleepTime, TableName tableName, float majorRatio) {
++    this.tableName = tableName;
++    this.majorRatio = (int) (100 * majorRatio);
++    this.sleepTime = sleepTime;
++  }
++
++  @Override
++  public void perform() throws Exception {
++    HBaseTestingUtility util = context.getHBaseIntegrationTestingUtility();
++    Admin admin = util.getHBaseAdmin();
++    boolean major = RandomUtils.nextInt(100) < majorRatio;
++
++    LOG.info("Performing action: Compact mob of table " + tableName + ", major=" + major);
++    try {
++      if (major) {
++        admin.majorCompactMob(tableName);
++      } else {
++        admin.compactMob(tableName);
++      }
++    } catch (Exception ex) {
++      LOG.warn("Mob Compaction failed, might be caused by other chaos: " + ex.getMessage());
++    }
++    if (sleepTime > 0) {
++      Thread.sleep(sleepTime);
++    }
++  }
++}
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobNoKillMonkeyFactory.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobNoKillMonkeyFactory.java
+new file mode 100644
+index 0000000..f832a2e
+--- /dev/null
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobNoKillMonkeyFactory.java
+@@ -0,0 +1,70 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.chaos.factories;
++
++import org.apache.hadoop.hbase.chaos.actions.*;
++import org.apache.hadoop.hbase.chaos.monkies.ChaosMonkey;
++import org.apache.hadoop.hbase.chaos.monkies.PolicyBasedChaosMonkey;
++import org.apache.hadoop.hbase.chaos.policies.PeriodicRandomActionPolicy;
++import org.apache.hadoop.hbase.chaos.policies.TwoConcurrentActionPolicy;
++
++/**
++ * This is a copy of NoKillMonkeyFactory that also does mob compactions.
++ */
++public class MobNoKillMonkeyFactory extends MonkeyFactory {
++  @Override public ChaosMonkey build() {
++    Action[] actions1 = new Action[] {
++            new CompactMobAction(tableName, MonkeyConstants.DEFAULT_PERIODIC_ACTION1_PERIOD),
++            new CompactTableAction(tableName, MonkeyConstants.DEFAULT_PERIODIC_ACTION1_PERIOD),
++            new CompactRandomRegionOfTableAction(tableName,
++                    MonkeyConstants.DEFAULT_COMPACT_RANDOM_REGION_RATIO),
++            new FlushTableAction(tableName),
++            new FlushRandomRegionOfTableAction(tableName),
++            new MoveRandomRegionOfTableAction(tableName)
++    };
++
++    Action[] actions2 = new Action[] {
++            new SplitRandomRegionOfTableAction(tableName),
++            new MergeRandomAdjacentRegionsOfTableAction(tableName),
++            new SnapshotTableAction(tableName),
++            new AddColumnAction(tableName),
++            new RemoveColumnAction(tableName, columnFamilies),
++            new ChangeEncodingAction(tableName),
++            new ChangeCompressionAction(tableName),
++            new ChangeBloomFilterAction(tableName),
++            new ChangeVersionsAction(tableName)
++    };
++
++    Action[] actions3 = new Action[] {
++            new MoveRegionsOfTableAction(MonkeyConstants.DEFAULT_MOVE_REGIONS_SLEEP_TIME,
++                    MonkeyConstants.DEFAULT_MOVE_REGIONS_MAX_TIME,
++                    tableName),
++            new MoveRandomRegionOfTableAction(MonkeyConstants.DEFAULT_RESTART_ACTIVE_MASTER_SLEEP_TIME,
++                    tableName),
++    };
++
++    Action[] actions4 = new Action[] {
++            new DumpClusterStatusAction()
++    };
++
++    return new PolicyBasedChaosMonkey(util,
++            new TwoConcurrentActionPolicy(MonkeyConstants.DEFAULT_PERIODIC_ACTION1_PERIOD, actions1, actions2),
++            new PeriodicRandomActionPolicy(MonkeyConstants.DEFAULT_PERIODIC_ACTION2_PERIOD,actions3),
++            new PeriodicRandomActionPolicy(MonkeyConstants.DEFAULT_PERIODIC_ACTION4_PERIOD,actions4));
++  }
++}
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobSlowDeterministicMonkeyFactory.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobSlowDeterministicMonkeyFactory.java
+new file mode 100644
+index 0000000..8d08bdb
+--- /dev/null
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MobSlowDeterministicMonkeyFactory.java
+@@ -0,0 +1,156 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.chaos.factories;
++
++import org.apache.hadoop.hbase.chaos.actions.*;
++import org.apache.hadoop.hbase.chaos.monkies.ChaosMonkey;
++import org.apache.hadoop.hbase.chaos.monkies.PolicyBasedChaosMonkey;
++import org.apache.hadoop.hbase.chaos.policies.CompositeSequentialPolicy;
++import org.apache.hadoop.hbase.chaos.policies.DoActionsOncePolicy;
++import org.apache.hadoop.hbase.chaos.policies.PeriodicRandomActionPolicy;
++
++/**
++ * This is a copy of SlowDeterministicMonkeyFactory that also does mob compactions.
++ */
++public class MobSlowDeterministicMonkeyFactory extends MonkeyFactory {
++
++  private long action1Period;
++  private long action2Period;
++  private long action3Period;
++  private long action4Period;
++  private long moveRegionsMaxTime;
++  private long moveRegionsSleepTime;
++  private long moveRandomRegionSleepTime;
++  private long restartRandomRSSleepTime;
++  private long batchRestartRSSleepTime;
++  private float batchRestartRSRatio;
++  private long restartActiveMasterSleepTime;
++  private long rollingBatchRestartRSSleepTime;
++  private float rollingBatchRestartRSRatio;
++  private long restartRsHoldingMetaSleepTime;
++  private float compactTableRatio;
++  private float compactRandomRegionRatio;
++
++  @Override
++  public ChaosMonkey build() {
++
++    loadProperties();
++    // Actions such as compact/flush a table/region,
++    // move one region around. They are not so destructive,
++    // can be executed more frequently.
++    Action[] actions1 = new Action[] {
++            new CompactMobAction(tableName, compactTableRatio),
++            new CompactTableAction(tableName, compactTableRatio),
++            new CompactRandomRegionOfTableAction(tableName, compactRandomRegionRatio),
++            new FlushTableAction(tableName),
++            new FlushRandomRegionOfTableAction(tableName),
++            new MoveRandomRegionOfTableAction(tableName)
++    };
++
++    // Actions such as split/merge/snapshot.
++    // They should not cause data loss, or unreliability
++    // such as region stuck in transition.
++    Action[] actions2 = new Action[] {
++            new SplitRandomRegionOfTableAction(tableName),
++            new MergeRandomAdjacentRegionsOfTableAction(tableName),
++            new SnapshotTableAction(tableName),
++            new AddColumnAction(tableName),
++            new RemoveColumnAction(tableName, columnFamilies),
++            new ChangeEncodingAction(tableName),
++            new ChangeCompressionAction(tableName),
++            new ChangeBloomFilterAction(tableName),
++            new ChangeVersionsAction(tableName)
++    };
++
++    // Destructive actions to mess things around.
++    Action[] actions3 = new Action[] {
++            new MoveRegionsOfTableAction(moveRegionsSleepTime, moveRegionsMaxTime,
++                    tableName),
++            new MoveRandomRegionOfTableAction(moveRandomRegionSleepTime, tableName),
++            new RestartRandomRsAction(restartRandomRSSleepTime),
++            new BatchRestartRsAction(batchRestartRSSleepTime, batchRestartRSRatio),
++            new RestartActiveMasterAction(restartActiveMasterSleepTime),
++            new RollingBatchRestartRsAction(rollingBatchRestartRSSleepTime,
++                    rollingBatchRestartRSRatio),
++            new RestartRsHoldingMetaAction(restartRsHoldingMetaSleepTime)
++    };
++
++    // Action to log more info for debugging
++    Action[] actions4 = new Action[] {
++            new DumpClusterStatusAction()
++    };
++
++    return new PolicyBasedChaosMonkey(util,
++            new PeriodicRandomActionPolicy(action1Period, actions1),
++            new PeriodicRandomActionPolicy(action2Period, actions2),
++            new CompositeSequentialPolicy(
++                    new DoActionsOncePolicy(action3Period, actions3),
++                    new PeriodicRandomActionPolicy(action3Period, actions3)),
++            new PeriodicRandomActionPolicy(action4Period, actions4));
++  }
++
++  private void loadProperties() {
++
++    action1Period = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.PERIODIC_ACTION1_PERIOD,
++            MonkeyConstants.DEFAULT_PERIODIC_ACTION1_PERIOD + ""));
++    action2Period = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.PERIODIC_ACTION2_PERIOD,
++            MonkeyConstants.DEFAULT_PERIODIC_ACTION2_PERIOD + ""));
++    action3Period = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.COMPOSITE_ACTION3_PERIOD,
++            MonkeyConstants.DEFAULT_COMPOSITE_ACTION3_PERIOD + ""));
++    action4Period = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.PERIODIC_ACTION4_PERIOD,
++            MonkeyConstants.DEFAULT_PERIODIC_ACTION4_PERIOD + ""));
++    moveRegionsMaxTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.MOVE_REGIONS_MAX_TIME,
++            MonkeyConstants.DEFAULT_MOVE_REGIONS_MAX_TIME + ""));
++    moveRegionsSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.MOVE_REGIONS_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_MOVE_REGIONS_SLEEP_TIME + ""));
++    moveRandomRegionSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.MOVE_RANDOM_REGION_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_MOVE_RANDOM_REGION_SLEEP_TIME + ""));
++    restartRandomRSSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.RESTART_RANDOM_RS_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_RESTART_RANDOM_RS_SLEEP_TIME + ""));
++    batchRestartRSSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.BATCH_RESTART_RS_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_BATCH_RESTART_RS_SLEEP_TIME + ""));
++    restartActiveMasterSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.RESTART_ACTIVE_MASTER_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_RESTART_ACTIVE_MASTER_SLEEP_TIME + ""));
++    rollingBatchRestartRSSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.ROLLING_BATCH_RESTART_RS_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_ROLLING_BATCH_RESTART_RS_SLEEP_TIME + ""));
++    rollingBatchRestartRSRatio = Float.parseFloat(this.properties.getProperty(
++            MonkeyConstants.ROLLING_BATCH_RESTART_RS_RATIO,
++            MonkeyConstants.DEFAULT_ROLLING_BATCH_RESTART_RS_RATIO + ""));
++    restartRsHoldingMetaSleepTime = Long.parseLong(this.properties.getProperty(
++            MonkeyConstants.RESTART_RS_HOLDING_META_SLEEP_TIME,
++            MonkeyConstants.DEFAULT_RESTART_RS_HOLDING_META_SLEEP_TIME + ""));
++    compactTableRatio = Float.parseFloat(this.properties.getProperty(
++            MonkeyConstants.COMPACT_TABLE_ACTION_RATIO,
++            MonkeyConstants.DEFAULT_COMPACT_TABLE_ACTION_RATIO + ""));
++    compactRandomRegionRatio = Float.parseFloat(this.properties.getProperty(
++            MonkeyConstants.COMPACT_RANDOM_REGION_RATIO,
++            MonkeyConstants.DEFAULT_COMPACT_RANDOM_REGION_RATIO + ""));
++  }
++}
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MonkeyFactory.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MonkeyFactory.java
+index f4b1c53..f3d535b 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MonkeyFactory.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/factories/MonkeyFactory.java
+@@ -69,6 +69,8 @@ public abstract class MonkeyFactory {
+   public static final String SERVER_KILLING = "serverKilling";
+   public static final String STRESS_AM = "stressAM";
+   public static final String NO_KILL = "noKill";
++  public static final String MOB_NO_KILL = "mobNoKill";
++  public static final String MOB_SLOW_DETERMINISTIC = "mobSlowDeterministic";
+ 
+   public static Map<String, MonkeyFactory> FACTORIES = ImmutableMap.<String,MonkeyFactory>builder()
+     .put(CALM, new CalmMonkeyFactory())
+@@ -77,6 +79,8 @@ public abstract class MonkeyFactory {
+     .put(SERVER_KILLING, new ServerKillingMonkeyFactory())
+     .put(STRESS_AM, new StressAssignmentManagerMonkeyFactory())
+     .put(NO_KILL, new NoKillMonkeyFactory())
++    .put(MOB_NO_KILL, new MobNoKillMonkeyFactory())
++    .put(MOB_SLOW_DETERMINISTIC, new MobNoKillMonkeyFactory())
+     .build();
+ 
+   public static MonkeyFactory getFactory(String factoryName) {
+-- 
+1.7.0.4
+

@@ -1,0 +1,76 @@
+From 611145e32937812cd473fc2046b49969f54099eb Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Mon, 15 Dec 2014 10:32:44 +0000
+Subject: [PATCH 003/110] CLOUDERA-BUILD add safety check to build to ensure JDK7 is being used
+
+---
+ pom.xml |   32 ++++++++++++++++++++++++++++----
+ 1 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index f67d935..8ff3e68 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -504,8 +504,8 @@
+           <artifactId>maven-compiler-plugin</artifactId>
+           <version>2.5.1</version>
+           <configuration>
+-            <source>${compileSource}</source>
+-            <target>${compileSource}</target>
++            <source>${sourceJavaVersion}</source>
++            <target>${targetJavaVersion}</target>
+             <showWarnings>true</showWarnings>
+             <showDeprecation>false</showDeprecation>
+             <compilerArgument>-Xlint:-options</compilerArgument>
+@@ -784,7 +784,7 @@
+             </requireMavenVersion>
+             <!-- The earliest JVM version we verify builds for via ASF Jenkins -->
+             <requireJavaVersion>
+-              <version>[${java.min.version},)</version>
++              <version>[${javaVersion}.0,${javaVersion}.1000}]</version>
+               <message>Java is out of date.
+   HBase requirs at least version ${java.min.version} of the JDK to properly build from source.
+   You appear to be using an older version. You can use either "mvn -version" or
+@@ -801,6 +801,27 @@
+               <goal>enforce</goal>
+             </goals>
+           </execution>
++          <execution>
++            <id>clean</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-clean</phase>
++          </execution>
++          <execution>
++            <id>default</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>validate</phase>
++          </execution>
++          <execution>
++            <id>site</id>
++            <goals>
++              <goal>enforce</goal>
++            </goals>
++            <phase>pre-site</phase>
++          </execution>
+         </executions>
+       </plugin>
+       <!-- parent-module only plugins -->
+@@ -1029,7 +1050,10 @@
+     <compileSource>1.7</compileSource>
+     <!-- Build dependencies -->
+     <maven.min.version>3.0.3</maven.min.version>
+-    <java.min.version>${compileSource}</java.min.version>
++    <javaVersion>1.7</javaVersion>
++    <targetJavaVersion>1.7</targetJavaVersion>
++    <sourceJavaVersion>${targetJavaVersion}</sourceJavaVersion>
++    <java.min.version>${javaVersion}</java.min.version>
+     <!-- Dependencies -->
+     <hadoop-two.version>${cdh.hadoop.version}</hadoop-two.version>
+     <hadoop-three.version>3.0.0-SNAPSHOT</hadoop-three.version>
+-- 
+1.7.0.4
+

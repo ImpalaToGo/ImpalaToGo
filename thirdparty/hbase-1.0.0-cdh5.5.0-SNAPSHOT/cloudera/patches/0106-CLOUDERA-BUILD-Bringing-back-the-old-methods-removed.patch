@@ -1,0 +1,173 @@
+From d7701695d73b2d357e5dc7f54bebfa025dbf77ab Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Thu, 12 Mar 2015 19:28:08 -0700
+Subject: [PATCH 106/110] CLOUDERA-BUILD Bringing back the old methods removed by HBASE-12363
+
+Reason: Product Requirement (Compatibility)
+Author: Srikanth Srungarapu
+Ref: CDH-24305
+---
+ .../org/apache/hadoop/hbase/HColumnDescriptor.java |   73 +++++++++++++++++++-
+ .../apache/hadoop/hbase/TestHColumnDescriptor.java |    2 +-
+ .../apache/hadoop/hbase/regionserver/ScanInfo.java |    2 +-
+ .../hbase/util/TestCoprocessorScanPolicy.java      |    6 +-
+ 4 files changed, 77 insertions(+), 6 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+index 5bd5db3..4425f79 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+@@ -481,6 +481,48 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+   }
+ 
+   /**
++   * Constructor
++   * @param familyName Column family name. Must be 'printable' -- digit or
++   * letter -- and may not contain a <code>:<code>
++   * @param minVersions Minimum number of versions to keep
++   * @param maxVersions Maximum number of versions to keep
++   * @param keepDeletedCells Whether to retain deleted cells until they expire
++   *        up to maxVersions versions.
++   * @param compression Compression type
++   * @param encodeOnDisk whether to use the specified data block encoding
++   *        on disk. If false, the encoding will be used in cache only.
++   * @param dataBlockEncoding data block encoding
++   * @param inMemory If true, column data should be kept in an HRegionServer's
++   * cache
++   * @param blockCacheEnabled If true, MapFile blocks should be cached
++   * @param blocksize Block size to use when writing out storefiles.  Use
++   * smaller blocksizes for faster random-access at expense of larger indices
++   * (more memory consumption).  Default is usually 64k.
++   * @param timeToLive Time-to-live of cell contents, in seconds
++   * (use HConstants.FOREVER for unlimited TTL)
++   * @param bloomFilter Bloom filter type for this column
++   * @param scope The scope tag for this column
++   *
++   * @throws IllegalArgumentException if passed a family name that is made of
++   * other than 'word' characters: i.e. <code>[a-zA-Z_0-9]</code> or contains
++   * a <code>:</code>
++   * @throws IllegalArgumentException if the number of versions is &lt;= 0
++   * @deprecated use {@link #HColumnDescriptor(String)} and setters
++   */
++  @Deprecated
++  public HColumnDescriptor(final byte[] familyName, final int minVersions,
++      final int maxVersions, final boolean keepDeletedCells,
++      final String compression, final boolean encodeOnDisk,
++      final String dataBlockEncoding, final boolean inMemory,
++      final boolean blockCacheEnabled, final int blocksize,
++      final int timeToLive, final String bloomFilter, final int scope) {
++    this(familyName, minVersions, maxVersions,
++        keepDeletedCells ? KeepDeletedCells.TRUE : KeepDeletedCells.FALSE,
++        compression, encodeOnDisk, dataBlockEncoding,
++        inMemory, blockCacheEnabled, blocksize, timeToLive, bloomFilter, scope);
++  }
++
++  /**
+    * @param b Family name.
+    * @return <code>b</code>
+    * @throws IllegalArgumentException If not null and not a legitimate family
+@@ -800,7 +842,12 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+     return setValue(HConstants.IN_MEMORY, Boolean.toString(inMemory));
+   }
+ 
+-  public KeepDeletedCells getKeepDeletedCells() {
++  /**
++   * This method is equivalent of getKeepDeletedCells() in HBase 1.0.
++   * The same name couldn't be used as it would break compatibility with
++   * earlier CDH5.x versions.
++   */
++  public KeepDeletedCells getKeepDeletedCellsAsEnum() {
+     String value = getValue(KEEP_DELETED_CELLS);
+     if (value != null) {
+       // toUpperCase for backwards compatibility
+@@ -810,6 +857,30 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+   }
+ 
+   /**
++   * If the KeepDeletedCells enum is being used with HColumnDescriptor,
++   * the value returned in case of TTL will be a mere placeholder and the
++   * KeepDeletedCells enum will be used for internal purposes.
++   * @deprecated use {@link #getKeepDeletedCellsAsEnum()} instead.
++   */
++  @Deprecated
++  public boolean getKeepDeletedCells() {
++    String value = getValue(KEEP_DELETED_CELLS);
++    if (value != null) {
++      KeepDeletedCells kdc = KeepDeletedCells.valueOf(value);
++      switch (kdc) {
++        case TRUE:
++        case TTL:
++          return true;
++        case FALSE:
++          return false;
++        default:
++          throw new IllegalStateException("The value " + kdc + " is not a valid code");
++      }
++    }
++    return Boolean.valueOf(DEFAULT_KEEP_DELETED.toString());
++  }
++
++  /**
+    * @param keepDeletedCells True if deleted rows should not be collected
+    * immediately.
+    * @return this (for chained invocation)
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+index df3148e..fdc58ae 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+@@ -67,7 +67,7 @@ public class TestHColumnDescriptor {
+     assertEquals(hcd.getValue("a"), deserializedHcd.getValue("a"));
+     assertEquals(hcd.getMaxVersions(), deserializedHcd.getMaxVersions());
+     assertEquals(hcd.getMinVersions(), deserializedHcd.getMinVersions());
+-    assertEquals(hcd.getKeepDeletedCells(), deserializedHcd.getKeepDeletedCells());
++    assertEquals(hcd.getKeepDeletedCellsAsEnum(), deserializedHcd.getKeepDeletedCellsAsEnum());
+     assertEquals(inmemory, deserializedHcd.isInMemory());
+     assertEquals(hcd.getScope(), deserializedHcd.getScope());
+     assertTrue(deserializedHcd.getCompressionType().equals(Compression.Algorithm.SNAPPY));
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ScanInfo.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ScanInfo.java
+index a8b314e..806711e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ScanInfo.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/ScanInfo.java
+@@ -52,7 +52,7 @@ public class ScanInfo {
+   public ScanInfo(final HColumnDescriptor family, final long ttl, final long timeToPurgeDeletes,
+       final KVComparator comparator) {
+     this(family.getName(), family.getMinVersions(), family.getMaxVersions(), ttl, family
+-        .getKeepDeletedCells(), timeToPurgeDeletes, comparator);
++        .getKeepDeletedCellsAsEnum(), timeToPurgeDeletes, comparator);
+   }
+ 
+   /**
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestCoprocessorScanPolicy.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestCoprocessorScanPolicy.java
+index 2f99cd5..921c9d8 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestCoprocessorScanPolicy.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/util/TestCoprocessorScanPolicy.java
+@@ -250,7 +250,7 @@ public class TestCoprocessorScanPolicy {
+       HColumnDescriptor family = store.getFamily();
+       ScanInfo scanInfo = new ScanInfo(family.getName(), family.getMinVersions(),
+           newVersions == null ? family.getMaxVersions() : newVersions,
+-          newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCells(),
++          newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCellsAsEnum(),
+           oldSI.getTimeToPurgeDeletes(), oldSI.getComparator());
+       Scan scan = new Scan();
+       scan.setMaxVersions(newVersions == null ? oldSI.getMaxVersions() : newVersions);
+@@ -270,7 +270,7 @@ public class TestCoprocessorScanPolicy {
+       HColumnDescriptor family = store.getFamily();
+       ScanInfo scanInfo = new ScanInfo(family.getName(), family.getMinVersions(),
+           newVersions == null ? family.getMaxVersions() : newVersions,
+-          newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCells(),
++          newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCellsAsEnum(),
+           oldSI.getTimeToPurgeDeletes(), oldSI.getComparator());
+       Scan scan = new Scan();
+       scan.setMaxVersions(newVersions == null ? oldSI.getMaxVersions() : newVersions);
+@@ -290,7 +290,7 @@ public class TestCoprocessorScanPolicy {
+         HColumnDescriptor family = store.getFamily();
+         ScanInfo scanInfo = new ScanInfo(family.getName(), family.getMinVersions(),
+             newVersions == null ? family.getMaxVersions() : newVersions,
+-            newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCells(),
++            newTtl == null ? oldSI.getTtl() : newTtl, family.getKeepDeletedCellsAsEnum(),
+             oldSI.getTimeToPurgeDeletes(), oldSI.getComparator());
+         return new StoreScanner(store, scanInfo, scan, targetCols,
+             ((HStore) store).getHRegion().getReadpoint(IsolationLevel.READ_COMMITTED));
+-- 
+1.7.0.4
+

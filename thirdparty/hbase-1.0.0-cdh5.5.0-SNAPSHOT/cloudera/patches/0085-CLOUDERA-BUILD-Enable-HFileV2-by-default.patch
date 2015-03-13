@@ -1,0 +1,50 @@
+From c9eb03bbf2c54b8e502feef89a59484bad987ff8 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Thu, 5 Mar 2015 20:54:06 -0800
+Subject: [PATCH 085/110] CLOUDERA-BUILD Enable HFileV2 by default
+
+Author: Esteban Gutierrez
+Reason: Backward compatibility
+Ref: CDH-25837
+---
+ hbase-common/src/main/resources/hbase-default.xml  |    6 ++++--
+ .../org/apache/hadoop/hbase/io/hfile/HFile.java    |    3 ++-
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-common/src/main/resources/hbase-default.xml b/hbase-common/src/main/resources/hbase-default.xml
+index 903c6b8..571f1db 100644
+--- a/hbase-common/src/main/resources/hbase-default.xml
++++ b/hbase-common/src/main/resources/hbase-default.xml
+@@ -761,11 +761,13 @@ possible configurations would overwhelm and obscure the important.
+   </property>
+   <property>
+       <name>hfile.format.version</name>
+-      <value>3</value>
++      <value>2</value>
+       <description>The HFile format version to use for new files.
+       Version 3 adds support for tags in hfiles (See http://hbase.apache.org/book.html#hbase.tags).
+       Distributed Log Replay requires that tags are enabled. Also see the configuration
+-      'hbase.replication.rpc.codec'. 
++      'hbase.replication.rpc.codec'.
++      By default CDH5 uses HFileV2 for backward compatibility
++      purposes.
+       </description>
+   </property>
+   <property>
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
+index cf09b0d..59a073f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/HFile.java
+@@ -307,7 +307,8 @@ public class HFile {
+   public static final String FORMAT_VERSION_KEY = "hfile.format.version";
+ 
+   public static int getFormatVersion(Configuration conf) {
+-    int version = conf.getInt(FORMAT_VERSION_KEY, MAX_FORMAT_VERSION);
++    /** CLOUDERA-SPECIFIC: Force HFileV2 as the default HFile version */
++    int version = conf.getInt(FORMAT_VERSION_KEY, MIN_FORMAT_VERSION);
+     checkFormatVersion(version);
+     return version;
+   }
+-- 
+1.7.0.4
+

@@ -1,0 +1,88 @@
+From 2932e5bf25cddb3e63efcf223ffc18996716f16c Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Tue, 3 Mar 2015 04:47:58 -0800
+Subject: [PATCH 087/110] HBASE-12670 Add unit tests that exercise the added hfilelink link mob paths (Jingcheng Du)
+
+Reason: Mob Testing
+Author: Jingcheng Du
+Ref: CDH-23959
+---
+ .../apache/hadoop/hbase/mob/TestMobFileLink.java   |   66 ++++++++++++++++++++
+ 1 files changed, 66 insertions(+), 0 deletions(-)
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileLink.java
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileLink.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileLink.java
+new file mode 100644
+index 0000000..4ddba13
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileLink.java
+@@ -0,0 +1,66 @@
++/**
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.mob;
++
++import java.io.IOException;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseConfiguration;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.io.HFileLink;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.hadoop.hbase.util.HFileArchiveUtil;
++import org.junit.Assert;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++@Category(SmallTests.class)
++public class TestMobFileLink {
++
++  @Test
++  public void testMobFilePath() throws IOException {
++    TableName tableName = TableName.valueOf("testMobFilePath");
++    Configuration conf = HBaseConfiguration.create();
++    FileSystem fs = FileSystem.get(conf);
++    Path rootDir = FSUtils.getRootDir(conf);
++    Path tableDir = FSUtils.getTableDir(rootDir, tableName);
++    Path archiveDir = FSUtils.getTableDir(HFileArchiveUtil.getArchivePath(conf), tableName);
++    String fileName = "mobFile";
++    String encodedRegionName = MobUtils.getMobRegionInfo(tableName).getEncodedName();
++    String columnFamily = "columnFamily";
++    Path regionDir = new Path(tableDir, encodedRegionName);
++    Path archivedRegionDir = new Path(archiveDir, encodedRegionName);
++    Path expectedMobFilePath = new Path(MobUtils.getMobFamilyPath(conf, tableName, columnFamily),
++      fileName).makeQualified(fs.getUri(), fs.getWorkingDirectory());
++    Path expectedOriginPath = new Path(new Path(regionDir, columnFamily), fileName).makeQualified(
++      fs.getUri(), fs.getWorkingDirectory());
++    Path expectedArchivePath = new Path(new Path(archivedRegionDir, columnFamily), fileName)
++      .makeQualified(fs.getUri(), fs.getWorkingDirectory());
++
++    String hfileLinkName = tableName.getNameAsString() + "=" + encodedRegionName + "-" + fileName;
++    Path hfileLinkPath = new Path(columnFamily, hfileLinkName);
++    HFileLink hfileLink = HFileLink.buildFromHFileLinkPattern(conf, hfileLinkPath);
++    Assert.assertEquals(expectedMobFilePath, hfileLink.getMobPath());
++    Assert.assertEquals(expectedOriginPath, hfileLink.getOriginPath());
++    Assert.assertEquals(expectedArchivePath, hfileLink.getArchivePath());
++  }
++}
+-- 
+1.7.0.4
+

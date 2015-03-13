@@ -1,0 +1,40 @@
+From 27c5ac004aaa1dbf3cc2921e47476821b6918f01 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Mon, 2 Mar 2015 10:31:19 -0800
+Subject: [PATCH 080/110] HBASE-13132 Improve RemoveColumn action debug message
+
+Reason: MOB testing
+Author: Jonathan Hsieh
+Ref: CDH-23959
+---
+ .../hbase/chaos/actions/RemoveColumnAction.java    |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RemoveColumnAction.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RemoveColumnAction.java
+index fc169e3..efb4413 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RemoveColumnAction.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/chaos/actions/RemoveColumnAction.java
+@@ -26,6 +26,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Admin;
++import org.apache.hadoop.hbase.util.Bytes;
+ 
+ /**
+  * Action that removes a column family.
+@@ -62,9 +63,10 @@ public class RemoveColumnAction extends Action {
+           protectedColumns.contains(columnDescriptors[index].getNameAsString())) {
+       index = random.nextInt(columnDescriptors.length);
+     }
+-    LOG.debug("Performing action: Removing " + columnDescriptors[index].getName() + " from "
++    byte[] colDescName = columnDescriptors[index].getName();
++    LOG.debug("Performing action: Removing " + Bytes.toString(colDescName)+ " from "
+         + tableName.getNameAsString());
+-    tableDescriptor.removeFamily(columnDescriptors[index].getName());
++    tableDescriptor.removeFamily(colDescName);
+ 
+     admin.modifyTable(tableName, tableDescriptor);
+   }
+-- 
+1.7.0.4
+

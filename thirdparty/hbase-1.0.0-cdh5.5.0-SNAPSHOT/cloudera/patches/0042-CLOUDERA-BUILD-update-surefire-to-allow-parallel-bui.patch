@@ -1,0 +1,28 @@
+From a88fd6f374b9ef2e94782868f25478a6dacf82f1 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@cloudera.com>
+Date: Thu, 29 Jan 2015 16:25:12 -0600
+Subject: [PATCH 042/110] CLOUDERA-BUILD update surefire to allow parallel builds.
+
+Avoid SUREFIRE-1121 by bumping to Surefire 2.18.1
+
+Ref: CDH-24732
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 4c4f102..ddbd8af 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1146,7 +1146,7 @@
+     <common.test.jar>hbase-common-${project.version}-tests.jar</common.test.jar>
+     <it.test.jar>hbase-it-${project.version}-tests.jar</it.test.jar>
+     <annotations.test.jar>hbase-annotations-${project.version}-tests.jar</annotations.test.jar>
+-    <surefire.version>2.18</surefire.version>
++    <surefire.version>2.18.1</surefire.version>
+     <surefire.provider>surefire-junit47</surefire.provider>
+     <!-- default: run small & medium, medium with 2 threads -->
+     <surefire.skipFirstPart>false</surefire.skipFirstPart>
+-- 
+1.7.0.4
+

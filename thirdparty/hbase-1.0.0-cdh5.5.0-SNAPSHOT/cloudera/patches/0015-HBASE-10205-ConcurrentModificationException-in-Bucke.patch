@@ -1,0 +1,83 @@
+From 6e09929c160510027c64b083d13950de64af9adf Mon Sep 17 00:00:00 2001
+From: stack <stack@apache.org>
+Date: Wed, 6 Aug 2014 15:56:31 -0700
+Subject: [PATCH 015/110] HBASE-10205 ConcurrentModificationException in BucketAllocator (Arjen Roodselaar and Chunhui Shen)
+
+---
+ .../hbase/io/hfile/bucket/BucketAllocator.java     |   15 ++++++++-------
+ .../hadoop/hbase/io/hfile/bucket/BucketCache.java  |    2 ++
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketAllocator.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketAllocator.java
+index df652f8..809a37d 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketAllocator.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketAllocator.java
+@@ -22,6 +22,7 @@ package org.apache.hadoop.hbase.io.hfile.bucket;
+ 
+ import java.util.ArrayList;
+ import java.util.Arrays;
++import java.util.LinkedList;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.atomic.AtomicLong;
+@@ -43,7 +44,7 @@ import com.google.common.primitives.Ints;
+  * when evicting. It manages an array of buckets, each bucket is associated with
+  * a size and caches elements up to this size. For a completely empty bucket, this
+  * size could be re-specified dynamically.
+- * 
++ *
+  * This class is not thread safe.
+  */
+ @InterfaceAudience.Private
+@@ -177,13 +178,13 @@ public final class BucketAllocator {
+     private int sizeIndex;
+ 
+     BucketSizeInfo(int sizeIndex) {
+-      bucketList = new ArrayList<Bucket>();
+-      freeBuckets = new ArrayList<Bucket>();
+-      completelyFreeBuckets = new ArrayList<Bucket>();
++      bucketList = new LinkedList<Bucket>();
++      freeBuckets = new LinkedList<Bucket>();
++      completelyFreeBuckets = new LinkedList<Bucket>();
+       this.sizeIndex = sizeIndex;
+     }
+ 
+-    public void instantiateBucket(Bucket b) {
++    public synchronized void instantiateBucket(Bucket b) {
+       assert b.isUninstantiated() || b.isCompletelyFree();
+       b.reconfigure(sizeIndex, bucketSizes, bucketCapacity);
+       bucketList.add(b);
+@@ -233,7 +234,7 @@ public final class BucketAllocator {
+       return b;
+     }
+ 
+-    private void removeBucket(Bucket b) {
++    private synchronized void removeBucket(Bucket b) {
+       assert b.isCompletelyFree();
+       bucketList.remove(b);
+       freeBuckets.remove(b);
+@@ -249,7 +250,7 @@ public final class BucketAllocator {
+       if (b.isCompletelyFree()) completelyFreeBuckets.add(b);
+     }
+ 
+-    public IndexStatistics statistics() {
++    public synchronized IndexStatistics statistics() {
+       long free = 0, used = 0;
+       for (Bucket b : bucketList) {
+         free += b.freeCount();
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketCache.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketCache.java
+index c094e45..1348edb 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketCache.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/hfile/bucket/BucketCache.java
+@@ -686,6 +686,8 @@ public class BucketCache implements BlockCache, HeapSize {
+         }
+       }
+ 
++    } catch (Throwable t) {
++      LOG.warn("Failed freeing space", t);
+     } finally {
+       cacheStats.evict();
+       freeInProgress = false;
+-- 
+1.7.0.4
+

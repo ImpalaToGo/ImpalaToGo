@@ -1,0 +1,101 @@
+From e3496681952e9b1ee7916e8773c2ee60cca062d6 Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Fri, 13 Feb 2015 12:02:17 -0800
+Subject: [PATCH 054/110] CLOUDERA-BUILD Restore the usage of master rpc and info ports.
+
+Reason: Product Requirement (Compatibility)
+Author: Srikanth Srungarapu
+Ref: CDH-24990
+---
+ .../org/apache/hadoop/hbase/master/HMaster.java    |    7 ++++++-
+ .../hadoop/hbase/regionserver/HRegionServer.java   |    7 +++++++
+ .../hadoop/hbase/regionserver/RSRpcServices.java   |   11 ++++++++---
+ 3 files changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+index 8de826c..eeca4f4 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/HMaster.java
+@@ -26,7 +26,6 @@ import java.net.InetAddress;
+ import java.net.InetSocketAddress;
+ import java.net.UnknownHostException;
+ import java.util.ArrayList;
+-import java.util.Arrays;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.Comparator;
+@@ -406,6 +405,12 @@ public class HMaster extends HRegionServer implements MasterServices, Server {
+     }
+ 
+     RedirectServlet.regionServerInfoPort = infoServer.getPort();
++    // In CDH5.4+, master and region server would be sharing the same info port.
++    // The below changes is to ensure that info server still starts on master info port.
++    // Please see release notes for more details.
++    if(RedirectServlet.regionServerInfoPort == infoPort) {
++      return infoPort;
++    }
+     masterJettyServer = new org.mortbay.jetty.Server();
+     Connector connector = new SelectChannelConnector();
+     connector.setHost(addr);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+index c3fcf96..553e112 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegionServer.java
+@@ -1694,6 +1694,13 @@ public class HRegionServer extends HasThread implements
+   private int putUpWebUI() throws IOException {
+     int port = this.conf.getInt(HConstants.REGIONSERVER_INFO_PORT,
+       HConstants.DEFAULT_REGIONSERVER_INFOPORT);
++    // In CDH5.4+, master and region server would be sharing the same info port.
++    // The below changes is to ensure that info server still starts on master info port.
++    // Please see release notes for more details.
++    if(this instanceof HMaster) {
++      port = conf.getInt(HConstants.MASTER_INFO_PORT,
++          HConstants.DEFAULT_MASTER_INFOPORT);
++    }
+     // -1 is for disabling info server
+     if (port < 0) return port;
+     String addr = this.conf.get("hbase.regionserver.info.bindAddress", "0.0.0.0");
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
+index eefab44..704a4da 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
+@@ -84,6 +84,7 @@ import org.apache.hadoop.hbase.ipc.RpcServer.BlockingServiceAndInterface;
+ import org.apache.hadoop.hbase.ipc.RpcServerInterface;
+ import org.apache.hadoop.hbase.ipc.ServerNotRunningYetException;
+ import org.apache.hadoop.hbase.ipc.ServerRpcController;
++import org.apache.hadoop.hbase.master.MasterRpcServices;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.RequestConverter;
+ import org.apache.hadoop.hbase.protobuf.ResponseConverter;
+@@ -149,14 +150,11 @@ import org.apache.hadoop.hbase.protobuf.generated.RPCProtos.RequestHeader;
+ import org.apache.hadoop.hbase.protobuf.generated.WALProtos.CompactionDescriptor;
+ import org.apache.hadoop.hbase.quotas.OperationQuota;
+ import org.apache.hadoop.hbase.quotas.RegionServerQuotaManager;
+-import org.apache.hadoop.hbase.quotas.ThrottlingException;
+ import org.apache.hadoop.hbase.regionserver.HRegion.Operation;
+ import org.apache.hadoop.hbase.regionserver.Leases.LeaseStillHeldException;
+ import org.apache.hadoop.hbase.regionserver.handler.OpenMetaHandler;
+ import org.apache.hadoop.hbase.regionserver.handler.OpenRegionHandler;
+-import org.apache.hadoop.hbase.wal.WAL;
+ import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
+-import org.apache.hadoop.hbase.util.ByteStringer;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Counter;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+@@ -785,6 +783,13 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
+     }
+     int port = rs.conf.getInt(HConstants.REGIONSERVER_PORT,
+       HConstants.DEFAULT_REGIONSERVER_PORT);
++    // In CDH5.4+, master and region server would be sharing the same port.
++    // The below changes is to ensure that info server still starts on master port.
++    // Please see release notes for more details.
++    if(this instanceof MasterRpcServices) {
++      port = rs.conf.getInt(HConstants.MASTER_PORT,
++          HConstants.DEFAULT_MASTER_PORT);
++    }
+     // Creation of a HSA will force a resolve.
+     InetSocketAddress initialIsa = new InetSocketAddress(hostname, port);
+     InetSocketAddress bindAddress = new InetSocketAddress(
+-- 
+1.7.0.4
+

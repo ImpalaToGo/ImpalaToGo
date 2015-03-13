@@ -1,0 +1,26 @@
+From a68d7321d989a80d5a76f0c55f85fe8b1de37084 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@cloudera.com>
+Date: Tue, 10 Mar 2015 11:02:35 -0500
+Subject: [PATCH 108/110] CLOUDERA-BUILD improve test robustness on low-end hardware with longer timeout.
+
+Ref: CDH-24807
+---
+ .../hadoop/hbase/client/TestAsyncProcess.java      |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
+index 8c6a4ce..a920c32 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestAsyncProcess.java
+@@ -382,7 +382,7 @@ public class TestAsyncProcess {
+   }
+ 
+   @Rule
+-  public Timeout timeout = new Timeout(10000); // 10 seconds max per method tested
++  public Timeout timeout = new Timeout(20000); // 20 seconds max per method tested
+ 
+   @Test
+   public void testSubmit() throws Exception {
+-- 
+1.7.0.4
+

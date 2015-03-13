@@ -1,0 +1,34 @@
+From 5ddcfbcba6ff881d8d29b249c0ef9748b2829ad5 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@cloudera.com>
+Date: Mon, 23 Feb 2015 00:19:21 -0600
+Subject: [PATCH 060/110] CLOUDERA-BUILD update MapreduceTestingShim to work for CDH5-MRv1.
+
+Ref: CDH-25346
+---
+ .../hbase/mapreduce/MapreduceTestingShim.java      |   10 +++++++---
+ 1 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
+index f03e11a..a109327 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/MapreduceTestingShim.java
+@@ -154,9 +154,13 @@ abstract public class MapreduceTestingShim {
+         // CDH5, we are building against MR1 by default. These two APIs are exactly the
+         // same in MR2 and hadoop2, but different in MR1. For eg, mapred.job.tracker was not being
+         // set properly in MR1 with the new API. The fix is to revert to the old way of getting the
+-        // conf.
+-        Method meth = MiniMRCluster.class.getMethod("createJobConf", emptyParam);
+-        return (JobConf) meth.invoke(cluster, new Object []{});
++        // conf. To ensure we get the original configuration values from HBaseTestingUtil, e.g. the
++        // zk quorum, we have to first use the newer getJobTrackerConf and pass the returned value
++        // as a basis for creating our own jobconf.
++        Method meth = MiniMRCluster.class.getMethod("getJobTrackerConf", emptyParam);
++        final JobConf conf = (JobConf) meth.invoke(cluster, new Object []{});
++        meth = MiniMRCluster.class.getMethod("createJobConf", JobConf.class);
++        return (JobConf) meth.invoke(cluster, conf);
+       } catch (NoSuchMethodException nsme) {
+         return null;
+       } catch (InvocationTargetException ite) {
+-- 
+1.7.0.4
+

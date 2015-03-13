@@ -1,0 +1,70 @@
+From 69a618be0b24b800f3b8251c04aa58cefa8c0f13 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Wed, 17 Dec 2014 17:20:22 +0000
+Subject: [PATCH 010/110] CLOUDERA-BUILD Revert "HBASE-10573 Use Netty 4 - addendum"
+
+---
+ .../org/apache/hadoop/hbase/client/TestHCM.java    |   19 +------------------
+ 1 files changed, 1 insertions(+), 18 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+index 1a7866f..c342f9e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+@@ -76,7 +76,6 @@ import org.apache.hadoop.hbase.util.JVMClusterUtil;
+ import org.apache.hadoop.hbase.util.ManualEnvironmentEdge;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.hbase.zookeeper.ZooKeeperWatcher;
+-import org.jboss.netty.util.internal.DetectionUtil;
+ import org.junit.AfterClass;
+ import org.junit.Assert;
+ import org.junit.BeforeClass;
+@@ -108,8 +107,6 @@ public class TestHCM {
+   private static final byte[] ROW_X = Bytes.toBytes("xxx");
+   private static Random _randy = new Random();
+ 
+-  private static boolean isJavaOk = DetectionUtil.javaVersion() > 6;
+-
+ /**
+ * This copro sleeps 20 second. The first call it fails. The second time, it works.
+ */
+@@ -131,11 +128,7 @@ public class TestHCM {
+ 
+   @BeforeClass
+   public static void setUpBeforeClass() throws Exception {
+-    TEST_UTIL.getConfiguration().setBoolean(HConstants.STATUS_PUBLISHED,
+-      HConstants.STATUS_PUBLISHED_DEFAULT);
+-    if (isJavaOk) {
+-      TEST_UTIL.getConfiguration().setBoolean(HConstants.STATUS_PUBLISHED, true);
+-    }
++    TEST_UTIL.getConfiguration().setBoolean(HConstants.STATUS_PUBLISHED, true);
+     TEST_UTIL.startMiniCluster(2);
+   }
+ 
+@@ -223,11 +216,6 @@ public class TestHCM {
+   // Fails too often!  Needs work.  HBASE-12558
+   @Ignore @Test(expected = RegionServerStoppedException.class)
+   public void testClusterStatus() throws Exception {
+-    if (!isJavaOk){
+-      // This test requires jdk 1.7+
+-      throw new RegionServerStoppedException("as expected by the test...");
+-    }
+-
+     TableName tn =
+         TableName.valueOf("testClusterStatus");
+     byte[] cf = "cf".getBytes();
+@@ -475,11 +463,6 @@ public class TestHCM {
+      */
+   @Test
+   public void testConnectionCut() throws Exception {
+-    if (!isJavaOk){
+-      // This test requires jdk 1.7+
+-      return;
+-    }
+-
+     TableName tableName = TableName.valueOf("HCM-testConnectionCut");
+ 
+     TEST_UTIL.createTable(tableName, FAM_NAM).close();
+-- 
+1.7.0.4
+

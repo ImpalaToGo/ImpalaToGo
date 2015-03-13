@@ -1,0 +1,329 @@
+From d3cd8b476fe739ab191ece31e2b8053f717daae1 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Thu, 5 Mar 2015 11:29:21 -0800
+Subject: [PATCH 092/110] HBASE-13107 Refactor MOB Snapshot logic to reduce code duplication (Jingcheng Du)
+
+Reason: Mob Feature
+Author: Jingcheng Du
+Ref: CDH-22447
+---
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |   84 ++---------
+ .../hadoop/hbase/snapshot/SnapshotManifest.java    |  153 ++++++++------------
+ 2 files changed, 71 insertions(+), 166 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index 255d2a0..3960cc6 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -427,67 +427,7 @@ public class RestoreSnapshotHelper {
+    */
+   private void restoreRegion(final HRegionInfo regionInfo,
+       final SnapshotRegionManifest regionManifest) throws IOException {
+-    Map<String, List<SnapshotRegionManifest.StoreFile>> snapshotFiles =
+-                getRegionHFileReferences(regionManifest);
+-
+-    Path regionDir = new Path(tableDir, regionInfo.getEncodedName());
+-    String tableName = tableDesc.getTableName().getNameAsString();
+-
+-    // Restore families present in the table
+-    for (Path familyDir: FSUtils.getFamilyDirs(fs, regionDir)) {
+-      byte[] family = Bytes.toBytes(familyDir.getName());
+-      Set<String> familyFiles = getTableRegionFamilyFiles(familyDir);
+-      List<SnapshotRegionManifest.StoreFile> snapshotFamilyFiles =
+-          snapshotFiles.remove(familyDir.getName());
+-      if (snapshotFamilyFiles != null) {
+-        List<SnapshotRegionManifest.StoreFile> hfilesToAdd =
+-            new ArrayList<SnapshotRegionManifest.StoreFile>();
+-        for (SnapshotRegionManifest.StoreFile storeFile: snapshotFamilyFiles) {
+-          if (familyFiles.contains(storeFile.getName())) {
+-            // HFile already present
+-            familyFiles.remove(storeFile.getName());
+-          } else {
+-            // HFile missing
+-            hfilesToAdd.add(storeFile);
+-          }
+-        }
+-
+-        // Remove hfiles not present in the snapshot
+-        for (String hfileName: familyFiles) {
+-          Path hfile = new Path(familyDir, hfileName);
+-          LOG.trace("Removing hfile=" + hfileName +
+-            " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
+-          HFileArchiver.archiveStoreFile(conf, fs, regionInfo, tableDir, family, hfile);
+-        }
+-
+-        // Restore Missing files
+-        for (SnapshotRegionManifest.StoreFile storeFile: hfilesToAdd) {
+-          LOG.debug("Adding HFileLink " + storeFile.getName() +
+-            " to region=" + regionInfo.getEncodedName() + " table=" + tableName);
+-          restoreStoreFile(familyDir, regionInfo, storeFile);
+-        }
+-      } else {
+-        // Family doesn't exists in the snapshot
+-        LOG.trace("Removing family=" + Bytes.toString(family) +
+-          " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
+-        HFileArchiver.archiveFamily(fs, conf, regionInfo, tableDir, family);
+-        fs.delete(familyDir, true);
+-      }
+-    }
+-
+-    // Add families not present in the table
+-    for (Map.Entry<String, List<SnapshotRegionManifest.StoreFile>> familyEntry:
+-                                                                      snapshotFiles.entrySet()) {
+-      Path familyDir = new Path(regionDir, familyEntry.getKey());
+-      if (!fs.mkdirs(familyDir)) {
+-        throw new IOException("Unable to create familyDir=" + familyDir);
+-      }
+-
+-      for (SnapshotRegionManifest.StoreFile storeFile: familyEntry.getValue()) {
+-        LOG.trace("Adding HFileLink " + storeFile.getName() + " to table=" + tableName);
+-        restoreStoreFile(familyDir, regionInfo, storeFile);
+-      }
+-    }
++    restoreRegion(regionInfo, regionManifest, new Path(tableDir, regionInfo.getEncodedName()));
+   }
+ 
+   /**
+@@ -499,10 +439,19 @@ public class RestoreSnapshotHelper {
+     if (regionManifest == null) {
+       return;
+     }
++    restoreRegion(regionInfo, regionManifest,
++      MobUtils.getMobRegionPath(conf, tableDesc.getTableName()));
++  }
++
++  /**
++   * Restore region by removing files not in the snapshot
++   * and adding the missing ones from the snapshot.
++   */
++  private void restoreRegion(final HRegionInfo regionInfo,
++      final SnapshotRegionManifest regionManifest, Path regionDir) throws IOException {
+     Map<String, List<SnapshotRegionManifest.StoreFile>> snapshotFiles =
+                 getRegionHFileReferences(regionManifest);
+ 
+-    Path regionDir = MobUtils.getMobRegionPath(conf, tableDesc.getTableName());
+     String tableName = tableDesc.getTableName().getNameAsString();
+ 
+     // Restore families present in the table
+@@ -668,15 +617,8 @@ public class RestoreSnapshotHelper {
+    */
+   private void cloneRegion(final HRegion region, final HRegionInfo snapshotRegionInfo,
+       final SnapshotRegionManifest manifest) throws IOException {
+-    final Path regionDir = new Path(tableDir, region.getRegionInfo().getEncodedName());
+-    final String tableName = tableDesc.getTableName().getNameAsString();
+-    for (SnapshotRegionManifest.FamilyFiles familyFiles: manifest.getFamilyFilesList()) {
+-      Path familyDir = new Path(regionDir, familyFiles.getFamilyName().toStringUtf8());
+-      for (SnapshotRegionManifest.StoreFile storeFile: familyFiles.getStoreFilesList()) {
+-        LOG.info("Adding HFileLink " + storeFile.getName() + " to table=" + tableName);
+-        restoreStoreFile(familyDir, snapshotRegionInfo, storeFile);
+-      }
+-    }
++    cloneRegion(new Path(tableDir, region.getRegionInfo().getEncodedName()), snapshotRegionInfo,
++      manifest);
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
+index 4ed8501..2083a4e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
+@@ -38,11 +38,9 @@ import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+-import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.errorhandling.ForeignExceptionSnare;
+-import org.apache.hadoop.hbase.mob.MobConstants;
+ import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+@@ -170,38 +168,41 @@ public class SnapshotManifest {
+     Path mobRegionPath = MobUtils.getMobRegionPath(conf, regionInfo.getTable());
+     for (HColumnDescriptor hcd : hcds) {
+       // 2.1. build the snapshot reference for the store if it's a mob store
+-      if (hcd.isMobEnabled()) {
+-        Object familyData = visitor.familyOpen(regionData, hcd.getName());
+-        monitor.rethrowException();
++      if (!hcd.isMobEnabled()) {
++        continue;
++      }
++      Object familyData = visitor.familyOpen(regionData, hcd.getName());
++      monitor.rethrowException();
+ 
+-        Path storePath = MobUtils.getMobFamilyPath(mobRegionPath, hcd.getNameAsString());
+-        try {
+-          if (fs.exists(storePath)) {
+-            FileStatus[] stats = fs.listStatus(storePath);
+-            if (LOG.isDebugEnabled()) {
+-              LOG.debug("Adding snapshot references for " + stats.length + " hfiles");
+-            }
++      Path storePath = MobUtils.getMobFamilyPath(mobRegionPath, hcd.getNameAsString());
++      if (!fs.exists(storePath)) {
++        continue;
++      }
++      FileStatus[] stats = fs.listStatus(storePath);
++      if (stats == null) {
++        continue;
++      }
++      List<StoreFileInfo> storeFiles = new ArrayList<StoreFileInfo>();
++      for (FileStatus stat : stats) {
++        storeFiles.add(new StoreFileInfo(conf, fs, stat));
++      }
++      if (LOG.isDebugEnabled()) {
++        LOG.debug("Adding snapshot references for " + storeFiles + " hfiles");
++      }
+ 
+-            // 2.2. iterate through all the mob files and create "references".
+-            for (int i = 0, fz = stats.length; i < fz; i++) {
+-              FileStatus stat = stats[i];
+-              monitor.rethrowException();
+-
+-              // create "reference" to this store file.
+-              if (LOG.isDebugEnabled()) {
+-                LOG.debug("Adding reference for file (" + (i + 1) + "/" + fz + "): "
+-                    + stat.getPath());
+-              }
+-              StoreFileInfo mobStoreFileInfo = new StoreFileInfo(conf, fs, stat);
+-              visitor.storeFile(regionData, familyData, mobStoreFileInfo);
+-            }
++      // 2.2. iterate through all the mob files and create "references".
++      for (int i = 0, sz = storeFiles.size(); i < sz; i++) {
++        StoreFileInfo storeFile = storeFiles.get(i);
++        monitor.rethrowException();
+ 
+-          }
+-        } catch (FileNotFoundException e) {
+-          // do nothing
++        // create "reference" to this store file.
++        if (LOG.isDebugEnabled()) {
++          LOG.debug("Adding reference for file (" + (i + 1) + "/" + sz + "): "
++            + storeFile.getPath());
+         }
+-        visitor.familyClose(regionData, familyData);
++        visitor.storeFile(regionData, familyData, storeFile);
+       }
++      visitor.familyClose(regionData, familyData);
+     }
+     visitor.regionClose(regionData);
+   }
+@@ -254,70 +255,8 @@ public class SnapshotManifest {
+     // 0. Get the ManifestBuilder/RegionVisitor
+     RegionVisitor visitor = createRegionVisitor(desc);
+ 
+-    HRegionInfo mobRegionInfo = new HRegionInfo(regionInfo.getTable(),
+-        MobConstants.MOB_REGION_NAME_BYTES, HConstants.EMPTY_END_ROW, false, 0);
+-    if (mobRegionInfo.getEncodedName().equals(regionInfo.getEncodedName())) {
+-      // this is a mob region
+-      try {
+-        HRegionFileSystem mobRegionFs = HRegionFileSystem.openRegionFromFileSystem(conf, fs,
+-            tableDir, regionInfo, true);
+-        monitor.rethrowException();
+-
+-        // 1. dump region meta info into the snapshot directory
+-        LOG.debug("Storing region-info for snapshot.");
+-        Object regionData = visitor.regionOpen(regionInfo);
+-        monitor.rethrowException();
+-
+-        // 2. iterate through all the stores in the region
+-        LOG.debug("Creating references for hfiles");
+-
+-        // This ensures that we have an atomic view of the directory as long as we have < ls limit
+-        // (batch size of the files in a directory) on the namenode. Otherwise, we get back the
+-        // files in batches and may miss files being added/deleted. This could be more robust
+-        // (iteratively
+-        // checking to see if we have all the files until we are sure), but the limit is currently
+-        // 1000 files/batch, far more than the number of store files under a single column family.
+-        Collection<String> familyNames = mobRegionFs.getFamilies();
+-        if (familyNames != null) {
+-          Path regionPath = MobUtils.getMobRegionPath(conf, regionInfo.getTable());
+-          for (String familyName: familyNames) {
+-            Object familyData = visitor.familyOpen(regionData, Bytes.toBytes(familyName));
+-            monitor.rethrowException();
+-
+-            Path storePath = MobUtils.getMobFamilyPath(regionPath, familyName);
+-            try {
+-              if (fs.exists(storePath)) {
+-                FileStatus[] stats = fs.listStatus(storePath);
+-                if (LOG.isDebugEnabled()) {
+-                  LOG.debug("Adding snapshot references for " + stats.length + " hfiles");
+-                }
+-
+-                // 2.2. iterate through all the mob files and create "references".
+-                for (int i = 0, fz = stats.length; i < fz; i++) {
+-                  FileStatus stat = stats[i];
+-                  monitor.rethrowException();
+-
+-                  // create "reference" to this store file.
+-                  if (LOG.isDebugEnabled()) {
+-                    LOG.debug("Adding reference for file (" + (i + 1) + "/" + fz + "): "
+-                        + stat.getPath());
+-                  }
+-                  StoreFileInfo mobStoreFileInfo = new StoreFileInfo(conf, fs, stat);
+-                  visitor.storeFile(regionData, familyData, mobStoreFileInfo);
+-                }
+-
+-              }
+-            } catch (FileNotFoundException e) {
+-              // do nothing
+-            }
+-            visitor.familyClose(regionData, familyData);
+-          }
+-        }
+-        visitor.regionClose(regionData);
+-      } catch(IOException e) {
+-        //the mob directory might not be created yet, so do nothing here
+-      }
+-    } else {
++    boolean isMobRegion = MobUtils.isMobRegionInfo(regionInfo);
++    try {
+       // Open the RegionFS
+       HRegionFileSystem regionFs = HRegionFileSystem.openRegionFromFileSystem(conf, fs,
+             tableDir, regionInfo, true);
+@@ -342,9 +281,28 @@ public class SnapshotManifest {
+           Object familyData = visitor.familyOpen(regionData, Bytes.toBytes(familyName));
+           monitor.rethrowException();
+ 
+-          Collection<StoreFileInfo> storeFiles = regionFs.getStoreFiles(familyName);
++          Collection<StoreFileInfo> storeFiles = null;
++          if (isMobRegion) {
++            Path regionPath = MobUtils.getMobRegionPath(conf, regionInfo.getTable());
++            Path storePath = MobUtils.getMobFamilyPath(regionPath, familyName);
++            if (!fs.exists(storePath)) {
++              continue;
++            }
++            FileStatus[] stats = fs.listStatus(storePath);
++            if (stats == null) {
++              continue;
++            }
++            storeFiles = new ArrayList<StoreFileInfo>();
++            for (FileStatus stat : stats) {
++              storeFiles.add(new StoreFileInfo(conf, fs, stat));
++            }
++          } else {
++            storeFiles = regionFs.getStoreFiles(familyName);
++          }
+           if (storeFiles == null) {
+-            LOG.debug("No files under family: " + familyName);
++            if (LOG.isDebugEnabled()) {
++              LOG.debug("No files under family: " + familyName);
++            }
+             continue;
+           }
+ 
+@@ -368,6 +326,11 @@ public class SnapshotManifest {
+         }
+       }
+       visitor.regionClose(regionData);
++    } catch (IOException e) {
++      // the mob directory might not be created yet, so do nothing when it is a mob region
++      if (!isMobRegion) {
++        throw e;
++      }
+     }
+   }
+ 
+-- 
+1.7.0.4
+

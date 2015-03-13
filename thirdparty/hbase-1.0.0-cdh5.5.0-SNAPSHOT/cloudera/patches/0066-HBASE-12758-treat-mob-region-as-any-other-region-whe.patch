@@ -1,0 +1,63 @@
+From 2a7b352b7654575075e4be403eb18320a5cbb5fe Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Wed, 24 Dec 2014 08:18:48 -0800
+Subject: [PATCH 066/110] HBASE-12758 treat mob region as any other region when generating rs manifest
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-22447
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   31 +++++++++----------
+ 1 files changed, 15 insertions(+), 16 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index f2019c2..72a840b 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -3403,28 +3403,27 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver { //
+     Path rootDir = FSUtils.getRootDir(conf);
+     Path snapshotDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(desc, rootDir);
+ 
+-    if (Bytes.equals(getStartKey(), HConstants.EMPTY_START_ROW)) {
+-      Map<byte[], Store> stores = getStores();
+-      boolean hasMobStore = false;
+-      for (Entry<byte[], Store> store : stores.entrySet()) {
+-        hasMobStore = store.getValue().getFamily().isMobEnabled();
+-        if (hasMobStore) {
+-          break;
+-        }
+-      }
+-      if (hasMobStore) {
+-        // if this is the first region, snapshot the mob files.
+-        SnapshotManifest snapshotManifest = SnapshotManifest.create(conf, getFilesystem(),
++    SnapshotManifest manifest = SnapshotManifest.create(conf, getFilesystem(),
+             snapshotDir, desc, exnSnare);
++    manifest.addRegion(this);
++
++    // The regionserver holding the first region of the table is responsible for taking the
++    // manifest of the mob dir.
++    if (!Bytes.equals(getStartKey(), HConstants.EMPTY_START_ROW))
++      return;
++
++    // if any cf's have is mob enabled, add the "mob region" to the manifest.
++    Map<byte[], Store> stores = getStores();
++    for (Entry<byte[], Store> store : stores.entrySet()) {
++      boolean hasMobStore = store.getValue().getFamily().isMobEnabled();
++      if (hasMobStore) {
+         // use the .mob as the start key and 0 as the regionid
+         HRegionInfo mobRegionInfo = MobUtils.getMobRegionInfo(this.getTableDesc().getTableName());
+         mobRegionInfo.setOffline(true);
+-        snapshotManifest.addMobRegion(mobRegionInfo, this.getTableDesc().getColumnFamilies());
++        manifest.addMobRegion(mobRegionInfo, this.getTableDesc().getColumnFamilies());
++        return;
+       }
+     }
+-    SnapshotManifest manifest = SnapshotManifest.create(conf, getFilesystem(),
+-                                                        snapshotDir, desc, exnSnare);
+-    manifest.addRegion(this);
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

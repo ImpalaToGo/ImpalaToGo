@@ -1,0 +1,28 @@
+From d2950ed1fc5b167bf65b020f425c00fe4ba34060 Mon Sep 17 00:00:00 2001
+From: Bhupendra <bhupendra.jain@huawei.com>
+Date: Mon, 16 Feb 2015 18:51:14 +0530
+Subject: [PATCH 061/110] HBASE-13049 wal_roll ruby command doesn't work
+
+Reason: Bug
+Author: Bhupendra
+Ref: CDH-25565
+---
+ hbase-shell/src/main/ruby/hbase/admin.rb |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-shell/src/main/ruby/hbase/admin.rb b/hbase-shell/src/main/ruby/hbase/admin.rb
+index 4545858..346590f 100644
+--- a/hbase-shell/src/main/ruby/hbase/admin.rb
++++ b/hbase-shell/src/main/ruby/hbase/admin.rb
+@@ -84,7 +84,7 @@ module Hbase
+     #----------------------------------------------------------------------------------------------
+     # Requests a regionserver's WAL roll
+     def wal_roll(server_name)
+-      @admin.rollWALWriter(server_name)
++      @admin.rollWALWriter(ServerName.valueOf(server_name))
+     end
+     # TODO remove older hlog_roll version
+     alias :hlog_roll :wal_roll
+-- 
+1.7.0.4
+

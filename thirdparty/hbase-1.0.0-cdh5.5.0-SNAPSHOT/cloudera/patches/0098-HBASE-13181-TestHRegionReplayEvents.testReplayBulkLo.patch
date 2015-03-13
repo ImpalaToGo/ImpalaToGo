@@ -1,0 +1,121 @@
+From a52281185fcd04bc8ab92c3eff7f617671755bd7 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Tue, 10 Mar 2015 17:21:34 +0000
+Subject: [PATCH 098/110] HBASE-13181 TestHRegionReplayEvents.testReplayBulkLoadEvent fails frequently
+
+---
+ .../hadoop/hbase/regionserver/TestBulkLoad.java    |   35 ++++++++++++--------
+ .../regionserver/TestHRegionReplayEvents.java      |   23 ++++++++----
+ 2 files changed, 36 insertions(+), 22 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestBulkLoad.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestBulkLoad.java
+index 931306c..5629050 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestBulkLoad.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestBulkLoad.java
+@@ -90,7 +90,7 @@ public class TestBulkLoad {
+   private final Expectations callOnce;
+   @Rule
+   public TestName name = new TestName();
+-  
++
+   public TestBulkLoad() throws IOException {
+     callOnce = new Expectations() {
+       {
+@@ -233,17 +233,24 @@ public class TestBulkLoad {
+     HFile.WriterFactory hFileFactory = HFile.getWriterFactoryNoCache(conf);
+     // TODO We need a way to do this without creating files
+     File hFileLocation = testFolder.newFile();
+-    hFileFactory.withOutputStream(new FSDataOutputStream(new FileOutputStream(hFileLocation)));
+-    hFileFactory.withFileContext(new HFileContext());
+-    HFile.Writer writer = hFileFactory.create();
+-
+-    writer.append(new KeyValue(CellUtil.createCell(randomBytes,
+-        family,
+-        randomBytes,
+-        0l,
+-        KeyValue.Type.Put.getCode(),
+-        randomBytes)));
+-    writer.close();
++    FSDataOutputStream out = new FSDataOutputStream(new FileOutputStream(hFileLocation));
++    try {
++      hFileFactory.withOutputStream(out);
++      hFileFactory.withFileContext(new HFileContext());
++      HFile.Writer writer = hFileFactory.create();
++      try {
++        writer.append(new KeyValue(CellUtil.createCell(randomBytes,
++            family,
++            randomBytes,
++            0l,
++            KeyValue.Type.Put.getCode(),
++            randomBytes)));
++      } finally {
++        writer.close();
++      }
++    } finally {
++      out.close();
++    }
+     return hFileLocation.getAbsoluteFile().getAbsolutePath();
+   }
+ 
+@@ -286,7 +293,7 @@ public class TestBulkLoad {
+       assertNotNull(desc);
+ 
+       if (tableName != null) {
+-        assertTrue(Bytes.equals(ProtobufUtil.toTableName(desc.getTableName()).getName(), 
++        assertTrue(Bytes.equals(ProtobufUtil.toTableName(desc.getTableName()).getName(),
+           tableName));
+       }
+ 
+@@ -297,7 +304,7 @@ public class TestBulkLoad {
+         assertTrue(Bytes.equals(Bytes.toBytes(store.getStoreHomeDir()), familyName));
+         assertEquals(storeFileNames.size(), store.getStoreFileCount());
+       }
+-      
++
+       return true;
+     }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegionReplayEvents.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegionReplayEvents.java
+index 4db58d1..137f4b3 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegionReplayEvents.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHRegionReplayEvents.java
+@@ -1142,7 +1142,7 @@ public class TestHRegionReplayEvents {
+     // close the region and open again.
+     primaryRegion.close();
+     primaryRegion = HRegion.openHRegion(rootDir, primaryHri, htd, walPrimary, CONF, rss, null);
+-    
++
+     // bulk load a file into primary region
+     Random random = new Random();
+     byte[] randomValues = new byte[20];
+@@ -1205,13 +1205,20 @@ public class TestHRegionReplayEvents {
+     HFile.WriterFactory hFileFactory = HFile.getWriterFactoryNoCache(TEST_UTIL.getConfiguration());
+     // TODO We need a way to do this without creating files
+     Path testFile = new Path(testPath, UUID.randomUUID().toString());
+-    hFileFactory.withOutputStream(TEST_UTIL.getTestFileSystem().create(testFile));
+-    hFileFactory.withFileContext(new HFileContext());
+-    HFile.Writer writer = hFileFactory.create();
+-
+-    writer.append(new KeyValue(CellUtil.createCell(valueBytes, family, valueBytes, 0l,
+-      KeyValue.Type.Put.getCode(), valueBytes)));
+-    writer.close();
++    FSDataOutputStream out = TEST_UTIL.getTestFileSystem().create(testFile);
++    try {
++      hFileFactory.withOutputStream(out);
++      hFileFactory.withFileContext(new HFileContext());
++      HFile.Writer writer = hFileFactory.create();
++      try {
++        writer.append(new KeyValue(CellUtil.createCell(valueBytes, family, valueBytes, 0l,
++          KeyValue.Type.Put.getCode(), valueBytes)));
++      } finally {
++        writer.close();
++      }
++    } finally {
++      out.close();
++    }
+     return testFile.toString();
+   }
+ 
+-- 
+1.7.0.4
+

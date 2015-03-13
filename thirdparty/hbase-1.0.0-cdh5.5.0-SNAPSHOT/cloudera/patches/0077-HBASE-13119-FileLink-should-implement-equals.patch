@@ -1,0 +1,175 @@
+From a54e7bf7a826a1d4e4f0623f887514098f6193bd Mon Sep 17 00:00:00 2001
+From: Enis Soztutar <enis@apache.org>
+Date: Fri, 27 Feb 2015 17:19:56 -0800
+Subject: [PATCH 077/110] HBASE-13119 FileLink should implement equals
+
+---
+ .../java/org/apache/hadoop/hbase/io/FileLink.java  |   20 ++++++++++-
+ .../org/apache/hadoop/hbase/io/TestFileLink.java   |   36 ++++++++++++++++++++
+ .../hbase/regionserver/TestStoreFileInfo.java      |   31 ++++++++++++++++-
+ 3 files changed, 84 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+index 7d96920..67153ae 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+@@ -19,8 +19,8 @@
+ package org.apache.hadoop.hbase.io;
+ 
+ import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.Collection;
+-
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.io.FileNotFoundException;
+@@ -336,6 +336,7 @@ public class FileLink {
+     return locations;
+   }
+ 
++  @Override
+   public String toString() {
+     StringBuilder str = new StringBuilder(getClass().getName());
+     str.append(" locations=[");
+@@ -472,5 +473,22 @@ public class FileLink {
+     if (dirPath == null) return false;
+     return dirPath.getName().startsWith(BACK_REFERENCES_DIRECTORY_PREFIX);
+   }
++
++  @Override
++  public boolean equals(Object obj) {
++    // Assumes that the ordering of locations between objects are the same. This is true for the
++    // current subclasses already (HFileLink, WALLink). Otherwise, we may have to sort the locations
++    // or keep them presorted
++    if (this.getClass().equals(obj.getClass())) {
++      return Arrays.equals(this.locations, ((FileLink) obj).locations);
++    }
++
++    return false;
++  }
++
++  @Override
++  public int hashCode() {
++    return Arrays.hashCode(locations);
++  }
+ }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/io/TestFileLink.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/io/TestFileLink.java
+index c0d62fd..da2c7a0 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/io/TestFileLink.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/io/TestFileLink.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.io;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotEquals;
+ import static org.junit.Assert.assertTrue;
+ 
+ import java.io.FileNotFoundException;
+@@ -45,6 +46,41 @@ import org.junit.experimental.categories.Category;
+  */
+ @Category(MediumTests.class)
+ public class TestFileLink {
++
++  @Test
++  public void testEquals() {
++    Path p1 = new Path("/p1");
++    Path p2 = new Path("/p2");
++    Path p3 = new Path("/p3");
++
++    assertEquals(new FileLink(), new FileLink());
++    assertEquals(new FileLink(p1), new FileLink(p1));
++    assertEquals(new FileLink(p1, p2), new FileLink(p1, p2));
++    assertEquals(new FileLink(p1, p2, p3), new FileLink(p1, p2, p3));
++
++    assertNotEquals(new FileLink(p1), new FileLink(p3));
++    assertNotEquals(new FileLink(p1, p2), new FileLink(p1));
++    assertNotEquals(new FileLink(p1, p2), new FileLink(p2));
++    assertNotEquals(new FileLink(p1, p2), new FileLink(p2, p1)); // ordering important!
++  }
++
++  @Test
++  public void testHashCode() {
++    Path p1 = new Path("/p1");
++    Path p2 = new Path("/p2");
++    Path p3 = new Path("/p3");
++
++    assertEquals(new FileLink().hashCode(), new FileLink().hashCode());
++    assertEquals(new FileLink(p1).hashCode(), new FileLink(p1).hashCode());
++    assertEquals(new FileLink(p1, p2).hashCode(), new FileLink(p1, p2).hashCode());
++    assertEquals(new FileLink(p1, p2, p3).hashCode(), new FileLink(p1, p2, p3).hashCode());
++
++    assertNotEquals(new FileLink(p1).hashCode(), new FileLink(p3).hashCode());
++    assertNotEquals(new FileLink(p1, p2).hashCode(), new FileLink(p1).hashCode());
++    assertNotEquals(new FileLink(p1, p2).hashCode(), new FileLink(p2).hashCode());
++    assertNotEquals(new FileLink(p1, p2).hashCode(), new FileLink(p2, p1).hashCode()); // ordering
++  }
++
+   /**
+    * Test, on HDFS, that the FileLink is still readable
+    * even when the current file gets renamed.
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFileInfo.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFileInfo.java
+index 955996c..13c05ec 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFileInfo.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestStoreFileInfo.java
+@@ -18,22 +18,28 @@
+  */
+ package org.apache.hadoop.hbase.regionserver;
+ 
+-import org.apache.hadoop.hbase.HBaseTestCase;
++import static org.junit.Assert.*;
++
++import java.io.IOException;
++
++import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.io.HFileLink;
++import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
+ /**
+  * Test HStoreFile
+  */
+ @Category(SmallTests.class)
+-public class TestStoreFileInfo extends HBaseTestCase {
++public class TestStoreFileInfo {
+   private static final HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
+ 
+   /**
+    * Validate that we can handle valid tables with '.', '_', and '-' chars.
+    */
++  @Test
+   public void testStoreFileNames() {
+     String[] legalHFileLink = { "MyTable_02=abc012-def345", "MyTable_02.300=abc012-def345",
+       "MyTable_02-400=abc012-def345", "MyTable_02-400.200=abc012-def345",
+@@ -56,5 +62,26 @@ public class TestStoreFileInfo extends HBaseTestCase {
+       assertFalse("should not be a valid link: " + name, HFileLink.isHFileLink(name));
+     }
+   }
++
++  @Test
++  public void testEqualsWithLink() throws IOException {
++    Path origin = new Path("/origin");
++    Path tmp = new Path("/tmp");
++    Path mob = new Path("/mob");
++    Path archive = new Path("/archive");
++    HFileLink link1 = new HFileLink(new Path(origin, "f1"), new Path(tmp, "f1"),
++      new Path(mob, "f1"), new Path(archive, "f1"));
++    HFileLink link2 = new HFileLink(new Path(origin, "f1"), new Path(tmp, "f1"),
++      new Path(mob, "f1"), new Path(archive, "f1"));
++
++
++    StoreFileInfo info1 = new StoreFileInfo(TEST_UTIL.getConfiguration(),
++      TEST_UTIL.getTestFileSystem(), null, link1);
++    StoreFileInfo info2 = new StoreFileInfo(TEST_UTIL.getConfiguration(),
++      TEST_UTIL.getTestFileSystem(), null, link2);
++
++    assertEquals(info1, info2);
++    assertEquals(info1.hashCode(), info2.hashCode());
++  }
+ }
+ 
+-- 
+1.7.0.4
+
