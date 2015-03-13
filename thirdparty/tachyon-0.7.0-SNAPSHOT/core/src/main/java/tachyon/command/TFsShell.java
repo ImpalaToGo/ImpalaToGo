@@ -32,7 +32,9 @@ import com.google.common.io.Closer;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.Path;
 
 import tachyon.Constants;
@@ -274,6 +276,84 @@ public class TFsShell implements Closeable {
     }
 
     System.out.println("Open is done.");
+    return 0;
+  }
+
+  public int fileStatus(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs fileStatus <src>");
+      return -1;
+    }
+
+    String path = argv[1];
+    TachyonURI srcPathT = new TachyonURI(argv[1]);
+    final Configuration conf = new Configuration();
+    conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
+
+    final URI uri =
+            URI.create(Constants.HEADER + "localhost:19998" + argv[1]);
+
+    mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
+    mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
+    mTachyonConf.set(Constants.USE_ZOOKEEPER, "true");
+    FileSystem ufs =
+            FileSystem.get(uri,
+                    conf);
+    if (ufs instanceof TFS) {
+      System.out.println("Instance of TFS");
+    } else {
+      System.out.println("NOT Instance of TFS");
+    }
+
+    FileStatus status = ufs.getFileStatus(new Path(path));
+    if (status == null) {
+      System.out.println("Unable to get status for path \"" + path + ".");
+      return -1;
+    }
+
+    System.out.println("Path : '" + path + "'. " + status.toString() + ".");
+    return 0;
+  }
+
+  public int fileBlockLocations(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs fileBlockLocations <src>");
+      return -1;
+    }
+
+    String path = argv[1];
+    TachyonURI srcPathT = new TachyonURI(argv[1]);
+    final Configuration conf = new Configuration();
+    conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
+
+    final URI uri =
+            URI.create(Constants.HEADER + "localhost:19998" + argv[1]);
+
+    mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
+    mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
+    mTachyonConf.set(Constants.USE_ZOOKEEPER, "true");
+    FileSystem ufs =
+            FileSystem.get(uri,
+                    conf);
+    if (ufs instanceof TFS) {
+      System.out.println("Instance of TFS");
+    } else {
+      System.out.println("NOT Instance of TFS");
+    }
+
+    BlockLocation[] locations = ufs.getFileBlockLocations(new Path(path), 0, 0);
+    if (locations == null) {
+      System.out.println("Unable to get block locations for path \"" + path + ".");
+      return -1;
+    }
+
+    System.out.println("Path : '" + path + "'.");
+    for (BlockLocation location : locations) {
+      System.out.println(location.toString());
+      for (String host : location.getHosts()) {
+        System.out.println("host : " + host);
+      }
+    }
     return 0;
   }
 
@@ -667,6 +747,10 @@ public class TFsShell implements Closeable {
         exitCode = copyToLocal(argv);
       } else if (cmd.equals("openFile")) {
         exitCode = openFile(argv);
+      } else if (cmd.equals("fileStatus")) {
+        exitCode = fileStatus(argv);
+      } else if (cmd.equals("fileBlockLocations")) {
+        exitCode = fileBlockLocations(argv);
       } else if (cmd.equals("fileinfo")) {
         exitCode = fileinfo(argv);
       } else if (cmd.equals("location")) {
