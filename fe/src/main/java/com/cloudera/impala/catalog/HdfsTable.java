@@ -265,26 +265,35 @@ public class HdfsTable extends Table {
             LOG.info("Block locations retrieved for \"" + p + "\" on table \"" + name_ + "\"");
             BlockLocation[] locations = fileBlockLocationRes.getResult();
             Preconditions.checkNotNull(locations);
+            LOG.info("Block locations are not null for \"" + p + "\" on table \"" + name_ + "\"");
             blockLocations.addAll(Arrays.asList(locations));
+
+            LOG.info("Added block locations for \"" + p + "\" on table \"" + name_ + "\"");
 
             // Loop over all blocks in the file.
             for (BlockLocation block: locations) {
               Preconditions.checkNotNull(block);
+              LOG.info("Block is not null for \"" + p + "\" on table \"" + name_ + "\"");
               // Get the location of all block replicas in ip:port format.
               String[] blockHostPorts = block.getNames();
-
+              if(blockHostPorts == null){
+                LOG.error("blockHostPorts = null for \"" + p + "\" on table \"" + name_ + "\"");
+              }
               // Get the hostnames for all block replicas. Used to resolve which hosts
               // contain cached data. The results are returned in the same order as
               // block.getNames() so it allows us to match a host specified as ip:port
               // to corresponding hostname using the same array index.
               String[] blockHostNames = block.getHosts();
+              if(blockHostNames == null){
+                LOG.error("blockHostNames = null for \"" + p + "\" on table \"" + name_ + "\"");
+              }
               Preconditions.checkState(blockHostNames.length == blockHostPorts.length);
-
+              LOG.info("blockHostNames.length = blockHostPorts.length for \"" + p + "\" on table \"" + name_ + "\"");
               // Get the hostnames that contain cached replicas of this block.
               Set<String> cachedHosts =
                   Sets.newHashSet(Arrays.asList(block.getCachedHosts()));
               Preconditions.checkState(cachedHosts.size() <= blockHostNames.length);
-
+              LOG.info("cachedHosts.size <= blockHostNames.length for \"" + p + "\" on table \"" + name_ + "\"");
               // Now enumerate all replicas of the block, adding any unknown hosts
               // to hostMap_/hostList_. The host ID (index in to the hostList_) for each
               // replica is stored in replicaHostIdxs.
@@ -293,14 +302,21 @@ public class HdfsTable extends Table {
               for (int i = 0; i < blockHostPorts.length; ++i) {
                 TNetworkAddress networkAddress =
                     BlockReplica.parseLocation(blockHostPorts[i]);
+
+                LOG.info("Network address is parsed from \"" + blockHostPorts[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
+
                 Preconditions.checkState(networkAddress != null);
+                LOG.info("Network address is not null from \"" + blockHostPorts[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
                 blockReplicas.add(
                     new BlockReplica(hostIndex_.getIndex(networkAddress),
                         cachedHosts.contains(blockHostNames[i])));
+                LOG.info("Block replica is added for networkAddress \"" + blockHostNames[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
               }
               FileBlock fileBlock =
                   new FileBlock(block.getOffset(), block.getLength(), blockReplicas);
+              LOG.info("File block is constructed for \"" + p + "\" on table \"" + name_ + "\"");
               fileDescriptor.addFileBlock(fileBlock);
+              LOG.info("File block is added into file descriptor for \"" + p + "\" on table \"" + name_ + "\"");
               if (fileBlock.isCached()) ++numCachedBlocks;
             }
           } catch (IOException e) {
