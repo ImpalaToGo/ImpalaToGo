@@ -165,12 +165,12 @@ public class BlockInfo {
           String resolvedHost = loc;
           int resolvedPort = -1;
           try {
-            String[] ip_port = loc.split(":");
-            if (ip_port.length == 2) {
-              resolvedHost = ip_port[0];
+            String[] ipport = loc.split(":");
+            if (ipport.length == 2) {
+              resolvedHost = ipport[0];
 
               resolvedHost = NetworkUtils.resolveHostName(resolvedHost);
-              resolvedPort = Integer.parseInt(ip_port[1]);
+              resolvedPort = Integer.parseInt(ipport[1]);
             }
           } catch (UnknownHostException e) {
             System.out.println("Unknown host exception fire when resolving '" + loc + "' to a network name");
