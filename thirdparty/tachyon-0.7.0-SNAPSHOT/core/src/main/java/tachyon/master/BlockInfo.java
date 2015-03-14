@@ -161,13 +161,21 @@ public class BlockInfo {
       }
       if (locs != null) {
         for (String loc : locs) {
-          String resolvedHost;
+          System.out.println("getLocations : original location = '" + loc + "' to a network name");
+          String resolvedHost = loc;
+          int resolvedPort = -1;
           try {
-            resolvedHost = NetworkUtils.resolveHostName(loc);
+            String[] ip_port = loc.split(":");
+            if (ip_port.length == 2) {
+              resolvedHost = ip_port[0];
+
+              resolvedHost = NetworkUtils.resolveHostName(resolvedHost);
+              resolvedPort = Integer.parseInt(ip_port[1]);
+            }
           } catch (UnknownHostException e) {
-            resolvedHost = loc;
+            System.out.println("Unknown host exception fire when resolving '" + loc + "' to a network name");
           }
-          ret.add(new NetAddress(resolvedHost, -1, -1));
+          ret.add(new NetAddress(resolvedHost, resolvedPort, -1));
         }
       }
     }
