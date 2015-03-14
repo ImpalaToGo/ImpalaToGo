@@ -173,8 +173,8 @@ public class BlockInfo {
               resolvedPort = Integer.parseInt(ipport[1]);
             }
           } catch (UnknownHostException e) {
-            System.out.println("Unknown host exception fire when resolving '" + loc +
-                    "' to a network name");
+            System.out.println("Unknown host exception fire when resolving '" + loc
+                    + "' to a network name");
           }
           ret.add(new NetAddress(resolvedHost, resolvedPort, -1));
         }
