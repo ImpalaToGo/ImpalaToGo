@@ -276,13 +276,14 @@ abstract class AbstractTFS extends FileSystem {
     List<ClientBlockInfo> blocks = mTFS.getFileBlocks(fileId);
     for (int k = 0; k < blocks.size(); k ++) {
       ClientBlockInfo info = blocks.get(k);
+      System.out.println("getFileBlockLocations : block : '" + info + "'");
       long offset = info.getOffset();
       long end = offset + info.getLength();
       if ((offset >= start && offset <= start + len) || (end >= start && end <= start + len)) {
         ArrayList<String> names = new ArrayList<String>();
         ArrayList<String> hosts = new ArrayList<String>();
         for (NetAddress addr : info.getLocations()) {
-          String name = addr.mHost + ":" + addr.mPort;
+          String name = addr.mHost;
           System.out.println("getFileBlockLocations : adding name : '" + name + "");
           names.add(name);
           hosts.add(addr.mHost);

@@ -111,7 +111,7 @@ public class UnderFileSystemSingleLocal extends UnderFileSystem {
   @Override
   public List<String> getFileLocations(String path) throws IOException {
     List<String> ret = new ArrayList<String>();
-    ret.add(NetworkUtils.getLocalHostName());
+    ret.add(NetworkUtils.getLocalHostName() + ":50010");
     return ret;
   }
 
