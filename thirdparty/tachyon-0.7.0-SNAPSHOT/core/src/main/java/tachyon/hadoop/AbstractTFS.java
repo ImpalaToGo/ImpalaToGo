@@ -282,7 +282,7 @@ abstract class AbstractTFS extends FileSystem {
         ArrayList<String> names = new ArrayList<String>();
         ArrayList<String> hosts = new ArrayList<String>();
         for (NetAddress addr : info.getLocations()) {
-          names.add(addr.mHost);
+          names.add(addr.mHost + ":" + addr.mPort);
           hosts.add(addr.mHost);
         }
         blockLocations.add(new BlockLocation(CommonUtils.toStringArray(names), CommonUtils
