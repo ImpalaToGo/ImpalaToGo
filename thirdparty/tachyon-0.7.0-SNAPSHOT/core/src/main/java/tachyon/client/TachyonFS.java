@@ -540,7 +540,9 @@ public class TachyonFS extends AbstractTachyonFS {
       throws IOException {
     validateUri(path);
     ClientFileInfo clientFileInfo = getFileStatus(-1, path, useCachedMetadata);
+
     if (clientFileInfo == null) {
+      System.out.println("client info = null for '" + path + "'");
       return null;
     }
     return new TachyonFile(this, clientFileInfo.getId(), mTachyonConf);
@@ -596,17 +598,23 @@ public class TachyonFS extends AbstractTachyonFS {
 
     info = mMasterClient.getFileStatus(fileId, path);
     if (info == null) {
-      LOG.error("null file info retrieved for path '" + path + "'.");
       System.out.println("null file info retrieved for path '" + path + "'.");
+      LOG.error("null file info retrieved for path '" + path + "'.");
       return null;
     }
+
     fileId = info.getId();
     if (fileId == -1) {
+      System.out.println("getFileStatus() :Fileid is still -1 for file with path '" + path + "'.");
       cache.remove(key);
       return null;
+    } else {
+      System.out.println("getFileStatus() : Fileid is " + fileId + " for file with path '"
+              + path + "'.");
     }
-    path = info.getPath();
 
+    path = info.getPath();
+    System.out.println("getFileStatus() : File path  " + path + "'.");
     // TODO: LRU
     mIdToClientFileInfo.put(fileId, info);
     mPathToClientFileInfo.put(path, info);
@@ -627,6 +635,7 @@ public class TachyonFS extends AbstractTachyonFS {
    */
   public synchronized ClientFileInfo getFileStatus(int fileId, TachyonURI path,
       boolean useCachedMetadata) throws IOException {
+    System.out.println("getFileStatus() : for '" + path + "'. File id = " + fileId);
     if (fileId != -1) {
       return getFileStatus(mIdToClientFileInfo, Integer.valueOf(fileId), fileId,
           TachyonURI.EMPTY_URI.getPath(), useCachedMetadata);

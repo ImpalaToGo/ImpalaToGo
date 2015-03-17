@@ -216,16 +216,21 @@ public class TFsShell implements Closeable {
 
     // tachyonClient.getFile() catches FileDoesNotExist exceptions and returns null
     if (tFile == null) {
+      System.out.println("tFile = null for '" + srcPath + "'");
+
       throw new IOException(srcPath.toString());
     }
 
     Closer closer = Closer.create();
     try {
       InStream is = closer.register(tFile.getInStream(ReadType.NO_CACHE));
+      System.out.println("Received instream for '" + srcPath + "'");
       FileOutputStream out = closer.register(new FileOutputStream(dst));
+      System.out.println("Registered outstream for '" + dst + "'");
       byte[] buf = new byte[64 * Constants.MB];
       int t = is.read(buf);
       while (t != -1) {
+        System.out.println("Going to write " + t + " bytes into '" + dst + "'");
         out.write(buf, 0, t);
         t = is.read(buf);
       }
@@ -237,25 +242,26 @@ public class TFsShell implements Closeable {
   }
 
   /**
-   * Open the file specified by argv
+   * Copy to local alternative implementation, gets the file locally
    *
    * @param argv [] Array of arguments given by the user's input from the terminal
    * @return 0 if command is successful, -1 if an error occurred.
    * @throws IOException
    */
-  public int openFile(String[] argv) throws IOException {
-    if (argv.length != 2) {
+  public int copyToLocalAlternative(String[] argv) throws IOException {
+    if (argv.length != 3) {
       System.out.println("Usage: tfs openFile <src>");
       return -1;
     }
 
-    String path = argv[1];
+    String path    = argv[1];
+    String dstPath = argv[2];
+
     TachyonURI srcPathT = new TachyonURI(argv[1]);
     final Configuration conf = new Configuration();
     conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
 
-    final URI uri =
-            URI.create("tachyon://localhost:19998/eventsSmall/demo_20140629000000000009.csv");
+    final URI uri = URI.create(argv[1]);
 
     mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
     mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
@@ -269,14 +275,31 @@ public class TFsShell implements Closeable {
       System.out.println("NOT Instance of TFS");
     }
 
-    InputStream open = ufs.open(new Path(path));
-    if (open == null) {
-      System.out.println("Unable to open file \"" + path + ".");
-      return -1;
-    }
+    Closer closer = Closer.create();
+    InputStream is = ufs.open(new Path(path));
+    try {
+      if (is == null) {
+        System.out.println("Unable to open file \"" + path + ".");
+        return -1;
+      }
 
-    System.out.println("Open is done.");
-    return 0;
+      FileOutputStream out = closer.register(new FileOutputStream(dstPath));
+
+      byte[] buf = new byte[64 * Constants.MB];
+      int t = is.read(buf);
+      while (t != -1) {
+        out.write(buf, 0, t);
+        t = is.read(buf);
+      }
+      System.out.println("Copied '" + path + "' to '" + dstPath + "'.");
+    } finally {
+      System.in.read();
+      is.close();
+      closer.close();
+      System.out.println("Open is done.");
+
+      return 0;
+    }
   }
 
   public int fileStatus(String[] argv) throws IOException {
@@ -350,7 +373,7 @@ public class TFsShell implements Closeable {
     System.out.println("Path : '" + path + "'.");
     for (BlockLocation location : locations) {
       System.out.println(location.toString());
-      for (String host : location.getHosts()) {
+      for (String host : location.getNames()) {
         System.out.println("host : " + host);
       }
     }
@@ -745,8 +768,8 @@ public class TFsShell implements Closeable {
         exitCode = copyFromLocal(argv);
       } else if (cmd.equals("copyToLocal")) {
         exitCode = copyToLocal(argv);
-      } else if (cmd.equals("openFile")) {
-        exitCode = openFile(argv);
+      } else if (cmd.equals("copyToLocalAlternative")) {
+        exitCode = copyToLocalAlternative(argv);
       } else if (cmd.equals("fileStatus")) {
         exitCode = fileStatus(argv);
       } else if (cmd.equals("fileBlockLocations")) {

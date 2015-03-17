@@ -166,11 +166,13 @@ public class TachyonFile implements Comparable<TachyonFile> {
     List<Long> blocks = getUnCachedFileStatus().getBlockIds();
 
     if (blocks.size() == 0) {
+      System.out.println("Blocks size = 0");
       return new EmptyBlockInStream(this, readType, mTachyonConf);
     } else if (blocks.size() == 1) {
+      System.out.println("Blocks size = 1");
       return BlockInStream.get(this, readType, 0, mUFSConf, mTachyonConf);
     }
-
+    System.out.println("Blocks size = " + blocks.size());
     return new FileInStream(this, readType, mUFSConf, mTachyonConf);
   }
 
@@ -406,7 +408,7 @@ public class TachyonFile implements Comparable<TachyonFile> {
 
     int blockLockId = mTachyonFS.getBlockLockId();
     String localFileName = mTachyonFS.lockBlock(blockId, blockLockId);
-
+    System.out.println("readLocalByteBuffer : local file name = '" + localFileName + "'");
     if (localFileName != null) {
       Closer closer = Closer.create();
       try {
@@ -442,7 +444,8 @@ public class TachyonFile implements Comparable<TachyonFile> {
         closer.close();
       }
     }
-
+    System.out.println("readLocalByteBuffer : going to return null buffer for local buffer = '"
+            + localFileName + "'");
     mTachyonFS.unlockBlock(blockId, blockLockId);
     return null;
   }

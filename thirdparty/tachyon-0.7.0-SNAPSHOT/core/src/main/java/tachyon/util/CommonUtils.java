@@ -140,6 +140,7 @@ public final class CommonUtils {
    */
   public static String cleanPath(String path) throws InvalidPathException {
     validatePath(path);
+    System.out.println("cleanPath(" + path + ") : validated");
     return FilenameUtils.separatorsToUnix(FilenameUtils.normalizeNoEndSeparator(path));
   }
 
@@ -293,7 +294,9 @@ public final class CommonUtils {
    */
   public static String[] getPathComponents(String path) throws InvalidPathException {
     path = cleanPath(path);
+    System.out.println("getPathComponents(" + path + ") : after clean");
     if (isRoot(path)) {
+      System.out.println("getPathComponents(" + path + ") : is root, an empty string is returned");
       String[] ret = new String[1];
       ret[0] = "";
       return ret;

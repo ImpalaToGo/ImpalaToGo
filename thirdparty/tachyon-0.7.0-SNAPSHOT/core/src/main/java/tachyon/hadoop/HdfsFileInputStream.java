@@ -59,8 +59,10 @@ public class HdfsFileInputStream extends InputStream implements Seekable, Positi
 
   public HdfsFileInputStream(TachyonFS tfs, int fileId, Path hdfsPath, Configuration conf,
       int bufferSize, TachyonConf tachyonConf) throws IOException {
-    LOG.debug("PartitionInputStreamHdfs({}, {}, {}, {}, {})", tfs, fileId, hdfsPath, conf,
-        bufferSize);
+    LOG.info("PartitionInputStreamHdfs({}, {}, {}, {}, {})", tfs, fileId, hdfsPath, conf,
+            bufferSize);
+    System.out.println("PartitionInputStreamHdfs(" + tfs + " , " + fileId + " , "
+            + hdfsPath + " , " + conf + bufferSize + ")");
     mTachyonConf = tachyonConf;
     long bufferBytes = mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES, 0);
     mBuffer = new byte[Ints.checkedCast(bufferBytes) * 4];
@@ -78,7 +80,11 @@ public class HdfsFileInputStream extends InputStream implements Seekable, Positi
     mTachyonFile.setUFSConf(mHadoopConf);
     try {
       mTachyonFileInputStream = mTachyonFile.getInStream(ReadType.CACHE);
+      System.out.println("Got cached file stream for file : '" + hdfsPath.toString() + "'");
+      LOG.info("Got cached file stream for file : '" + hdfsPath.toString() + "'");
     } catch (IOException e) {
+      System.out.println("Exception occur when getting cached instream for file : '"
+              + hdfsPath.toString() + "'; ex = '" + e.getMessage() + "'");
       LOG.error(e.getMessage());
     }
   }

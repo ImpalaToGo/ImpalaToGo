@@ -306,21 +306,32 @@ abstract class AbstractTFS extends FileSystem {
   @Override
   public FileStatus getFileStatus(Path path) throws IOException {
     LOG.info("getFileStatus received by AbstractTFS: Path = '" + path + "'.");
+    System.out.println("getFileStatus received by AbstractTFS: Path = '" + path + "'.");
     TachyonURI tPath = new TachyonURI(Utils.getPathWithoutScheme(path));
     LOG.info("getFileStatus going to retrieve hdfsPath for original Path = '" + path + "'.");
+    System.out.println("getFileStatus going to retrieve hdfsPath for original Path = '"
+            + path + "'.");
     Path hdfsPath = Utils.getHDFSPath(tPath, mUnderFSAddress);
 
     LOG.info("getFileStatus constructed hdfsPath '" + hdfsPath + "'; Path = '" + path + "'.");
+    System.out.println("getFileStatus constructed hdfsPath '"
+            + hdfsPath + "'; Path = '" + path + "'.");
     LOG.info("getFileStatus : tachyon header : '" + mTachyonHeader + "'; Path = '" + path + "'.");
+    System.out.println("getFileStatus : tachyon header : '" + mTachyonHeader
+            + "'; Path = '" + path + "'.");
 
     LOG.info("getFileStatus(" + path + "): HDFS Path: " + hdfsPath + " TPath: " + mTachyonHeader
         + tPath);
+    System.out.println("getFileStatus(" + path + "): HDFS Path: " + hdfsPath
+            + " TPath: " + mTachyonHeader
+            + tPath);
     if (useHdfs()) {
       fromHdfsToTachyon(tPath);
     }
     TachyonFile file = mTFS.getFile(tPath);
     if (file == null) {
       LOG.info("File does not exist: " + path);
+      System.out.println("File does not exist: " + path);
       throw new FileNotFoundException("File does not exist: " + path);
     }
 
@@ -372,8 +383,11 @@ abstract class AbstractTFS extends FileSystem {
     super.initialize(uri, conf);
     LOG.info("initialize(" + uri + ", " + conf + "). Connecting to Tachyon: " + uri.toString());
     Utils.addS3Credentials(conf);
+    System.out.println("Added s3 credentials");
     setConf(conf);
     mTachyonHeader = getScheme() + "://" + uri.getHost() + ":" + uri.getPort();
+
+    System.out.println("Constructed tachyon header : '" + mTachyonHeader + "'.");
 
     // Load TachyonConf if any and merge to the one in TachyonFS
     TachyonConf siteConf = ConfUtils.loadFromHadoopConfiguration(conf);
@@ -434,10 +448,14 @@ abstract class AbstractTFS extends FileSystem {
   public FSDataInputStream open(Path cPath, int bufferSize) throws IOException {
     LOG.info("open(" + cPath + ", " + bufferSize + ")");
 
+    System.out.println("open(" + cPath + ", " + bufferSize + ")");
+
     TachyonURI path = new TachyonURI(Utils.getPathWithoutScheme(cPath));
+    System.out.println("open with tachyon uri (" + path + ")");
     fromHdfsToTachyon(path);
     int fileId = mTFS.getFileId(path);
-
+    System.out.println("open() : tachyon uri (" + path + "); fileId = "
+            + fileId + ".");
     return new FSDataInputStream(new HdfsFileInputStream(mTFS, fileId,
         Utils.getHDFSPath(path, mUnderFSAddress), getConf(), bufferSize, mTachyonConf));
   }

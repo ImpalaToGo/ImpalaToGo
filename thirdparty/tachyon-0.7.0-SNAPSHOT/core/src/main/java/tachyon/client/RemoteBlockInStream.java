@@ -123,6 +123,8 @@ public class RemoteBlockInStream extends BlockInStream {
 
     mRecache = readType.isCache();
     if (mRecache) {
+      System.out.println("RemoteBlockInStream ctor : going to recache file '"
+              + mFile.getPath() + "' with block index = " + blockIndex);
       mBlockOutStream = new BlockOutStream(file, WriteType.TRY_CACHE, blockIndex, tachyonConf);
     }
 
@@ -279,6 +281,8 @@ public class RemoteBlockInStream extends BlockInStream {
 
   private static ByteBuffer retrieveByteBufferFromRemoteMachine(InetSocketAddress address,
       long blockId, long offset, long length, TachyonConf conf) throws IOException {
+    System.out.println("I am going to retrieve byte buffer from remote machine!");
+
     return RemoteBlockReader.Factory.createRemoteBlockReader(conf).readRemoteBlock(
         address.getHostName(), address.getPort(), blockId, offset, length);
   }

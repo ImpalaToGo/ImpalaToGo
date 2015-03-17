@@ -94,19 +94,6 @@ public class UfsUtils {
     System.out.println("Loading to " + tachyonPath + " " + ufsAddrRootPath
             + " " + excludePathPrefix);
 
-    //try {
-      // resolve and replace hostname embedded in the given ufsAddress
-    TachyonURI oldPath = ufsAddrRootPath;
-   //   ufsAddrRootPath = NetworkUtils.replaceHostName(ufsAddrRootPath);        
-            
-  /*    if (!ufsAddrRootPath.getHost().equalsIgnoreCase(oldPath.getHost())) {
-        System.out.println("UnderFS hostname resolved: " + ufsAddrRootPath);
-      } */
-    /*} catch (UnknownHostException e) {
-      LOG.info("hostname cannot be resolved in given UFS path: " + ufsAddrRootPath);
-      throw new IOException(e);
-    }*/
-
     Pair<String, String> ufsPair = UnderFileSystem.parse(ufsAddrRootPath, tachyonConf);
     String ufsAddress = ufsPair.getFirst();
     String ufsRootPath = ufsPair.getSecond();
@@ -133,6 +120,8 @@ public class UfsUtils {
       } else {
         directoryName = "";
       }
+    } else {
+      directoryName = ufsRootPath;
     }
 
     if (!tfs.exist(tachyonPath)) {
@@ -148,12 +137,17 @@ public class UfsUtils {
 
     Queue<TachyonURI> ufsPathQueue = new LinkedList<TachyonURI>();
     if (excludePathPrefix.outList(ufsRootPath)) {
+      System.out.println("Adding path under processing queue : '" + ufsAddrRootPath + "'.");
       ufsPathQueue.add(ufsAddrRootPath);
+    } else {
+      System.out.println("Path was not added under processing queue : '" + ufsAddrRootPath + "'.");
     }
+
 
     while (!ufsPathQueue.isEmpty()) {
       TachyonURI ufsPath = ufsPathQueue.poll(); // this is the absolute path
       LOG.info("Loading: " + ufsPath);
+      System.out.println("Loading: " + ufsPath);
       if (ufs.isFile(ufsPath.toString())) {
         TachyonURI tfsPath = buildTFSPath(isFile
                         ? new TachyonURI(directoryName) : tachyonPath, ufsAddrRootPath,
@@ -166,9 +160,12 @@ public class UfsUtils {
         int fileId = tfs.createFile(tfsPath, ufsPath);
         if (fileId == -1) {
           LOG.info("Failed to create tachyon file: " + tfsPath);
+          System.out.println("Failed to create tachyon file: " + tfsPath);
         } else {
           LOG.info("Create tachyon file " + tfsPath + " with file id " + fileId + " and "
               + "checkpoint location " + ufsPath);
+          System.out.println("Create tachyon file " + tfsPath + " with file id " + fileId + " and "
+                  + "checkpoint location " + ufsPath);
         }
       } else { // ufsPath is a directory
         System.out.println("Loading ufs. ufs path is a directory.");

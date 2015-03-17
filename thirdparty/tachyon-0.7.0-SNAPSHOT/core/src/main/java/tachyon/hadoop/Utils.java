@@ -48,8 +48,10 @@ public final class Utils {
 
   public static Path getHDFSPath(TachyonURI path, String ufsAddress) {
     if (path.isPathAbsolute()) {
+      LOG.info("getHDFSPath : Absolute path = '" + path.getPath() + "'.");
       return new Path(ufsAddress + path.getPath());
     } else {
+      LOG.info("getHDFSPath : Relative path = '" + path.getPath() + "'.");
       return new Path(ufsAddress + TachyonURI.SEPARATOR + path.getPath());
     }
   }

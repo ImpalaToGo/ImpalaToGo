@@ -787,8 +787,10 @@ public class MasterService {
         return result.success;
       }
       if (result.eI != null) {
+        System.out.println("recv_getFileStatus. exception occur " + result.eI.message);
         throw result.eI;
       }
+      System.out.println("recv_getFileStatus. throwing missing result");
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getFileStatus failed: unknown result");
     }
 

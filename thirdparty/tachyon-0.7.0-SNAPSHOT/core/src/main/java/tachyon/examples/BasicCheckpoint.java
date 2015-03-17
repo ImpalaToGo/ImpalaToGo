@@ -82,7 +82,7 @@ public class BasicCheckpoint implements Callable<Boolean> {
     boolean pass = true;
     for (int i = 0; i < mNumFiles; i ++) {
       TachyonURI filePath = new TachyonURI(mFileFolder + "/part-" + i);
-      LOG.debug("Reading data from {}", filePath);
+      LOG.info("Reading data from {}", filePath);
       TachyonFile file = tachyonClient.getFile(filePath);
       TachyonByteBuffer buf = file.readByteBuffer(0);
       if (buf == null) {
