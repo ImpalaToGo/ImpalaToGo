@@ -487,6 +487,7 @@ public class TachyonFile implements Comparable<TachyonFile> {
    */
   boolean recache(int blockIndex) throws IOException {
     String path = getUfsPath();
+    System.out.println("TachyonFile '" + path + "' is requested for recaching");
     UnderFileSystem underFsClient = UnderFileSystem.get(path, mTachyonConf);
 
     InputStream inputStream = null;

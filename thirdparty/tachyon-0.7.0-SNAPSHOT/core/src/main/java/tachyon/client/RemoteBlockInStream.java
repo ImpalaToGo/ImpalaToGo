@@ -140,6 +140,7 @@ public class RemoteBlockInStream extends BlockInStream {
     if (mRecache) {
       mRecache = false;
       if (mBlockOutStream != null) {
+        System.out.println("RemoteBlockInStream.cancel(), cancelling recaching attempt.");
         mBlockOutStream.cancel();
       }
     }
@@ -155,6 +156,10 @@ public class RemoteBlockInStream extends BlockInStream {
       if (mBlockPos == mBlockInfo.length) {
         mBlockOutStream.close();
       } else {
+        System.out.println("RemoteBlockInStream.close(), cancelling cache "
+                + " attempt because we did not reach the end of file."
+                + " Blockinfo.length = " + mBlockInfo.length
+                + "; blockPos = " + mBlockPos);
         mBlockOutStream.cancel();
       }
     }
@@ -298,6 +303,7 @@ public class RemoteBlockInStream extends BlockInStream {
       // There's nothing to do
       return;
     }
+    System.out.println("RemoteBlockInStream.seek() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     mBlockPos = pos;
@@ -343,6 +349,7 @@ public class RemoteBlockInStream extends BlockInStream {
     if (n <= 0) {
       return 0;
     }
+    System.out.println("RemoteBlockInStream.skip() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     long skipped = Math.min(n, mBlockInfo.length - mBlockPos);

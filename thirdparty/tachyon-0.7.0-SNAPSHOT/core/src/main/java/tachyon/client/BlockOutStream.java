@@ -116,6 +116,7 @@ public class BlockOutStream extends OutStream {
     long allocateBytes = mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES,
         Constants.MB) + 4L;
     mBuffer = ByteBuffer.allocate(Ints.checkedCast(allocateBytes));
+    System.out.println("BlockOutStream allocated buffer, bytes = " + allocateBytes);
   }
 
   private synchronized void appendCurrentBuffer(byte[] buf, int offset, int length)
