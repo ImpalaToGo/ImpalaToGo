@@ -2013,7 +2013,7 @@ public class Analyzer {
     if(table == null)
       return table;
 
-    if (!table.isLoaded() || table instanceof IncompleteTable){
+    if ((!privilege.equals(Privilege.DROP)) & (!table.isLoaded() || table instanceof IncompleteTable)){
       throw new AnalysisException(
           "Table/view is missing metadata: " + table.getFullName());
     }
@@ -2050,6 +2050,8 @@ public class Analyzer {
         table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
       }
       catch(CatalogException e){
+        LOG.warn("Catalog exception caught while retrieving table \"" +
+            tableName + "\". Prioritize table load once again.");
         // initiate prioritized table load
         table = prioritizedTableLoad(tableName, privilege);
         }
@@ -2058,6 +2060,10 @@ public class Analyzer {
       }
       // initiate prioritized load (once):
       if (!table.isLoaded() || table instanceof IncompleteTable){
+        if(privilege.equals(Privilege.DROP)){
+          // no need to load this table more
+          return table;
+        }
         table = prioritizedTableLoad(tableName, privilege);
       }
       // if table is still not loaded, throwing
