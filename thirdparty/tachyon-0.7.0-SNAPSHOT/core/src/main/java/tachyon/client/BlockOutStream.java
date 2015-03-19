@@ -104,13 +104,14 @@ public class BlockOutStream extends OutStream {
     }
     try {
       mLocalFilePath = mTachyonFS.getLocalBlockTemporaryPath(mBlockId, initialBytes);
-    } catch(IOException e) {
-      System.out.println("Temporary file for caching block " + mBlockId +
-              " already exist, will not be written in this session.");
+    } catch (IOException e) {
+      System.out.println("Temporary file for caching block " + mBlockId
+              + " already exist, will not be written in this session.");
       mIsBusy = true;
     }
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
 
     System.out.println("BlockOutStream ctor : local file path = '" + mLocalFilePath + "'");
     mLocalFile = mCloser.register(new RandomAccessFile(mLocalFilePath, "rw"));
@@ -132,8 +133,9 @@ public class BlockOutStream extends OutStream {
 
   private synchronized void appendCurrentBuffer(byte[] buf, int offset, int length)
       throws IOException {
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
     if (mAvailableBytes < length) {
       long bytesRequested = mTachyonFS.requestSpace(mBlockId, length - mAvailableBytes);
       if (bytesRequested + mAvailableBytes >= length) {
@@ -153,8 +155,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void cancel() throws IOException {
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
 
     if (!mClosed) {
       mCloser.close();
@@ -174,8 +177,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void close() throws IOException {
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
 
     if (!mClosed) {
       if (mBuffer.position() > 0) {
@@ -220,8 +224,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
 
     if (b == null) {
       throw new NullPointerException();
@@ -256,8 +261,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void write(int b) throws IOException {
-    if(mIsBusy)
+    if (mIsBusy) {
       return;
+    }
 
     if (!canWrite()) {
       throw new IOException("Can not write cache.");
