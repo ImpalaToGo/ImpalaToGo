@@ -1982,6 +1982,42 @@ public class Analyzer {
     globalState_.accessEvents.add(event);
   }
 
+  private Table prioritizedTableLoad(TableName tableName) throws AnalysisException, CatalogException{
+    Table table = null;
+    Set<TableName> missingTables = new HashSet<TableName>();
+    missingTbls_.add(tableName);
+    missingTables.add(tableName);
+
+    // Call into the CatalogServer and request the required tables be loaded.
+    LOG.info(String.format("Requesting prioritized load of table: %s", tableName));
+    TStatus status = null;
+    try {
+      // load only requested table
+      status = FeSupport.PrioritizeLoad(missingTables);
+    } catch (InternalException ex) {
+      LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", tableName, ex.getMessage()));
+    }
+    if (status == null || status.getStatus_code() != TStatusCode.OK) {
+      throw new AnalysisException(
+          "Unable to reload missing metadata for table/view : " + tableName);
+    }
+    LOG.info(String.format("Waiting for table to complete loading: %s", tableName));
+    getCatalog().waitForCatalogUpdate(MAX_CATALOG_UPDATE_WAIT_TIME_MS);
+    table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
+
+    if(table == null)
+      return table;
+
+    if (!table.isLoaded() || table instanceof IncompleteTable){
+      throw new AnalysisException(
+          "Table/view is missing metadata: " + table.getFullName());
+    }
+    else
+      // remove the loaded table from missing tables
+      missingTables.remove(tableName);
+    return table;
+  }
+
   /**
    * Returns the Catalog Table object for the TableName at the given Privilege level.
    * If the table has not yet been loaded in the local catalog cache, it will get
@@ -2008,43 +2044,25 @@ public class Analyzer {
       try{
         table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
       }
-      catch(TableLoadingException e){
-
-        Set<TableName> missingTables = new HashSet<TableName>();
-        missingTbls_.add(tableName);
-        missingTables.add(tableName);
-
-        // Call into the CatalogServer and request the required tables be loaded.
-        LOG.info(String.format("Requesting prioritized load of table: %s", tableName));
-        TStatus status = null;
-        try {
-          // load only requested table
-          status = FeSupport.PrioritizeLoad(missingTables);
-        } catch (InternalException ex) {
-          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", tableName, ex.getMessage()));
+      catch(CatalogException e){
+        // initiate prioritized table load
+        table = prioritizedTableLoad(tableName);
         }
-        if (status == null || status.getStatus_code() != TStatusCode.OK) {
-          throw new AnalysisException(
-              "Unable to reload missing metadata for table/view : " + tableName);
-        }
-        LOG.info(String.format("Waiting for table to complete loading: %s", tableName));
-        getCatalog().waitForCatalogUpdate(MAX_CATALOG_UPDATE_WAIT_TIME_MS);
-        table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
-        if (!table.isLoaded() || table instanceof IncompleteTable){
-          throw new AnalysisException(
-              "Table/view is missing metadata: " + table.getFullName());
-        }
-        else
-          // remove the loaded table from missing tables
-          missingTables.remove(tableName);
-      }
       if (table == null) {
         throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
       }
+      // initiate prioritized load (once):
+      if (!table.isLoaded() || table instanceof IncompleteTable){
+        table = prioritizedTableLoad(tableName);
+      }
+      // if table is still not loaded, throwing
       if (!table.isLoaded() || table instanceof IncompleteTable) {
         TableName tn = new TableName(table.getDb().getName(), table.getName());
         missingTbls_.add(tn);
-          throw new AnalysisException(
+        // if calling context is "DROP", don't rise from here, return incomplete table
+        if(privilege.equals(Privilege.DROP))
+          return table;
+        throw new AnalysisException(
               "Table/view is missing metadata: " + table.getFullName());
       }
 

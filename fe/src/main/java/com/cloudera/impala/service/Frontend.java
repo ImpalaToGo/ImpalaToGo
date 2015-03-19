@@ -77,7 +77,9 @@ import com.cloudera.impala.catalog.Function;
 import com.cloudera.impala.catalog.HBaseTable;
 import com.cloudera.impala.catalog.HdfsTable;
 import com.cloudera.impala.catalog.ImpaladCatalog;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Table;
+import com.cloudera.impala.catalog.TableLoadingException;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.FileSystemUtil;
@@ -490,8 +492,10 @@ public class Frontend {
       destPathString = impaladCatalog_.getHdfsPartition(tableName.getDb(),
           tableName.getTbl(), request.getPartition_spec()).getLocation();
     } else {
-      destPathString = impaladCatalog_.getTable(tableName.getDb(), tableName.getTbl())
-          .getMetaStoreTable().getSd().getLocation();
+      Table table =  impaladCatalog_.getTable(tableName.getDb(), tableName.getTbl());
+      if(table.isLoaded() && table instanceof IncompleteTable)
+        throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
+      destPathString = table.getMetaStoreTable().getSd().getLocation();
     }
 
     Path destPath = new Path(destPathString);
@@ -598,6 +602,9 @@ public class Frontend {
   public TResultSet getColumnStats(String dbName, String tableName)
       throws ImpalaException {
     Table table = impaladCatalog_.getTable(dbName, tableName);
+    if(table.isLoaded() && table instanceof IncompleteTable)
+      throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
+
     TResultSet result = new TResultSet();
     TResultSetMetadata resultSchema = new TResultSetMetadata();
     result.setSchema(resultSchema);
@@ -626,6 +633,9 @@ public class Frontend {
   public TResultSet getTableStats(String dbName, String tableName)
       throws ImpalaException {
     Table table = impaladCatalog_.getTable(dbName, tableName);
+    if(table.isLoaded() && table instanceof IncompleteTable)
+      throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
+
     if (table instanceof HdfsTable) {
       return ((HdfsTable) table).getTableStats();
     } else if (table instanceof HBaseTable) {
@@ -667,6 +677,8 @@ public class Frontend {
   public TDescribeTableResult describeTable(String dbName, String tableName,
       TDescribeTableOutputStyle outputStyle) throws ImpalaException {
     Table table = impaladCatalog_.getTable(dbName, tableName);
+    if(table.isLoaded() && table instanceof IncompleteTable)
+      throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
     return DescribeResultFactory.buildDescribeTableResult(table, outputStyle);
   }
 

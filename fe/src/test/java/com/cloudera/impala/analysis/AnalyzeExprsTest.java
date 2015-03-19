@@ -2111,6 +2111,7 @@ public class AnalyzeExprsTest extends AnalyzerTest {
     List<String> allCountDistinctFns = Lists.newArrayList();
 
     Table alltypesTbl = catalog_.getTable("functional", "alltypes");
+    AnalysisError("requested table is null");
     for (Column col: alltypesTbl.getColumns()) {
       String colName = col.getName();
       // Test a single count(distinct) with some other aggs.

@@ -15,6 +15,7 @@
 package com.cloudera.impala.analysis;
 
 import com.cloudera.impala.authorization.Privilege;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
@@ -70,8 +71,9 @@ public class DropTableOrViewStmt extends StatementBase {
   @Override
   public void analyze(Analyzer analyzer) throws AnalysisException {
     dbName_ = analyzer.getTargetDbName(tableName_);
+    Table table = null;
     try {
-      Table table = analyzer.getTable(tableName_, Privilege.DROP);
+      table = analyzer.getTable(tableName_, Privilege.DROP);
       Preconditions.checkNotNull(table);
       if (table instanceof View && dropTable_) {
         throw new AnalysisException(String.format(
@@ -82,9 +84,11 @@ public class DropTableOrViewStmt extends StatementBase {
             "DROP VIEW not allowed on a table: %s.%s", dbName_, getTbl()));
       }
     } catch (AnalysisException e) {
-      if (ifExists_ && analyzer.getMissingTbls().isEmpty()) return;
+      if (ifExists_ && table != null) return;
       throw e;
     }
+    // even if table is incomplete table it can be allowed to be dropped.
+    if(table instanceof IncompleteTable) return;
   }
 
   /**
