@@ -1029,7 +1029,7 @@ public class CatalogOpExecutor {
         }
       };
 
-      final Boolean nodeleteDataFlag = true;
+      final Boolean nodeleteDataFlag = false;
       InterruptableCallable<Exception> callable2 = new InterruptableCallable<Exception>("HiveClient.DropTable with no data") {
         @Override
         protected Exception dowork() throws IOException{
