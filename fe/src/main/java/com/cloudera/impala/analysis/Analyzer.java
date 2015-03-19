@@ -1982,11 +1982,16 @@ public class Analyzer {
     globalState_.accessEvents.add(event);
   }
 
-  private Table prioritizedTableLoad(TableName tableName) throws AnalysisException, CatalogException{
+  private Table prioritizedTableLoad(TableName tableName, Privilege privilege) throws AnalysisException, CatalogException{
     Table table = null;
     Set<TableName> missingTables = new HashSet<TableName>();
-    missingTbls_.add(tableName);
-    missingTables.add(tableName);
+    // add the table to reload into missing tables only in case if this is not DROP request.
+    // Otherwise Frontend will invoke analyze statement till the end of time for
+    // malformed table
+    if(!privilege.equals(Privilege.DROP)){
+      missingTbls_.add(tableName);
+      missingTables.add(tableName);
+    }
 
     // Call into the CatalogServer and request the required tables be loaded.
     LOG.info(String.format("Requesting prioritized load of table: %s", tableName));
@@ -2012,7 +2017,7 @@ public class Analyzer {
       throw new AnalysisException(
           "Table/view is missing metadata: " + table.getFullName());
     }
-    else
+    else if(!privilege.equals(Privilege.DROP))
       // remove the loaded table from missing tables
       missingTables.remove(tableName);
     return table;
@@ -2046,22 +2051,26 @@ public class Analyzer {
       }
       catch(CatalogException e){
         // initiate prioritized table load
-        table = prioritizedTableLoad(tableName);
+        table = prioritizedTableLoad(tableName, privilege);
         }
       if (table == null) {
         throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
       }
       // initiate prioritized load (once):
       if (!table.isLoaded() || table instanceof IncompleteTable){
-        table = prioritizedTableLoad(tableName);
+        table = prioritizedTableLoad(tableName, privilege);
       }
       // if table is still not loaded, throwing
       if (!table.isLoaded() || table instanceof IncompleteTable) {
         TableName tn = new TableName(table.getDb().getName(), table.getName());
-        missingTbls_.add(tn);
         // if calling context is "DROP", don't rise from here, return incomplete table
-        if(privilege.equals(Privilege.DROP))
+        // and don't store it in "incomplete tables"
+        if(!privilege.equals(Privilege.DROP)){
+          missingTbls_.add(tn);
+        }
+        else
           return table;
+
         throw new AnalysisException(
               "Table/view is missing metadata: " + table.getFullName());
       }
