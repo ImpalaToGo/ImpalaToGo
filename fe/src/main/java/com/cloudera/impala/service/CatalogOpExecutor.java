@@ -1073,36 +1073,33 @@ public class CatalogOpExecutor {
           completed = true;
         }
         catch (TimeoutException e) {
-          LOG.error("Timeout while execution of : \"" + callable1.getName() + "\"; Ex : \"" + e.getMessage() + "\"." );
+          LOG.error("Timeout while execution of : \"" + callable2.getName() + "\"; Ex : \"" + e.getMessage() + "\"." );
           }
         catch (ExecutionException e) {
-          LOG.error("Execution exception while execution of : \"" + callable1.getName() + "\"; Ex: " +
+          LOG.error("Execution exception while execution of : \"" + callable2.getName() + "\"; Ex: " +
               e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
           }
         catch (InterruptedException e) {
-          LOG.error("Execution is interrupted exception while execution of : \"" + callable1.getName() +
+          LOG.error("Execution is interrupted exception while execution of : \"" + callable2.getName() +
               "\"; Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
         }
         // check that execution with data deletion was completed without delays.
         // If execution was interrupted, drop should be recalled, this time with "no data" flag:
         if(!completed){
           LOG.error("table \"" + tableName.getTbl() + "\" was not dropped from metastore due to reasons. "
-              + "Its not cleaned up from catalog...");
-          // if still no completion, throw out:
-          throw new ImpalaRuntimeException(
-              String.format(HMS_RPC_ERROR_FORMAT_STR, "dropTable"));
+              + "Will be cleaned up from catalog registry for current session...");
         }
-
       }
       // run the deletion with data, wait to be executed for timeout:
-      if(res != null){
+      if(res != null && completed){
         LOG.error("table \"" + tableName.getTbl() + "\" was not dropped from metastore due to exception \"" +
             res.getMessage() + "\". Its not cleaned up from catalog...");
         throw new ImpalaRuntimeException(
             String.format(HMS_RPC_ERROR_FORMAT_STR, "dropTable"), res);
       }
-
-      LOG.info("table \"" + tableName.getTbl() + "\" is dropped from metastore. Cleaning up it from catalog...");
+      if(completed){
+        LOG.info("table \"" + tableName.getTbl() + "\" is dropped from metastore. Cleaning up it from catalog...");
+      }
 
       Table table = catalog_.removeTable(params.getTable_name().db_name,
           params.getTable_name().table_name);
