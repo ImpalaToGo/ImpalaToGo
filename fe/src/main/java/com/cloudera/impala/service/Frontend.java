@@ -37,6 +37,7 @@ import org.apache.hive.service.cli.thrift.TGetColumnsReq;
 import org.apache.hive.service.cli.thrift.TGetFunctionsReq;
 import org.apache.hive.service.cli.thrift.TGetSchemasReq;
 import org.apache.hive.service.cli.thrift.TGetTablesReq;
+import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -369,6 +370,7 @@ public class Frontend {
       ddl.setDdl_params(req);
       metadata.setColumns(Collections.<TColumn>emptyList());
     } else if (analysis.isDropTableOrViewStmt()) {
+      Log.info("Create Catalog operation request for DROP TABLE or VIEW.");
       ddl.op_type = TCatalogOpType.DDL;
       TDdlExecRequest req = new TDdlExecRequest();
       DropTableOrViewStmt stmt = analysis.getDropTableOrViewStmt();
@@ -817,6 +819,7 @@ public class Frontend {
 
     if (analysisResult.isCatalogOp()) {
       result.stmt_type = TStmtType.DDL;
+      Log.info("Create Execution request : DDL statement.");
       createCatalogOpRequest(analysisResult, result);
 
       // All DDL operations except for CTAS are done with analysis at this point.

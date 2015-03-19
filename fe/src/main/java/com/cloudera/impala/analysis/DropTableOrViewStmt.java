@@ -14,6 +14,8 @@
 
 package com.cloudera.impala.analysis;
 
+import org.mortbay.log.Log;
+
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Table;
@@ -88,7 +90,10 @@ public class DropTableOrViewStmt extends StatementBase {
       throw e;
     }
     // even if table is incomplete table it can be allowed to be dropped.
-    if(table instanceof IncompleteTable) return;
+    if(table instanceof IncompleteTable) {
+      Log.warn("DropTableOrView : incomplete table is detected.");
+      return;
+    }
   }
 
   /**
