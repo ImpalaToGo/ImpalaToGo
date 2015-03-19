@@ -36,6 +36,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HAUtil;
+import org.apache.hive.com.esotericsoftware.minlog.Log;
 import org.apache.log4j.Appender;
 import org.apache.log4j.FileAppender;
 import org.apache.thrift.TException;
@@ -150,6 +151,7 @@ public class JniFrontend {
     try {
       return serializer.serialize(result);
     } catch (TException e) {
+      Log.error("createExecRequest : exception happened, unable to serialize exec request");
       throw new InternalException(e.getMessage());
     }
   }

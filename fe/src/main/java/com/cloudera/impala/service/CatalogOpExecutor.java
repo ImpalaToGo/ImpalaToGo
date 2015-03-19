@@ -14,14 +14,17 @@
 
 package com.cloudera.impala.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -72,9 +75,11 @@ import com.cloudera.impala.catalog.TableLoadingException;
 import com.cloudera.impala.catalog.TableNotFoundException;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.catalog.View;
+import com.cloudera.impala.common.ITPool;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.ImpalaRuntimeException;
 import com.cloudera.impala.common.InternalException;
+import com.cloudera.impala.common.InterruptableCallable;
 import com.cloudera.impala.common.Pair;
 import com.cloudera.impala.thrift.ImpalaInternalServiceConstants;
 import com.cloudera.impala.thrift.TAlterTableAddPartitionParams;
@@ -975,29 +980,129 @@ public class CatalogOpExecutor {
     resp.result.setRemoved_catalog_object(removedObject);
   }
 
+  /** remote API call permitted timeout */
+  private static final long TIMEOUT_BASE = 60000;
+
+  /** number of retries should be attempted while delegated API invocation is timed out */
+  private static final int RETRIES = 5;
+
+  /** Managed FileSystem API pool executor */
+  private static ITPool pool = new ITPool();
+
   /**
    * Drops a table or view from the metastore and removes it from the catalog.
    * Also drops all associated caching requests on the table and/or table's partitions,
    * uncaching all table data.
    */
-  private void dropTableOrView(TDropTableOrViewParams params, TDdlExecResponse resp)
+  private void dropTableOrView(final TDropTableOrViewParams params, TDdlExecResponse resp)
       throws ImpalaException {
-    TableName tableName = TableName.fromThrift(params.getTable_name());
+    final TableName tableName = TableName.fromThrift(params.getTable_name());
     Preconditions.checkState(tableName != null && tableName.isFullyQualified());
     LOG.debug(String.format("Dropping table/view %s", tableName));
 
     TCatalogObject removedObject = new TCatalogObject();
     synchronized (metastoreDdlLock_) {
-      MetaStoreClient msClient = catalog_.getMetaStoreClient();
-      try {
-        msClient.getHiveClient().dropTable(
-            tableName.getDb(), tableName.getTbl(), true, params.if_exists);
-      } catch (TException e) {
-        throw new ImpalaRuntimeException(
-            String.format(HMS_RPC_ERROR_FORMAT_STR, "dropTable"), e);
-      } finally {
-        msClient.release();
+      final MetaStoreClient msClient = catalog_.getMetaStoreClient();
+
+      // wrap the call to hive metastore into the interruptible timed-out
+      // shell in order to be able to cancel it on time-out.
+      // this is required in following scenario:
+      // suppose we have tables in metastore which are bound to died datasources
+      // on remote dfs. In this case the metastore will try to delete data for such table
+      // till the end of days without success.
+      // Thus we give it a try and then recall table drop without bound data deletion.
+      final Boolean deleteDataFlag = true;
+      InterruptableCallable<Exception> callable1 = new InterruptableCallable<Exception>("HiveClient.DropTable with data") {
+        @Override
+        protected Exception dowork() throws IOException{
+          Exception exception = null;
+          try {
+            msClient.getHiveClient().dropTable(
+                tableName.getDb(), tableName.getTbl(), deleteDataFlag, params.if_exists);
+          } catch (TException e) {
+            exception = e;
+          }
+          finally {
+            msClient.release();
+          }
+          return exception;
+        }
+      };
+
+      final Boolean nodeleteDataFlag = true;
+      InterruptableCallable<Exception> callable2 = new InterruptableCallable<Exception>("HiveClient.DropTable with no data") {
+        @Override
+        protected Exception dowork() throws IOException{
+          Exception exception = null;
+          try {
+            msClient.getHiveClient().dropTable(
+                tableName.getDb(), tableName.getTbl(), nodeleteDataFlag, params.if_exists);
+          } catch (TException e) {
+            exception = e;
+          }
+          finally {
+            msClient.release();
+          }
+          return exception;
+        }
+      };
+
+      Exception res = null;
+      Boolean completed = false;
+      try{
+        res = pool.run(callable1, TIMEOUT_BASE);
+        completed = true;
       }
+      catch (TimeoutException e) {
+        LOG.error("Timeout while execution of : \"" + callable1.getName() + "\"; Ex : \"" + e.getMessage() + "\"." );
+        }
+      catch (ExecutionException e) {
+        LOG.error("Execution exception while execution of : \"" + callable1.getName() + "\"; Ex: " +
+            e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+        }
+      catch (InterruptedException e) {
+        LOG.error("Execution is interrupted exception while execution of : \"" + callable1.getName() +
+            "\"; Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+      }
+      // check that execution with data deletion was completed without delays.
+      // If execution was interrupted, drop should be recalled, this time with "no data" flag:
+      if(!completed){
+        try{
+          // request the execution of dropping table with no data
+          res = pool.run(callable2, TIMEOUT_BASE);
+          completed = true;
+        }
+        catch (TimeoutException e) {
+          LOG.error("Timeout while execution of : \"" + callable1.getName() + "\"; Ex : \"" + e.getMessage() + "\"." );
+          }
+        catch (ExecutionException e) {
+          LOG.error("Execution exception while execution of : \"" + callable1.getName() + "\"; Ex: " +
+              e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+          }
+        catch (InterruptedException e) {
+          LOG.error("Execution is interrupted exception while execution of : \"" + callable1.getName() +
+              "\"; Ex : \"" + e.getMessage() + "\"; cause = \"" + e.getCause().getMessage() + "\"." );
+        }
+        // check that execution with data deletion was completed without delays.
+        // If execution was interrupted, drop should be recalled, this time with "no data" flag:
+        if(!completed){
+          LOG.error("table \"" + tableName.getTbl() + "\" was not dropped from metastore due to reasons. "
+              + "Its not cleaned up from catalog...");
+          // if still no completion, throw out:
+          throw new ImpalaRuntimeException(
+              String.format(HMS_RPC_ERROR_FORMAT_STR, "dropTable"));
+        }
+
+      }
+      // run the deletion with data, wait to be executed for timeout:
+      if(res != null){
+        LOG.error("table \"" + tableName.getTbl() + "\" was not dropped from metastore due to exception \"" +
+            res.getMessage() + "\". Its not cleaned up from catalog...");
+        throw new ImpalaRuntimeException(
+            String.format(HMS_RPC_ERROR_FORMAT_STR, "dropTable"), res);
+      }
+
+      LOG.info("table \"" + tableName.getTbl() + "\" is dropped from metastore. Cleaning up it from catalog...");
 
       Table table = catalog_.removeTable(params.getTable_name().db_name,
           params.getTable_name().table_name);

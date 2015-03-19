@@ -370,7 +370,6 @@ public class Frontend {
       ddl.setDdl_params(req);
       metadata.setColumns(Collections.<TColumn>emptyList());
     } else if (analysis.isDropTableOrViewStmt()) {
-      Log.info("Create Catalog operation request for DROP TABLE or VIEW.");
       ddl.op_type = TCatalogOpType.DDL;
       TDdlExecRequest req = new TDdlExecRequest();
       DropTableOrViewStmt stmt = analysis.getDropTableOrViewStmt();
