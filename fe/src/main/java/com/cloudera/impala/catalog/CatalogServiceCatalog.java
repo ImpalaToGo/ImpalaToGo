@@ -724,7 +724,7 @@ public class CatalogServiceCatalog extends Catalog {
     Preconditions.checkNotNull(partitionSpec);
     Table tbl = getOrLoadTable(tableName.getDb(), tableName.getTbl());
     if (tbl == null) {
-      throw new TableNotFoundException("Table not found: " + tbl.getFullName());
+      throw new TableNotFoundException("Table not found: " + tableName);
     }
     if (!(tbl instanceof HdfsTable)) {
       throw new CatalogException("Table " + tbl.getFullName() + " is not an Hdfs table");

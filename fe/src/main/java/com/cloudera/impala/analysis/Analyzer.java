@@ -2010,29 +2010,24 @@ public class Analyzer {
       }
       catch(TableLoadingException e){
 
-        if(table == null)
-          throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
-
         Set<TableName> missingTables = new HashSet<TableName>();
-
-        TableName tn = new TableName(table.getDb().getName(), table.getName());
-        missingTbls_.add(tn);
-        missingTables.add(tn);
+        missingTbls_.add(tableName);
+        missingTables.add(tableName);
 
         // Call into the CatalogServer and request the required tables be loaded.
-//        LOG.info(String.format("Requesting prioritized load of table: %s", tn));
+        LOG.info(String.format("Requesting prioritized load of table: %s", tableName));
         TStatus status = null;
         try {
           // load only requested table
           status = FeSupport.PrioritizeLoad(missingTables);
         } catch (InternalException ex) {
-          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", table.getFullName(), ex.getMessage()));
+          LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", tableName, ex.getMessage()));
         }
         if (status == null || status.getStatus_code() != TStatusCode.OK) {
           throw new AnalysisException(
-              "Unable to reload missing metadata for table/view : " + table.getFullName());
+              "Unable to reload missing metadata for table/view : " + tableName);
         }
-        LOG.info(String.format("Waiting for table to complete loading: %s", tn));
+        LOG.info(String.format("Waiting for table to complete loading: %s", tableName));
         getCatalog().waitForCatalogUpdate(MAX_CATALOG_UPDATE_WAIT_TIME_MS);
         table = getCatalog().getTable(tableName.getDb(), tableName.getTbl());
         if (!table.isLoaded() || table instanceof IncompleteTable){
@@ -2041,7 +2036,7 @@ public class Analyzer {
         }
         else
           // remove the loaded table from missing tables
-          missingTables.remove(tn);
+          missingTables.remove(tableName);
       }
       if (table == null) {
         throw new AnalysisException(TBL_DOES_NOT_EXIST_ERROR_MSG + tableName.toString());
