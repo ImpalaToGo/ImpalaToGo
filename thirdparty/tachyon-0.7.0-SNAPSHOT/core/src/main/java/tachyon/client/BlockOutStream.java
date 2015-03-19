@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import tachyon.Constants;
 import tachyon.conf.TachyonConf;
+import tachyon.thrift.FileAlreadyExistException;
 import tachyon.util.CommonUtils;
 
 /**
@@ -45,17 +46,18 @@ public class BlockOutStream extends OutStream {
   private final long mBlockOffset;
   private final boolean mPin;
   private final Closer mCloser = Closer.create(); 
-  private final String mLocalFilePath;
-  private final RandomAccessFile mLocalFile;
-  private final FileChannel mLocalFileChannel;
-  private final ByteBuffer mBuffer;
+  private String mLocalFilePath;
+  private RandomAccessFile mLocalFile;
+  private FileChannel mLocalFileChannel;
+  private ByteBuffer mBuffer;
 
   private long mAvailableBytes = 0;
   private long mInFileBytes = 0;
   private long mWrittenBytes = 0;
 
   private boolean mCanWrite = false;
-  private boolean mClosed = false;
+  private boolean mIsBusy   = false;
+  private boolean mClosed   = false;
 
   /**
    * @param file the file the block belongs to
@@ -100,7 +102,16 @@ public class BlockOutStream extends OutStream {
       System.out.println(msg);
       throw new IOException(msg);
     }
-    mLocalFilePath = mTachyonFS.getLocalBlockTemporaryPath(mBlockId, initialBytes);
+    try {
+      mLocalFilePath = mTachyonFS.getLocalBlockTemporaryPath(mBlockId, initialBytes);
+    } catch(IOException e) {
+      System.out.println("Temporary file for caching block " + mBlockId +
+              " already exist, will not be written in this session.");
+      mIsBusy = true;
+    }
+    if(mIsBusy)
+      return;
+
     System.out.println("BlockOutStream ctor : local file path = '" + mLocalFilePath + "'");
     mLocalFile = mCloser.register(new RandomAccessFile(mLocalFilePath, "rw"));
     System.out.println("BlockOutStream ctor : creating RA file = '" + mLocalFilePath + "'");
@@ -121,6 +132,8 @@ public class BlockOutStream extends OutStream {
 
   private synchronized void appendCurrentBuffer(byte[] buf, int offset, int length)
       throws IOException {
+    if(mIsBusy)
+      return;
     if (mAvailableBytes < length) {
       long bytesRequested = mTachyonFS.requestSpace(mBlockId, length - mAvailableBytes);
       if (bytesRequested + mAvailableBytes >= length) {
@@ -140,6 +153,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void cancel() throws IOException {
+    if(mIsBusy)
+      return;
+
     if (!mClosed) {
       mCloser.close();
       mClosed = true;
@@ -158,6 +174,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void close() throws IOException {
+    if(mIsBusy)
+      return;
+
     if (!mClosed) {
       if (mBuffer.position() > 0) {
         appendCurrentBuffer(mBuffer.array(), 0, mBuffer.position());
@@ -201,6 +220,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void write(byte[] b, int off, int len) throws IOException {
+    if(mIsBusy)
+      return;
+
     if (b == null) {
       throw new NullPointerException();
     } else if ((off < 0) || (off > b.length) || (len < 0) || ((off + len) > b.length)
@@ -234,6 +256,9 @@ public class BlockOutStream extends OutStream {
 
   @Override
   public void write(int b) throws IOException {
+    if(mIsBusy)
+      return;
+
     if (!canWrite()) {
       throw new IOException("Can not write cache.");
     }
