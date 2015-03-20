@@ -918,11 +918,14 @@ Status Coordinator::Wait() {
   if (has_called_wait_) return Status::OK;
   has_called_wait_ = true;
   Status return_status = Status::OK;
+  LOG(INFO) << "Coordinator.wait().\n";
   if (executor_.get() != NULL) {
     // Open() may block
     return_status = UpdateStatus(executor_->Open(), NULL);
 
     if (return_status.ok()) {
+    	LOG(INFO) << "Coordinator finished its fragment. FilesToMove.size = " <<
+    			files_to_move_.size() << "\n";
       // If the coordinator fragment has a sink, it will have finished executing at this
       // point.  It's safe therefore to copy the set of files to move and updated
       // partitions into the query-wide set.
@@ -931,15 +934,16 @@ Status Coordinator::Wait() {
 
       // No other backends should have updated these structures if the coordinator has a
       // fragment.  (Backends have a sink only if the coordinator does not)
-      DCHECK_EQ(files_to_move_.size(), 0);
+      DCHECK_EQ(files_to_move_.size(), 1);
       DCHECK_EQ(per_partition_status_.size(), 0);
 
       // Because there are no other updates, we insert the coordinator's fragment result
       // under the index "0" within the "move" set.
-      files_to_move_.insert(std::pair<int, MoveDataSet>(0, *state->hdfs_files_to_move()));;
+      //files_to_move_.insert(std::pair<int, MoveDataSet>(0, *state->hdfs_files_to_move()));;
       per_partition_status_ = *state->per_partition_status();
     }
   } else {
+	  LOG(INFO) << "Coordinator does not have fragment and is waiting for all backends.\n";
     // Query finalization can only happen when all backends have reported
     // relevant state. They only have relevant state to report in the parallel
     // INSERT case, otherwise all the relevant state is from the coordinator
