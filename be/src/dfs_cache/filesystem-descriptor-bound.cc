@@ -1,10 +1,12 @@
 /*
  * @file filesystem-descriptor-bound.cc
  * @brief implementation of hadoop FileSystem mediator (mainly types translator)
+ * Specifics for FileSystem mediators should also be placed here (like for Tachyon)
  *
  * @date   Oct 10, 2014
  * @author elenav
  */
+#include <fcntl.h>
 
 #include "dfs_cache/filesystem-descriptor-bound.hpp"
 #include "dfs_cache/hadoop-fs-adaptive.h"
@@ -263,5 +265,68 @@ const void * FileSystemDescriptorBound::_hadoopRzBufferGet(const struct hadoopRz
 void FileSystemDescriptorBound::_hadoopRzBufferFree(dfsFile file, struct hadoopRzBuffer* buffer){
 	hadoopRzBufferFree(file, buffer);
 }
+
+dfsFile TachyonFileSystemDescriptorBound::fileOpen(raiiDfsConnection& conn, const char* path, int flags, int bufferSize,
+		short replication, tSize blocksize){
+	dfsFile handle = _dfsOpenFile(conn.connection()->connection, path, flags, bufferSize, replication, blocksize);
+	if(handle == NULL){
+		LOG(ERROR) << "Tachyon file system descriptor failed to open file with path \"" <<
+				path << "\". Null handle will be returned. \n";
+		return handle;
+	}
+    if(flags == O_WRONLY){
+    	// file is opened for write, no need to trigger its caching on Tachyon, just reply it:
+    	return handle;
+    }
+	// read from the remote file to trigger its caching
+	tSize last_read = 0;
+	tSize bytes = 0;
+
+	const int BUFFER_SIZE = 17408;
+	char* buffer = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+	if(buffer == NULL){
+		LOG (ERROR)<< "Insufficient memory to allocate buffer for read the file \"" <<  path <<
+				"\" on filesystem " << m_fsDescriptor.dfs_type << ":" << m_fsDescriptor.host << "\"" << "\n";
+		// close the handle, there're scenarios where Impala cannot work stable with non-cached Tachyon stream
+		// (in particular, file seek)
+		_dfsCloseFile(conn.connection()->connection, handle);
+		return NULL;
+	}
+
+	// define a reader
+	boost::function<void ()> reader = [&]() {
+		last_read = _dfsRead(conn.connection()->connection, handle, (void*)buffer, BUFFER_SIZE);
+		for (; last_read > 0;) {
+			bytes += last_read;
+			// read next data buffer:
+			last_read = _dfsRead(conn.connection()->connection, handle, (void*)buffer, BUFFER_SIZE);
+		}
+	};
+	// and run the reader
+	reader();
+	if(last_read == 0){
+		free(buffer);
+
+		// file is read to end, close the stream (this will trigger Tachyon to cache the file in memory)
+		// and return reopened stream on top:
+		int ret = 0;
+		ret = _dfsCloseFile(conn.connection()->connection, handle);
+		if(ret){
+			LOG(ERROR) << "Tachyon file system descriptor failed to finalize file caching for path \"" <<
+					path << "\". Null handle will be returned. \n";
+			return NULL;
+		}
+        // reopen the stream from position 0:
+        handle = _dfsOpenFile(conn.connection()->connection, path, flags, bufferSize, replication, blocksize);
+        return handle;
+	}
+	if(last_read == -1){
+		LOG (WARNING) << "Remote file \"" << path << "\" read encountered IO exception." << "\n";
+		// Note that retry mechanism may be inserted here, just to be sure retry should try to re-read the file
+		// from position 0, otherwise caching will be cancelled by Tachyon
+	}
+	return NULL;
+}
+
 } /** namespace impala */
 

@@ -73,7 +73,9 @@ status::StatusInternal CacheLayerRegistry::setupFileSystem(FileSystemDescriptor 
 	}
 	// create the FileSystem-bound descriptor and assign the File System adaptor to it
 	boost::shared_ptr<FileSystemDescriptorBound> descriptor(
-			new FileSystemDescriptorBound(fsDescriptor));
+			fsDescriptor.dfs_type == DFS_TYPE::tachyon ?
+					new TachyonFileSystemDescriptorBound(fsDescriptor) :
+					new FileSystemDescriptorBound(fsDescriptor));
 	// and insert new {key-value} under the appropriate FileSystem type
 	m_filesystems[fsDescriptor.dfs_type].insert(
 			std::make_pair(fsDescriptor.host, descriptor));

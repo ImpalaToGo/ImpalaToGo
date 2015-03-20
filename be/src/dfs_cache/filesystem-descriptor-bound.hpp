@@ -25,7 +25,7 @@ namespace impala{
  * invalidates only the iterators that point to the elements that are removed
  */
 class FileSystemDescriptorBound{
-private:
+protected:
 	boost::mutex                                      m_mux;
 	std::list<boost::shared_ptr<dfsConnection> >      m_connections;     /**< cached connections to this File System */
 	FileSystemDescriptor                              m_fsDescriptor;    /**< File System connection details as configured */
@@ -50,7 +50,7 @@ private:
 	fsBridge connect();
 
 public:
-	~FileSystemDescriptorBound();
+	virtual ~FileSystemDescriptorBound();
 
 	inline FileSystemDescriptorBound(const FileSystemDescriptor & fsDescriptor) :
 		m_fsDescriptor(fsDescriptor){
@@ -83,7 +83,7 @@ public:
 	 *
 	 * @return file handle on success, NULL otherwise
 	 */
-	dfsFile fileOpen(raiiDfsConnection& conn, const char* path, int flags, int bufferSize,
+	virtual dfsFile fileOpen(raiiDfsConnection& conn, const char* path, int flags, int bufferSize,
 			short replication, tSize blocksize);
 
 	/**
@@ -440,6 +440,33 @@ public:
 	 * @param buffer     The buffer to release.
 	 */
 	static void _hadoopRzBufferFree(dfsFile file, struct hadoopRzBuffer* buffer);
+};
+
+/** Tachyon filesystem descriptor may add some prerequisites into HadoopFs API
+ * rather than simply routing the callee to Hadoop.FileSystem implementation
+ */
+class TachyonFileSystemDescriptorBound : public FileSystemDescriptorBound{
+public:
+
+	inline TachyonFileSystemDescriptorBound(const FileSystemDescriptor & fsDescriptor) : FileSystemDescriptorBound(fsDescriptor){
+	}
+
+	virtual ~TachyonFileSystemDescriptorBound(){}
+
+	/**
+	 * Open file with given path and flags
+	 *
+	 * @param conn        - wrapped managed connection
+	 * @param path        - file path
+	 * @param flags       - flags
+	 * @param bufferSize  - buffer size
+	 * @param replication - replication
+	 * @param blockSize   - block size
+	 *
+	 * @return file handle on success, NULL otherwise
+	 */
+	virtual dfsFile fileOpen(raiiDfsConnection& conn, const char* path, int flags, int bufferSize,
+			short replication, tSize blocksize);
 };
 }
 

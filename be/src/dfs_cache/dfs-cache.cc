@@ -166,7 +166,7 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  *
  * @param [in]  fsDescriptor - filesystem descriptor
  * @param [in]  path         - file path
- * @param [in]  bufferSize   - buffer size
+ * @param [in]  bufferSize   - buffer sizenf
  * @param [in]  replication  - replication (hdfs-only relevant)
  * @param [in]  blockSize    - block size
  * @param [out] available    - flag, indicates whether the file is available after all
@@ -421,6 +421,11 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 			// mark this handle as "direct"
 			handle->direct = true;
 			available = true;
+			// If dfs is layered with Tachyon, fs descriptor will read the opened file till the end thus getting it cached on local worker.
+			// This will allow any further stream operations invoked from Impala to work (seek, skip)
+	        // We have already mechanism of getting data locally (cache-mgr) but we do not want to run all its resources
+			// only because of getting this file into Tachyon. Therefore we simply override File system descriptor behavior for
+			// Tachyon file-system type to get behaviour specific for Tachyon
 		}
 		return handle;
 	}
