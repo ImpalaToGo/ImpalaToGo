@@ -282,7 +282,7 @@ dfsFile TachyonFileSystemDescriptorBound::fileOpen(raiiDfsConnection& conn, cons
 	tSize last_read = 0;
 	tSize bytes = 0;
 
-	const int BUFFER_SIZE = 17408;
+	const int BUFFER_SIZE = 6684672;
 	char* buffer = (char*)malloc(sizeof(char) * BUFFER_SIZE);
 	if(buffer == NULL){
 		LOG (ERROR)<< "Insufficient memory to allocate buffer for read the file \"" <<  path <<
