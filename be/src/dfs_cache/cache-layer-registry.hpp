@@ -220,6 +220,18 @@ private:
 
     /** Setter for Local storage root file system path */
     inline bool localstorage(std::string& localpath) {
+    	// first need to check whether the path specified exists, if no, create it
+    	if (!boost::filesystem::exists(localpath)) {
+    		LOG(WARNING) << "Cache location \"" << localpath << "\" does not exist, creating...\n";
+
+            boost::system::error_code ec;
+
+            if(!boost::filesystem::create_directory(localpath, ec) || ec){
+            	LOG(ERROR) << "Failed to create cache directory specified by location \"" <<
+            			localpath << "\". Critical failure. error : \"" << ec.message() << "\"";
+            	return false;
+            }
+    	}
     	const std::string alias = localpath;
 		// reworked to check for possible symlink as an input. We ned to resolve symlink here to get the real physical
     	// location. We cannot rely on symlinks internally
