@@ -59,6 +59,8 @@ namespace constants
     /** separator we use to divide the source host and the port in the file path */
     extern const char HOST_PORT_SEPARATOR;
 
+    /** limit of history requests archive */
+    extern const int HISTORY_ENTRIES_LIMIT;
 }
 
 /**
@@ -154,6 +156,7 @@ struct FileSystemDescriptor{
 	FileSystemDescriptor(const std::string& path);
 };
 
+
 /** Impala client code is aware of remote FileSystem mapping only */
 typedef FileSystemDescriptor     dfsFS;
 
@@ -164,6 +167,7 @@ typedef std::list<const char*> DataSet;
  * Represent the single DFS connection
  */
 typedef struct {
+	/** Connection state, for connections management */
 	typedef enum{
 		NON_INITIALIZED,
 		FREE_INITIALIZED,

@@ -14,12 +14,10 @@
 
 package com.cloudera.impala.analysis;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +30,6 @@ import com.cloudera.impala.catalog.Table;
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
-import com.cloudera.impala.common.FileSystemUtil;
 import com.cloudera.impala.planner.DataSink;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -305,6 +302,9 @@ public class InsertStmt extends StatementBase {
         targetTableName_ =
             new TableName(analyzer.getDefaultDb(), targetTableName_.getTbl());
       }
+      // here, we got the target table with its current metadata cached on catalog side.
+      // after insert will be finished, the cached metadata should be reloaded with a fresh dataset
+      // on catalog
       table_ = analyzer.getTable(targetTableName_, Privilege.INSERT);
     } else {
       targetTableName_ = new TableName(table_.getDb().getName(), table_.getName());
@@ -347,16 +347,18 @@ public class InsertStmt extends StatementBase {
         throw new AnalysisException(String.format("Unable to INSERT into target table " +
             "(%s) because the table spans multiple filesystems.", targetTableName_));
       }
-      try {
+      /*try {
         if (!FileSystemUtil.isDistributedFileSystem(new Path(hdfsTable.getLocation()))) {
           throw new AnalysisException(String.format("Unable to INSERT into target " +
               "table (%s) because %s is not an HDFS filesystem.", targetTableName_,
                hdfsTable.getLocation()));
         }
+
       } catch (IOException e) {
         throw new AnalysisException(String.format("Unable to INSERT into target " +
             "table (%s): %s.", targetTableName_, e.getMessage()), e);
       }
+      */
       for (int colIdx = 0; colIdx < numClusteringCols; ++colIdx) {
         Column col = hdfsTable.getColumns().get(colIdx);
         // Hive has a number of issues handling BOOLEAN partition columns (see HIVE-6590).

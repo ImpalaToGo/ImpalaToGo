@@ -46,6 +46,7 @@ class TTupleDescriptor;
 class Expr;
 class ExprContext;
 class RuntimeState;
+class TRemoteShortCommand;
 
 struct LlvmTupleStruct {
   llvm::StructType* tuple_struct;

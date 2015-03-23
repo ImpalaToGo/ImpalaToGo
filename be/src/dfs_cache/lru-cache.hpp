@@ -52,7 +52,7 @@ public:
 
 	/** predicate to construct/acquire externally the cache-managed object using the key and the "weight is changed" event*/
 	template<typename KeyType_>
-	using ConstructItemFunc = typename boost::function<ItemType_*(KeyType_ key)>;
+	using ConstructItemFunc = typename boost::function<ItemType_*(const KeyType_ key)>;
 
 	/** "get capacity limit" predicate */
 	using TellCapacityLimitPredicate = typename boost::function<size_t()>;
@@ -86,12 +86,20 @@ public:
      public:
      	ItemType_* m_item;   /**< underlying item to store */
 
+     	bool                      m_alivnessFlag;           /**< flag, indicates that Node is alive */
+        boost::condition_variable m_finalization_condition; /**< finalization condition variable, is being rise in case if finalization completed */
+        boost::mutex              m_finalization_mux;       /**< mux to protect finalization mechanism */
+
      	/** set node underlying value */
      	void value(ItemType_* item) { m_item = item; };
-     	virtual ~INode() = default;
 
      	/** get node underlying value */
      	ItemType_*  value()  { return m_item; }
+
+     	/** pin the node to be sure its content is valid within the session */
+     	virtual bool pin() = 0;
+
+     	virtual ~INode() = default;
 
      	virtual bool touch (bool first = false)        = 0;  /** method that marks the item as "accessed", "first" flag is to know whether
      														     the node is new */
@@ -148,7 +156,7 @@ public:
     	 *
     	 * @return the value of object associated with the cache
     	 */
-    	virtual ItemType_* operator [](KeyType_ key) = 0;
+    	virtual ItemType_* operator [](const KeyType_ key) = 0;
 
     	/**
     	 * Delete object that matches key from cache
@@ -156,7 +164,7 @@ public:
     	 * @param key  - key to remove from cache
     	 * @physically - flag, indicates whether physical removal is required
     	 */
-    	virtual bool remove(KeyType_ key, bool physically = true) = 0;
+    	virtual bool remove(const KeyType_ key, bool physically = true) = 0;
     };
 
 private:
@@ -187,7 +195,7 @@ private:
         ConstructItemFunc<KeyType_> m_constructItemPredicate;
 
         /** get the node by key */
-        boost::shared_ptr<INode> getNode(KeyType_ key){
+        boost::shared_ptr<INode> getNode(const KeyType_ key){
         	ReadLock lock(m_rwLock);
         	auto it = m_index.find(key);
         	// no node found under the key specified:
@@ -236,41 +244,53 @@ private:
          *
          * @return node underlying value-item. If no node exists, rise and invalid_argument exception
          */
-        const ItemType_* operator [](KeyType_ key) const{
-        	INode* node = getNode(key);
+        const ItemType_* operator [](const KeyType_ key) const{
+			boost::shared_ptr<INode> node = getNode(key);
 
-        	if(!node){
-        		// if autoload is configured, invoke it to get the item into the cache
-        		if(!m_loadItem || !m_constructItemPredicate)
-        			return nullptr;
+			ItemType_* item;
+			bool success = false;
+			bool duplicate = false;
 
-        		ItemType_* item;
-        		bool success = false;
-        		bool duplicate = false;
+			if(node){
+				if(!node->pin()){
+					LOG(WARNING) << "Node was located but cannot be pinned as just finalized, resetting...\n";
+				}
+			}
+			if (!node) {
+				LOG(INFO) << "No node located so far, going to add one...\n";
+				// if autoload is configured, invoke it to get the item into the cache
+				if (!m_loadItem || !m_constructItemPredicate)
+					return nullptr;
 
-        		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
-        			loader(key, m_constructItemPredicate, m_loadItem);
-        		while(loader(item)){
-        			// if object construction was non-successful, reply nullptr
-        			if(item == nullptr)
-        				return nullptr;
-        			node = m_owner->addInternal(item, success, duplicate);
-        			if(!node){
-        				// destroy the newly allocated item
-        				delete item;
-        				item = nullptr;
-        			}
-        		}
-        		// here,
-        		if(!node)
-        			return nullptr;
-        	}
-        	// check node value. It may be lazy-erased
-        	if(node->value() == nullptr)
-        		return nullptr;
+				item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>,
+						LoadItemFunc<KeyType_> > loader(key,
+						m_constructItemPredicate, m_loadItem);
+				while (loader(item)) {
+					// if object construction was non-successful, reply nullptr
+					if (item == nullptr)
+						return nullptr;
 
-        	node->touch();
-        	return node->value();
+					node = m_owner->addInternal(item, success, duplicate);
+					// if node was not acquired by some reason, no chance to add new item
+					if (!node) {
+						return nullptr;
+					}
+					if (duplicate) {
+						if (node->value() != nullptr && node->pin())
+							node->touch();
+						return node->value();
+					}
+					else if(!node->pin())
+						return nullptr;
+				}
+			}
+
+			// check node value. It may be lazy-erased
+			if (node->value() == nullptr)
+				return nullptr;
+
+			node->touch();
+			return node->value();
         }
 
         /** Index getter
@@ -278,49 +298,62 @@ private:
          *
          *  @return node underlying value-item. If no node exists, rise and invalid_argument exception
          */
-        ItemType_* operator [](KeyType_ key){
-        	boost::shared_ptr<INode> node = getNode(key);
+        ItemType_* operator [](const KeyType_ key){
+			boost::shared_ptr<INode> node = getNode(key);
 
-        	if(!node){
-        		// if autoload is configured, invoke it to get the item into the cache
-        		if(!m_loadItem || !m_constructItemPredicate)
-        			return nullptr;
+			ItemType_* item;
+			bool success = false;
+			bool duplicate = false;
 
-        		ItemType_* item;
-        		bool success   = false;
-        		bool duplicate = false;
+			if(node){
+				if(!node->pin()){
+					LOG(WARNING) << "Node was located but cannot be pinned as just finalized, resetting...\n";
+					node.reset();
+				}
+			}
+			if (!node) {
+				LOG(INFO) << "No node located so far, going to add one...\n";
+				// if autoload is configured, invoke it to get the item into the cache
+				if (!m_loadItem || !m_constructItemPredicate)
+					return nullptr;
 
-        		item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>, LoadItemFunc<KeyType_> >
-        			loader(key, m_constructItemPredicate, m_loadItem);
-        		while(loader(item)){
-        			// if object construction was non-successful, reply nullptr
-        			if(item == nullptr)
-        				return nullptr;
-        			node = m_owner->addInternal(item, success, duplicate);
-        			if(!node){
-        				// destroy the newly allocated item
-        				delete item;
-        				item = nullptr;
-        				return nullptr;
-        			}
-        		}
-    			if(!node)
-    				return nullptr;
-        	}
-        	// check node value. It may be lazy-erased
-        	if(node->value() == nullptr)
-        		return nullptr;
+				item_loader<KeyType_, ItemType_, ConstructItemFunc<KeyType_>,
+						LoadItemFunc<KeyType_> > loader(key,
+						m_constructItemPredicate, m_loadItem);
+				while (loader(item)) {
+					// if object construction was non-successful, reply nullptr
+					if (item == nullptr)
+						return nullptr;
 
-        	node->touch();
-        	return node->value();
-        }
+					node = m_owner->addInternal(item, success, duplicate);
+					// if node was not acquired by some reason, no chance to add new item
+					if (!node) {
+						return nullptr;
+					}
+					if (duplicate) {
+						if (node->value() != nullptr && node->pin())
+							node->touch();
+						return node->value();
+					}
+					else if(!node->pin())
+						return nullptr;
+				}
+			}
+
+			// check node value. It may be lazy-erased
+			if (node->value() == nullptr)
+				return nullptr;
+
+			node->touch();
+			return node->value();
+		}
 
         /**
          * Delete object that matches key from cache
          * @param key        - key to remove
          * @param physically - flag, indicates whether physical removal is requried
          */
-        bool remove(KeyType_ key, bool physically = true)
+        bool remove(const KeyType_ key, bool physically = true)
         {
         	bool result = false;
             boost::shared_ptr<INode> node = getNode(key);
@@ -365,8 +398,10 @@ private:
             WriteLock lock(m_rwLock);
             indexIterator it = m_index.find(key);
             bool duplicate = false;
-            if(it != m_index.end())
+            if(it != m_index.end()){
             	duplicate = true;
+            	LOG(WARNING) << "Duplicate found while adding node to the index" << ".\n";
+            }
             m_index[key] = item;
             lock.unlock();
             return duplicate;
@@ -412,11 +447,15 @@ private:
 
         	// run generator
         	for(boost::shared_ptr<INode> node; (*gen)(node);){
-        	  add(node);
-        	  // increase the index size
-              ++indexSize;
+        		LOG(INFO) << "Adding node to the index. index size = \"" << std::to_string(indexSize) << "\".\n";
+        		add(node);
+        		// increase the index size
+        		++indexSize;
+        		LOG(INFO) << "Node added to the index. index size = \"" << std::to_string(indexSize) << "\".\n";
         	}
-
+        	// destroy the generator:
+        	delete gen;
+            LOG(INFO) << "Index is rebuilt, index size = \"" << std::to_string(indexSize) << "\".\n";
         	return indexSize;
           }
 	};
@@ -490,10 +529,17 @@ private:
                  std::atomic_fetch_add_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
                  LOG (INFO) << "capacity after node added : " <<
                 		 std::to_string(m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) << ".\n";
+
+                // say node is alive
+         		boost::unique_lock<boost::mutex> lock(this->m_finalization_mux);
+         		this->m_alivnessFlag = true;
+         		this->m_finalization_condition.notify_all();
+         		lock.unlock();
+
 			}
 
 			virtual ~Node() {
-				LOG (INFO) << "Node destructor called" << "\n.";
+				LOG (INFO) << "Node destructor called" << ".\n";
 			}
 
 			/** Updates the status of the node to prevent it from being dropped from cache.
@@ -505,76 +551,87 @@ private:
 			 */
 			bool touch(bool first = false) {
 				bool valid = true;
-				if( this->value() != nullptr ) {
 
-					// first check that cache is valid to proceed with the node.
-					// we do not handle touch for newly created node as well (flag "first" is set):
-					if(!m_mgr->checkValid() && first){
-						return false;
+				if(this->value() == nullptr)
+					return valid;
+
+				// first check that cache is valid to proceed with the node.
+				// we do not handle touch for newly created node as well (flag "first" is set):
+				if(!m_mgr->checkValid() && first) {
+					return false;
+				}
+				// ask the item about its timestamp:
+				boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
+				// the following operation allows the item to control the self-promotion as an item to
+				// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
+				m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
+
+				valid = false;
+				// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
+				AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp, valid);
+				if(!valid)
+				return false;
+
+				if((bucket != nullptr ) && (bucket == m_ageBucket)) {
+					// just do nothing, we are still in correct bucket
+				}
+				// no bucket exist, create new one:
+				if(bucket == nullptr) { // no bucket exist for specified timestamp, create one to be managed by Lifespan Mgr:
+
+					LOG (INFO) << "No bucket exists for item timestamp \"" <<
+					std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
+					// share myself with Lifespan Manager:
+					boost::shared_ptr<Node> sh = makeShared();
+
+					// Acquire the corresponding bucket from Lifespan Manager.
+					// This is done basing on timestamp so that it should be correct.
+					boost::posix_time::ptime initial_timestamp = timestamp;
+
+					bucket = m_mgr->openBucket(timestamp);
+					// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
+					if(bucket == nullptr) {
+						LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
+						return valid;
 					}
-					// ask the item about its timestamp:
-					boost::posix_time::ptime timestamp = m_mgr->m_owner->tellTimestamp(this->value());
-					// the following operation allows the item to control the self-promotion as an item to
-					// be of the relevance, so the item itself decides how relevant should it be basing on internal conditions
-					m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
 
-					valid = false;
-					// ask Lifespan Manager for corresponding Bucket location (if no bucket exist for this time range) or relocation:
-                    AgeBucket* bucket = m_mgr->getBucketForTimestamp(timestamp, valid);
-                    if(!valid)
-                    	return false;
+					// if timestamp was changed by Lifespan Manager, update the bound item about that:
+					if(initial_timestamp != timestamp) {
+						LOG (INFO) << "Timestamp was changed by Manager, updated : \"" <<
+						std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
+						m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
+					}
 
-                    if(bucket == m_ageBucket){
-                    	// just do nothing, we are still in correct bucket
-                    }
-                    // no bucket exist, create new one:
-                    if(bucket == nullptr){ // no bucket exist for specified timestamp, create one to be managed by Lifespan Mgr:
-
-                    	LOG (INFO) << "No bucket exists for item timestamp \"" <<
-                    			std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
-						// share myself with Lifespan Manager:
+					if(m_ageBucket == nullptr) {
+						LOG (INFO) << "Current node is not assigned to any bucket, assign it to newly created bucket as a first node.\n";
+						// assign itself to the newly created bucket:
 						boost::shared_ptr<Node> sh = makeShared();
-
-						// Acquire the corresponding bucket from Lifespan Manager.
-						// This is done basing on timestamp so that it should be correct.
-						boost::posix_time::ptime initial_timestamp = timestamp;
-						m_ageBucket = m_mgr->openBucket(timestamp);
-                        // if timestamp was changed by Lifespan Manager, update the bound item about that:
-						if(initial_timestamp != timestamp){
-							LOG (INFO) << "Timestamp was changed by Manager, updated : \"" <<
-									std::to_string(utilities::posix_time_to_time_t(timestamp)) << "\".\n";
-							m_mgr->m_owner->updateItemTimestamp(this->value(), timestamp);
-						}
-						// if there were no bucket acquired for the node, just do nothing. Cleanup will take care of this node later.
-						if(m_ageBucket == nullptr){
-							LOG (WARNING) << "No bucket was acquired for node, touch is cancelled.\n";
-							return valid;
-						}
-
 						boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
 						// assign own "next" bag to be the one from the manager current bucket:
-						m_next = m_ageBucket->first;
+						boost::shared_ptr<Node> next = bucket->first;
 						// and assign myself to be the first one in the current bucket
-						m_ageBucket->first = sh;
+						bucket->first = sh;
+						// start pointing next Node from the managed bucket
+						m_next = next;
 						lock.unlock();
-                    	return valid;
-                    }
-                    else {
-                    	if(m_ageBucket == nullptr){
-                    		LOG (INFO) << "Bucket was acquired from Manager and will be used as the node bucket.\n";
-                    		// assign itself to the bucket:
-                    		boost::shared_ptr<Node> sh = makeShared();
-                    		boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
-                    		boost::shared_ptr<Node> next = bucket->first;
-                    		bucket->first = sh;
-                    		// start pointing next Node from the managed bucket
-                    		m_next = next;
-                    		lock.unlock();
-                    	}
-                    	// bucket exists.
-                    	// do not reallocate myself now. This will be done on cleanup.
-                    	m_ageBucket = bucket;
-                    }
+					}
+					m_ageBucket = bucket;
+					return valid;
+				}
+				else {
+					if(m_ageBucket == nullptr) {
+						LOG (INFO) << "Bucket was acquired from Manager and will be used as the node bucket.\n";
+						// assign itself to the bucket:
+						boost::shared_ptr<Node> sh = makeShared();
+						boost::mutex::scoped_lock lock(*m_mgr->lifespan_mux());
+						boost::shared_ptr<Node> next = bucket->first;
+						bucket->first = sh;
+						// start pointing next Node from the managed bucket
+						m_next = next;
+						lock.unlock();
+					}
+					// bucket exists.
+					// do not reallocate myself now. This will be done on cleanup.
+					m_ageBucket = bucket;
 				}
 				return valid;
 			}
@@ -602,6 +659,31 @@ private:
 				return m_ageBucket;
 			}
 
+			/** pin the node content if it is available right now
+			 *  @return flag, indicates whether the content was pinned successfully
+			 */
+			bool pin(){
+				if(this->value() == nullptr)
+					return false;
+
+				bool pinned = false;
+
+				boost::unique_lock<boost::mutex> lock(this->m_finalization_mux);
+				// Wait for either node is alive or node value is set to nothing
+	            (this->m_finalization_condition).wait(lock, [&](){ return [&](){
+	            	if (this->m_alivnessFlag || this->value() == nullptr)
+	            		return true;
+	            	return false;
+	            }(); });
+	            if(this->m_alivnessFlag && this->value() != nullptr){
+	            	// if node is alive, pin its content:
+	            	this->value()->open();
+	            	pinned = true;
+	            }
+	            lock.unlock();
+	            return pinned;
+			}
+
             /** Removes the object from node, thereby removing it from all indexes and allows it to be RAII-deleted soon
              * @param cleanup - removal scenario, by default this is cleanup.
              * During cleanup, externally defined removal scenario is run.
@@ -610,36 +692,41 @@ private:
             bool remove(bool cleanup)
             {
             	bool result = false;
-                if( m_ageBucket != nullptr && this->value() != nullptr ){
-                	long long weight = m_mgr->m_owner->tellWeight(this->value());
 
-                	// below will run external deletion in either cleanup or reload mode, basing on the flag arrived:
-                	try{
-                		result = m_mgr->m_owner->deleteItemExt(this->value(), cleanup);
-                	}
-                	catch(...){
-                		LOG (WARNING) << "Exception thrown from external deleter." << "\n";
-                	}
-                    if(!result){
-                    	LOG (WARNING) << "Node deletion is requested for item that cannot be removed. Node will not be removed as well.\n";
-                    	return result;
-                    }
+            	if(this->value() == nullptr){
+            		LOG (WARNING) << "LRU Node : Node content removal was not done as expected by scenario due to leak of metadata" << "\n";
+            		return result;
+            	}
 
-                	// say no external value is managed more by this node
-                    this->value(nullptr);
+				long long weight = m_mgr->m_owner->tellWeight(this->value());
 
-                    LOG (INFO) << "capacity before node removal : " <<
-                    		std::to_string((m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
-                    // decrease cache current capacity once the node is removed
-                	std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
-                    LOG (INFO) << "capacity after node removal : " <<
-                    		std::to_string( (m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
-                	// decrease number of hard items
-                    std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
-                }
-                else
-                	LOG (WARNING) << "LRU Node : Node content removal was not done as expected by scenario due to leak of metadata" << "\n";
-                return result;
+				// below will run external deletion in either cleanup or reload mode, basing on the flag arrived:
+				try {
+					result = m_mgr->m_owner->deleteItemExt(this->value(), cleanup);
+				}
+				catch(...) {
+					LOG (WARNING) << "Exception thrown from external deleter." << "\n";
+				}
+				if(!result) {
+					LOG (WARNING) << "Node deletion is requested for item that cannot be removed. Node will not be removed as well.\n";
+					return result;
+				}
+
+				// say no external value is managed more by this node
+				this->value(nullptr);
+
+				LOG (INFO) << "capacity before node removal : " <<
+				std::to_string((m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
+				// decrease cache current capacity once the node is removed
+				std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_currentCapacity, weight, std::memory_order_relaxed);
+				LOG (INFO) << "capacity after node removal : " <<
+				std::to_string( (m_mgr->m_owner->m_currentCapacity.load(std::memory_order_acquire)) ) << "\n";
+
+				// decrease number of hard items only in case if this node had been added into the registry:
+				if(m_ageBucket != nullptr)
+				std::atomic_fetch_sub_explicit (&m_mgr->m_owner->m_numberOfHardItems, 1u, std::memory_order_relaxed);
+
+				return result;
             }
 		};
 
@@ -815,8 +902,11 @@ private:
             bool added = sp->touch(true);
             if(added)
             	return sp;
-            // remove physically
-            sp->remove(true);
+            // decrease the weight of this Node:
+
+            // remove non-physically
+            sp->remove(false);
+            sp.reset();
             return nullPtr;
         }
 
@@ -923,6 +1013,7 @@ private:
 
         		// store the current alive node within the cleaned up bucket (suppose the oldest bucket is still active):
         		boost::shared_ptr<Node> active = nullPtr;
+        		// this is the head of reversed node:
         		boost::shared_ptr<Node> head = nullPtr;
 
         		// and reverse nodes under this bucket so that most recent added will be last to delete:
@@ -938,17 +1029,27 @@ private:
 
         			if( node->value() != nullptr && node->bucket() != nullptr ){
         				if( node->bucket() == bucket ) {
+                    		boost::unique_lock<boost::mutex> lock(node->m_finalization_mux);
+
         					// item has not been touched since bucket was closed, so remove it from LifespanMgr if it is allowed for removal.
                             if(!m_owner->markForDeletion(node->value())){
                             	// no approval for item removal received. Deny the age bucket removal
                             	deletePermitted = false;
 
-                            	if(active){
+                            	// relax all awaiters for this node, it is still alive
+                            	node->m_finalization_condition.notify_all();
+   	                    		lock.unlock();
+
+   	                    		if(active){
+                            		// if "active" node was set already, say its "next" node is current one.
                             		active->next(node);
+                            		// and reset the "active" node to the current one:
                             		active = active->next();
                             	}
                             	else {
+                            		// say the node we cannot delete is the "active":
                             		active = node;
+                            		// point the head to this first found "active" node:
                             		head = active;
                             	}
 
@@ -959,16 +1060,29 @@ private:
         					// get the weight the item will release back to the cache:
         					long long toRelease = m_owner->tellWeight(node->value());
 
-                            // remove the node
+                            // remove the node, physically
                 		    bool result = node->remove(true);
+
                 		    if(!result){
+                		    	// node was not cleaned up, don't throw it out from the cache to be handled on another iteration
                 		    	LOG (WARNING) << " Cleanup scenario : Node content was not cleaned up as expected by scenario" << "\n";
+
+                		    	deletePermitted = false;
+
+                		    	// relax all node awaiters, this node is still alive
+                		    	node->m_finalization_condition.notify_all();
+                		    	lock.unlock();
+
                             	if(active){
+                            		// if active node was set already, say its "next" node is current one
                             		active->next(node);
+                            		// and reset the "active" node to point to current one
                             		active = active->next();
                             	}
                             	else {
+                            		// "active" node was not set yet, set it now to current node
                             		active = node;
+                            		// and point the head to this node
                             		head = active;
                             	}
 
@@ -980,14 +1094,22 @@ private:
                 		    weightToRemove -= toRelease;
                 		    LOG (INFO) << "Cleanup : to remove = " << std::to_string(weightToRemove) << std::endl;
 
+                		    // set the node aliveness flag to "false"
+                		    node->m_alivnessFlag = false;
+                		    node->m_finalization_condition.notify_all();
+                		    lock.unlock();
+
                 		    // cut off it from registry
                 			node.reset();
-                			if(active)
-                				// and say active yet not point to any node
-                				active->next(nullPtr);
+
+                			if(active){
+                				// and say "active" node (current one) now points to node next to current one.
+                				active->next(next);
+                			}
         				}
         				else {
-        					// item has been touched and should be moved to correct age bag now
+        					LOG(INFO) << "Moving node to the other age bucket.\n";
+        					// item has been touched and should be moved to correct age bucket now
         					node->next(node->bucket()->first);
         					// and point another Age Bucket to this node as to the first node:
         					node->bucket()->first = node;
@@ -997,12 +1119,13 @@ private:
         		}
 
         		if(!deletePermitted){
-        			LOG (WARNING) << "Cache bucket \"" << std::to_string(key) << "\" is not deleted as its content is still in use.\n";
+        			LOG (WARNING) << "Cache bucket \"" << std::to_string(key) << "\" couldn't deleted as its content is still in use.\n";
 
         			// reverse the remained list of nodes under this bucket back:
         			utilities::reverse(head);
         			head->bucket()->first = head;
         			it++;
+        			LOG(INFO) << "Age bucket \"" << std::to_string(key) << "\" cleanup is completed, no more nodes can be released.\n";
         			continue; // go next bucket if current bucket deletion is denied (as its node is restricted from deletion externally)
         		}
 
@@ -1011,6 +1134,7 @@ private:
         			LOG (INFO) << "Cache bucket \"" << std::to_string(key) << "\" still has alive nodes. Required space is freed.\n";
         			utilities::reverse(node);
         			node->bucket()->first = node;
+        			LOG(INFO) << "Age bucket \"" << std::to_string(key) << "\" cleanup is completed, required space is released.\n";
         			break;
         		}
 
@@ -1032,9 +1156,10 @@ private:
 
         	}
         	lock.unlock();
-        	if(weightToRemove <= 0)
+        	if(weightToRemove <= 0){
+        		LOG (INFO) << "Cleanup summary : required space is released." << "\n";
         		cleanupSucceed = true;
-
+        	}
         	checkIndexValid();
         	return cleanupSucceed;
         }
@@ -1114,19 +1239,20 @@ private:
 
         	// say current bucket is a new one:
         	m_currentBucket = newBucket;
+        	LOG(INFO) << "Open new bucket completed for bucket key \"" << std::to_string(idx) << "\"" ;
         	return newBucket;
         }
 
         boost::shared_ptr<INode> nullNode() { return nullPtr; }
 
-        /** reply with first key for buckets set */
+        /** reply with first index within the buckets keys set */
         long long start(){
         	return 0;
         }
 
         /** get next buckets set key using sequence number */
         const long long getNextKey(long long& idx){
-        	return (*m_bucketsKeys)[idx++];
+        	return (*m_bucketsKeys)[++idx];
         }
 
         /** get next node in the Lifespan Registry. Traverse all buckets, from most recent to most ancient */
@@ -1134,32 +1260,54 @@ private:
         	AgeBucket* bucket;
         	boost::shared_ptr<INode> ret;
 
-        	long long key = (*m_bucketsKeys)[idx];
-        	if((bucket = (*m_buckets)[key]) == nullptr)
+        	LOG(INFO) << "getNextNode() : idx = " << std::to_string(idx) << ".\n";
+        	// check the index is not out of bound:
+        	if(idx >= m_bucketsKeys->size()){
+        		LOG(INFO) << "getNextNode() : end of buckets collection reached. current idx = " << std::to_string(idx) << ".\n";
         		return nullNode();
+        	}
+        	long long key = (*m_bucketsKeys)[idx];
+        	if((bucket = (*m_buckets)[key]) == nullptr){
+        		LOG(WARNING) << "getNextNode() : no bucket detected for idx = " << std::to_string(idx) << ".\n";
+        		return nullNode();
+        	}
 
         	// if no node specified
         	if(!currentNode){
+        		LOG(WARNING) << "getNextNode() : no current node specified for idx = " << std::to_string(idx) << ". Replying first from bucket.\n";
         		return bucket->first;
         	}
         	// downcast current node to internal type:
             boost::shared_ptr<Node> internalCurrent = boost::dynamic_pointer_cast<Node>(currentNode);
         	if(internalCurrent->next()){ // if there's something next exists
-        		if(internalCurrent->next()->value() != nullptr)
+        		if(internalCurrent->next()->value() != nullptr){
+        			LOG(INFO) << "getNextNode() : tehre's value assigned to node next to current node. idx = " << std::to_string(idx) <<
+        					". Replying next node.\n";
         			return internalCurrent->next();
+        		}
         		else{
+        			LOG(WARNING) << "getNextNode() : no value assigned to node next to current one. idx = " << std::to_string(idx) <<
+        			        					". Replying null node.\n";
         			return nullNode();
         		}
         	}
         	else{ // no node next to current
-        		if(key == m_oldestIdx) // end of collection reached, send finalization marker
-        			return nullNode();
-        		else{
-        			// go next bucket
-        			key = getNextKey(idx);
-        			currentNode.reset();
-        			return getNextNode(idx, currentNode);
-        		}
+        		LOG(WARNING) << "getNextNode() : there's no node next to current one. idx = " << std::to_string(idx) <<
+        				". Check we have the oldest idx already.\n";
+
+        		// go next bucket if buckets registry contains more:
+				if((idx + 1) < getNextKey(idx)) {
+					key = getNextKey(idx);
+
+					LOG(WARNING) << "getNextNode() : the idx = " << std::to_string(idx) <<
+					" is not the oldest one. Got the next key : \"" << std::to_string(key) << "\".\n";
+					currentNode.reset();
+					return getNextNode(idx, currentNode);
+				}
+				// no bucket next to current one:
+				LOG(INFO) << "getNextNode() : the idx = " << std::to_string(idx) <<
+									" is the oldest one. Buckets iteration is completed; last bucket key = \"" << std::to_string(key) << "\".\n";
+        		return nullNode();
         	}
         	return ret;
         }
@@ -1177,6 +1325,7 @@ private:
 	                                                           For Indexes cleanup scenario  */
 
 	const unsigned _max_limit_of_forbidden_items = 200;  /**< limit of forbidden items in particular Index. Forbidden = deleted from cache node */
+    boost::mutex m_unique_item_guard;                    /**< guard to protect index lookup and adding the item into the cache scenario */
 
 	/** external call to get the item weight */
     long long tellWeight(ItemType_* item){
@@ -1216,7 +1365,7 @@ private:
 
     /** Add an item to the cache.
      * Note that in case of duplicate this routine will overwrite the @a item pointer
-     * to the existing one.
+     * to the existing one. It will deallocate memory consumed by original item!!!
      *
      * @param [in]  item      - item to add
      * @param [out] succeed   - flag, indicates whether the item is in the registry
@@ -1230,36 +1379,36 @@ private:
          // see if item is already in index
          boost::shared_ptr<INode> node = nullPtr;
 
-         for(auto idx : (*m_indexList)){
-        	 if((node = idx.second->findItem(item)))
-        		 break;
-         }
+         boost::unique_lock<boost::mutex> scoped_lock(m_unique_item_guard);
 
-         // duplicate is prevented from being added into the cache
-         duplicate = (node && (*node->value() == (*item)));
-         if( duplicate ){
-        	 LOG(WARNING) << "Duplicate found within the registry.\n";
-        	 // reassign the link just in case is somebody uses it now outside
-        	 ItemType_* _item = item;
-        	 item = node->value();
-        	 // delete the reference to the item requested to add
-        	 delete _item;
-        	 succeed = true;
-        	 return node;
-         }
+		for(auto idx : (*m_indexList)) {
+			// check that node exists for requested item
+			if((node = idx.second->findItem(item)))
+			break;
+		}
 
-         node = m_lifeSpan->add(item);
-         if(!node){
-        	 // Unable to add new node, the cache is full, and no items could be removed to free space enough
-        	 LOG (WARNING) << "new node could not be added into the cache, reason : no free space available.\n";
-        	 succeed = false;
-        	 return node;
-         }
+		// duplicate is prevented from being added into the cache
+		duplicate = (node && (node->value() != nullptr) && (*node->value() == (*item)));
+		if( duplicate ) {
+			LOG(WARNING) << "Duplicate found within the registry.\n";
+			delete item;
+			item = node->value();
+			succeed = true;
+			return node;
+		}
 
-         // make sure node gets inserted into all indexes
-         for(auto item : (*m_indexList)){
-        	 item.second->add(node);
-         }
+		node = m_lifeSpan->add(item);
+		if(!node) {
+			// Unable to add new node, the cache is full, and no items could be removed to free space enough
+			LOG (WARNING) << "new node could not be added into the cache, reason : no free space available.\n";
+			succeed = false;
+			return node;
+		}
+
+		// make sure node gets inserted into all indexes
+		for(auto item : (*m_indexList)) {
+			item.second->add(node);
+		}
 
          // whenever we add new item, we increment both hard and soft items amount:
          std::atomic_fetch_add_explicit (&m_numberOfHardItems, 1u, std::memory_order_relaxed);
@@ -1361,22 +1510,21 @@ private:
         return index;
     }
 
-    /** Add an item to the cache (not needed if accessed by index) */
+    /** Add an item to the cache (not needed if accessed by index).
+     * Note that in case if @a duplicate is set to "true" by function on return,
+     * the item was not added into the cache, that is, the responsibility to release it is
+     * the caller-side.
+     */
     bool add(ItemType_*& item, bool& duplicate)
     {
-    	// cannot add an item to the cache if the capacity limit exceeded (for example, all cache content is still in use):
-    	/*
-    	if(m_currentCapacity.load(std::memory_order_acquire) > m_capacityLimit){
-    		LOG (WARNING) << "Item is not added to the cache as capacity limit exceeded. Capacity = " << std::to_string(m_currentCapacity) <<
-    				"; limit = " << std::to_string(m_capacityLimit) << "\n";
-    		return false;
-    	}
-    	*/
     	bool success = false;
     	duplicate    = false;
 
     	// items that are issued earlier than specified in m_startTime are rejected as well as null-items:
     	if(item == nullptr || (m_tellItemTimestamp && m_tellItemTimestamp(item) < m_startTime)){
+    		// deallocate the item if possible
+    		if(item != nullptr)
+    			delete item;
     		LOG (WARNING) << "File creation time is older than the cache start timestamp, this item will not be tracked.\n";
     		return success;
     	}

@@ -60,7 +60,7 @@ void HdfsOp::Execute() const {
       VLOG_FILE << "hdfsDelete() file=" << src_.c_str();
       break;
     case CREATE_DIR:
-    	status = dfsCreateDirectory(*hdfs_connection, src_.c_str());
+    	status = dfsCreateDirectory(*hdfs_connection, src_.c_str(), true);
       VLOG_FILE << "hdfsCreateDirectory() file=" << src_.c_str();
       break;
     case RENAME:
@@ -74,7 +74,7 @@ void HdfsOp::Execute() const {
     	if(status != status::OK)
     		err = -1;
       if (err != -1) {
-      err = dfsCreateDirectory(*hdfs_connection, src_.c_str());  
+      err = dfsCreateDirectory(*hdfs_connection, src_.c_str(), true);
       VLOG_FILE << "dfsCreateDirectory() file=" << src_.c_str();
       }
       break;

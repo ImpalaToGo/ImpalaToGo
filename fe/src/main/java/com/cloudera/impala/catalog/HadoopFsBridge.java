@@ -286,21 +286,25 @@ public class HadoopFsBridge {
   /**
    * Execute FileSystem.listStatus(Path path) in the controlled way
    *
-   * @param fs   - hadoop FileSystem
-   * @param path - hadoop Path
+   * @param fs    - hadoop FileSystem
+   * @param path  - hadoop Path
+   * @param force - flag, indicates that if the operation result is cached, it should be reloaded
    *
    * @return operation compound result, if status is OK, contain list of FileStatus found on the path
    */
-  public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path){
+  public static BridgeOpResult<FileStatus[]> listStatus(final FsKey fs, final Path path, boolean force){
     LOG.info("listStatus() for \"" + path + "\"");
     // check within the cache for requested result:
     FileStatus[] statistic = fsCache.getDirStat(fs, path);
 
     BridgeOpResult<FileStatus[]> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus[]>();
     if(statistic != null){
-      res.setResult(statistic);
-      res.setStatus(BridgeOpStatus.OK);
-      return res;
+      if(!force){
+        res.setResult(statistic);
+        res.setStatus(BridgeOpStatus.OK);
+        return res;
+      }
+      // for force reload, reload it - remained part
     }
 
     AtomicReference<BridgeOpResult<FileStatus[]>> result = new AtomicReference<BridgeOpResult<FileStatus[]>>();

@@ -585,7 +585,8 @@ public class HdfsTable extends Table {
   private void loadPartitions(
       List<org.apache.hadoop.hive.metastore.api.Partition> msPartitions,
       org.apache.hadoop.hive.metastore.api.Table msTbl,
-      Map<String, List<FileDescriptor>> oldFileDescMap) throws IOException,
+      Map<String, List<FileDescriptor>> oldFileDescMap,
+      boolean force) throws IOException,
       CatalogException {
     resetPartitionMd();
     partitions_.clear();
@@ -614,7 +615,7 @@ public class HdfsTable extends Table {
       // files in the table's root directory.
       LOG.info("Going to create partition for \"" + msTbl.getTableName() + "\".");
       HdfsPartition part = createPartition(msTbl.getSd(), null, oldFileDescMap,
-          fileDescsToLoad);
+          fileDescsToLoad, force);
       LOG.info("partition created for \"" + msTbl.getTableName() + "\".");
       addPartition(part);
       if (isMarkedCached_) part.markCached();
@@ -639,7 +640,7 @@ public class HdfsTable extends Table {
     } else {
       for (org.apache.hadoop.hive.metastore.api.Partition msPartition: msPartitions) {
         HdfsPartition partition = createPartition(msPartition.getSd(), msPartition,
-            oldFileDescMap, fileDescsToLoad);
+            oldFileDescMap, fileDescsToLoad, force);
         addPartition(partition);
         // If the partition is null, its HDFS path does not exist, and it was not added to
         // this table's partition list. Skip the partition.
@@ -708,7 +709,7 @@ public class HdfsTable extends Table {
       throws CatalogException {
     Map<FsKey, Map<String, List<FileDescriptor>>> fileDescsToLoad = Maps.newHashMap();
     HdfsPartition hdfsPartition = createPartition(storageDescriptor, msPartition,
-        fileDescMap_, fileDescsToLoad);
+        fileDescMap_, fileDescsToLoad, true);
     loadBlockMd(fileDescsToLoad);
     return hdfsPartition;
   }
@@ -735,7 +736,8 @@ public class HdfsTable extends Table {
   private HdfsPartition createPartition(StorageDescriptor storageDescriptor,
       org.apache.hadoop.hive.metastore.api.Partition msPartition,
       Map<String, List<FileDescriptor>> oldFileDescMap,
-      Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescMap)
+      Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescMap,
+      boolean force)
       throws CatalogException {
 
     HdfsStorageDescriptor fileFormatDescriptor = null;
@@ -829,7 +831,7 @@ public class HdfsTable extends Table {
         // fs.listStatus() to list all the files.
         LOG.info("Ask file system for directory \"" + partDirPath.toString() + "\" status.");
 
-        BridgeOpResult<FileStatus[]> listStatusRes = HadoopFsBridge.listStatus(fsKey, partDirPath);
+        BridgeOpResult<FileStatus[]> listStatusRes = HadoopFsBridge.listStatus(fsKey, partDirPath, force);
         if(listStatusRes.getStatus() != BridgeOpStatus.OK){
           throw new IOException(listStatusRes.getError());
         }
@@ -1038,7 +1040,7 @@ public class HdfsTable extends Table {
    * metadata cache of the table to trigger a fresh load.
    */
   public void load(Table cachedEntry, HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
+      org.apache.hadoop.hive.metastore.api.Table msTbl, boolean force) throws TableLoadingException {
     numHdfsFiles_ = 0;
     totalHdfsBytes_ = 0;
     LOG.debug("load table: " + db_.getName() + "." + name_);
@@ -1179,7 +1181,7 @@ public class HdfsTable extends Table {
         oldFileDescMap = cachedHdfsTable.fileDescMap_;
         hostIndex_.populate(cachedHdfsTable.hostIndex_.getList());
       }
-      loadPartitions(msPartitions, msTbl, oldFileDescMap);
+      loadPartitions(msPartitions, msTbl, oldFileDescMap, force);
 
       // load table stats
       numRows_ = getRowCount(msTbl.getParameters());

@@ -223,8 +223,12 @@ public class TableLoadingMgr {
    * Can also be used to perform an incremental refresh of an existing table, by passing
    * the previous Table value in previousTbl. This may speedup the loading process, but
    * may return a stale object.
+   *
+   * @param tblName     - table name
+   * @param previousTbl - previous table instance
+   * @param force       - flag, indicates whether force reload is required
    */
-  public LoadRequest loadAsync(final TTableName tblName, final Table previousTbl)
+  public LoadRequest loadAsync(final TTableName tblName, final Table previousTbl, final boolean force)
       throws DatabaseNotFoundException {
     final Db parentDb = catalog_.getDb(tblName.getDb_name());
     if (parentDb == null) {
@@ -238,7 +242,7 @@ public class TableLoadingMgr {
         @Override
         public Table call() throws Exception {
           return tblLoader_.load(parentDb, tblName.table_name,
-              previousTbl);
+              previousTbl, force);
         }});
 
     FutureTask<Table> existingValue = loadingTables_.putIfAbsent(tblName, tableLoadTask);

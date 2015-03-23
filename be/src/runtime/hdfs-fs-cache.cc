@@ -37,12 +37,12 @@ void HdfsFsCache::Init() {
 }
 
 Status HdfsFsCache::GetConnection(const string& path, dfsFS* fs) {
-	string namenode;
+	string dfs_identity;
 	size_t n = path.find("://");
 
 	if (n == string::npos) {
 	    // Path is not qualified, so use the default FS.
-	    namenode = "default";
+		dfs_identity = "default";
 	  } else {
 	    // Path is qualified, i.e. "scheme://authority/path/to/file".  Extract
 	    // "scheme://authority/".
@@ -51,20 +51,20 @@ Status HdfsFsCache::GetConnection(const string& path, dfsFS* fs) {
 	      return Status(Substitute("Path missing '/' after authority: $0", path));
 	    }
 	    // Include the trailling '/' for local filesystem case, i.e. "file:///".
-	    namenode = path.substr(0, n + 1);
+	    dfs_identity = path.substr(0, n + 1);
 	  }
-	  DCHECK(!namenode.empty());
+	  DCHECK(!dfs_identity.empty());
 
 	  lock_guard<mutex> l(lock_);
-	  HdfsFsMap::iterator i = fs_map_.find(namenode);
+	  HdfsFsMap::iterator i = fs_map_.find(dfs_identity);
 
 	  if (i == fs_map_.end()) {
 			// no connection exists.
-			dfsFS conn(namenode);
+			dfsFS conn(dfs_identity);
 			conn.valid = true;
 			// run connection resolver and registration:
 		    cacheConfigureFileSystem(conn);
-		    fs_map_.insert(make_pair(namenode, conn));
+		    fs_map_.insert(make_pair(dfs_identity, conn));
 		    *fs = conn;
 	  } else {
 		  *fs = i->second;

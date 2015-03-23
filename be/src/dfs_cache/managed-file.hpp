@@ -10,6 +10,7 @@
 #define MANAGED_FILE_HPP_
 
 #include <list>
+#include <vector>
 #include <atomic>
 
 #include <boost/weak_ptr.hpp>
@@ -44,6 +45,12 @@ namespace managed_file {
                                          * Sync module perspective. In order to say that client relies on the file transition from
                                          * this status to whatever next status, we count "file state changed" event subscribers.
       	  	  	  	  	  	  	  	     */
+
+      FILE_SYNC_JUST_HAPPEN,             /**< Status indicates that file sync just happen. As sync is triggered by client request,
+       	   	   	   	   	   	   	   	   	 * the client waits for sync result, thus, the file need to be available for awaiting client
+       	   	   	   	   	   	   	   	   	 * till the moment the client will "open" it. Such file couldn't be deleted by cleanup mechanism
+       	   	   	   	   	   	   	   	   	 * despite it does not have attached clients yet.
+       	   	   	   	   	   	   	   	   	 */
 
       FILE_HAS_CLIENTS,                  /**< File is being processed in client(s) context(s).
       	  	  	  	  	  	  	  	  	 * This state equals to lock for Sync manager.
@@ -102,7 +109,7 @@ namespace managed_file {
 	   std::string        m_fqnp;                    /**< fully qualified path (network) */
 	   boost::uintmax_t   m_remotesize;              /**< remote file size. For internal and user statistics and memory planning. */
 	   std::size_t        m_estimatedsize;           /**< estimated file size. For files that are being loaded right now. */
-	   NatureFlag         m_filenature;              /**< file nature, the initial condition of creation */
+	   std::atomic<NatureFlag>  m_filenature;        /**< file nature, the initial condition of creation */
 
 	   std::size_t        m_prevsize;                /**< always contains the "previous size", initially 0 */
 
@@ -127,9 +134,19 @@ namespace managed_file {
 	   boost::condition_variable m_state_changed_condition;   /**< condition variable for those who waits for file state changed */
 	   boost::mutex m_state_changed_mux;                      /**< protector for "file state changed" condition */
 
+	   boost::mutex m_detaching_mux_guard;                    /**< protector of final object detach from clients. Is required in order
+	    													  * to guard the close() remainder right after last client detaches
+	    													  **/
+
+	   std::vector<std::string> m_detaching_clients;          /**< list of clients that currently in detach (close()) context.
+	    													  * Required to guard the object finalization from objects supervisor
+	    													  * while the object is still in the detach context of last client detaching. */
+
+	   boost::condition_variable m_detaching_condition;       /**< condition variable to be fired when no one client is running the finalization */
+
 	   WeightChangedEvent m_weightIsChangedcallback;          /**< "weight is changed" event callback */
-	   GetFileInfo     m_getFielInfoCb;                       /**< "get file info" callback */
-	   FreeFileInfo    m_freeFileInfoCb;                      /**< "free file info" callback */
+	   GetFileInfo        m_getFielInfoCb;                    /**< "get file info" callback */
+	   FreeFileInfo       m_freeFileInfoCb;                   /**< "free file info" callback */
 
    public:
         static void initialize();
@@ -154,7 +171,7 @@ namespace managed_file {
         * @param path       - full file local path
 	    */
 	   File(const char* path, NatureFlag creationFlag,  GetFileInfo getinfo = 0, FreeFileInfo freeinfo = 0)
-         :  m_fqp(path), m_remotesize(0), m_estimatedsize(0), m_filenature(creationFlag), m_prevsize(0),
+         :  m_fqp(path), m_remotesize(0), m_estimatedsize(0), m_prevsize(0),
             m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0), m_getFielInfoCb(getinfo), m_freeFileInfoCb(freeinfo){
 
 		   LOG (INFO) << "Creating new managed file on top of \"" << path << "\".\n";
@@ -174,6 +191,8 @@ namespace managed_file {
 
            m_users.store(0);
            m_subscribers.store(0);
+           m_filenature.store(creationFlag);
+
            // specify that the attempt to resync the file from remote side can be performed once per 20 seconds
            m_duration_next_attempt_to_sync = boost::posix_time::seconds(_defaultTimeSliceInSeconds);
 
@@ -226,7 +245,8 @@ namespace managed_file {
 
 	   /** flag, indicates that the file is in valid state and can be used */
 	   inline bool exists() {
-		   return (m_state == State::FILE_HAS_CLIENTS || m_state == State::FILE_IS_IDLE);
+		   return ((m_state == State::FILE_HAS_CLIENTS) || (m_state == State::FILE_IS_IDLE) || (m_state == State::FILE_SYNC_JUST_HAPPEN)) &&
+				   ((NatureFlag::PHYSICAL == getnature()) || (NatureFlag::FOR_WRITE == getnature()));
 	   }
 
 	   /** flag, indicates whether the file was resolved by registry */
@@ -240,7 +260,10 @@ namespace managed_file {
 	   }
 
 	   /** change the file nature */
-	   inline void nature(NatureFlag nature = NatureFlag::PHYSICAL){ m_filenature = nature; }
+	   inline void nature(NatureFlag nature = NatureFlag::PHYSICAL){ m_filenature.exchange(nature, std::memory_order_acq_rel); }
+
+	   /** getter for file nature */
+	   inline NatureFlag getnature() { return m_filenature.load(std::memory_order_acquire); }
 
 	   /**
 	    * Try mark the file for deletion. Only few file states permit this operation to happen.
@@ -250,13 +273,24 @@ namespace managed_file {
 	    */
 	   inline bool mark_for_deletion(){
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);
+
+		   bool marked = false;
+
 		   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() << "\" is requested for deletion." <<
 				   "subscribers # = " <<  m_subscribers.load(std::memory_order_acquire) << "\n";
 		   // check all states that allow to mark the file for deletion:
 		   State expected = State::FILE_IS_IDLE;
-           bool marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
+
+		   // look for "idle marker"
+           marked = m_state.compare_exchange_strong(expected, State::FILE_IS_MARKED_FOR_DELETION);
 
            if(marked){
+        	   // wait for all detaching clients to finish:
+        	   boost::unique_lock<boost::mutex> detaching_lock(m_detaching_mux_guard);
+        	   m_detaching_condition.wait(detaching_lock, [&]{ return (m_detaching_clients.size() == 0); });
+        	   detaching_lock.unlock();
+
+        	   // go ahead, no detaching clients are in progress more
         	   m_state_changed_condition.notify_all();
         	   LOG (INFO) << "Managed file OTO \"" << fqp() << "\" with state \"" << state() <<
         			   "\" is successfully marked for deletion." << "\n";
@@ -299,8 +333,9 @@ namespace managed_file {
 
 		   if(state == State::FILE_IS_IN_USE_BY_SYNC)
 			   m_lastsyncattempt = boost::posix_time::microsec_clock::local_time();
+
 		   // fire the condition variable for whoever waits for file status to be changed:
-		   m_state.store(state, std::memory_order_release);
+		   m_state.exchange(state, std::memory_order_release);
 		   boost::mutex::scoped_lock lock(m_state_changed_mux);
 		   m_state_changed_condition.notify_all();
 	   }
@@ -368,10 +403,10 @@ namespace managed_file {
 	   /** getter for File size (available locally) */
 	   inline boost::uintmax_t size() {
 		   // for amorphous file, reply the remote size instead of local as the file does not exist locally:
-		   if(m_filenature == NatureFlag::AMORPHOUS)
+		   if(NatureFlag::AMORPHOUS == getnature())
 			   return m_remotesize;
 
-		   if(m_filenature == NatureFlag::FOR_WRITE)
+		   if(NatureFlag::FOR_WRITE == getnature())
 			   return m_estimatedsize;
 
 		   // for physical file, reply its physical size from local FS:
@@ -400,7 +435,7 @@ namespace managed_file {
 		   long long delta = size - m_prevsize;
 		   // if any subscribers for size change, send the signal with a delta.
 		   // In current design this is only relevant for files opened for write (as we cannot predict their final size):
-		   if(m_weightIsChangedcallback && m_filenature == NatureFlag::FOR_WRITE)
+		   if(m_weightIsChangedcallback && (NatureFlag::FOR_WRITE == getnature()))
 			   m_weightIsChangedcallback(delta);
 		   m_prevsize = size;
 		   m_estimatedsize = size;

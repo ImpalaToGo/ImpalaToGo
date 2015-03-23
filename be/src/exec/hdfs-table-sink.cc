@@ -283,16 +283,26 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
     OutputPartition* output_partition) {
   SCOPED_TIMER(ADD_TIMER(profile(), "TmpFileCreateTimer"));
   stringstream filename;
-  filename << output_partition->tmp_hdfs_file_name_prefix
-           << "." << output_partition->num_files
-           << "." << output_partition->writer->file_extension();
+  // Elena : change required for s3 to work more efficiently - avoid temporaries to avoid rename
+  if(hdfs_connection_.dfs_type == s3n){
+	  // construct the final filename and work with it.
+	  // Later, in master's coordinator, filter out bundles with "temp filename = final filename"
+	  filename << output_partition->final_hdfs_file_name_prefix
+	       << "." << output_partition->num_files
+	       << "." << output_partition->writer->file_extension();
+  }
+  else
+	  filename << output_partition->tmp_hdfs_file_name_prefix
+	  	  << "." << output_partition->num_files
+	  	  << "." << output_partition->writer->file_extension();
+
   output_partition->current_file_name = filename.str();
   // Check if tmp_hdfs_file_name exists.
   const char* tmp_hdfs_file_name_cstr =
       output_partition->current_file_name.c_str();
   bool available;
   if ((dfsExists(hdfs_connection_, tmp_hdfs_file_name_cstr, &available) == 0) && available) {
-    return Status(GetHdfsErrorMsg("Temporary HDFS file already exists: ",
+    return Status(GetHdfsErrorMsg("Temporary DFS file already exists: ",
         output_partition->current_file_name));
   }
   uint64_t block_size = output_partition->partition_descriptor->block_size();
@@ -303,7 +313,7 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
       tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size, available);
   VLOG_FILE << "dfsOpenFile() file=" << tmp_hdfs_file_name_cstr;
   if (output_partition->tmp_hdfs_file == NULL || !available) {
-    return Status(GetHdfsErrorMsg("Failed to open HDFS file for writing: ",
+    return Status(GetHdfsErrorMsg("Failed to open DFS file for writing: ",
         output_partition->current_file_name));
   }
 
@@ -483,7 +493,8 @@ inline Status HdfsTableSink::GetOutputPartition(
     state->per_partition_status()->insert(
         make_pair(partition->partition_name, partition_status));
 
-    if (!has_empty_input_batch_) {
+    // schedule the temporary directory for coordinator deletion for non-block-based file systems:
+    if (!has_empty_input_batch_ && (hdfs_connection_.dfs_type != s3n)) {
       // Indicate that temporary directory is to be deleted after execution
       (*state->hdfs_files_to_move())[partition->tmp_hdfs_dir_name] = "";
     }
@@ -596,7 +607,7 @@ void HdfsTableSink::ClosePartitionFile(RuntimeState* state, OutputPartition* par
   int hdfs_ret = dfsCloseFile(hdfs_connection_, partition->tmp_hdfs_file);
   VLOG_FILE << "dfsCloseFile() file=" << partition->current_file_name;
   if (hdfs_ret != 0) {
-    state->LogError(GetHdfsErrorMsg("Failed to close HDFS file: ",
+    state->LogError(GetHdfsErrorMsg("Failed to close DFS file: ",
         partition->current_file_name));
   }
   partition->tmp_hdfs_file = NULL;

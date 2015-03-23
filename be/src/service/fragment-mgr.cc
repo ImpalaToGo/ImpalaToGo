@@ -42,7 +42,7 @@ Status FragmentMgr::ExecPlanFragment(const TExecPlanFragmentParams& exec_params)
     return Status("missing sink in plan fragment");
   }
 
-  shared_ptr<FragmentExecState> exec_state(
+  boost::shared_ptr<FragmentExecState> exec_state(
       new FragmentExecState(exec_params.fragment_instance_ctx, ExecEnv::GetInstance()));
   // Call Prepare() now, before registering the exec state, to avoid calling
   // exec_state->Cancel().
@@ -74,7 +74,7 @@ void FragmentMgr::FragmentExecThread(FragmentExecState* exec_state) {
   // want the destructor to be called while the fragment_exec_state_map_lock_
   // is taken so we'll first grab a reference here before removing the entry
   // from the map.
-  shared_ptr<FragmentExecState> exec_state_reference;
+  boost::shared_ptr<FragmentExecState> exec_state_reference;
   {
     lock_guard<mutex> l(fragment_exec_state_map_lock_);
     FragmentExecStateMap::iterator i =
@@ -101,12 +101,12 @@ void FragmentMgr::FragmentExecThread(FragmentExecState* exec_state) {
 #endif
 }
 
-shared_ptr<FragmentMgr::FragmentExecState> FragmentMgr::GetFragmentExecState(
+boost::shared_ptr<FragmentMgr::FragmentExecState> FragmentMgr::GetFragmentExecState(
     const TUniqueId& fragment_instance_id) {
   lock_guard<mutex> l(fragment_exec_state_map_lock_);
   FragmentExecStateMap::iterator i = fragment_exec_state_map_.find(fragment_instance_id);
   if (i == fragment_exec_state_map_.end()) {
-    return shared_ptr<FragmentExecState>();
+    return boost::shared_ptr<FragmentExecState>();
   } else {
     return i->second;
   }
@@ -115,7 +115,7 @@ shared_ptr<FragmentMgr::FragmentExecState> FragmentMgr::GetFragmentExecState(
 void FragmentMgr::CancelPlanFragment(TCancelPlanFragmentResult& return_val,
     const TCancelPlanFragmentParams& params) {
   VLOG_QUERY << "CancelPlanFragment(): instance_id=" << params.fragment_instance_id;
-  shared_ptr<FragmentExecState> exec_state =
+  boost::shared_ptr<FragmentExecState> exec_state =
       GetFragmentExecState(params.fragment_instance_id);
   if (exec_state.get() == NULL) {
     Status status(TStatusCode::INTERNAL_ERROR, Substitute("Unknown fragment id: $0",

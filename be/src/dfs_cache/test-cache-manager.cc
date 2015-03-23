@@ -38,10 +38,9 @@ namespace ph = std::placeholders;
 
 namespace impala {
 
-FileSystemDescriptor CacheLayerTest::m_namenode1;
-FileSystemDescriptor CacheLayerTest::m_namenodeHdfs;
-FileSystemDescriptor CacheLayerTest::m_namenodeDefault;
-FileSystemDescriptor CacheLayerTest::m_namenodelocalFilesystem;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentityDefault;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentitylocalFilesystem;
+FileSystemDescriptor CacheLayerTest::m_dfsIdentityTachyon;
 
 SessionContext CacheLayerTest::m_ctx1 = nullptr;
 SessionContext CacheLayerTest::m_ctx2 = nullptr;
@@ -86,7 +85,7 @@ TEST_F(CacheLayerTest, DISABLED_AddEstmateDatasetTaskAsync){
 	time_t time = 0;
 	requestIdentity identity;
 	// execute request in async way:
-    CacheManager::instance()->cacheEstimate(m_ctx1, m_namenode1, data, time, cb, identity);
+    CacheManager::instance()->cacheEstimate(m_ctx1, m_dfsIdentityDefault, data, time, cb, identity);
     // wait when callback will be fired:
 
     std::unique_lock<std::mutex> lock(m_mux);
@@ -132,7 +131,7 @@ TEST_F(CacheLayerTest, DISABLED_AddEstmateDatasetTaskSync){
 	time_t time = 0;
 	requestIdentity identity;
 	// execute request in a sync way:
-    CacheManager::instance()->cacheEstimate(m_ctx1, m_namenode1, data, time, cb, identity, false);
+    CacheManager::instance()->cacheEstimate(m_ctx1, m_dfsIdentityDefault, data, time, cb, identity, false);
     // wait when callback will be fired:
 
     std::unique_lock<std::mutex> lock(m_mux);
@@ -194,12 +193,12 @@ TEST_F(CacheLayerTest, DISABLED_AddFewEstmateDatasetTaskAsync){
 
 		auto f1 = std::bind(&CacheManager::cacheEstimate, CacheManager::instance(), ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6, ph::_7);
 
-		auto fumanual1 = spawn_task(f1, m_ctx1, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
-		auto fumanual2 = spawn_task(f1, m_ctx2, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
-		auto fumanual3 = spawn_task(f1, m_ctx3, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
-		auto fumanual4 = spawn_task(f1, m_ctx4, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
-		auto fumanual5 = spawn_task(f1, m_ctx5, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
-		auto fumanual6 = spawn_task(f1, m_ctx6, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual1 = spawn_task(f1, m_ctx1, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual2 = spawn_task(f1, m_ctx2, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual3 = spawn_task(f1, m_ctx3, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual4 = spawn_task(f1, m_ctx4, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual5 = spawn_task(f1, m_ctx5, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
+		auto fumanual6 = spawn_task(f1, m_ctx6, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true);
 
 		status::StatusInternal status = fumanual1.get();
 		EXPECT_EQ(status, status::StatusInternal::OPERATION_ASYNC_SCHEDULED);
@@ -214,12 +213,12 @@ TEST_F(CacheLayerTest, DISABLED_AddFewEstmateDatasetTaskAsync){
 		status = fumanual6.get();
 		EXPECT_EQ(status, status::StatusInternal::OPERATION_ASYNC_SCHEDULED);
 
-		auto future1 = std::async(std::launch::async, [&]{ return f1(m_ctx1, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
-		auto future2 = std::async(std::launch::async, [&]{ return f1(m_ctx2, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
-		auto future3 = std::async(std::launch::async, [&]{ return f1(m_ctx3, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
-		auto future4 = std::async(std::launch::async, [&]{ return f1(m_ctx4, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
-		auto future5 = std::async(std::launch::async, [&]{ return f1(m_ctx5, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
-		auto future6 = std::async(std::launch::async, [&]{ return f1(m_ctx6, std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future1 = std::async(std::launch::async, [&]{ return f1(m_ctx1, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future2 = std::async(std::launch::async, [&]{ return f1(m_ctx2, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future3 = std::async(std::launch::async, [&]{ return f1(m_ctx3, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future4 = std::async(std::launch::async, [&]{ return f1(m_ctx4, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future5 = std::async(std::launch::async, [&]{ return f1(m_ctx5, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
+		auto future6 = std::async(std::launch::async, [&]{ return f1(m_ctx6, std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); });
 
 		status = future1.get();
 		EXPECT_EQ(status, status::StatusInternal::OPERATION_ASYNC_SCHEDULED);
@@ -303,7 +302,7 @@ TEST_F(CacheLayerTest, DISABLED_EstimateDatasetHeavyLoadManagedAsync){
 				idx = 0;
 			else
 				idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and 1000
-			futures.push_back(std::move(spawn_task(f1, clients[idx], std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true)));
+			futures.push_back(std::move(spawn_task(f1, clients[idx], std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true)));
 		}
 
 
@@ -383,7 +382,7 @@ TEST_F(CacheLayerTest, DISABLED_EstimateDataseHeavyLoadUnmanagedAsync){
 				idx = 0;
 			else
 				idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and CONTEXT_NUM
-			futures.push_back(std::async(std::launch::async, [&]{ return f1(clients[idx], std::cref(m_namenode1), std::cref(data), std::ref(time_), cb, std::ref(identity), true); }));
+			futures.push_back(std::async(std::launch::async, [&]{ return f1(clients[idx], std::cref(m_dfsIdentityDefault), std::cref(data), std::ref(time_), cb, std::ref(identity), true); }));
 		}
 
 		EXPECT_EQ(futures.size(), CONTEXT_NUM);
@@ -461,7 +460,7 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 				idx = 0;
 			else
 				idx = rand() % (CONTEXT_NUM - 1); //generates a random number between 0 and CONTEXT_NUM
-			futures.push_back(std::move(spawn_task(f1, clients[idx], std::cref(m_namenode1), std::cref(data), cb, std::ref(identity))));
+			futures.push_back(std::move(spawn_task(f1, clients[idx], std::cref(m_dfsIdentityDefault), std::cref(data), cb, std::ref(identity))));
 		}
 
 
@@ -485,14 +484,6 @@ TEST_F(CacheLayerTest, DISABLED_PrepareDatasetHeavyLoadManagedAsync){
 		lock.unlock();
 }
 
-TEST_F(CacheLayerTest, DISABLED_RemoteFileOpenReadAutoloadTest){
-	m_namenodeHdfs.dfs_type = DFS_TYPE::hdfs;
-	m_namenodeHdfs.host = "104.236.39.60";
-	m_namenodeHdfs.port = 8020;
-	m_namenodeHdfs.credentials = "";
-	m_namenodeHdfs.password = "";
-	m_namenodeHdfs.valid = true;
-}
 }
 
 int main(int argc, char **argv) {

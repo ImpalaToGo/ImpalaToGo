@@ -55,7 +55,7 @@ public class TableLoader {
    * Returns new instance of Table, If there were any errors loading the table metadata
    * an IncompleteTable will be returned that contains details on the error.
    */
-  public Table load(Db db, String tblName, Table cachedValue) {
+  public Table load(Db db, String tblName, Table cachedValue, boolean force) {
     String fullTblName = db.getName() + "." + tblName;
     LOG.info("Loading metadata for: " + fullTblName);
     MetaStoreClient msClient = null;
@@ -75,13 +75,13 @@ public class TableLoader {
             "Unsupported table type '%s' for: %s", tableType, fullTblName));
       }
 
-      // Create a table of appropriate type and have it load itself
+      // Create a table of appropriate type and let it load itself
       table = Table.fromMetastoreTable(catalog_.getNextTableId(), db, msTbl);
       if (table == null) {
         throw new TableLoadingException(
             "Unrecognized table type for table: " + fullTblName);
       }
-      table.load(cachedValue, msClient.getHiveClient(), msTbl);
+      table.load(cachedValue, msClient.getHiveClient(), msTbl, force);
       LOG.info("Table is loaded for : " + tblName);
       table.validate();
       LOG.info("Table is validated for : " + tblName);

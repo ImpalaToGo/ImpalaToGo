@@ -266,7 +266,7 @@ Status DiskIoMgr::ScanRange::Open() {
 
     if (dfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != status::OK) {
     	dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
-    	VLOG_FILE << "hdfsCloseFile() (error) file=" << file();
+    	VLOG_FILE << "dfsCloseFile() (error) file=" << file();
     	hdfs_file_ = NULL;
 
     	string error_msg = GetHdfsErrorMsg("");

@@ -291,7 +291,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 LOG (ERROR) << "File \"" << managed_file->fqp() << "\" has inconsistent size and is marked as forbidden.\n";
 		 status = status::StatusInternal::CACHE_OBJECT_IS_FORBIDDEN;
 	 }
-
+	 // mark the file as just synchronized to avoid its possible recycling due "clients = 0" reason.
+     managed_file->state(managed_file::State::FILE_SYNC_JUST_HAPPEN);
 	 managed_file->close();
 	 return status;
 }

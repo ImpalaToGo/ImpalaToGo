@@ -19,6 +19,11 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <vector>
+#include <sys/time.h>
+
+#include <boost/function.hpp>
+#include "dfs_cache/common-include.hpp"
 
 namespace impala{
 namespace constants{
@@ -39,6 +44,15 @@ namespace constants{
 
 	/** reduced age bucket timeslice */
 	extern const int TEST_CACHE_REDUCED_TIMESLICE;
+
+	/** dataset single file for tests operating with a single file */
+	extern const std::string TEST_SINGLE_FILE_FROM_DATASET;
+
+	/** protocol prefix represents local fs */
+	extern const std::string TEST_LOCALFS_PROTO_PREFFIX;
+
+	/** protocol prefix representing Tachyon fs */
+	extern const std::string TEST_TACHYONFS_PROTO_PREFIX;
 }
 
 
@@ -102,6 +116,34 @@ extern int stringLength;
 
 extern char genRandomChar();
 extern std::string genRandomString(size_t len);
+
+template<typename Item>
+Item getRandomFromVector(const std::vector<Item>& dataset ){
+	struct timeval time;
+	gettimeofday(&time,NULL);
+
+	// microsecond has 1 000 000
+	// Assuming you did not need quite that accuracy
+	// Also do not assume the system clock has that accuracy.
+	srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
+
+	size_t len = dataset.size();
+    return dataset[rand() % len];
+}
+
+typedef boost::function<void(
+			const FileSystemDescriptor& fsDescriptor,
+			const std::string& fsPath,
+			const std::vector<std::string>& dataset,
+			std::atomic<long>& direct_handles,
+			std::atomic<long>& cached_handles,
+			std::atomic<long>& zero_handles,
+			std::atomic<long>& total_handles)> Scenario;
+
+struct ScenarioCase{
+	Scenario scenario;
+	std::string name;
+};
 
 }
 

@@ -126,6 +126,7 @@ class ImpaladMetrics {
   static IntGauge* HASH_TABLE_TOTAL_BYTES;
   static IntCounter* IMPALA_SERVER_NUM_FRAGMENTS;
   static IntCounter* IMPALA_SERVER_NUM_QUERIES;
+  static IntCounter* IMPALA_SERVER_NUM_COMMANDS;
   static IntCounter* NUM_QUERIES_EXPIRED;
   static IntCounter* NUM_QUERIES_SPILLED;
   static IntCounter* NUM_RANGES_MISSING_VOLUME_ID;

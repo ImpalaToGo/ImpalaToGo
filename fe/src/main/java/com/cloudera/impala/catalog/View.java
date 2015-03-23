@@ -81,7 +81,7 @@ public class View extends Table {
 
   @Override
   public void load(Table oldValue, HiveMetaStoreClient client,
-      org.apache.hadoop.hive.metastore.api.Table msTbl) throws TableLoadingException {
+      org.apache.hadoop.hive.metastore.api.Table msTbl, boolean force) throws TableLoadingException {
     try {
       // Load columns.
       List<FieldSchema> fieldSchemas = client.getFields(db_.getName(), name_);
