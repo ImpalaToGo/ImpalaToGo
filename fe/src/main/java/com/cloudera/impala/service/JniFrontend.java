@@ -36,6 +36,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HAUtil;
+import org.apache.hive.com.esotericsoftware.minlog.Log;
 import org.apache.log4j.Appender;
 import org.apache.log4j.FileAppender;
 import org.apache.thrift.TException;
@@ -50,7 +51,10 @@ import com.cloudera.impala.authorization.ImpalaInternalAdminUser;
 import com.cloudera.impala.authorization.User;
 import com.cloudera.impala.catalog.DataSource;
 import com.cloudera.impala.catalog.Function;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Role;
+import com.cloudera.impala.catalog.Table;
+import com.cloudera.impala.catalog.TableLoadingException;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.InternalException;
 import com.cloudera.impala.common.JniUtil;
@@ -147,6 +151,7 @@ public class JniFrontend {
     try {
       return serializer.serialize(result);
     } catch (TException e) {
+      Log.error("createExecRequest : exception happened, unable to serialize exec request");
       throw new InternalException(e.getMessage());
     }
   }
@@ -366,8 +371,11 @@ public class JniFrontend {
       throws ImpalaException {
     TTableName params = new TTableName();
     JniUtil.deserializeThrift(protocolFactory_, params, thriftTableName);
-    return ToSqlUtils.getCreateTableSql(frontend_.getCatalog().getTable(
-        params.getDb_name(), params.getTable_name()));
+    Table table = frontend_.getCatalog().getTable(
+        params.getDb_name(), params.getTable_name());
+    if(table.isLoaded() && table instanceof IncompleteTable)
+      throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
+    return ToSqlUtils.getCreateTableSql(table);
   }
 
   /**

@@ -190,8 +190,8 @@ public class ImpaladCatalog extends Catalog {
       ImpalaException cause = ((IncompleteTable) table).getCause();
       LOG.error("Initial cause for table \"" + tableName + "\" was : \"" + cause.getMessage() + "\".");
 
-      if (cause instanceof TableLoadingException) throw (TableLoadingException) cause;
-      throw new TableLoadingException("Missing metadata for table: " + tableName, cause);
+      // if (cause instanceof TableLoadingException) throw (TableLoadingException) cause;
+      // throw new TableLoadingException("Missing metadata for table: " + tableName, cause);
     }
     return table;
   }

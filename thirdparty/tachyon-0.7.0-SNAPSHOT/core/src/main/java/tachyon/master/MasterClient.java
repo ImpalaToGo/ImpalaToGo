@@ -215,6 +215,11 @@ public final class MasterClient implements Closeable {
       return;
     } while (retry.attemptRetry() && !mIsShutdown);
 
+    LOG.info("No connection to master established. Master address : "
+            + mMasterAddress);
+    System.out.println("No connection to master established. Master address : "
+            + mMasterAddress);
+
     // Reaching here indicates that we did not successfully connect.
     throw new IOException("Failed to connect to master " + mMasterAddress + " after "
         + (retry.getRetryCount()) + " attempts", lastException);
@@ -249,14 +254,21 @@ public final class MasterClient implements Closeable {
 
       try {
         LOG.info("getFileStatus for path '" + path + "'");
+        System.out.println("getFileStatus for path '" + path + "'");
         return mClient.getFileStatus(fileId, path);
       } catch (InvalidPathException e) {
+        LOG.error("getFileStatus rise IO exception for path '" + path + "'");
+        System.out.println("getFileStatus rise IO exception for path '" + path + "'");
         throw new IOException(e);
       } catch (TException e) {
+        LOG.error("getFileStatus rise transport exception for path '" + path + "'");
+        System.out.println("getFileStatus rise transport exception for path '" + path + "'");
         LOG.error(e.getMessage(), e);
+        System.out.println(e.getMessage());
         mConnected = false;
       }
     }
+    System.out.println("getFileStatus returns null for path, no connection '" + path + "'");
     return null;
   }
 
@@ -299,6 +311,32 @@ public final class MasterClient implements Closeable {
       }
     }
     return null;
+  }
+
+  public synchronized long getCapacityBytes() throws IOException {
+    while (!mIsShutdown) {
+      connect();
+      try {
+        return mClient.user_getCapacityBytes();
+      } catch (TException e) {
+        LOG.error(e.getMessage(), e);
+        mConnected = false;
+      }
+    }
+    return -1;
+  }
+
+  public synchronized long getUsedBytes() throws IOException {
+    while (!mIsShutdown) {
+      connect();
+      try {
+        return mClient.user_getUsedBytes();
+      } catch (TException e) {
+        LOG.error(e.getMessage(), e);
+        mConnected = false;
+      }
+    }
+    return -1;
   }
 
   public synchronized boolean isConnected() {

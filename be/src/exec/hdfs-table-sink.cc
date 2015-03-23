@@ -309,6 +309,7 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   if (block_size == 0) block_size = output_partition->writer->default_block_size();
 
   available = false;
+  LOG(INFO) << "HdfsTableSink : dfsOpenFile() file = \"" << tmp_hdfs_file_name_cstr << "\".";
   output_partition->tmp_hdfs_file = dfsOpenFile(hdfs_connection_,
       tmp_hdfs_file_name_cstr, O_WRONLY, 0, 0, block_size, available);
   VLOG_FILE << "dfsOpenFile() file=" << tmp_hdfs_file_name_cstr;

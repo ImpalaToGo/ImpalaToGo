@@ -4,9 +4,9 @@
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License. You may obtain a
  * copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -76,6 +76,12 @@ public class RemoteBlockInStream extends BlockInStream {
   private boolean mRecache;
 
   /**
+   * True initially, will be false after a cache miss, meaning no worker had this block in memory.
+   * Afterward, all reads will go directly to the under filesystem.
+   */
+  private boolean mAttemptReadFromWorkers = true;
+
+  /**
    * If we are re-caching the file, we write it to a block out stream as we read it.
    */
   private BlockOutStream mBlockOutStream = null;
@@ -122,22 +128,22 @@ public class RemoteBlockInStream extends BlockInStream {
     mBlockInfo = mFile.getClientBlockInfo(mBlockIndex);
 
     mRecache = readType.isCache();
-    if (mRecache) {
-      mBlockOutStream = new BlockOutStream(file, WriteType.TRY_CACHE, blockIndex, tachyonConf);
-    }
+    System.out.println("RemoteBlockInStream ctor : going to recache file '"
+            + mFile.getPath() + "' with block index = " + blockIndex);
 
     mUFSConf = ufsConf;
   }
 
   /**
    * Cancels the re-caching attempt
-   * 
+   *
    * @throws IOException
    */
   private void cancelRecache() throws IOException {
     if (mRecache) {
       mRecache = false;
       if (mBlockOutStream != null) {
+        System.out.println("RemoteBlockInStream.cancel(), cancelling recaching attempt.");
         mBlockOutStream.cancel();
       }
     }
@@ -148,11 +154,15 @@ public class RemoteBlockInStream extends BlockInStream {
     if (mClosed) {
       return;
     }
-    if (mRecache) {
+    if (mRecache && mBlockOutStream != null) {
       // We only finish re-caching if we've gotten to the end of the file
       if (mBlockPos == mBlockInfo.length) {
         mBlockOutStream.close();
       } else {
+        System.out.println("RemoteBlockInStream.close(), cancelling cache "
+                + " attempt because we did not reach the end of file."
+                + " Blockinfo.length = " + mBlockInfo.length
+                + "; blockPos = " + mBlockPos);
         mBlockOutStream.cancel();
       }
     }
@@ -192,9 +202,20 @@ public class RemoteBlockInStream extends BlockInStream {
     // read up to the end of the file
     len = (int) Math.min(len, mBlockInfo.length - mBlockPos);
     int bytesLeft = len;
+    // Lazy initialization of the out stream for caching to avoid collisions with other caching
+    // attempts that are invalidated later due to seek/skips
+    if (bytesLeft > 0 && mBlockOutStream == null && mRecache) {
+      try {
+        mBlockOutStream = new BlockOutStream(mFile, WriteType.TRY_CACHE, mBlockIndex, mTachyonConf);
+      } catch (IOException ioe) {
+        LOG.warn("Recache attempt failed.", ioe);
+        cancelRecache();
+      }
+    }
+
     // While we still have bytes to read, make sure the buffer is set to read the byte at mBlockPos.
     // If we fail to set mCurrentBuffer, we stream the rest from the underfs
-    while (bytesLeft > 0 && updateCurrentBuffer()) {
+    while (bytesLeft > 0 && mAttemptReadFromWorkers && updateCurrentBuffer()) {
       int bytesToRead = (int) Math.min(bytesLeft, mCurrentBuffer.remaining());
       mCurrentBuffer.get(b, off, bytesToRead);
       if (mRecache) {
@@ -204,7 +225,10 @@ public class RemoteBlockInStream extends BlockInStream {
       bytesLeft -= bytesToRead;
       mBlockPos += bytesToRead;
     }
+
     if (bytesLeft > 0) {
+      // Unable to read from worker memory, reading this block from underfs in the future.
+      mAttemptReadFromWorkers = false;
       // We failed to read everything from mCurrentBuffer, so we need to stream the rest from the
       // underfs
       if (!setupStreamFromUnderFs()) {
@@ -238,6 +262,7 @@ public class RemoteBlockInStream extends BlockInStream {
     try {
       List<NetAddress> blockLocations = blockInfo.getLocations();
       LOG.info("Block locations:" + blockLocations);
+      String localhost = NetworkUtils.getLocalHostName(conf);
 
       for (NetAddress blockLocation : blockLocations) {
         String host = blockLocation.mHost;
@@ -247,14 +272,15 @@ public class RemoteBlockInStream extends BlockInStream {
         if (port == -1) {
           continue;
         }
+        
         if (host.equals(InetAddress.getLocalHost().getHostName())
             || host.equals(InetAddress.getLocalHost().getHostAddress())
-            || host.equals(NetworkUtils.getLocalHostName())) {
+            || host.equals(localhost)) {
           LOG.warn("Master thinks the local machine has data, But not! blockId:{}",
               blockInfo.blockId);
         }
-        LOG.info(host + ":" + port + " current host is " + NetworkUtils.getLocalHostName() + " "
-            + NetworkUtils.getLocalIpAddress());
+        LOG.info(host + ":" + port + " current host is " + localhost + " "
+            + NetworkUtils.getLocalIpAddress(conf));
 
         try {
           buf =
@@ -279,6 +305,8 @@ public class RemoteBlockInStream extends BlockInStream {
 
   private static ByteBuffer retrieveByteBufferFromRemoteMachine(InetSocketAddress address,
       long blockId, long offset, long length, TachyonConf conf) throws IOException {
+    System.out.println("I am going to retrieve byte buffer from remote machine!");
+
     return RemoteBlockReader.Factory.createRemoteBlockReader(conf).readRemoteBlock(
         address.getHostName(), address.getPort(), blockId, offset, length);
   }
@@ -294,6 +322,7 @@ public class RemoteBlockInStream extends BlockInStream {
       // There's nothing to do
       return;
     }
+    System.out.println("RemoteBlockInStream.seek() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     mBlockPos = pos;
@@ -339,6 +368,7 @@ public class RemoteBlockInStream extends BlockInStream {
     if (n <= 0) {
       return 0;
     }
+    System.out.println("RemoteBlockInStream.skip() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     long skipped = Math.min(n, mBlockInfo.length - mBlockPos);
@@ -358,7 +388,7 @@ public class RemoteBlockInStream extends BlockInStream {
    */
   private boolean updateCurrentBuffer() throws IOException {
     long bufferSize =
-        mTachyonConf.getInt(Constants.USER_REMOTE_READ_BUFFER_SIZE_BYTE, Constants.MB);
+        mTachyonConf.getBytes(Constants.USER_REMOTE_READ_BUFFER_SIZE_BYTE, Constants.MB);
     if (mCurrentBuffer != null && mBufferStartPos <= mBlockPos
         && mBlockPos < Math.min(mBufferStartPos + bufferSize, mBlockInfo.length)) {
       // We move the buffer to read at mBlockPos

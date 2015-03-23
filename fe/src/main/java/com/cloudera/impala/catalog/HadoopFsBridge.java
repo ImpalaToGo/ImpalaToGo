@@ -350,8 +350,11 @@ public class HadoopFsBridge {
    */
   public static BridgeOpResult<FileStatus> getFileStatus(final FsKey fs, final Path path){
 
+    LOG.info("\"FileSystem.getFileStatus\" is invoked on \"" + path + "\"");
     // check within the cache for requested result:
     FileStatus statistic = fsCache.getFileStat(fs, path);
+
+    LOG.info("\"FileSystem.getFileStatus\" statistics requested from cache for \"" + path + "\"");
 
     BridgeOpResult<FileStatus> res =  new HadoopFsBridge().new BridgeOpResult<FileStatus>();
     if(statistic != null){
@@ -406,6 +409,8 @@ public class HadoopFsBridge {
       final long start, final long len){
     AtomicReference<BridgeOpResult<BlockLocation[]>> result = new AtomicReference<BridgeOpResult<BlockLocation[]>>();
 
+    LOG.info("\"FileSystem.getFileBlockLocations\" is invoked for \"" + file.getPath() + "\".");
+
     //declaration of the anonymous class
     InterruptableCallable<BlockLocation[]> callable = new InterruptableCallable<BlockLocation[]>("FileSystem.getFileBlockLocations") {
       @Override
@@ -435,6 +440,8 @@ public class HadoopFsBridge {
   public static BridgeOpResult<BlockStorageLocation[]> getFileBlockStorageLocations(final DistributedFileSystem dfs,
       final List<BlockLocation> blocks){
     AtomicReference<BridgeOpResult<BlockStorageLocation[]>> result = new AtomicReference<BridgeOpResult<BlockStorageLocation[]>>();
+
+    LOG.info("\"FileSystem.getFileBlockStorageLocations\"");
 
     //declaration of the anonymous class
     InterruptableCallable<BlockStorageLocation[]> callable = new InterruptableCallable<BlockStorageLocation[]>("DistributedFileSystem.getFileBlockStorageLocations") {

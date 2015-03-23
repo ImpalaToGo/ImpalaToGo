@@ -166,11 +166,13 @@ public class TachyonFile implements Comparable<TachyonFile> {
     List<Long> blocks = getUnCachedFileStatus().getBlockIds();
 
     if (blocks.size() == 0) {
+      System.out.println("Blocks size = 0");
       return new EmptyBlockInStream(this, readType, mTachyonConf);
     } else if (blocks.size() == 1) {
+      System.out.println("Blocks size = 1");
       return BlockInStream.get(this, readType, 0, mUFSConf, mTachyonConf);
     }
-
+    System.out.println("Blocks size = " + blocks.size());
     return new FileInStream(this, readType, mUFSConf, mTachyonConf);
   }
 
@@ -406,7 +408,7 @@ public class TachyonFile implements Comparable<TachyonFile> {
 
     int blockLockId = mTachyonFS.getBlockLockId();
     String localFileName = mTachyonFS.lockBlock(blockId, blockLockId);
-
+    System.out.println("readLocalByteBuffer : local file name = '" + localFileName + "'");
     if (localFileName != null) {
       Closer closer = Closer.create();
       try {
@@ -442,7 +444,8 @@ public class TachyonFile implements Comparable<TachyonFile> {
         closer.close();
       }
     }
-
+    System.out.println("readLocalByteBuffer : going to return null buffer for local buffer = '"
+            + localFileName + "'");
     mTachyonFS.unlockBlock(blockId, blockLockId);
     return null;
   }
@@ -484,6 +487,7 @@ public class TachyonFile implements Comparable<TachyonFile> {
    */
   boolean recache(int blockIndex) throws IOException {
     String path = getUfsPath();
+    System.out.println("TachyonFile '" + path + "' is requested for recaching");
     UnderFileSystem underFsClient = UnderFileSystem.get(path, mTachyonConf);
 
     InputStream inputStream = null;
@@ -495,7 +499,8 @@ public class TachyonFile implements Comparable<TachyonFile> {
       long offset = blockIndex * length;
       inputStream.skip(offset);
 
-      int bufferBytes = mTachyonConf.getInt(Constants.USER_FILE_BUFFER_BYTES, Constants.MB) * 4;
+      int bufferBytes =
+          (int) mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES, Constants.MB) * 4;
       byte[] buffer = new byte[bufferBytes];
       bos = new BlockOutStream(this, WriteType.TRY_CACHE, blockIndex, mTachyonConf);
       int limit;
@@ -513,6 +518,8 @@ public class TachyonFile implements Comparable<TachyonFile> {
       bos.close();
     } catch (IOException e) {
       LOG.warn(e.getMessage(), e);
+      System.out.println("TachyonFile '" + path + "' : execption occur while recache : '"
+              + e.getMessage() + "'");
       if (bos != null) {
         bos.cancel();
       }

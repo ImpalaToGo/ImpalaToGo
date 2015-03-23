@@ -32,7 +32,9 @@ import com.google.common.io.Closer;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.Path;
 
 import tachyon.Constants;
@@ -214,16 +216,21 @@ public class TFsShell implements Closeable {
 
     // tachyonClient.getFile() catches FileDoesNotExist exceptions and returns null
     if (tFile == null) {
+      System.out.println("tFile = null for '" + srcPath + "'");
+
       throw new IOException(srcPath.toString());
     }
 
     Closer closer = Closer.create();
     try {
       InStream is = closer.register(tFile.getInStream(ReadType.NO_CACHE));
+      System.out.println("Received instream for '" + srcPath + "'");
       FileOutputStream out = closer.register(new FileOutputStream(dst));
+      System.out.println("Registered outstream for '" + dst + "'");
       byte[] buf = new byte[64 * Constants.MB];
       int t = is.read(buf);
       while (t != -1) {
+        System.out.println("Going to write " + t + " bytes into '" + dst + "'");
         out.write(buf, 0, t);
         t = is.read(buf);
       }
@@ -235,25 +242,26 @@ public class TFsShell implements Closeable {
   }
 
   /**
-   * Open the file specified by argv
+   * Copy to local alternative implementation, gets the file locally
    *
    * @param argv [] Array of arguments given by the user's input from the terminal
    * @return 0 if command is successful, -1 if an error occurred.
    * @throws IOException
    */
-  public int openFile(String[] argv) throws IOException {
-    if (argv.length != 2) {
+  public int copyToLocalAlternative(String[] argv) throws IOException {
+    if (argv.length != 3) {
       System.out.println("Usage: tfs openFile <src>");
       return -1;
     }
 
-    String path = argv[1];
+    String path    = argv[1];
+    String dstPath = argv[2];
+
     TachyonURI srcPathT = new TachyonURI(argv[1]);
     final Configuration conf = new Configuration();
     conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
 
-    final URI uri =
-            URI.create("tachyon://localhost:19998/eventsSmall/demo_20140629000000000009.csv");
+    final URI uri = URI.create(argv[1]);
 
     mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
     mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
@@ -267,13 +275,108 @@ public class TFsShell implements Closeable {
       System.out.println("NOT Instance of TFS");
     }
 
-    InputStream open = ufs.open(new Path(path));
-    if (open == null) {
-      System.out.println("Unable to open file \"" + path + ".");
+    Closer closer = Closer.create();
+    InputStream is = ufs.open(new Path(path));
+    try {
+      if (is == null) {
+        System.out.println("Unable to open file \"" + path + ".");
+        return -1;
+      }
+
+      FileOutputStream out = closer.register(new FileOutputStream(dstPath));
+
+      byte[] buf = new byte[64 * Constants.MB];
+      int t = is.read(buf);
+      while (t != -1) {
+        out.write(buf, 0, t);
+        t = is.read(buf);
+      }
+      System.out.println("Copied '" + path + "' to '" + dstPath + "'.");
+    } finally {
+      System.in.read();
+      is.close();
+      closer.close();
+      System.out.println("Open is done.");
+
+      return 0;
+    }
+  }
+
+  public int fileStatus(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs fileStatus <src>");
       return -1;
     }
 
-    System.out.println("Open is done.");
+    String path = argv[1];
+    TachyonURI srcPathT = new TachyonURI(argv[1]);
+    final Configuration conf = new Configuration();
+    conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
+
+    final URI uri =
+            URI.create(Constants.HEADER + "localhost:19998" + argv[1]);
+
+    mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
+    mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
+    mTachyonConf.set(Constants.USE_ZOOKEEPER, "true");
+    FileSystem ufs =
+            FileSystem.get(uri,
+                    conf);
+    if (ufs instanceof TFS) {
+      System.out.println("Instance of TFS");
+    } else {
+      System.out.println("NOT Instance of TFS");
+    }
+
+    FileStatus status = ufs.getFileStatus(new Path(path));
+    if (status == null) {
+      System.out.println("Unable to get status for path \"" + path + ".");
+      return -1;
+    }
+
+    System.out.println("Path : '" + path + "'. " + status.toString() + ".");
+    return 0;
+  }
+
+  public int fileBlockLocations(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs fileBlockLocations <src>");
+      return -1;
+    }
+
+    String path = argv[1];
+    TachyonURI srcPathT = new TachyonURI(argv[1]);
+    final Configuration conf = new Configuration();
+    conf.set("fs." + Constants.SCHEME_FT + ".impl", TFSFT.class.getName());
+
+    final URI uri =
+            URI.create(Constants.HEADER + "localhost:19998" + argv[1]);
+
+    mTachyonConf.set(Constants.MASTER_HOSTNAME, uri.getHost());
+    mTachyonConf.set(Constants.MASTER_PORT, Integer.toString(uri.getPort()));
+    mTachyonConf.set(Constants.USE_ZOOKEEPER, "true");
+    FileSystem ufs =
+            FileSystem.get(uri,
+                    conf);
+    if (ufs instanceof TFS) {
+      System.out.println("Instance of TFS");
+    } else {
+      System.out.println("NOT Instance of TFS");
+    }
+
+    BlockLocation[] locations = ufs.getFileBlockLocations(new Path(path), 0, 0);
+    if (locations == null) {
+      System.out.println("Unable to get block locations for path \"" + path + ".");
+      return -1;
+    }
+
+    System.out.println("Path : '" + path + "'.");
+    for (BlockLocation location : locations) {
+      System.out.println(location.toString());
+      for (String host : location.getNames()) {
+        System.out.println("host : " + host);
+      }
+    }
     return 0;
   }
 
@@ -472,6 +575,50 @@ public class TFsShell implements Closeable {
   }
 
   /**
+   * get number of bytes used in the TachyonFS
+   *
+   * @param argv [] Array of arguments given by the user's input from the terminal
+   * @return 0 if command is successful, -1 if an error occurred.
+   * @throws IOException
+   */
+  public int getUsedBytes(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs getUsedBytes <path>");
+      return -1;
+    }
+    TachyonURI path = new TachyonURI(argv[1]);
+    TachyonFS tachyonClient = createFS(path);
+    long usedBytes = tachyonClient.getUsedBytes();
+    if (usedBytes == -1) {
+      return -1;
+    }
+    System.out.println("Used Bytes: " + usedBytes);
+    return 0;
+  }
+
+  /**
+   * Get the capacity of the TachyonFS
+   *
+   * @param argv [] Array of arguments given by the user's input from the terminal
+   * @return 0 if command is successful, -1 if an error occurred.
+   * @throws IOException
+   */
+  public int getCapacityBytes(String[] argv) throws IOException {
+    if (argv.length != 2) {
+      System.out.println("Usage: tfs getCapacityBytes <path>");
+      return -1;
+    }
+    TachyonURI path = new TachyonURI(argv[1]);
+    TachyonFS tachyonClient = createFS(path);
+    long capacityBytes = tachyonClient.getCapacityBytes();
+    if (capacityBytes == -1) {
+      return -1;
+    }
+    System.out.println("Capacity Bytes: " + capacityBytes);
+    return 0;
+  }
+
+  /**
    * Pins the given file or folder (recursively pinning all children if a folder). Pinned files are
    * never evicted from memory.
    *
@@ -523,6 +670,8 @@ public class TFsShell implements Closeable {
     System.out.println("       [pin <path>]");
     System.out.println("       [unpin <path>]");
     System.out.println("       [free <file path|folder path>]");
+    System.out.println("       [getUsedBytes <tachyon root path>]");
+    System.out.println("       [getCapacityBytes <tachyon root path>]");
   }
 
   /**
@@ -651,6 +800,10 @@ public class TFsShell implements Closeable {
         exitCode = lsr(argv);
       } else if (cmd.equals("mkdir")) {
         exitCode = mkdir(argv);
+      } else if (cmd.equals("getUsedBytes")) {
+        exitCode = getUsedBytes(argv);
+      } else if (cmd.equals("getCapacityBytes")) {
+        exitCode = getCapacityBytes(argv);
       } else if (cmd.equals("rm")) {
         exitCode = rm(argv);
       } else if (cmd.equals("rmr")) {
@@ -665,8 +818,12 @@ public class TFsShell implements Closeable {
         exitCode = copyFromLocal(argv);
       } else if (cmd.equals("copyToLocal")) {
         exitCode = copyToLocal(argv);
-      } else if (cmd.equals("openFile")) {
-        exitCode = openFile(argv);
+      } else if (cmd.equals("copyToLocalAlternative")) {
+        exitCode = copyToLocalAlternative(argv);
+      } else if (cmd.equals("fileStatus")) {
+        exitCode = fileStatus(argv);
+      } else if (cmd.equals("fileBlockLocations")) {
+        exitCode = fileBlockLocations(argv);
       } else if (cmd.equals("fileinfo")) {
         exitCode = fileinfo(argv);
       } else if (cmd.equals("location")) {

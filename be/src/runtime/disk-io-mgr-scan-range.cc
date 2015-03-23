@@ -258,11 +258,16 @@ Status DiskIoMgr::ScanRange::Open() {
     // TODO: is there much overhead opening hdfs files?  Should we try to preserve
     // the handle across multiple scan ranges of a file?
     bool available;
+    LOG(INFO) << "Scan range is going to open the file \"" << file() <<
+    		"\" for read. \n";
     hdfs_file_ = dfsOpenFile(reader_->hdfs_connection_, file(), O_RDONLY, 0, 0, 0, available);
-    VLOG_FILE << "dfsOpenFile() file=" << file();
+    VLOG_FILE << "dfsOpenFile() file =" << file();
     if (hdfs_file_ == NULL || !available) {
-      return Status(GetHdfsErrorMsg("Failed to open HDFS file ", file_));
+      return Status(GetHdfsErrorMsg("Failed to open DFS file ", file_));
     }
+
+    LOG(INFO) << "Scan range is completed file open for path \"" << file() <<
+    		"\". For read. \n";
 
     if (dfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != status::OK) {
     	dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
@@ -397,8 +402,9 @@ Status DiskIoMgr::ScanRange::ReadFromCache(bool* read_succeeded) {
   Status status = Open();
   if (!status.ok()) return status;
 
-  // Cached reads not supported on local filesystem.
-  if (reader_->hdfs_connection_.dfs_type == local ) return Status::OK;
+  // Cached reads not supported on local filesystem or tachyon.
+  if (reader_->hdfs_connection_.dfs_type == local ||
+		  reader_->hdfs_connection_.dfs_type == tachyon ) return Status::OK;
 
   {
     unique_lock<mutex> hdfs_lock(hdfs_lock_);

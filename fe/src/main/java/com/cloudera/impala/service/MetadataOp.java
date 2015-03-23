@@ -28,6 +28,7 @@ import com.cloudera.impala.catalog.Column;
 import com.cloudera.impala.catalog.Db;
 import com.cloudera.impala.catalog.Function;
 import com.cloudera.impala.catalog.ImpaladCatalog;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.PrimitiveType;
 import com.cloudera.impala.catalog.ScalarType;
 import com.cloudera.impala.catalog.Table;
@@ -281,6 +282,8 @@ public class MetadataOp {
           Table table = null;
           try {
             table = catalog.getTable(dbName, tabName);
+            if(table.isLoaded() && table instanceof IncompleteTable)
+              throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) table).getCause());
           } catch (TableLoadingException e) {
             // Ignore exception (this table will be skipped).
           }

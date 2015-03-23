@@ -168,7 +168,8 @@ public class TachyonFS extends AbstractTachyonFS {
   private TachyonFS(TachyonConf tachyonConf) throws IOException {
     super(tachyonConf);
 
-    String masterHost = tachyonConf.get(Constants.MASTER_HOSTNAME, NetworkUtils.getLocalHostName());
+    String masterHost = tachyonConf.get(Constants.MASTER_HOSTNAME,
+        NetworkUtils.getLocalHostName(tachyonConf));
     int masterPort = tachyonConf.getInt(Constants.MASTER_PORT, Constants.DEFAULT_MASTER_PORT);
 
     mMasterAddress = new InetSocketAddress(masterHost, masterPort);
@@ -183,7 +184,8 @@ public class TachyonFS extends AbstractTachyonFS {
         mTachyonConf));
 
     mUserFailedSpaceRequestLimits =
-        mTachyonConf.getInt(Constants.USER_FAILED_SPACE_REQUEST_LIMITS, 0);
+        mTachyonConf.getInt(Constants.USER_FAILED_SPACE_REQUEST_LIMITS,
+            Constants.DEFAULT_USER_FAILED_SPACE_REQUEST_LIMITS);
 
     String scheme = mZookeeperMode ? Constants.SCHEME_FT : Constants.SCHEME;
     String authority = mMasterAddress.getHostName() + ":" + mMasterAddress.getPort();
@@ -540,7 +542,9 @@ public class TachyonFS extends AbstractTachyonFS {
       throws IOException {
     validateUri(path);
     ClientFileInfo clientFileInfo = getFileStatus(-1, path, useCachedMetadata);
+
     if (clientFileInfo == null) {
+      System.out.println("client info = null for '" + path + "'");
       return null;
     }
     return new TachyonFile(this, clientFileInfo.getId(), mTachyonConf);
@@ -595,13 +599,24 @@ public class TachyonFS extends AbstractTachyonFS {
     }
 
     info = mMasterClient.getFileStatus(fileId, path);
-    fileId = info.getId();
-    if (fileId == -1) {
-      cache.remove(key);
+    if (info == null) {
+      System.out.println("null file info retrieved for path '" + path + "'.");
+      LOG.error("null file info retrieved for path '" + path + "'.");
       return null;
     }
-    path = info.getPath();
 
+    fileId = info.getId();
+    if (fileId == -1) {
+      System.out.println("getFileStatus() :Fileid is still -1 for file with path '" + path + "'.");
+      cache.remove(key);
+      return null;
+    } else {
+      System.out.println("getFileStatus() : Fileid is " + fileId + " for file with path '"
+              + path + "'.");
+    }
+
+    path = info.getPath();
+    System.out.println("getFileStatus() : File path  " + path + "'.");
     // TODO: LRU
     mIdToClientFileInfo.put(fileId, info);
     mPathToClientFileInfo.put(path, info);
@@ -622,6 +637,7 @@ public class TachyonFS extends AbstractTachyonFS {
    */
   public synchronized ClientFileInfo getFileStatus(int fileId, TachyonURI path,
       boolean useCachedMetadata) throws IOException {
+    System.out.println("getFileStatus() : for '" + path + "'. File id = " + fileId);
     if (fileId != -1) {
       return getFileStatus(mIdToClientFileInfo, Integer.valueOf(fileId), fileId,
           TachyonURI.EMPTY_URI.getPath(), useCachedMetadata);
@@ -731,6 +747,23 @@ public class TachyonFS extends AbstractTachyonFS {
    */
   long getUserId() throws IOException {
     return mMasterClient.getUserId();
+  }
+
+
+  /**
+   * @return get the total number of bytes used in Tachyon cluster
+   * @throws IOException
+   */
+  public synchronized long getUsedBytes() throws IOException {
+    return mMasterClient.getUsedBytes();
+  }
+
+  /**
+   * @return get the capacity of Tachyon cluster
+   * @throws IOException
+   */
+  public synchronized long getCapacityBytes() throws IOException {
+    return mMasterClient.getCapacityBytes();
   }
 
   /**

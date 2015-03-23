@@ -233,6 +233,8 @@ abstract class AbstractTFS extends FileSystem {
   private void fromHdfsToTachyon(TachyonURI path) throws IOException {
     if (!mTFS.exist(path)) {
       Path hdfsPath = Utils.getHDFSPath(path, mUnderFSAddress);
+      System.out.println("fromHdfsToTachyon hdfspath = " + path + "");
+
       Configuration conf = new Configuration(getConf());
       if (conf.get("fs.defaultFS") == null) {
         conf.set("fs.defaultFS", mUnderFSAddress);
@@ -242,6 +244,7 @@ abstract class AbstractTFS extends FileSystem {
         TachyonURI ufsUri = new TachyonURI(mUnderFSAddress);
         TachyonURI ufsAddrPath = new TachyonURI(ufsUri.getScheme(), ufsUri.getAuthority(),
             path.getPath());
+        System.out.println("fromHdfsToTachyon ufs addr path = " + ufsAddrPath + "");
         // Set the path as the TFS root path.
         UfsUtils.loadUnderFs(mTFS, path, ufsAddrPath, new PrefixList(null), mTachyonConf);
       }
@@ -273,13 +276,16 @@ abstract class AbstractTFS extends FileSystem {
     List<ClientBlockInfo> blocks = mTFS.getFileBlocks(fileId);
     for (int k = 0; k < blocks.size(); k ++) {
       ClientBlockInfo info = blocks.get(k);
+      System.out.println("getFileBlockLocations : block : '" + info + "'");
       long offset = info.getOffset();
       long end = offset + info.getLength();
       if ((offset >= start && offset <= start + len) || (end >= start && end <= start + len)) {
         ArrayList<String> names = new ArrayList<String>();
         ArrayList<String> hosts = new ArrayList<String>();
         for (NetAddress addr : info.getLocations()) {
-          names.add(addr.mHost);
+          String name = addr.mHost + ":" + addr.mPort;
+          System.out.println("getFileBlockLocations : adding name : '" + name + "");
+          names.add(name);
           hosts.add(addr.mHost);
         }
         blockLocations.add(new BlockLocation(CommonUtils.toStringArray(names), CommonUtils
@@ -299,17 +305,33 @@ abstract class AbstractTFS extends FileSystem {
    */
   @Override
   public FileStatus getFileStatus(Path path) throws IOException {
+    LOG.info("getFileStatus received by AbstractTFS: Path = '" + path + "'.");
+    System.out.println("getFileStatus received by AbstractTFS: Path = '" + path + "'.");
     TachyonURI tPath = new TachyonURI(Utils.getPathWithoutScheme(path));
+    LOG.info("getFileStatus going to retrieve hdfsPath for original Path = '" + path + "'.");
+    System.out.println("getFileStatus going to retrieve hdfsPath for original Path = '"
+            + path + "'.");
     Path hdfsPath = Utils.getHDFSPath(tPath, mUnderFSAddress);
+
+    LOG.info("getFileStatus constructed hdfsPath '" + hdfsPath + "'; Path = '" + path + "'.");
+    System.out.println("getFileStatus constructed hdfsPath '"
+            + hdfsPath + "'; Path = '" + path + "'.");
+    LOG.info("getFileStatus : tachyon header : '" + mTachyonHeader + "'; Path = '" + path + "'.");
+    System.out.println("getFileStatus : tachyon header : '" + mTachyonHeader
+            + "'; Path = '" + path + "'.");
 
     LOG.info("getFileStatus(" + path + "): HDFS Path: " + hdfsPath + " TPath: " + mTachyonHeader
         + tPath);
+    System.out.println("getFileStatus(" + path + "): HDFS Path: " + hdfsPath
+            + " TPath: " + mTachyonHeader
+            + tPath);
     if (useHdfs()) {
       fromHdfsToTachyon(tPath);
     }
     TachyonFile file = mTFS.getFile(tPath);
     if (file == null) {
       LOG.info("File does not exist: " + path);
+      System.out.println("File does not exist: " + path);
       throw new FileNotFoundException("File does not exist: " + path);
     }
 
@@ -361,8 +383,11 @@ abstract class AbstractTFS extends FileSystem {
     super.initialize(uri, conf);
     LOG.info("initialize(" + uri + ", " + conf + "). Connecting to Tachyon: " + uri.toString());
     Utils.addS3Credentials(conf);
+    System.out.println("Added s3 credentials");
     setConf(conf);
     mTachyonHeader = getScheme() + "://" + uri.getHost() + ":" + uri.getPort();
+
+    System.out.println("Constructed tachyon header : '" + mTachyonHeader + "'.");
 
     // Load TachyonConf if any and merge to the one in TachyonFS
     TachyonConf siteConf = ConfUtils.loadFromHadoopConfiguration(conf);
@@ -423,10 +448,14 @@ abstract class AbstractTFS extends FileSystem {
   public FSDataInputStream open(Path cPath, int bufferSize) throws IOException {
     LOG.info("open(" + cPath + ", " + bufferSize + ")");
 
+    System.out.println("open(" + cPath + ", " + bufferSize + ")");
+
     TachyonURI path = new TachyonURI(Utils.getPathWithoutScheme(cPath));
+    System.out.println("open with tachyon uri (" + path + ")");
     fromHdfsToTachyon(path);
     int fileId = mTFS.getFileId(path);
-
+    System.out.println("open() : tachyon uri (" + path + "); fileId = "
+            + fileId + ".");
     return new FSDataInputStream(new HdfsFileInputStream(mTFS, fileId,
         Utils.getHDFSPath(path, mUnderFSAddress), getConf(), bufferSize, mTachyonConf));
   }
@@ -436,8 +465,18 @@ abstract class AbstractTFS extends FileSystem {
     LOG.info("rename(" + src + ", " + dst + ")");
     TachyonURI srcPath = new TachyonURI(Utils.getPathWithoutScheme(src));
     TachyonURI dstPath = new TachyonURI(Utils.getPathWithoutScheme(dst));
+    ClientFileInfo info = mTFS.getFileStatus(-1, dstPath);
+    // If the destination is an existing folder, try to move the src into the folder
+    if (info != null && info.isFolder) {
+      dstPath = dstPath.join(srcPath.getName());
+    }
     fromHdfsToTachyon(srcPath);
-    return mTFS.rename(srcPath, dstPath);
+    try {
+      return mTFS.rename(srcPath, dstPath);
+    } catch (IOException ioe) {
+      LOG.error("Failed to rename {} to {}", src, dst, ioe);
+      return false;
+    }
   }
 
   @Override

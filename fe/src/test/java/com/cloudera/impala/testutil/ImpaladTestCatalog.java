@@ -20,7 +20,9 @@ import com.cloudera.impala.catalog.CatalogServiceCatalog;
 import com.cloudera.impala.catalog.Db;
 import com.cloudera.impala.catalog.HdfsCachePool;
 import com.cloudera.impala.catalog.ImpaladCatalog;
+import com.cloudera.impala.catalog.IncompleteTable;
 import com.cloudera.impala.catalog.Table;
+import com.cloudera.impala.catalog.TableLoadingException;
 import com.google.common.base.Preconditions;
 
 /**
@@ -72,7 +74,10 @@ public class ImpaladTestCatalog extends ImpaladCatalog {
       throws CatalogException {
     Table existingTbl = super.getTable(dbName, tableName);
     // Table doesn't exist or is already loaded. Just return it.
-    if (existingTbl == null || existingTbl.isLoaded()) return existingTbl;
+    if (existingTbl == null || existingTbl.isLoaded() && !(existingTbl instanceof IncompleteTable)) return existingTbl;
+
+    if(existingTbl.isLoaded() && existingTbl instanceof IncompleteTable)
+      throw new TableLoadingException("Missing metadata for table: " +  ((IncompleteTable) existingTbl).getCause());
 
     // The table was not yet loaded. Load it in to the catalog and try getTable()
     // again.

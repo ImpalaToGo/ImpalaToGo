@@ -24,14 +24,12 @@ import org.apache.commons.lang.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.cloudera.impala.analysis.ToSqlUtils;
 import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.LiteralExpr;
 import com.cloudera.impala.analysis.NullLiteral;
 import com.cloudera.impala.analysis.PartitionKeyValue;
-import com.cloudera.impala.catalog.PartitionStatsUtil;
+import com.cloudera.impala.analysis.ToSqlUtils;
 import com.cloudera.impala.common.ImpalaException;
-import com.cloudera.impala.common.JniUtil;
 import com.cloudera.impala.thrift.ImpalaInternalServiceConstants;
 import com.cloudera.impala.thrift.TAccessLevel;
 import com.cloudera.impala.thrift.TExpr;
@@ -41,15 +39,15 @@ import com.cloudera.impala.thrift.THdfsFileBlock;
 import com.cloudera.impala.thrift.THdfsFileDesc;
 import com.cloudera.impala.thrift.THdfsPartition;
 import com.cloudera.impala.thrift.TNetworkAddress;
-import com.cloudera.impala.thrift.TTableStats;
 import com.cloudera.impala.thrift.TPartitionStats;
+import com.cloudera.impala.thrift.TTableStats;
 import com.cloudera.impala.util.HdfsCachingUtil;
+import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.base.Joiner;
 
 /**
  * Query-relevant information for one table partition. Partitions are comparable

@@ -54,14 +54,17 @@ public abstract class BlockInStream extends InStream {
    */
   public static BlockInStream get(TachyonFile tachyonFile, ReadType readType, int blockIndex,
       Object ufsConf, TachyonConf tachyonConf) throws IOException {
+    System.out.println("BlockInStream.get() : getting blockinstream.");
     TachyonByteBuffer buf = tachyonFile.readLocalByteBuffer(blockIndex);
     if (buf != null) {
+      System.out.println("BlockInStream.get() : buffer is <> null");
       if (readType.isPromote()) {
+        System.out.println("BlockInStream.get() : promoting block with index " + blockIndex);
         tachyonFile.promoteBlock(blockIndex);
       }
       return new LocalBlockInStream(tachyonFile, readType, blockIndex, buf, tachyonConf);
     }
-
+    System.out.println("BlockInStream.get() : going to return remote blockinstream");
     return new RemoteBlockInStream(tachyonFile, readType, blockIndex, ufsConf, tachyonConf);
   }
 

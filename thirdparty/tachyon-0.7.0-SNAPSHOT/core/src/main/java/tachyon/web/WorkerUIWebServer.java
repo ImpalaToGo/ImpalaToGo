@@ -13,33 +13,28 @@
  * the License.
  */
 
-package tachyon.worker;
+package tachyon.web;
 
-import java.io.IOException;
+import java.net.InetSocketAddress;
 
-import com.google.common.base.Throwables;
+import org.eclipse.jetty.servlet.ServletHolder;
 
-import tachyon.HeartbeatExecutor;
+import com.google.common.base.Preconditions;
+
+import tachyon.conf.TachyonConf;
+import tachyon.worker.WorkerStorage;
 
 /**
- * User client sends periodical heartbeats to the worker it is talking to. If it fails to do so, the
- * worker may withdraw the space granted to the particular user.
+ * A worker's UI web server
  */
-class WorkerClientHeartbeatExecutor implements HeartbeatExecutor {
-  private final WorkerClient mWorkerClient;
-  private final long mUserId;
+public class WorkerUIWebServer extends UIWebServer {
 
-  public WorkerClientHeartbeatExecutor(WorkerClient workerClient, long userId) {
-    mWorkerClient = workerClient;
-    mUserId = userId;
-  }
+  public WorkerUIWebServer(String serverName, InetSocketAddress address,
+      WorkerStorage workerStorage, TachyonConf conf) {
+    super(serverName, address, conf);
+    Preconditions.checkNotNull(workerStorage, "WorkerStorage cannot be null");
 
-  @Override
-  public void heartbeat() {
-    try {
-      mWorkerClient.userHeartbeat(mUserId);
-    } catch (IOException e) {
-      throw Throwables.propagate(e);
-    }
+    mWebAppContext.addServlet(new ServletHolder(
+        new WebInterfaceWorkerGeneralServlet(workerStorage)), "/home");
   }
 }

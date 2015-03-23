@@ -499,7 +499,8 @@ public class MasterInfo extends ImageWriter {
       throw new BlockInfoException("Invalid block size " + blockSizeByte);
     }
 
-    LOG.debug("createFile {}", CommonUtils.parametersToString(path));
+    LOG.info("createFile {}", CommonUtils.parametersToString(path));
+    System.out.println("createFile " + CommonUtils.parametersToString(path));
 
     String[] pathNames = CommonUtils.getPathComponents(path.toString());
     String name = path.getName();
@@ -512,6 +513,7 @@ public class MasterInfo extends ImageWriter {
       // pathIndex is the index into pathNames where we start filling in the path from the inode.
       int pathIndex = parentPath.length;
       if (!traversalSucceeded(inodeTraversal)) {
+        System.out.println("Traversal failed for : " + path);
         // Then the path component at errorInd k doesn't exist. If it's not recursive, we throw an
         // exception here. Otherwise we add the remaining path components to the list of components
         // to create.
@@ -534,9 +536,11 @@ public class MasterInfo extends ImageWriter {
       InodeFolder currentInodeFolder = (InodeFolder) inodeTraversal.getFirst();
       // Fill in the directories that were missing.
       for (int k = pathIndex; k < parentPath.length; k ++) {
+        System.out.println("Path index : " + k + "; path = "
+                + pathNames[k]);
         Inode dir =
-            new InodeFolder(pathNames[k], mInodeCounter.incrementAndGet(),
-                currentInodeFolder.getId(), creationTimeMs);
+                new InodeFolder(pathNames[k], mInodeCounter.incrementAndGet(),
+                        currentInodeFolder.getId(), creationTimeMs);
         dir.setPinned(currentInodeFolder.isPinned());
         currentInodeFolder.addChild(dir);
         currentInodeFolder.setLastModificationTimeMs(creationTimeMs);
@@ -556,6 +560,8 @@ public class MasterInfo extends ImageWriter {
         throw new FileAlreadyExistException(path.toString());
       }
       if (directory) {
+        System.out.println("Creating leaf with name : " + name + "; path = "
+                + path);
         ret =
             new InodeFolder(name, mInodeCounter.incrementAndGet(), currentInodeFolder.getId(),
                 creationTimeMs);
@@ -576,8 +582,8 @@ public class MasterInfo extends ImageWriter {
       mFileIdToInodes.put(ret.getId(), ret);
       currentInodeFolder.addChild(ret);
       currentInodeFolder.setLastModificationTimeMs(creationTimeMs);
-
-      LOG.debug("createFile: File Created: {} parent: ", ret, currentInodeFolder);
+      LOG.info("createFile: File Created: {} parent: ", ret, currentInodeFolder);
+      System.out.println("createFile: File Created: " + ret + " parent: " + currentInodeFolder);
       return ret.getId();
     }
   }
@@ -921,9 +927,10 @@ public class MasterInfo extends ImageWriter {
    */
   public int cacheBlock(long workerId, long usedBytesOnTier, long storageDirId, long blockId,
       long length) throws FileDoesNotExistException, BlockInfoException {
-    LOG.debug("Cache block: {}",
-        CommonUtils.parametersToString(workerId, usedBytesOnTier, blockId, length));
-
+    LOG.info("Cache block: {}",
+            CommonUtils.parametersToString(workerId, usedBytesOnTier, blockId, length));
+    System.out.println("Cache block: "
+        + CommonUtils.parametersToString(workerId, usedBytesOnTier, blockId, length));
     MasterWorkerInfo tWorkerInfo = getWorkerInfo(workerId);
     int storageLevelAliasValue = StorageDirId.getStorageLevelAliasValue(storageDirId);
     tWorkerInfo.updateBlock(true, blockId);
@@ -1241,8 +1248,10 @@ public class MasterInfo extends ImageWriter {
    */
   public ClientFileInfo getClientFileInfo(TachyonURI path) throws InvalidPathException {
     synchronized (mRootLock) {
+      System.out.println("getClientFileInfo(" + path + ")");
       Inode inode = getInode(path);
       if (inode == null) {
+        System.out.println("getClientFileInfo(" + path + ") : iNode = null");
         ClientFileInfo info = new ClientFileInfo();
         info.id = -1;
         return info;
@@ -1469,8 +1478,15 @@ public class MasterInfo extends ImageWriter {
    * @throws InvalidPathException
    */
   private Inode getInode(String[] pathNames) throws InvalidPathException {
+    System.out.println("getInode(). path components:");
+    for (String component : pathNames) {
+      System.out.println("getInode(). path component = " + component);
+    }
     Pair<Inode, Integer> inodeTraversal = traverseToInode(pathNames);
+    System.out.println("getInode() : first = " + inodeTraversal.getFirst()
+            + "; second = " + inodeTraversal.getSecond());
     if (!traversalSucceeded(inodeTraversal)) {
+      System.out.println("getInode(). traversal failed.");
       return null;
     }
     return inodeTraversal.getFirst();
@@ -2303,15 +2319,21 @@ public class MasterInfo extends ImageWriter {
    */
   private Pair<Inode, Integer> traverseToInode(String[] pathNames) throws InvalidPathException {
     synchronized (mRootLock) {
+      System.out.println("traverseToInode() : root = '" + mRoot + "'");
+
       if (pathNames == null || pathNames.length == 0) {
+        System.out.println("passed-in pathNames is null or empty");
         throw new InvalidPathException("passed-in pathNames is null or empty");
       }
       if (pathNames.length == 1) {
         if (pathNames[0].equals("")) {
+          System.out.println("paths.length = 1 and first path component is empty, root "
+                   + "will be replied : '" + mRoot + "'");
           return new Pair<Inode, Integer>(mRoot, -1);
         } else {
           final String msg = "File name starts with " + pathNames[0];
           LOG.info("InvalidPathException: " + msg);
+          System.out.println("InvalidPathException: " + msg);
           throw new InvalidPathException(msg);
         }
       }
@@ -2321,6 +2343,8 @@ public class MasterInfo extends ImageWriter {
       for (int k = 1; k < pathNames.length; k ++) {
         Inode next = ((InodeFolder) ret.getFirst()).getChild(pathNames[k]);
         if (next == null) {
+          System.out.println("traverseToInode() : next = null. k = " + k
+                  + "pathNames[k] = " + pathNames[k]);
           // The user might want to create the nonexistent directories, so we leave ret.getFirst()
           // as the last Inode taken. We set nonexistentInd to k, to indicate that the kth path
           // component was the first one that couldn't be found.
@@ -2332,11 +2356,13 @@ public class MasterInfo extends ImageWriter {
           // The inode can't have any children. If this is the last path component, we're good.
           // Otherwise, we can't traverse further, so we clean up and throw an exception.
           if (k == pathNames.length - 1) {
+            System.out.println("traverseToInode() : k == pathNames.length - 1");
             break;
           } else {
             final String msg =
                 "Traversal failed. Component " + k + "(" + ret.getFirst().getName() + ") is a file";
             LOG.info("InvalidPathException: " + msg);
+            System.out.println("InvalidPathException: " + msg);
             throw new InvalidPathException(msg);
           }
         }

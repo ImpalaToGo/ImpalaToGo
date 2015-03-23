@@ -80,7 +80,7 @@ public class MasterServiceHandler implements MasterService.Iface {
       return mMasterInfo.getClientFileInfo(fileId);
 
     }
-
+    System.out.println("masterSrvHandler.getFileStatus() : " + path);
     return mMasterInfo.getClientFileInfo(new TachyonURI(path));
   }
 
@@ -173,6 +173,11 @@ public class MasterServiceHandler implements MasterService.Iface {
   }
 
   @Override
+  public long user_getCapacityBytes() throws TException {
+    return mMasterInfo.getCapacityBytes();
+  }
+
+  @Override
   public ClientBlockInfo user_getClientBlockInfo(long blockId) throws FileDoesNotExistException,
       BlockInfoException, TException {
     return mMasterInfo.getClientBlockInfo(blockId);
@@ -198,6 +203,7 @@ public class MasterServiceHandler implements MasterService.Iface {
   public List<ClientBlockInfo> user_getFileBlocks(int fileId, String path)
       throws FileDoesNotExistException, InvalidPathException, TException {
     List<ClientBlockInfo> ret = null;
+    System.out.println("file blocks requested for file with id " + fileId);
     if (fileId != -1) {
       ret = mMasterInfo.getFileBlocks(fileId);
     } else {
@@ -214,6 +220,11 @@ public class MasterServiceHandler implements MasterService.Iface {
   @Override
   public String user_getUfsAddress() throws TException {
     return mMasterInfo.getTachyonConf().get(Constants.UNDERFS_ADDRESS, "/underfs");
+  }
+
+  @Override
+  public long user_getUsedBytes() throws TException {
+    return mMasterInfo.getUsedBytes();
   }
 
   @Override
