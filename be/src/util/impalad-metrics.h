@@ -40,6 +40,10 @@ class ImpaladMetricKeys {
   // queries
   static const char* IMPALA_SERVER_NUM_FRAGMENTS;
 
+  // Number of commands executed by this server, including failed and cancelled
+  // batches
+  static const char* IMPALA_SERVER_NUM_COMMANDS;
+
   // Number of open HiveServer2 sessions
   static const char* IMPALA_SERVER_NUM_OPEN_HS2_SESSIONS;
 

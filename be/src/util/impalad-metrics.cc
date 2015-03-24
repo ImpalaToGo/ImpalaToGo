@@ -32,6 +32,8 @@ const char* ImpaladMetricKeys::IMPALA_SERVER_NUM_QUERIES =
     "impala-server.num-queries";
 const char* ImpaladMetricKeys::IMPALA_SERVER_NUM_FRAGMENTS =
     "impala-server.num-fragments";
+const char* ImpaladMetricKeys::IMPALA_SERVER_NUM_COMMANDS =
+    "impala-server.num-commands";
 const char* ImpaladMetricKeys::TOTAL_SCAN_RANGES_PROCESSED =
     "impala-server.scan-ranges.total";
 const char* ImpaladMetricKeys::NUM_SCAN_RANGES_MISSING_VOLUME_ID =
@@ -136,6 +138,8 @@ void ImpaladMetrics::CreateMetrics(MetricGroup* m) {
       ImpaladMetricKeys::NUM_QUERIES_SPILLED, 0L);
   IMPALA_SERVER_NUM_FRAGMENTS = m->AddCounter(
       ImpaladMetricKeys::IMPALA_SERVER_NUM_FRAGMENTS, 0L);
+  IMPALA_SERVER_NUM_COMMANDS = m->AddCounter(
+	      ImpaladMetricKeys::IMPALA_SERVER_NUM_FRAGMENTS, 0L);
   IMPALA_SERVER_NUM_OPEN_HS2_SESSIONS = m->AddGauge<int64_t>(
       ImpaladMetricKeys::IMPALA_SERVER_NUM_OPEN_HS2_SESSIONS, 0L);
   IMPALA_SERVER_NUM_OPEN_BEESWAX_SESSIONS = m->AddGauge<int64_t>(
