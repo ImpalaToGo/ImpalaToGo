@@ -771,7 +771,6 @@ Status Coordinator::FinalizeSuccessfulInsert() {
 	  }
   }
 
-
   {
     SCOPED_TIMER(ADD_CHILD_TIMER(query_profile_, "FileMoveTimer", "FinalizationTimer"));
 
@@ -890,7 +889,7 @@ Status Coordinator::RunBatchOnRemoteBackends(const dfsBatch& batch, const std::s
 		LOG (INFO) << "Batch size is \"" << batches_fragments << "\" in context " << context << ".\n";
         commands_exec_status = ParallelExecutor::Exec(
         		bind<Status>(mem_fn(&Coordinator::ExecRemoteCommand), this, _1),
-				reinterpret_cast<void**>(&backend_command_states_),
+				reinterpret_cast<void**>(&backend_command_states_[0]),
 				num_backends_initial, &latencies);
 	}
 	if (!commands_exec_status.ok()) {
