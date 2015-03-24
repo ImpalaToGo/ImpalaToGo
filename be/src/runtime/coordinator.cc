@@ -761,11 +761,11 @@ Status Coordinator::FinalizeSuccessfulInsert() {
 	  }
 	  // If there's some operations of "DELETE" or "MOVE" nature, collect them according
 	  // to backend where they are relevant, to be batch-executed later
-	  if(command_delete.__isset.delete_set && !command_delete.delete_set.empty()){
+	  if(!command_delete.delete_set.empty()){
 		  batch_deletion.insert(std::pair<int, TRemoteShortCommand>(move.first, command_delete));
 		  LOG(INFO) << "Deletion batch is updated with non-empty command.\n";
 	  }
-	  if(command_move.__isset.rename_set && !command_move.rename_set.empty()){
+	  if(!command_move.rename_set.empty()){
 		  batch_move.insert(std::pair<int, TRemoteShortCommand>(move.first, command_move));
 		  LOG(INFO) << "Move batch is updated with non-empty command.\n";
 	  }
