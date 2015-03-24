@@ -748,21 +748,27 @@ Status Coordinator::FinalizeSuccessfulInsert() {
 			  // for s3 or other block-based filesystem, where we don't want moves due its non-efficiency,
 			  // we don't create any temporary folders and so don't need to delete them
 			  VLOG_ROW << "Deleting file: " << item.first;
+			  LOG(INFO) << "Deleting file: " << item.first;
 			  command_delete.delete_set.push_back(item.first);
 		  } else {
 			  // if destination path is equals to temporary path, don't rename anything
 			  if(item.first.compare(item.second) != 0){
 				  VLOG_ROW << "Moving tmp file: " << item.first << " to " << item.second;
+				  LOG(INFO) << "Moving tmp file: " << item.first << " to " << item.second;
 				  command_move.rename_set.insert(std::pair<std::string, std::string> (item.first, item.second));
 			  }
 		  }
 	  }
 	  // If there's some operations of "DELETE" or "MOVE" nature, collect them according
 	  // to backend where they are relevant, to be batch-executed later
-	  if(command_delete.__isset.delete_set && !command_delete.delete_set.empty())
+	  if(command_delete.__isset.delete_set && !command_delete.delete_set.empty()){
 		  batch_deletion.insert(std::pair<int, TRemoteShortCommand>(move.first, command_delete));
-	  if(command_move.__isset.rename_set && !command_move.rename_set.empty())
+		  LOG(INFO) << "Deletion batch is updated with non-empty command.\n";
+	  }
+	  if(command_move.__isset.rename_set && !command_move.rename_set.empty()){
 		  batch_move.insert(std::pair<int, TRemoteShortCommand>(move.first, command_move));
+		  LOG(INFO) << "Move batch is updated with non-empty command.\n";
+	  }
   }
 
 
@@ -1462,31 +1468,39 @@ Status Coordinator::UpdateFragmentExecStatus(const TReportExecStatusParams& para
 
   // below section is for parallel insert statements
   if (params.done && params.__isset.insert_exec_status) {
-    lock_guard<mutex> l(lock_);
-    // Merge in table update data (partitions written to, files to be moved as part of
-    // finalization)
-    BOOST_FOREACH(const PartitionStatusMap::value_type& partition,
-        params.insert_exec_status.per_partition_status) {
-      TInsertPartitionStatus* status = &(per_partition_status_[partition.first]);
-      status->num_appended_rows += partition.second.num_appended_rows;
-      status->id = partition.second.id;
-      if (!status->__isset.stats) status->__set_stats(TInsertStats());
-      DataSink::MergeInsertStats(partition.second.stats, &status->stats);
-    }
-    // save the dataset to be renamed as well as bound backend where rename should be run
-    MoveDataSet backend_rename_set;
-    backend_rename_set.insert(params.insert_exec_status.files_to_move.begin(),
-            params.insert_exec_status.files_to_move.end());
+		LOG(INFO)<< "Fragment updates about its exec status! Files to move size = \"" <<
+		params.insert_exec_status.files_to_move.size() << "\"";
+		lock_guard<mutex> l(lock_);
+		// Merge in table update data (partitions written to, files to be moved as part of
+		// finalization)
+		BOOST_FOREACH(const PartitionStatusMap::value_type& partition,
+				params.insert_exec_status.per_partition_status) {
+			TInsertPartitionStatus* status = &(per_partition_status_[partition.first]);
+			status->num_appended_rows += partition.second.num_appended_rows;
+			status->id = partition.second.id;
+			if (!status->__isset.stats) status->__set_stats(TInsertStats());
+			DataSink::MergeInsertStats(partition.second.stats, &status->stats);
+		}
+		// save the dataset to be renamed as well as bound backend where rename should be run
+		MoveDataSet backend_rename_set;
+		backend_rename_set.insert(params.insert_exec_status.files_to_move.begin(),
+				params.insert_exec_status.files_to_move.end());
 
-    // update the "move set" with the backend's update (merge update):
-    FileMoveMap::iterator it =  files_to_move_.lower_bound(params.backend_num);
-    if(it != files_to_move_.end() && !(files_to_move_.key_comp()(params.backend_num, it->first)))
-    	// backend is already registered within the "move set", update it with new dataset
-    	it->second.insert(backend_rename_set.begin(), backend_rename_set.end());
-    else
-        // the backend is not registered yet in "move set". Register now. Reuse iterator to avoid yet
-    	// another lookup:
-    	files_to_move_.insert(it, FileMoveMap::value_type(params.backend_num, backend_rename_set));
+		// update the "move set" with the backend's update (merge update):
+		FileMoveMap::iterator it = files_to_move_.lower_bound(params.backend_num);
+		if(it != files_to_move_.end() && !(files_to_move_.key_comp()(params.backend_num, it->first))){
+			  LOG(INFO) << "Backend \"" << params.backend_num << "\" already registered in \"move set\", updating... " <<
+					  "\n";
+			// backend is already registered within the "move set", update it with new dataset
+			it->second.insert(backend_rename_set.begin(), backend_rename_set.end());
+		}
+		else{
+			// the backend is not registered yet in "move set". Register now. Reuse iterator to avoid yet
+			// another lookup:
+			  LOG(INFO) << "Backend \"" << params.backend_num << "\" is not registered in \"move set\" yet, creating... " <<
+					  "\n";
+			files_to_move_.insert(it, FileMoveMap::value_type(params.backend_num, backend_rename_set));
+		}
   }
 
   if (VLOG_FILE_IS_ON) {
