@@ -23,8 +23,11 @@ DEFINE_int32(log_c_mem_usage_interval, 0,
 				"every log_c_mem_usage_interval'th command completion.");
 
 Status CommandMgr::init(){
+	LOG (INFO) << "Command manager is going to register its pool within the system." << "\n";
 	// acquire resources (here, threads) pool from exec, typically 3 number of threads per core
 	resource_pool_ = ExecEnv::GetInstance()->thread_mgr()->RegisterPool();
+	LOG (INFO) << "Command manager completed pool registration within the system." << "\n";
+
 	DCHECK(resource_pool_ != NULL);
 	LOG (INFO) << "Command manager is initialized." << "\n";
 	return Status::OK;
@@ -47,6 +50,10 @@ Status CommandMgr::ExecCommand(const TExecRemoteCommandParams& params){
 			new CommandExecState(params.command_instance_ctx,
 					ExecEnv::GetInstance()));
 
+	LOG(INFO) << "Command exec state is created...";
+
+    RETURN_IF_ERROR(exec_state->Prepare(params));
+
 	boost::lock_guard<boost::mutex> l(commands_exec_state_map_lock_);
 		// register exec_state before starting exec thread
 	commands_exec_state_map_.insert(
@@ -54,7 +61,8 @@ Status CommandMgr::ExecCommand(const TExecRemoteCommandParams& params){
 						exec_state));
 
 	// Reserve one main thread from the pool
-	resource_pool()->AcquireThreadToken();
+	if(resource_pool() != NULL)
+		resource_pool()->AcquireThreadToken();
 
 	exec_state->set_exec_thread(
 			new Thread("impala-server", "exec-command",
@@ -68,8 +76,9 @@ void CommandMgr::CommandExecThread(CommandExecState* exec_state) {
 
 	ImpaladMetrics::IMPALA_SERVER_NUM_COMMANDS->Increment(1L);
 	exec_state->Exec();
-	// we're done with this command
-	resource_pool()->ReleaseThreadToken(true);
+	if(resource_pool() != NULL)
+		// we're done with this command
+		resource_pool()->ReleaseThreadToken(true);
 
 	// The last reference to the CommandExecState is in the map. We don't
 	// want the destructor to be called while the command_exec_state_map_lock_
