@@ -139,7 +139,7 @@ void ImpaladMetrics::CreateMetrics(MetricGroup* m) {
   IMPALA_SERVER_NUM_FRAGMENTS = m->AddCounter(
       ImpaladMetricKeys::IMPALA_SERVER_NUM_FRAGMENTS, 0L);
   IMPALA_SERVER_NUM_COMMANDS = m->AddCounter(
-	      ImpaladMetricKeys::IMPALA_SERVER_NUM_FRAGMENTS, 0L);
+	      ImpaladMetricKeys::IMPALA_SERVER_NUM_COMMANDS, 0L);
   IMPALA_SERVER_NUM_OPEN_HS2_SESSIONS = m->AddGauge<int64_t>(
       ImpaladMetricKeys::IMPALA_SERVER_NUM_OPEN_HS2_SESSIONS, 0L);
   IMPALA_SERVER_NUM_OPEN_BEESWAX_SESSIONS = m->AddGauge<int64_t>(
