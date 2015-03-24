@@ -64,6 +64,8 @@ Status CommandMgr::ExecCommand(const TExecRemoteCommandParams& params){
 }
 
 void CommandMgr::CommandExecThread(CommandExecState* exec_state) {
+	LOG(INFO) << "New command is received for execution. \n";
+
 	ImpaladMetrics::IMPALA_SERVER_NUM_COMMANDS->Increment(1L);
 	exec_state->Exec();
 	// we're done with this command

@@ -1894,6 +1894,11 @@ void Coordinator::SetExecCommandParams(int backend_num, const TRemoteShortComman
     int fragment_idx, const FragmentExecParams& params, int instance_idx,
     const TNetworkAddress& coord, TExecRemoteCommandParams* rpc_params) {
 
+	LOG(INFO) << "Coordinator set command exec parameters for backend = \"" <<
+			backend_num << "\"; command instance id = \"" << params.instance_ids[instance_idx] <<
+			"\" ; coordinator address = \"" << coord << "\"; backend addr = \"" << params.hosts[instance_idx] <<
+			"\".";
+
 	// set protocol:
 	rpc_params->__set_protocol_version(ImpalaInternalServiceVersion::V1);
 	// set command:
@@ -1907,7 +1912,7 @@ void Coordinator::SetExecCommandParams(int backend_num, const TRemoteShortComman
 	rpc_params->command_instance_ctx.backend_num = backend_num;
 
 	// set coordinator address:
-	rpc_params->command_instance_ctx.coord_address = coord;
+	rpc_params->command_instance_ctx.__set_coord_address(coord);
 
 	rpc_params->__isset.command_instance_ctx = true;
 }
