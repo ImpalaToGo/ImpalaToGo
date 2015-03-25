@@ -1913,6 +1913,8 @@ void Coordinator::SetExecCommandParams(int backend_num, const TRemoteShortComman
 	rpc_params->command_instance_ctx.num_command_instances = params.instance_ids.size();
 	rpc_params->command_instance_ctx.backend_num = backend_num;
 
+	// bind command to active query id to be routed to this execution context on completion/report callback:
+    rpc_params->command_instance_ctx.__set_query_id(query_id_);
 	// set coordinator address:
 	rpc_params->command_instance_ctx.__set_coord_address(coord);
 
