@@ -43,7 +43,7 @@ Status CommandExecutor::validate(const TExecRemoteCommandParams& request) {
 
 	VLOG_QUERY << "validate(): command instance id = \""
 			<< PrintId(request.command_instance_ctx.command_instance_id) << "\".";
-	VLOG(2) << "params : \n" << apache::thrift::ThriftDebugString(params);
+	LOG(INFO) << "params : \n" << apache::thrift::ThriftDebugString(params);
 
 	// total_time_counter() is in the runtime_state_ so start it up now.
 	SCOPED_TIMER(profile()->total_time_counter());
@@ -58,10 +58,10 @@ Status CommandExecutor::validate(const TExecRemoteCommandParams& request) {
 
 Status CommandExecutor::validateInternal(const TExecRemoteCommandParams& request){
 	switch(request.command.type){
-	case RENAME:
+	case TRemoteShortCommandType::RENAME:
 		command_ = new RenameCmdDescriptor(request.command);
         break;
-	case DELETE:
+	case TRemoteShortCommandType::DELETE:
 		command_ = new DeleteCmdDescriptor(request.command);
 		break;
 	default:
