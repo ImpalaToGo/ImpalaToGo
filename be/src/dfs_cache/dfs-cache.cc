@@ -980,7 +980,7 @@ status::StatusInternal dfsRename(const FileSystemDescriptor & fsDescriptor, cons
     }
 
     // if direct dfs access is configured, don't deal with the cache registry
-    if(!CacheLayerRegistry::instance()->directDFSAccess()){
+    if(CacheLayerRegistry::instance()->directDFSAccess()){
     	return status::StatusInternal::OK;
     }
 
