@@ -647,7 +647,7 @@ public class HdfsTable extends Table {
       FileSystem fs = fileSystemRes.getResult();
       // wrap this
       FsKey fsKey = new FsKey(fs);
-      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, location);
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, location, force);
       if(existsRes.getStatus() != BridgeOpStatus.OK){
         throw new IOException(existsRes.getError());
       }
@@ -837,7 +837,7 @@ public class HdfsTable extends Table {
       multipleFileSystems_ = multipleFileSystems_ ||
           !FileSystemUtil.isPathOnFileSystem(new Path(getLocation()), fs);
 
-      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, partDirPath);
+      BridgeOpResult<Boolean> existsRes = HadoopFsBridge.exists(fsKey, partDirPath, force);
       if(existsRes.getStatus() != BridgeOpStatus.OK){
         throw new IOException(existsRes.getError());
       }

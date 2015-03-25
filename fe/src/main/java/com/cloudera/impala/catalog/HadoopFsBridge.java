@@ -170,21 +170,23 @@ public class HadoopFsBridge {
    *
    * @return operation compound result, if OK, contain Boolean
    */
-  public static BridgeOpResult<Boolean> exists(final FsKey fs, final Path path){
+  public static BridgeOpResult<Boolean> exists(final FsKey fs, final Path path, boolean force){
 
-    // check within the cache for requested result:
-    Boolean flag = fsCache.getPathExistence(fs, path);
+    BridgeOpResult<Boolean> res = new HadoopFsBridge().new BridgeOpResult<Boolean>();
+    if(!force){
+      // check within the cache for requested result:
+      Boolean flag = fsCache.getPathExistence(fs, path);
 
-    BridgeOpResult<Boolean> res =  new HadoopFsBridge().new BridgeOpResult<Boolean>();
-    if(flag != null){
-      res.setStatus(BridgeOpStatus.OK);
+      if (flag != null) {
+        res.setStatus(BridgeOpStatus.OK);
 
-      if(flag){
-        res.setResult(true);
+        if (flag) {
+          res.setResult(true);
+          return res;
+        }
+        res.setResult(false);
         return res;
       }
-      res.setResult(false);
-      return res;
     }
 
     // if still here, we have no cached information yet or cached object was not succeed to sync with remote file system
