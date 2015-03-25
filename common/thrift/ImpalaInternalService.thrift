@@ -220,6 +220,10 @@ struct TCommandInstanceCtx {
 
   // backend number assigned by coordinator to identify backend
   5: required i32 backend_num
+  
+  // query id, command is invoked in context of specific query in order
+  // to be called back with results on correct exec
+  6: required Types.TUniqueId query_id
 }
 
 // A scan range plus the parameters needed to execute that scan.
@@ -353,7 +357,7 @@ struct TExecRemoteCommandParams {
 struct TReportCommandStatusParams {
   1: required ImpalaInternalServiceVersion protocol_version
 
-  2: optional Types.TUniqueId query_id
+  2: required Types.TUniqueId query_id
 
   // passed into ExecShortCommand() as TCommandInstanceCtx.backend_num
   3: optional i32 backend_num

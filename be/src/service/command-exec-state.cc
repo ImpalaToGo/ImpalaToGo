@@ -56,6 +56,7 @@ void CommandMgr::CommandExecState::ReportStatusCb(const Status& status,
   params.protocol_version = ImpalaInternalServiceVersion::V1;
   params.__set_backend_num(command_instance_ctx_.backend_num);
   params.__set_command_instance_id(command_instance_ctx_.command_instance_id);
+  params.__set_query_id(command_instance_ctx_.query_id);
   exec_status.SetTStatus(&params);
   params.__set_done(done);
   profile->ToThrift(&params.profile);

@@ -896,7 +896,7 @@ void ImpalaServer::ReportCommandStatus(TReportCommandStatusResult& return_val,
 	  // little longer (until all reports have been received).
 	  if (exec_state.get() == NULL) {
 	    return_val.status.__set_status_code(TStatusCode::INTERNAL_ERROR);
-	    const string& err = Substitute("ReportExecStatus(): Received report for unknown "
+	    const string& err = Substitute("ReportCommandStatus(): Received report for unknown "
 	        "query ID (probably closed or cancelled). (query_id: $0, backend: $1, instance:"
 	        " $2 done: $3)", PrintId(params.query_id), params.backend_num,
 	        PrintId(params.command_instance_id), params.done);
