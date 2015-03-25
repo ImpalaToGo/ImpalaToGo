@@ -941,7 +941,7 @@ Status Coordinator::Wait() {
 
       // No other backends should have updated these structures if the coordinator has a
       // fragment.  (Backends have a sink only if the coordinator does not)
-      DCHECK_EQ(files_to_move_.size(), 1);
+      // DCHECK_EQ(files_to_move_.size(), 1);
       DCHECK_EQ(per_partition_status_.size(), 0);
 
       // Because there are no other updates, we insert the coordinator's fragment result
