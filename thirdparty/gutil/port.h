@@ -570,7 +570,7 @@ enum PrefetchHint {
 #endif
 
 extern inline void prefetch(const char *x, int hint) {
-#if defined(__llvm__)
+#if defined(__llvm__) || defined(__INTEL_COMPILER)
   // In the gcc version of prefetch(), hint is only a constant _after_ inlining
   // (assumed to have been successful).  llvm views things differently, and
   // checks constant-ness _before_ inlining.  This leads to compilation errors
