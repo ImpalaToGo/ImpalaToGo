@@ -41,6 +41,8 @@ void CommandMgr::CommandExecState::ReportStatusCb(const Status& status,
   DCHECK(status.ok() || done);  // if !status.ok() => done
   Status exec_status = UpdateStatus(status);
 
+  LOG(INFO) << "Command Mgr is near to update on command exec status..\n";
+
   Status coord_status;
   ImpalaInternalServiceConnection coord(client_cache_, coord_address(), &coord_status);
   if (!coord_status.ok()) {

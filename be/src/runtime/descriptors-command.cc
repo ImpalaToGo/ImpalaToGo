@@ -11,9 +11,9 @@ namespace impala{
 
 bool RenameCmdDescriptor::validate(const TRemoteShortCommand& cdesc){
 	// check there's the path is specified:
-    DCHECK(!cdesc.__isset.dfs_path);
+    DCHECK(cdesc.__isset.dfs_path);
     // check rename set is specified:
-    DCHECK(!cdesc.__isset.rename_set);
+    DCHECK(cdesc.__isset.rename_set);
 
     // check that there's connection to dfs exist:
 	HdfsFsCache::instance()->GetConnection(
@@ -23,6 +23,7 @@ bool RenameCmdDescriptor::validate(const TRemoteShortCommand& cdesc){
 }
 
 bool RenameCmdDescriptor::run() {
+	LOG(INFO) << "RenameCmdDescriptor.run(): rename set size = " << m_rename_set.size() << ".\n";
 	std::map<std::string, std::string>::iterator iter;
 	for (iter = m_rename_set.begin(); iter != m_rename_set.end(); iter++) {
 		DCHECK(	dfsRename(dfs_connection_, iter->first.c_str(),
@@ -32,6 +33,7 @@ bool RenameCmdDescriptor::run() {
 }
 
 bool DeleteCmdDescriptor::run() {
+	LOG(INFO) << "RenameCmdDescriptor.run(): delete set size = " << m_deletion_set.size() << ".\n";
 	std::vector<std::string>::iterator iter;
 	for (iter = m_deletion_set.begin(); iter != m_deletion_set.end(); iter++) {
 		DCHECK(dfsDelete(dfs_connection_, (*iter).c_str()) == 0);
@@ -41,9 +43,9 @@ bool DeleteCmdDescriptor::run() {
 
 bool DeleteCmdDescriptor::validate(const TRemoteShortCommand& cdesc){
 	// check there's the path is specified:
-	DCHECK(!cdesc.__isset.dfs_path);
+	DCHECK(cdesc.__isset.dfs_path);
 	// check deletion set is specified:
-	DCHECK(!cdesc.__isset.delete_set);
+	DCHECK(cdesc.__isset.delete_set);
 
 	// check that there's connection to dfs exist:
 	HdfsFsCache::instance()->GetConnection(cdesc.dfs_path, &dfs_connection_);

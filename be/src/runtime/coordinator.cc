@@ -730,13 +730,13 @@ Status Coordinator::FinalizeSuccessfulInsert() {
 	  TRemoteShortCommand command_delete;
 	  TRemoteShortCommand command_move;
 
-	  command_delete.display_name = "delete";
-	  command_delete.type = TRemoteShortCommandType::DELETE;
-	  command_delete.dfs_path = finalize_params_.hdfs_base_dir;
+	  command_delete.__set_display_name("delete");
+	  command_delete.__set_type(TRemoteShortCommandType::DELETE);
+	  command_delete.__set_dfs_path(finalize_params_.hdfs_base_dir);
 
-	  command_move.display_name = "move";
-	  command_delete.type = TRemoteShortCommandType::RENAME;
-	  command_move.dfs_path = finalize_params_.hdfs_base_dir;
+	  command_move.__set_display_name("move");
+	  command_move.__set_type(TRemoteShortCommandType::RENAME);
+	  command_move.__set_dfs_path(finalize_params_.hdfs_base_dir);
 
 	  // Empty destination means delete, so this is a directory. These get deleted in a
 	  // separate pass to ensure that we have moved all the contents of the directory first.
@@ -762,10 +762,12 @@ Status Coordinator::FinalizeSuccessfulInsert() {
 	  // If there's some operations of "DELETE" or "MOVE" nature, collect them according
 	  // to backend where they are relevant, to be batch-executed later
 	  if(!command_delete.delete_set.empty()){
+		  command_delete.__isset.delete_set = true;
 		  batch_deletion.insert(std::pair<int, TRemoteShortCommand>(move.first, command_delete));
 		  LOG(INFO) << "Deletion batch is updated with non-empty command.\n";
 	  }
 	  if(!command_move.rename_set.empty()){
+		  command_move.__isset.rename_set = true;
 		  batch_move.insert(std::pair<int, TRemoteShortCommand>(move.first, command_move));
 		  LOG(INFO) << "Move batch is updated with non-empty command.\n";
 	  }

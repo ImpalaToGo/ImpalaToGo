@@ -94,7 +94,7 @@ Status CommandExecutor::run() {
     report_thread_started_cv_.wait(l);
     report_thread_active_ = true;
   }
-
+  LOG(INFO) << "run(): reporting thread is started for command instance_id = \"" << PrintId(command_id_) << "\".";
   Status status = runInternal();
   if (!status.ok() && !status.IsCancelled() && !status.IsMemLimitExceeded()) {
 	  // Log error message in addition to returning in Status. Some requests
@@ -111,6 +111,7 @@ void CommandExecutor::reportProfile() {
   boost::unique_lock<boost::mutex> l(report_thread_lock_);
   // tell open() that we started
   report_thread_started_cv_.notify_one();
+  LOG(INFO) << "reportProfile(): thread started for command instance_id = \"" << PrintId(command_id_) << "\".";
 
   // Jitter the reporting time of remote command by a random amount between
   // 0 and the report_interval.  This way, the coordinator doesn't get all the
@@ -144,6 +145,7 @@ void CommandExecutor::reportProfile() {
     if (!report_thread_active_) break;
 
     if (completed_report_sent_.Read() == 0) {
+    	LOG(INFO) << "reportProfile(): sending complete command report for instance_id = \"" << PrintId(command_id_) << "\".";
       // No complete command report has been sent.
       sendReport(false);
     }
@@ -179,6 +181,8 @@ void CommandExecutor::stopReportThread() {
 }
 
 void CommandExecutor::complete() {
+	LOG (INFO) << "Command executor completed command \"" << command_->name() << "\".n";
+
 	delete command_;
 	// Check the atomic flag. If it is set, then a fragment complete report has already
 	// been sent.

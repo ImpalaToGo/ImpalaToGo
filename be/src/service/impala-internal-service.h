@@ -75,7 +75,7 @@ class ImpalaInternalService : public ImpalaInternalServiceIf {
    */
   virtual void ReportCommandStatus(TReportCommandStatusResult& return_val,
 		  const TReportCommandStatusParams& params){
-
+	  impala_server_->ReportCommandStatus(return_val, params);
   }
  private:
   // Manages fragment reporting and data transmission

@@ -50,8 +50,8 @@ public:
 
 	virtual ~RenameCmdDescriptor() {}
 
-	bool run();
-	bool validate(const TRemoteShortCommand& cdesc);
+	virtual bool run();
+	virtual bool validate(const TRemoteShortCommand& cdesc);
 
 private:
 	std::string                        m_dfs_path;   /**< remote fs path to establish connection on */
@@ -67,8 +67,8 @@ public:
 
 	virtual ~DeleteCmdDescriptor() {}
 
-	bool run();
-	bool validate(const TRemoteShortCommand& cdesc);
+	virtual bool run();
+	virtual bool validate(const TRemoteShortCommand& cdesc);
 
 private:
 	std::string m_dfs_path;                  /**< remote fs path to establish connection on */
