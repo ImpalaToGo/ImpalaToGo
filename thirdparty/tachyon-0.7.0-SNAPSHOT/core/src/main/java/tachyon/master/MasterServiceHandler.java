@@ -78,9 +78,7 @@ public class MasterServiceHandler implements MasterService.Iface {
       TException {
     if (fileId != -1) {
       return mMasterInfo.getClientFileInfo(fileId);
-
     }
-    System.out.println("masterSrvHandler.getFileStatus() : " + path);
     return mMasterInfo.getClientFileInfo(new TachyonURI(path));
   }
 
@@ -203,7 +201,6 @@ public class MasterServiceHandler implements MasterService.Iface {
   public List<ClientBlockInfo> user_getFileBlocks(int fileId, String path)
       throws FileDoesNotExistException, InvalidPathException, TException {
     List<ClientBlockInfo> ret = null;
-    System.out.println("file blocks requested for file with id " + fileId);
     if (fileId != -1) {
       ret = mMasterInfo.getFileBlocks(fileId);
     } else {

@@ -544,7 +544,7 @@ public class TachyonFS extends AbstractTachyonFS {
     ClientFileInfo clientFileInfo = getFileStatus(-1, path, useCachedMetadata);
 
     if (clientFileInfo == null) {
-      System.out.println("client info = null for '" + path + "'");
+      LOG.debug("client info = null for '" + path + "'");
       return null;
     }
     return new TachyonFile(this, clientFileInfo.getId(), mTachyonConf);
@@ -600,23 +600,22 @@ public class TachyonFS extends AbstractTachyonFS {
 
     info = mMasterClient.getFileStatus(fileId, path);
     if (info == null) {
-      System.out.println("null file info retrieved for path '" + path + "'.");
       LOG.error("null file info retrieved for path '" + path + "'.");
       return null;
     }
 
     fileId = info.getId();
     if (fileId == -1) {
-      System.out.println("getFileStatus() :Fileid is still -1 for file with path '" + path + "'.");
+      LOG.debug("getFileStatus() :Fileid is still -1 for file with path '" + path + "'.");
       cache.remove(key);
       return null;
     } else {
-      System.out.println("getFileStatus() : Fileid is " + fileId + " for file with path '"
+      LOG.debug("getFileStatus() : Fileid is " + fileId + " for file with path '"
               + path + "'.");
     }
 
     path = info.getPath();
-    System.out.println("getFileStatus() : File path  " + path + "'.");
+    LOG.debug("getFileStatus() : File path  " + path + "'.");
     // TODO: LRU
     mIdToClientFileInfo.put(fileId, info);
     mPathToClientFileInfo.put(path, info);
@@ -637,7 +636,7 @@ public class TachyonFS extends AbstractTachyonFS {
    */
   public synchronized ClientFileInfo getFileStatus(int fileId, TachyonURI path,
       boolean useCachedMetadata) throws IOException {
-    System.out.println("getFileStatus() : for '" + path + "'. File id = " + fileId);
+    LOG.debug("getFileStatus() : for '" + path + "'. File id = " + fileId);
     if (fileId != -1) {
       return getFileStatus(mIdToClientFileInfo, Integer.valueOf(fileId), fileId,
           TachyonURI.EMPTY_URI.getPath(), useCachedMetadata);
@@ -1035,14 +1034,14 @@ public class TachyonFS extends AbstractTachyonFS {
    */
   private void validateUri(TachyonURI uri) throws IOException {
     if (!uri.isPathAbsolute() && !TachyonURI.EMPTY_URI.equals(uri)) {
-      System.out.println("URL is invalid because of Absolute");
+      LOG.debug("URL is invalid because of Absolute");
     }
     if (uri.hasScheme() && !mRootUri.getScheme().equals(uri.getScheme())) {
-      System.out.println("URL is invalid because of schema");
+      LOG.debug("URL is invalid because of schema");
     }
 
     if (uri.hasAuthority() && !mRootUri.getAuthority().equals(uri.getAuthority())) {
-      System.out.println("URL is invalid because of authority. URI has authoring "
+      LOG.debug("URL is invalid because of authority. URI has authoring "
               + uri.hasAuthority() + " root authoring " + mRootUri.getAuthority()
               + " uri authority " + uri.getAuthority());
     }

@@ -128,7 +128,7 @@ public class RemoteBlockInStream extends BlockInStream {
     mBlockInfo = mFile.getClientBlockInfo(mBlockIndex);
 
     mRecache = readType.isCache();
-    System.out.println("RemoteBlockInStream ctor : going to recache file '"
+    LOG.debug("RemoteBlockInStream ctor : going to recache file '"
             + mFile.getPath() + "' with block index = " + blockIndex);
 
     mUFSConf = ufsConf;
@@ -143,7 +143,7 @@ public class RemoteBlockInStream extends BlockInStream {
     if (mRecache) {
       mRecache = false;
       if (mBlockOutStream != null) {
-        System.out.println("RemoteBlockInStream.cancel(), cancelling recaching attempt.");
+        LOG.debug("RemoteBlockInStream.cancel(), cancelling recaching attempt.");
         mBlockOutStream.cancel();
       }
     }
@@ -159,7 +159,7 @@ public class RemoteBlockInStream extends BlockInStream {
       if (mBlockPos == mBlockInfo.length) {
         mBlockOutStream.close();
       } else {
-        System.out.println("RemoteBlockInStream.close(), cancelling cache "
+        LOG.debug("RemoteBlockInStream.close(), cancelling cache "
                 + " attempt because we did not reach the end of file."
                 + " Blockinfo.length = " + mBlockInfo.length
                 + "; blockPos = " + mBlockPos);
@@ -305,7 +305,7 @@ public class RemoteBlockInStream extends BlockInStream {
 
   private static ByteBuffer retrieveByteBufferFromRemoteMachine(InetSocketAddress address,
       long blockId, long offset, long length, TachyonConf conf) throws IOException {
-    System.out.println("I am going to retrieve byte buffer from remote machine!");
+    LOG.debug("I am going to retrieve byte buffer from remote machine!");
 
     return RemoteBlockReader.Factory.createRemoteBlockReader(conf).readRemoteBlock(
         address.getHostName(), address.getPort(), blockId, offset, length);
@@ -322,7 +322,7 @@ public class RemoteBlockInStream extends BlockInStream {
       // There's nothing to do
       return;
     }
-    System.out.println("RemoteBlockInStream.seek() : cancelling recache");
+    LOG.debug("RemoteBlockInStream.seek() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     mBlockPos = pos;
@@ -368,7 +368,7 @@ public class RemoteBlockInStream extends BlockInStream {
     if (n <= 0) {
       return 0;
     }
-    System.out.println("RemoteBlockInStream.skip() : cancelling recache");
+    LOG.debug("RemoteBlockInStream.skip() : cancelling recache");
     // Since we're not doing a straight read-through, we've invalidated our re-caching attempt.
     cancelRecache();
     long skipped = Math.min(n, mBlockInfo.length - mBlockPos);

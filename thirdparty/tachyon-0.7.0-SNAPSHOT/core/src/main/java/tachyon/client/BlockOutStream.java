@@ -97,25 +97,21 @@ public class BlockOutStream extends OutStream {
     if (!mTachyonFS.hasLocalWorker()) {
       mCanWrite = false;
       String msg = "The machine does not have any local worker.";
-      System.out.println(msg);
       throw new IOException(msg);
     }
     mLocalFilePath = mTachyonFS.getLocalBlockTemporaryPath(mBlockId, initialBytes);
     mLocalFile = mCloser.register(new RandomAccessFile(mLocalFilePath, "rw"));
-    System.out.println("BlockOutStream ctor : creating RA file = '" + mLocalFilePath + "'");
     mLocalFileChannel = mCloser.register(mLocalFile.getChannel());
     // change the permission of the temporary file in order that the worker can move it.
     CommonUtils.changeLocalFileToFullPermission(mLocalFilePath);
     // use the sticky bit, only the client and the worker can write to the block
     CommonUtils.setLocalFileStickyBit(mLocalFilePath);
     LOG.info(mLocalFilePath + " was created!");
-    System.out.println(mLocalFilePath + " was created!");
     mAvailableBytes += initialBytes;
 
     long allocateBytes = mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES,
         Constants.MB) + 4L;
     mBuffer = ByteBuffer.allocate(Ints.checkedCast(allocateBytes));
-    System.out.println("BlockOutStream allocated buffer, bytes = " + allocateBytes);
   }
 
   private synchronized void appendCurrentBuffer(byte[] buf, int offset, int length)
