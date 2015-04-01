@@ -129,10 +129,15 @@ mvn -version
 
 Impala build
 ----
-put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources.  BOOST_LIBRARY_DIR and LD_LIBRARY_DIR should point to boost libraries location
+put the following lines in Your .bashrc (replace YOUR_PATH with path where you cloned ImpalaToGo sources if you want build not from that directory).  BOOST_LIBRARY_DIR and LD_LIBRARY_DIR should point to boost libraries location
 ```sh
 export JAVA_HOME=/usr/lib/jvm/java-7-oracle
-export IMPALA_HOME=YOUR_PATH/ImpalaToGo
+if [ "${PWD##/*/}" = "ImpalaToGo" ];
+then
+        export IMPALA_HOME=$PWD
+else
+        export IMPALA_HOME=YOUR_PATH/ImpalaToGo
+fi
 export BOOST_LIBRARYDIR=/usr/lib/x86_64-linux-gnu
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 export LC_ALL="en_US.UTF-8"
