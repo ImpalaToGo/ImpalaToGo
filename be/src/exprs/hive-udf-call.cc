@@ -21,11 +21,10 @@
 #include "codegen/llvm-codegen.h"
 #include "exprs/anyval-util.h"
 #include "exprs/expr-context.h"
-#include "rpc/thrift-util.h"
+#include "rpc/jni-thrift-util.h"
 #include "runtime/lib-cache.h"
 #include "runtime/runtime-state.h"
 #include "util/bit-util.h"
-#include "util/jni-util.h"
 
 #include "gen-cpp/Frontend_types.h"
 
@@ -53,12 +52,16 @@ struct JniContext {
 
   AnyVal* output_anyval;
 
-  JniContext() {
-    executor = NULL;
-    input_values_buffer = NULL;
-    input_nulls_buffer = NULL;
-    output_value_buffer = NULL;
-    warning_logged = false;
+  JniContext()
+    : cl(NULL),
+      executor(NULL),
+      evalute_id(NULL),
+      close_id(NULL),
+      input_values_buffer(NULL),
+      input_nulls_buffer(NULL),
+      output_value_buffer(NULL),
+      warning_logged(false),
+      output_anyval(NULL) {
   }
 };
 
@@ -131,7 +134,7 @@ AnyVal* HiveUdfCall::Evaluate(ExprContext* ctx, TupleRow* row) {
     if (!jni_ctx->warning_logged) {
       stringstream ss;
       ss << "Hive UDF path=" << fn_.hdfs_location << " class=" << fn_.scalar_fn.symbol
-        << " failed due to: " << status.GetErrorMsg();
+        << " failed due to: " << status.GetDetail();
       fn_ctx->AddWarning(ss.str().c_str());
       jni_ctx->warning_logged = true;
     }
@@ -241,13 +244,24 @@ void HiveUdfCall::Close(RuntimeState* state, ExprContext* ctx,
       env->DeleteGlobalRef(jni_ctx->executor);
       // Clear any exceptions. Not much we can do about them here.
       Status status = JniUtil::GetJniExceptionMsg(env);
-      if (!status.ok()) VLOG_QUERY << status.GetErrorMsg();
+      if (!status.ok()) VLOG_QUERY << status.GetDetail();
     }
-    delete[] jni_ctx->input_values_buffer;
-    delete[] jni_ctx->input_nulls_buffer;
-    delete[] jni_ctx->output_value_buffer;
-
-    delete jni_ctx->output_anyval;
+    if (jni_ctx->input_values_buffer != NULL) {
+      delete[] jni_ctx->input_values_buffer;
+      jni_ctx->input_values_buffer = NULL;
+    }
+    if (jni_ctx->input_nulls_buffer != NULL) {
+      delete[] jni_ctx->input_nulls_buffer;
+      jni_ctx->input_nulls_buffer = NULL;
+    }
+    if (jni_ctx->output_value_buffer != NULL) {
+      delete[] jni_ctx->output_value_buffer;
+      jni_ctx->output_value_buffer = NULL;
+    }
+    if (jni_ctx->output_anyval != NULL) {
+      delete jni_ctx->output_anyval;
+      jni_ctx->output_anyval = NULL;
+    }
   } else {
     DCHECK(!ctx->opened_);
   }

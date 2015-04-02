@@ -31,6 +31,8 @@ using namespace impala;
 using namespace llvm;
 using namespace std;
 
+DEFINE_bool(enable_quadratic_probing, false, "Enable quadratic probing hash table");
+
 const char* HashTableCtx::LLVM_CLASS_NAME = "class.impala::HashTableCtx";
 
 // Page sizes used only for BE test. For non-testing, we use the io buffer size.
@@ -42,7 +44,19 @@ static uint32_t SEED_PRIMES[] = {
   1431655781,
   1183186591,
   622729787,
+  472882027,
   338294347,
+  275604541,
+  41161739,
+  29999999,
+  27475109,
+  611603,
+  16313357,
+  11380003,
+  21261403,
+  33393119,
+  101,
+  71043403
 };
 
 // Put a non-zero constant in the result location for NULL.
@@ -59,10 +73,10 @@ static int64_t NULL_VALUE[] = { HashUtil::FNV_SEED, HashUtil::FNV_SEED,
                                 HashUtil::FNV_SEED, HashUtil::FNV_SEED,
                                 HashUtil::FNV_SEED, HashUtil::FNV_SEED };
 
-// The first NUM_SMALL_BLOCKS of nodes_ are made of blocks less than the io size to
-// reduce the memory footprint of small queries.
-static const int64_t INITIAL_DATA_PAGE_SIZES[] =
-    { 64 * 1024, 512 * 1024 };
+// The first NUM_SMALL_BLOCKS of nodes_ are made of blocks less than the IO size (of 8MB)
+// to reduce the memory footprint of small queries. In particular, we always first use a
+// 64KB and a 512KB block before starting using IO-sized blocks.
+static const int64_t INITIAL_DATA_PAGE_SIZES[] = { 64 * 1024, 512 * 1024 };
 static const int NUM_SMALL_DATA_PAGES = sizeof(INITIAL_DATA_PAGE_SIZES) / sizeof(int64_t);
 
 HashTableCtx::HashTableCtx(const vector<ExprContext*>& build_expr_ctxs,
@@ -85,7 +99,7 @@ HashTableCtx::HashTableCtx(const vector<ExprContext*>& build_expr_ctxs,
 
   // Populate the seeds to use for all the levels. TODO: revisit how we generate these.
   DCHECK_GE(max_levels, 0);
-  DCHECK_LE(max_levels, sizeof(SEED_PRIMES) / sizeof(SEED_PRIMES[0]));
+  DCHECK_LT(max_levels, sizeof(SEED_PRIMES) / sizeof(SEED_PRIMES[0]));
   DCHECK_NE(initial_seed, 0);
   seeds_.resize(max_levels + 1);
   seeds_[0] = initial_seed;
@@ -172,51 +186,55 @@ bool HashTableCtx::Equals(TupleRow* build_row) {
   return true;
 }
 
-const float HashTable::MAX_BUCKET_OCCUPANCY_FRACTION = 0.75f;
+const double HashTable::MAX_FILL_FACTOR = 0.75f;
 
 HashTable::HashTable(RuntimeState* state, BufferedBlockMgr::Client* client,
-    int num_build_tuples, BufferedTupleStream* stream, bool use_initial_small_pages,
-    int64_t max_num_buckets, int64_t num_buckets)
+    int num_build_tuples, BufferedTupleStream* stream, int64_t max_num_buckets,
+    int64_t num_buckets)
   : state_(state),
     block_mgr_client_(client),
     tuple_stream_(stream),
     data_page_pool_(NULL),
-    num_build_tuples_(num_build_tuples),
     stores_tuples_(num_build_tuples == 1),
-    use_initial_small_pages_(use_initial_small_pages),
-    max_num_buckets_(max_num_buckets),
-    num_filled_buckets_(0),
-    num_nodes_(0),
+    quadratic_probing_(FLAGS_enable_quadratic_probing),
     total_data_page_size_(0),
     next_node_(NULL),
     node_remaining_current_page_(0),
+    num_duplicate_nodes_(0),
+    max_num_buckets_(max_num_buckets),
     buckets_(NULL),
     num_buckets_(num_buckets),
-    num_buckets_till_resize_(num_buckets_ * MAX_BUCKET_OCCUPANCY_FRACTION),
-    has_matches_(false) {
+    num_filled_buckets_(0),
+    num_buckets_with_duplicates_(0),
+    num_build_tuples_(num_build_tuples),
+    has_matches_(false),
+    num_probes_(0), num_failed_probes_(0), travel_length_(0), num_hash_collisions_(0),
+    num_resizes_(0) {
   DCHECK_EQ((num_buckets & (num_buckets-1)), 0) << "num_buckets must be a power of 2";
   DCHECK_GT(num_buckets, 0) << "num_buckets must be larger than 0";
-  if (!stores_tuples_) DCHECK_NOTNULL(stream);
+  DCHECK(stores_tuples_ || stream != NULL);
 }
 
-HashTable::HashTable(MemPool* pool, int num_buckets)
+HashTable::HashTable(MemPool* pool, bool quadratic_probing, int num_buckets)
   : state_(NULL),
     block_mgr_client_(NULL),
     tuple_stream_(NULL),
     data_page_pool_(pool),
-    num_build_tuples_(1),
     stores_tuples_(true),
-    use_initial_small_pages_(false),
-    max_num_buckets_(-1),
-    num_filled_buckets_(0),
-    num_nodes_(0),
+    quadratic_probing_(quadratic_probing),
     total_data_page_size_(0),
     next_node_(NULL),
     node_remaining_current_page_(0),
+    num_duplicate_nodes_(0),
+    max_num_buckets_(-1),
     buckets_(NULL),
     num_buckets_(num_buckets),
-    num_buckets_till_resize_(num_buckets_ * MAX_BUCKET_OCCUPANCY_FRACTION),
-    has_matches_(false) {
+    num_filled_buckets_(0),
+    num_buckets_with_duplicates_(0),
+    num_build_tuples_(1),
+    has_matches_(false),
+    num_probes_(0), num_failed_probes_(0), travel_length_(0), num_hash_collisions_(0),
+    num_resizes_(0) {
   DCHECK_EQ((num_buckets & (num_buckets-1)), 0) << "num_buckets must be a power of 2";
   DCHECK_GT(num_buckets, 0) << "num_buckets must be larger than 0";
   bool ret = Init();
@@ -236,6 +254,12 @@ bool HashTable::Init() {
 }
 
 void HashTable::Close() {
+  // Print statistics only for the large or heavily used hash tables.
+  // TODO: Tweak these numbers/conditions, or print them always?
+  const int64_t LARGE_HT = 128 * 1024;
+  const int64_t HEAVILY_USED = 1024 * 1024;
+  // TODO: These statistics should go to the runtime profile as well.
+  if ((num_buckets_ > LARGE_HT) || (num_probes_ > HEAVILY_USED)) VLOG(2) << PrintStats();
   for (int i = 0; i < data_pages_.size(); ++i) {
     data_pages_[i]->Delete();
   }
@@ -245,91 +269,75 @@ void HashTable::Close() {
   data_pages_.clear();
   if (buckets_ != NULL) free(buckets_);
   if (block_mgr_client_ != NULL) {
-    state_->block_mgr()->ReleaseMemory(block_mgr_client_, num_buckets_ * sizeof(Bucket));
+    state_->block_mgr()->ReleaseMemory(block_mgr_client_,
+        num_buckets_ * sizeof(Bucket));
   }
 }
 
-void HashTable::UpdateProbeFilters(HashTableCtx* ht_ctx,
-    vector<pair<SlotId, Bitmap*> >& bitmaps) {
-  DCHECK_NOTNULL(ht_ctx);
-  // For the bitmap filters, always use the initial seed. The other parts of the plan
-  // tree (e.g. the scan node) relies on this.
-  uint32_t seed = ht_ctx->seeds_[0];
-
-  // Walk the build table and update the bitmap for each probe side slot.
-  HashTable::Iterator iter = Begin(ht_ctx);
-  while (iter != End()) {
-    TupleRow* row = iter.GetRow();
-    for (int i = 0; i < ht_ctx->build_expr_ctxs_.size(); ++i) {
-      if (bitmaps[i].second == NULL) continue;
-      void* e = ht_ctx->build_expr_ctxs_[i]->GetValue(row);
-      uint32_t h =
-          RawValue::GetHashValue(e, ht_ctx->build_expr_ctxs_[i]->root()->type(), seed);
-      bitmaps[i].second->Set<true>(h, true);
-    }
-    iter.Next<false>(ht_ctx);
-  }
+int64_t HashTable::CurrentMemSize() const {
+  return num_buckets_ * sizeof(Bucket) + num_duplicate_nodes_ * sizeof(DuplicateNode);
 }
 
-bool HashTable::ResizeBuckets(int64_t num_buckets) {
+bool HashTable::CheckAndResize(uint64_t rows_to_add, HashTableCtx* ht_ctx) {
+  uint64_t shift = 0;
+  while (static_cast<double>(num_filled_buckets_ + rows_to_add) >
+         (static_cast<double>(num_buckets_ << shift) * MAX_FILL_FACTOR)) {
+    // TODO: next prime instead of double?
+    ++shift;
+  }
+  if (shift > 0) return ResizeBuckets(num_buckets_ << shift, ht_ctx);
+  return true;
+}
+
+bool HashTable::ResizeBuckets(int64_t num_buckets, HashTableCtx* ht_ctx) {
   DCHECK_EQ((num_buckets & (num_buckets-1)), 0)
       << "num_buckets=" << num_buckets << " must be a power of 2";
+  DCHECK_GT(num_buckets, num_filled_buckets_) << "Cannot shrink the hash table to "
+      "smaller number of buckets than the number of filled buckets.";
   VLOG(2) << "Resizing hash table from "
           << num_buckets_ << " to " << num_buckets << " buckets.";
-
   if (max_num_buckets_ != -1 && num_buckets > max_num_buckets_) return false;
+  ++num_resizes_;
 
-  int64_t old_num_buckets = num_buckets_;
   // All memory that can grow proportional to the input should come from the block mgrs
   // mem tracker.
-  int64_t delta_size = (num_buckets - old_num_buckets) * sizeof(Bucket);
+  // Note that while we copying over the contents of the old hash table, we need to have
+  // allocated both the old and the new hash table. Once we finish, we return the memory
+  // of the old hash table.
+  int64_t old_size = num_buckets_ * sizeof(Bucket);
+  int64_t new_size = num_buckets * sizeof(Bucket);
   if (block_mgr_client_ != NULL &&
-      !state_->block_mgr()->ConsumeMemory(block_mgr_client_, delta_size)) {
+      !state_->block_mgr()->ConsumeMemory(block_mgr_client_, new_size)) {
     return false;
   }
-  if (num_buckets > old_num_buckets) {
-    buckets_ = reinterpret_cast<Bucket*>(realloc(buckets_, num_buckets * sizeof(Bucket)));
-    memset(&buckets_[old_num_buckets], 0, delta_size);
-  }
+  Bucket* new_buckets = reinterpret_cast<Bucket*>(malloc(new_size));
+  DCHECK_NOTNULL(new_buckets);
+  memset(new_buckets, 0, new_size);
 
-  // If we're doubling the number of buckets, all nodes in a particular bucket
-  // either remain there, or move down to an analogous bucket in the other half.
-  // In order to efficiently check which of the two buckets a node belongs in, the number
-  // of buckets must be a power of 2.
-  bool doubled_buckets = (num_buckets == old_num_buckets * 2);
-  for (int i = 0; i < num_buckets_; ++i) {
-    Bucket* bucket = &buckets_[i];
-    Bucket* sister_bucket = &buckets_[i + old_num_buckets];
-    Node* last_node = NULL;
-    Node* node = bucket->node;
-
-    while (node != NULL) {
-      Node* next = node->next;
-      uint32_t hash = node->hash;
-
-      bool node_must_move;
-      Bucket* move_to;
-      if (doubled_buckets) {
-        node_must_move = ((hash & old_num_buckets) != 0);
-        move_to = sister_bucket;
-      } else {
-        int64_t bucket_idx = hash & (num_buckets - 1);
-        node_must_move = (bucket_idx != i);
-        move_to = &buckets_[bucket_idx];
-      }
-
-      if (node_must_move) {
-        MoveNode(bucket, move_to, node, last_node);
-      } else {
-        last_node = node;
-      }
-
-      node = next;
-    }
+  // Walk the old table and copy all the filled buckets to the new (resized) table.
+  // We do not have to do anything with the duplicate nodes. This operation is expected
+  // to succeed.
+  for (HashTable::Iterator iter = Begin(ht_ctx); !iter.AtEnd();
+       NextFilledBucket(&iter.bucket_idx_, &iter.node_)) {
+    Bucket* bucket_to_copy = &buckets_[iter.bucket_idx_];
+    bool found = false;
+    int64_t bucket_idx = Probe(new_buckets, num_buckets, NULL, bucket_to_copy->hash,
+                               &found);
+    DCHECK(!found);
+    DCHECK_NE(bucket_idx, Iterator::BUCKET_NOT_FOUND) << " Probe failed even though "
+        " there are free buckets. " << num_buckets << " " << num_filled_buckets_;
+    Bucket* dst_bucket = &new_buckets[bucket_idx];
+    *dst_bucket = *bucket_to_copy;
   }
 
   num_buckets_ = num_buckets;
-  num_buckets_till_resize_ = MAX_BUCKET_OCCUPANCY_FRACTION * num_buckets_;
+  free(buckets_);
+  buckets_ = new_buckets;
+  // TODO: Remove this check, i.e. block_mgr_client_ should always be != NULL,
+  // see IMPALA-1656.
+  if (block_mgr_client_ != NULL) {
+    state_->block_mgr()->ReleaseMemory(block_mgr_client_, old_size);
+  }
   return true;
 }
 
@@ -337,63 +345,95 @@ bool HashTable::GrowNodeArray() {
   int64_t page_size = 0;
   if (block_mgr_client_ != NULL) {
     page_size = state_->block_mgr()->max_block_size();;
-    if (use_initial_small_pages_ && data_pages_.size() < NUM_SMALL_DATA_PAGES) {
+    if (data_pages_.size() < NUM_SMALL_DATA_PAGES) {
       page_size = min(page_size, INITIAL_DATA_PAGE_SIZES[data_pages_.size()]);
     }
     BufferedBlockMgr::Block* block = NULL;
     Status status = state_->block_mgr()->GetNewBlock(
         block_mgr_client_, NULL, &block, page_size);
-    if (!status.ok()) DCHECK(block == NULL);
+    DCHECK(status.ok() || block == NULL);
     if (block == NULL) return false;
     data_pages_.push_back(block);
-    next_node_ = block->Allocate<Node>(page_size);
+    next_node_ = block->Allocate<DuplicateNode>(page_size);
     ImpaladMetrics::HASH_TABLE_TOTAL_BYTES->Increment(page_size);
   } else {
     // Only used for testing.
-    DCHECK(data_page_pool_ != NULL);
+    DCHECK_NOTNULL(data_page_pool_);
     page_size = TEST_PAGE_SIZE;
-    next_node_ = reinterpret_cast<Node*>(data_page_pool_->Allocate(page_size));
+    next_node_ = reinterpret_cast<DuplicateNode*>(data_page_pool_->Allocate(page_size));
     if (data_page_pool_->mem_tracker()->LimitExceeded()) return false;
     DCHECK(next_node_ != NULL);
   }
-  node_remaining_current_page_ = page_size / sizeof(Node);
+  node_remaining_current_page_ = page_size / sizeof(DuplicateNode);
   total_data_page_size_ += page_size;
   return true;
 }
 
+void HashTable::DebugStringTuple(stringstream& ss, HtData& htdata,
+    const RowDescriptor* desc) {
+  if (stores_tuples_) {
+    ss << "(" << htdata.tuple << ")";
+  } else {
+    ss << "(" << htdata.idx.block() << ", " << htdata.idx.idx()
+       << ", " << htdata.idx.offset() << ")";
+  }
+  if (desc != NULL) {
+    Tuple* row[num_build_tuples_];
+    ss << " " << PrintRow(GetRow(htdata, reinterpret_cast<TupleRow*>(row)), *desc);
+  }
+}
+
 string HashTable::DebugString(bool skip_empty, bool show_match,
     const RowDescriptor* desc) {
-  Tuple* row[num_build_tuples_];
   stringstream ss;
   ss << endl;
   for (int i = 0; i < num_buckets_; ++i) {
-    Node* node = buckets_[i].node;
-    bool first = true;
-    if (skip_empty && node == NULL) continue;
+    if (skip_empty && !buckets_[i].filled) continue;
     ss << i << ": ";
-    while (node != NULL) {
-      if (!first) ss << ",";
-      if (stores_tuples_) {
-        ss << node << "(" << node->tuple << ")";
+    if (show_match) {
+      if (buckets_[i].matched) {
+        ss << " [M]";
       } else {
-        ss << node << "(" << node->idx.block() << ", " << node->idx.idx()
-           << ", " << node->idx.offset() << ")";
+        ss << " [U]";
       }
-      if (desc != NULL) {
-        ss << " " << PrintRow(GetRow(node, reinterpret_cast<TupleRow*>(row)), *desc);
+    }
+    if (buckets_[i].hasDuplicates) {
+      DuplicateNode* node = buckets_[i].bucketData.duplicates;
+      bool first = true;
+      ss << " [D] ";
+      while (node != NULL) {
+        if (!first) ss << ",";
+        DebugStringTuple(ss, node->htdata, desc);
+        node = node->next;
+        first = false;
       }
-      if (show_match) {
-        if (node->matched) {
-          ss << " [M]";
-        } else {
-          ss << " [U]";
-        }
+    } else {
+      ss << " [B] ";
+      if (buckets_[i].filled) {
+        DebugStringTuple(ss, buckets_[i].bucketData.htdata, desc);
+      } else {
+        ss << " - ";
       }
-      node = node->next;
-      first = false;
     }
     ss << endl;
   }
+  return ss.str();
+}
+
+string HashTable::PrintStats() const {
+  double curr_fill_factor = (double)num_filled_buckets_/(double)num_buckets_;
+  double avg_travel = (double)travel_length_/(double)num_probes_;
+  double avg_collisions = (double)num_hash_collisions_/(double)num_filled_buckets_;
+  stringstream ss;
+  ss << "Buckets: " << num_buckets_ << " " << num_filled_buckets_ << " "
+     << curr_fill_factor << endl;
+  ss << "Duplicates: " << num_buckets_with_duplicates_ << " buckets "
+     << num_duplicate_nodes_ << " nodes" << endl;
+  ss << "Probes: " << num_probes_ << endl;
+  ss << "FailedProbes: " << num_failed_probes_ << endl;
+  ss << "Travel: " << travel_length_ << " " << avg_travel << endl;
+  ss << "HashCollisions: " << num_hash_collisions_ << " " << avg_collisions << endl;
+  ss << "Resizes: " << num_resizes_ << endl;
   return ss.str();
 }
 
@@ -525,7 +565,7 @@ Function* HashTableCtx::CodegenEvalRow(RuntimeState* state, bool build) {
     Function* expr_fn;
     Status status = ctxs[i]->root()->GetCodegendComputeFn(state, &expr_fn);
     if (!status.ok()) {
-      VLOG_QUERY << "Problem with CodegenEvalRow: " << status.GetErrorMsg();
+      VLOG_QUERY << "Problem with CodegenEvalRow: " << status.GetDetail();
       fn->eraseFromParent(); // deletes function
       return NULL;
     }
@@ -813,7 +853,7 @@ Function* HashTableCtx::CodegenEquals(RuntimeState* state) {
     Function* expr_fn;
     Status status = build_expr_ctxs_[i]->root()->GetCodegendComputeFn(state, &expr_fn);
     if (!status.ok()) {
-      VLOG_QUERY << "Problem with CodegenEquals: " << status.GetErrorMsg();
+      VLOG_QUERY << "Problem with CodegenEquals: " << status.GetDetail();
       fn->eraseFromParent(); // deletes function
       return NULL;
     }

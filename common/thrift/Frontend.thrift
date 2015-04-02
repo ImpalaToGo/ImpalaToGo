@@ -19,6 +19,7 @@ include "Types.thrift"
 include "ImpalaInternalService.thrift"
 include "PlanNodes.thrift"
 include "Planner.thrift"
+include "RuntimeProfile.thrift"
 include "Descriptors.thrift"
 include "Data.thrift"
 include "Results.thrift"
@@ -182,6 +183,15 @@ struct TShowTablesParams {
   // Optional pattern to match tables names. If not set, all tables from the given
   // database are returned.
   2: optional string show_pattern
+}
+
+// Parameters for SHOW FILES commands
+struct TShowFilesParams {
+  1: required CatalogObjects.TTableName table_name
+
+  // An optional partition spec. Set if this operation should apply to a specific
+  // partition rather than the base table.
+  2: optional list<CatalogObjects.TPartitionKeyValue> partition_spec
 }
 
 // Parameters for SHOW [CURRENT] ROLES and SHOW ROLE GRANT GROUP <groupName> commands
@@ -354,6 +364,9 @@ struct TQueryExecRequest {
 
   // List of replica hosts.  Used by the host_idx field of TScanRangeLocation.
   12: required list<Types.TNetworkAddress> host_list
+
+  // Column lineage graph serialized into JSON
+  13: optional string lineage_graph
 }
 
 enum TCatalogOpType {
@@ -369,6 +382,7 @@ enum TCatalogOpType {
   SHOW_DATA_SRCS,
   SHOW_ROLES,
   SHOW_GRANT_ROLE,
+  SHOW_FILES,
 }
 
 // TODO: Combine SHOW requests with a single struct that contains a field
@@ -414,6 +428,12 @@ struct TCatalogOpRequest {
 
   // Parameters for SHOW CREATE TABLE
   10: optional CatalogObjects.TTableName show_create_table_params
+
+  // Parameters for SHOW FILES
+  14: optional TShowFilesParams show_files_params
+
+  // Column lineage graph serialized into JSON
+  15: optional string lineage_graph
 }
 
 // Parameters for the SET query option command
@@ -496,13 +516,16 @@ struct TExecRequest {
 
   // List of catalog objects accessed by this request. May be empty in this
   // case that the query did not access any Catalog objects.
-  8: optional list<TAccessEvent> access_events
+  8: optional set<TAccessEvent> access_events
 
   // List of warnings that were generated during analysis. May be empty.
   9: required list<string> analysis_warnings
 
   // Set iff stmt_type is SET
   10: optional TSetQueryOptionRequest set_query_option_request
+
+  // Timeline of planner's operation, for profiling
+  11: optional RuntimeProfile.TEventSequence timeline
 }
 
 // Parameters to FeSupport.cacheJar().
@@ -656,4 +679,9 @@ struct TGetHadoopConfigResponse {
 
 struct TGetAllHadoopConfigsResponse {
   1: optional map<string, string> configs;
+}
+
+// BE startup options
+struct TStartupOptions {
+  1: optional bool compute_lineage
 }

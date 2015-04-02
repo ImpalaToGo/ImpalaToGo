@@ -244,6 +244,9 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
     return is_offline_;
   }
 
+  // Returns true if lineage logging is enabled, false otherwise.
+  bool IsLineageLoggingEnabled();
+
  private:
   friend class ChildQuery;
 
@@ -425,7 +428,7 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
       rapidjson::Document* document);
 
   // Json callback for /query_profile. Expects query_id as an argument, produces Json with
-  // 'profile' set to the profile string.
+  // 'profile' set to the profile string, and 'query_id' set to the query ID.
   void QueryProfileUrlCallback(const Webserver::ArgumentMap& args,
       rapidjson::Document* document);
 
@@ -437,8 +440,11 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   //   "id": <...>,
   //   "state": "FINISHED"
   // }
-  void QuerySummaryCallback(const Webserver::ArgumentMap& args,
-      rapidjson::Document* document);
+  // If include_plan_json is true, 'plan_json' will be set to a JSON representation of the
+  // query plan. If include_summary is true, 'summary' will be a text rendering of the
+  // query summary.
+  void QuerySummaryCallback(bool include_plan_json, bool include_summary,
+      const Webserver::ArgumentMap& args, rapidjson::Document* document);
 
   // Webserver callback. Cancels an in-flight query and writes the result to 'contents'.
   void CancelQueryUrlCallback(const Webserver::ArgumentMap& args,
@@ -503,6 +509,12 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // from being written. If an error is returned, impalad startup will be aborted.
   Status InitAuditEventLogging();
 
+  // Checks settings for lineage logging, including whether the output
+  // directory exists and is writeable, and initialises the first log file.
+  // Returns OK unless there is some problem preventing lineage log files
+  // from being written. If an error is returned, impalad startup will be aborted.
+  Status InitLineageLogging();
+
   // Initializes a logging directory, creating the directory if it does not already
   // exist. If there is any error creating the directory an error will be returned.
   static Status InitLoggingDir(const std::string& log_dir);
@@ -510,13 +522,21 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // Returns true if audit event logging is enabled, false otherwise.
   bool IsAuditEventLoggingEnabled();
 
+  Status LogAuditRecord(const QueryExecState& exec_state, const TExecRequest& request);
+
+  Status LogLineageRecord(const TExecRequest& request);
+
+  // Log audit and column lineage events
+  void LogQueryEvents(const QueryExecState& exec_state);
+
   // Runs once every 5s to flush the profile log file to disk.
   void LogFileFlushThread();
 
   // Runs once every 5s to flush the audit log file to disk.
   void AuditEventLoggerFlushThread();
 
-  Status LogAuditRecord(const QueryExecState& exec_state, const TExecRequest& request);
+  // Runs once every 5s to flush the lineage log file to disk.
+  void LineageLoggerFlushThread();
 
   // Copies a query's state into the query log. Called immediately prior to a
   // QueryExecState's deletion. Also writes the query profile to the profile log on disk.
@@ -578,6 +598,13 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
     TExecSummary exec_summary;
 
     Status query_status;
+
+    // Timeline of important query events
+    TEventSequence event_sequence;
+
+    // Save the query plan fragments so that the plan tree can be rendered on the debug
+    // webpages.
+    vector<TPlanFragment> fragments;
 
     // Initialise from an exec_state. If copy_profile is true, print the query
     // profile to a string and copy that into this.profile (which is expensive),
@@ -712,11 +739,18 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
   // "<current timestamp>" : { JSON object }
   boost::scoped_ptr<SimpleLogger> audit_event_logger_;
 
+  // Logger for writing lineage events, one per line with the format:
+  // { JSON object }
+  boost::scoped_ptr<SimpleLogger> lineage_logger_;
+
   // If profile logging is enabled, wakes once every 5s to flush query profiles to disk
   boost::scoped_ptr<Thread> profile_log_file_flush_thread_;
 
   // If audit event logging is enabled, wakes once every 5s to flush audit events to disk
   boost::scoped_ptr<Thread> audit_event_logger_flush_thread_;
+
+  // If lineage logging is enabled, wakes once every 5s to flush lineage events to disk
+  boost::scoped_ptr<Thread> lineage_logger_flush_thread_;
 
   // global, per-server state
   ExecEnv* exec_env_;  // not owned
@@ -875,7 +909,7 @@ class ImpalaServer : public ImpalaServiceIf, public ImpalaHiveServer2ServiceIf,
     boost::lock_guard<boost::mutex> l(session->lock);
     DCHECK_GT(session->ref_count, 0);
     --session->ref_count;
-    session->last_accessed_ms = ms_since_epoch();
+    session->last_accessed_ms = UnixMillis();
   }
 
   // protects query_locations_. Must always be taken after

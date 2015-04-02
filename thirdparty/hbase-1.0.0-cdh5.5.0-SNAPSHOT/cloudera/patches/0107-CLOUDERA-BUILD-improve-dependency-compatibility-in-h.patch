@@ -1,0 +1,117 @@
+From 1ad80d11dc9ece23d5e3e5b2a55613334bb1e7c3 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@cloudera.com>
+Date: Tue, 10 Mar 2015 03:11:55 -0500
+Subject: [PATCH 107/110] CLOUDERA-BUILD improve dependency compatibility in hbase-client and hbase-server
+
+Ref: CDH-24807
+---
+ hbase-server/pom.xml |    5 +++++
+ pom.xml              |   49 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 53 insertions(+), 1 deletions(-)
+
+diff --git a/hbase-server/pom.xml b/hbase-server/pom.xml
+index 9381530..7e5e166 100644
+--- a/hbase-server/pom.xml
++++ b/hbase-server/pom.xml
+@@ -368,6 +368,11 @@
+       <groupId>commons-cli</groupId>
+       <artifactId>commons-cli</artifactId>
+     </dependency>
++    <!-- CDH specific change, included to keep dependencies the same as earlier CDH5 -->
++    <dependency>
++      <groupId>com.github.stephenc.high-scale-lib</groupId>
++      <artifactId>high-scale-lib</artifactId>
++    </dependency>
+     <dependency>
+       <groupId>commons-io</groupId>
+       <artifactId>commons-io</artifactId>
+diff --git a/pom.xml b/pom.xml
+index c8a60aa..712c654 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1093,7 +1093,7 @@
+     <commons-io.version>2.4</commons-io.version>
+     <commons-lang.version>2.6</commons-lang.version>
+     <commons-logging.version>1.2</commons-logging.version>
+-    <commons-math.version>2.2</commons-math.version>
++    <commons-math.version>2.1</commons-math.version>
+     <commons-net.version>3.1</commons-net.version>
+     <disruptor.version>3.3.0</disruptor.version>
+     <collections.version>3.2.1</collections.version>
+@@ -1370,6 +1370,12 @@
+         <artifactId>commons-cli</artifactId>
+         <version>${commons-cli.version}</version>
+       </dependency>
++      <!-- CDH specific change, included to keep dependencies the same as earlier CDH5 -->
++      <dependency>
++        <groupId>com.github.stephenc.high-scale-lib</groupId>
++        <artifactId>high-scale-lib</artifactId>
++        <version>1.1.1</version>
++      </dependency>
+       <dependency>
+         <groupId>commons-codec</groupId>
+         <artifactId>commons-codec</artifactId>
+@@ -1421,6 +1427,11 @@
+             <groupId>javax.jms</groupId>
+             <artifactId>jms</artifactId>
+           </exclusion>
++          <!-- exclude netty from CDH5 zookeeper -->
++          <exclusion>
++            <groupId>org.jboss.netty</groupId>
++            <artifactId>netty</artifactId>
++          </exclusion>
+           <exclusion>
+             <groupId>io.netty</groupId>
+             <artifactId>netty</artifactId>
+@@ -1971,12 +1982,48 @@
+             <groupId>org.apache.hadoop</groupId>
+             <artifactId>hadoop-hdfs</artifactId>
+             <version>${hadoop-two.yarn.version}</version>
++            <exclusions>
++              <exclusion>
++                <groupId>io.netty</groupId>
++                <artifactId>netty</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>javax.servlet.jsp</groupId>
++                <artifactId>jsp-api</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>javax.servlet</groupId>
++                <artifactId>servlet-api</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>stax</groupId>
++                <artifactId>stax-api</artifactId>
++              </exclusion>
++            </exclusions>
+           </dependency>
+           <dependency>
+             <groupId>org.apache.hadoop</groupId>
+             <artifactId>hadoop-hdfs</artifactId>
+             <version>${hadoop-two.yarn.version}</version>
+             <type>test-jar</type>
++            <exclusions>
++              <exclusion>
++                <groupId>io.netty</groupId>
++                <artifactId>netty</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>javax.servlet.jsp</groupId>
++                <artifactId>jsp-api</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>javax.servlet</groupId>
++                <artifactId>servlet-api</artifactId>
++              </exclusion>
++              <exclusion>
++                <groupId>stax</groupId>
++                <artifactId>stax-api</artifactId>
++              </exclusion>
++            </exclusions>
+           </dependency>
+           <dependency>
+             <groupId>org.apache.hadoop</groupId>
+-- 
+1.7.0.4
+

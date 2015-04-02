@@ -1,0 +1,40 @@
+From 6a4b618de8e5940bf7ab3613904dff57fb2ec485 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Mon, 2 Mar 2015 21:25:47 -0800
+Subject: [PATCH 081/110] HBASE-13141 IntegrationTestAcidGuarantees returns incorrect values for getColumnFamilies
+
+Reason: MOB testing
+Author: Jonathan Hsieh
+Ref: CDH-23959
+---
+ .../hbase/IntegrationTestAcidGuarantees.java       |    7 ++++---
+ 1 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestAcidGuarantees.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestAcidGuarantees.java
+index acece95..7250eb3 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestAcidGuarantees.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestAcidGuarantees.java
+@@ -21,6 +21,7 @@ import com.google.common.collect.Sets;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.regionserver.ConstantSizeRegionSplitPolicy;
+ import org.apache.hadoop.hbase.testclassification.IntegrationTests;
++import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.util.ToolRunner;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+@@ -83,9 +84,9 @@ public class IntegrationTestAcidGuarantees extends IntegrationTestBase {
+ 
+   @Override
+   protected Set<String> getColumnFamilies() {
+-    return Sets.newHashSet(String.valueOf(TestAcidGuarantees.FAMILY_A),
+-            String.valueOf(TestAcidGuarantees.FAMILY_B),
+-            String.valueOf(TestAcidGuarantees.FAMILY_C));
++    return Sets.newHashSet(Bytes.toString(TestAcidGuarantees.FAMILY_A),
++            Bytes.toString(TestAcidGuarantees.FAMILY_B),
++            Bytes.toString(TestAcidGuarantees.FAMILY_C));
+   }
+ 
+   // ***** Actual integration tests
+-- 
+1.7.0.4
+

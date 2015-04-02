@@ -139,7 +139,7 @@ Status Expr::CreateExprTree(ObjectPool* pool, const TExpr& texpr, ExprContext** 
         "Expression tree only partially reconstructed. Not all thrift nodes were used.");
   }
   if (!status.ok()) {
-    LOG(ERROR) << "Could not construct expr tree.\n" << status.GetErrorMsg() << "\n"
+    LOG(ERROR) << "Could not construct expr tree.\n" << status.GetDetail() << "\n"
                << apache::thrift::ThriftDebugString(texpr);
   }
   return status;
@@ -477,7 +477,7 @@ void Expr::InitBuiltinsDummy() {
   ConditionalFunctions::NullIfZero(NULL, TinyIntVal::null());
   DecimalFunctions::Precision(NULL, DecimalVal::null());
   DecimalOperators::CastToDecimalVal(NULL, DecimalVal::null());
-  InPredicate::In(NULL, BigIntVal::null(), 0, NULL);
+  InPredicate::InIterate(NULL, BigIntVal::null(), 0, NULL);
   IsNullPredicate::IsNull(NULL, BooleanVal::null());
   LikePredicate::Like(NULL, StringVal::null(), StringVal::null());
   Operators::Add_IntVal_IntVal(NULL, IntVal::null(), IntVal::null());

@@ -20,6 +20,7 @@
 
 #include "common/compiler-util.h"
 #include "util/cpu-info.h"
+#include "util/sse-util.h"
 
 namespace impala {
 
@@ -44,6 +45,8 @@ class BitUtil {
 
   // Returns the smallest power of two that contains v. Taken from
   // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+  // TODO: Pick a better name, as it is not clear what happens when the input is
+  // already a power of two.
   static inline int64_t NextPowerOfTwo(int64_t v) {
     --v;
     v |= v >> 1;
@@ -112,7 +115,7 @@ class BitUtil {
   // Returns the number of set bits in x
   static inline int Popcount(uint64_t x) {
     if (LIKELY(CpuInfo::IsSupported(CpuInfo::POPCNT))) {
-      return __builtin_popcountl(x);
+      return POPCNT_popcnt_u64(x);
     } else {
       return PopcountNoHw(x);
     }

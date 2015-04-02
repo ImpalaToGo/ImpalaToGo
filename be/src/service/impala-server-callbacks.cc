@@ -24,6 +24,7 @@
 
 #include "gen-cpp/beeswax_types.h"
 #include "thrift/protocol/TDebugProtocol.h"
+#include "util/redactor.h"
 #include "util/summary-util.h"
 #include "util/url-coding.h"
 
@@ -67,7 +68,7 @@ void ImpalaServer::RegisterWebserverCallbacks(Webserver* webserver) {
 
   Webserver::UrlCallback profile_callback =
       bind<void>(mem_fn(&ImpalaServer::QueryProfileUrlCallback), this, _1, _2);
-  webserver->RegisterUrlCallback("/query_profile", "common-pre.tmpl",
+  webserver->RegisterUrlCallback("/query_profile", "query_profile.tmpl",
       profile_callback, false);
 
   Webserver::UrlCallback cancel_callback =
@@ -86,9 +87,21 @@ void ImpalaServer::RegisterWebserverCallbacks(Webserver* webserver) {
       inflight_query_ids_callback, false);
 
   Webserver::UrlCallback query_summary_callback =
-      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, _1, _2);
+      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, true, _1, _2);
   webserver->RegisterUrlCallback("/query_summary", "query_summary.tmpl",
       query_summary_callback, false);
+
+  Webserver::UrlCallback query_plan_callback =
+      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, true, true, _1, _2);
+  webserver->RegisterUrlCallback("/query_plan", "query_plan.tmpl",
+      query_plan_callback, false);
+
+  Webserver::UrlCallback query_plan_text_callback =
+      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, false, _1, _2);
+  webserver->RegisterUrlCallback("/query_plan_text", "query_plan_text.tmpl",
+      query_plan_text_callback, false);
+  webserver->RegisterUrlCallback("/query_stmt", "query_stmt.tmpl",
+      query_plan_text_callback, false);
 }
 
 void ImpalaServer::HadoopVarzUrlCallback(const Webserver::ArgumentMap& args,
@@ -127,14 +140,14 @@ void ImpalaServer::CancelQueryUrlCallback(const Webserver::ArgumentMap& args,
   TUniqueId unique_id;
   Status status = ParseQueryId(args, &unique_id);
   if (!status.ok()) {
-    Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+    Value error(status.GetDetail().c_str(), document->GetAllocator());
     document->AddMember("error", error, document->GetAllocator());
     return;
   }
   Status cause("Cancelled from Impala's debug web interface");
   status = UnregisterQuery(unique_id, true, &cause);
   if (!status.ok()) {
-    Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+    Value error(status.GetDetail().c_str(), document->GetAllocator());
     document->AddMember("error", error, document->GetAllocator());
     return;
   }
@@ -147,7 +160,7 @@ void ImpalaServer::QueryProfileUrlCallback(const Webserver::ArgumentMap& args,
   TUniqueId unique_id;
   Status parse_status = ParseQueryId(args, &unique_id);
   if (!parse_status.ok()) {
-    Value error(parse_status.GetErrorMsg().c_str(), document->GetAllocator());
+    Value error(parse_status.GetDetail().c_str(), document->GetAllocator());
     document->AddMember("error", error, document->GetAllocator());
     return;
   }
@@ -155,13 +168,15 @@ void ImpalaServer::QueryProfileUrlCallback(const Webserver::ArgumentMap& args,
   stringstream ss;
   Status status = GetRuntimeProfileStr(unique_id, false, &ss);
   if (!status.ok()) {
-    Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+    Value error(status.GetDetail().c_str(), document->GetAllocator());
     document->AddMember("error", error, document->GetAllocator());
     return;
   }
 
   Value profile(ss.str().c_str(), document->GetAllocator());
-  document->AddMember("contents", profile, document->GetAllocator());
+  document->AddMember("profile", profile, document->GetAllocator());
+  document->AddMember("query_id", args.find("query_id")->second.c_str(),
+      document->GetAllocator());
 }
 
 void ImpalaServer::QueryProfileEncodedUrlCallback(const Webserver::ArgumentMap& args,
@@ -170,11 +185,11 @@ void ImpalaServer::QueryProfileEncodedUrlCallback(const Webserver::ArgumentMap& 
   stringstream ss;
   Status status = ParseQueryId(args, &unique_id);
   if (!status.ok()) {
-    ss << status.GetErrorMsg();
+    ss << status.GetDetail();
   } else {
     Status status = GetRuntimeProfileStr(unique_id, true, &ss);
     if (!status.ok()) {
-      ss.str(Substitute("Could not obtain runtime profile: $0", status.GetErrorMsg()));
+      ss.str(Substitute("Could not obtain runtime profile: $0", status.GetDetail()));
     }
   }
 
@@ -203,7 +218,8 @@ void ImpalaServer::QueryStateToJson(const ImpalaServer::QueryStateRecord& record
   Value default_db(record.default_db.c_str(), document->GetAllocator());
   value->AddMember("default_db", default_db, document->GetAllocator());
 
-  Value stmt(record.stmt.c_str(), document->GetAllocator());
+  // Redact the query string
+  Value stmt(RedactCopy(record.stmt).c_str(), document->GetAllocator());
   value->AddMember("stmt", stmt, document->GetAllocator());
 
   Value stmt_type(_TStmtType_VALUES_TO_NAMES.find(record.stmt_type)->second,
@@ -240,6 +256,12 @@ void ImpalaServer::QueryStateToJson(const ImpalaServer::QueryStateRecord& record
 
   Value query_id(PrintId(record.id).c_str(), document->GetAllocator());
   value->AddMember("query_id", query_id, document->GetAllocator());
+
+  if (record.event_sequence.labels.size() > 0) {
+    Value last_event(record.event_sequence.labels.back().c_str(),
+        document->GetAllocator());
+    value->AddMember("last_event", last_event, document->GetAllocator());
+  }
 }
 
 void ImpalaServer::QueryStateUrlCallback(const Webserver::ArgumentMap& args,
@@ -347,7 +369,7 @@ void ImpalaServer::CatalogUrlCallback(const Webserver::ArgumentMap& args,
   TGetDbsResult get_dbs_result;
   Status status = exec_env_->frontend()->GetDbNames(NULL, NULL, &get_dbs_result);
   if (!status.ok()) {
-    Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+    Value error(status.GetDetail().c_str(), document->GetAllocator());
     document->AddMember("error", error, document->GetAllocator());
     return;
   }
@@ -362,7 +384,7 @@ void ImpalaServer::CatalogUrlCallback(const Webserver::ArgumentMap& args,
     Status status =
         exec_env_->frontend()->GetTableNames(db, NULL, NULL, &get_table_results);
     if (!status.ok()) {
-      Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+      Value error(status.GetDetail().c_str(), document->GetAllocator());
       database.AddMember("error", error, document->GetAllocator());
       continue;
     }
@@ -402,7 +424,7 @@ void ImpalaServer::CatalogObjectsUrlCallback(const Webserver::ArgumentMap& args,
       Value debug_string(ThriftDebugString(result).c_str(), document->GetAllocator());
       document->AddMember("thrift_string", debug_string, document->GetAllocator());
     } else {
-      Value error(status.GetErrorMsg().c_str(), document->GetAllocator());
+      Value error(status.GetDetail().c_str(), document->GetAllocator());
       document->AddMember("error", error, document->GetAllocator());
     }
   } else {
@@ -412,12 +434,132 @@ void ImpalaServer::CatalogObjectsUrlCallback(const Webserver::ArgumentMap& args,
   }
 }
 
-void ImpalaServer::QuerySummaryCallback(const Webserver::ArgumentMap& args,
-    Document* document) {
+// Helper for PlanToJson(), processes a single list of plan nodes which are the
+// DFS-flattened representation of a single plan fragment. Called recursively, the
+// iterator parameter is updated in place so that when a recursive call returns, the
+// caller is pointing at the next of its children.
+void PlanToJsonHelper(const map<TPlanNodeId, TPlanNodeExecSummary>& summaries,
+    const vector<TPlanNode>& nodes,
+    vector<TPlanNode>::const_iterator* it, rapidjson::Document* document, Value* value) {
+  Value children(kArrayType);
+  value->AddMember("label", (*it)->label.c_str(), document->GetAllocator());
+  // Node "details" may contain exprs which should be redacted.
+  Value label_detail(RedactCopy((*it)->label_detail).c_str(), document->GetAllocator());
+  value->AddMember("label_detail", label_detail, document->GetAllocator());
+
+  TPlanNodeId id = (*it)->node_id;
+  map<TPlanNodeId, TPlanNodeExecSummary>::const_iterator summary = summaries.find(id);
+  if (summary != summaries.end()) {
+    int64_t cardinality = 0;
+    int64_t max_time = 0L;
+    int64_t total_time = 0;
+    BOOST_FOREACH(const TExecStats& stat, summary->second.exec_stats) {
+      if (summary->second.is_broadcast) {
+        // Avoid multiple-counting for recipients of broadcasts.
+        cardinality = ::max(cardinality, stat.cardinality);
+      } else {
+        cardinality += stat.cardinality;
+      }
+      total_time += stat.latency_ns;
+      max_time = ::max(max_time, stat.latency_ns);
+    }
+    value->AddMember("output_card", cardinality, document->GetAllocator());
+    value->AddMember("num_instances", summary->second.exec_stats.size(),
+        document->GetAllocator());
+    if (summary->second.is_broadcast) {
+      value->AddMember("is_broadcast", true, document->GetAllocator());
+    }
+
+    const string& max_time_str = PrettyPrinter::Print(max_time, TUnit::TIME_NS);
+    Value max_time_str_json(max_time_str.c_str(), document->GetAllocator());
+    value->AddMember("max_time", max_time_str_json, document->GetAllocator());
+    value->AddMember("max_time_val", max_time, document->GetAllocator());
+
+    // Round to the nearest ns, to workaround a bug in pretty-printing a fraction of a
+    // ns. See IMPALA-1800.
+    const string& avg_time_str = PrettyPrinter::Print(
+        // A bug may occasionally cause 1-instance nodes to appear to have 0 instances.
+        total_time / ::max(static_cast<int>(summary->second.exec_stats.size()), 1),
+        TUnit::TIME_NS);
+    Value avg_time_str_json(avg_time_str.c_str(), document->GetAllocator());
+    value->AddMember("avg_time", avg_time_str_json, document->GetAllocator());
+  }
+
+  int num_children = (*it)->num_children;
+  for (int i = 0; i < num_children; ++i) {
+    ++(*it);
+    Value container(kObjectType);
+    PlanToJsonHelper(summaries, nodes, it, document, &container);
+    children.PushBack(container, document->GetAllocator());
+  }
+  value->AddMember("children", children, document->GetAllocator());
+}
+
+// Helper method which converts a list of plan fragments into a single JSON document, with
+// the following schema:
+// "plan_nodes": [
+//     {
+//       "label": "12:AGGREGATE",
+//       "label_detail": "FINALIZE",
+//       "output_card": 23456,
+//       "num_instances": 34,
+//       "max_time": "1m23s",
+//       "avg_time": "1.3ms",
+//       "children": [
+//           {
+//             "label": "11:EXCHANGE",
+//             "label_detail": "UNPARTITIONED",
+//             "children": []
+//           }
+//       ]
+//     },
+//     {
+//       "label": "07:AGGREGATE",
+//       "label_detail": "",
+//       "children": [],
+//       "data_stream_target": "11:EXCHANGE"
+//     }
+// ]
+void PlanToJson(const vector<TPlanFragment>& fragments, const TExecSummary& summary,
+    rapidjson::Document* document, Value* value) {
+  // Build a map from id to label so that we can resolve the targets of data-stream sinks
+  // and connect plan fragments.
+  map<TPlanNodeId, string> label_map;
+  BOOST_FOREACH(const TPlanFragment& fragment, fragments) {
+    BOOST_FOREACH(const TPlanNode& node, fragment.plan.nodes) {
+      label_map[node.node_id] = node.label;
+    }
+  }
+
+  map<TPlanNodeId, TPlanNodeExecSummary> exec_summaries;
+  BOOST_FOREACH(const TPlanNodeExecSummary& s, summary.nodes) {
+    exec_summaries[s.node_id] = s;
+  }
+
+  Value nodes(kArrayType);
+  BOOST_FOREACH(const TPlanFragment& fragment, fragments) {
+    Value plan_fragment(kObjectType);
+    vector<TPlanNode>::const_iterator it = fragment.plan.nodes.begin();
+    PlanToJsonHelper(exec_summaries, fragment.plan.nodes, &it, document, &plan_fragment);
+    if (fragment.__isset.output_sink) {
+      const TDataSink& sink = fragment.output_sink;
+      if (sink.__isset.stream_sink) {
+        plan_fragment.AddMember("data_stream_target",
+            label_map[sink.stream_sink.dest_node_id].c_str(), document->GetAllocator());
+      }
+    }
+    nodes.PushBack(plan_fragment, document->GetAllocator());
+  }
+  value->AddMember("plan_nodes", nodes, document->GetAllocator());
+}
+
+void ImpalaServer::QuerySummaryCallback(bool include_json_plan, bool include_summary,
+    const Webserver::ArgumentMap& args, Document* document) {
   TUniqueId query_id;
   Status status = ParseQueryId(args, &query_id);
   if (!status.ok()) {
-    Value json_error(status.GetErrorMsg().c_str(), document->GetAllocator());
+    // Redact the error message, it may contain part or all of the query.
+    Value json_error(RedactCopy(status.GetDetail()).c_str(), document->GetAllocator());
     document->AddMember("error", json_error, document->GetAllocator());
     return;
   }
@@ -427,23 +569,29 @@ void ImpalaServer::QuerySummaryCallback(const Webserver::ArgumentMap& args,
   string plan;
   Status query_status;
   bool found = false;
+  vector<TPlanFragment> fragments;
 
+  // Search the in-flight queries first, followed by the archived ones.
   {
     shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
     if (exec_state != NULL) {
-      lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
       found = true;
-      if (exec_state->coord() != NULL) {
-        query_status = exec_state->query_status();
-        stmt = exec_state->sql_stmt();
-        plan = exec_state->exec_request().query_exec_request.query_plan;
-        ScopedSpinLock lock(exec_state->coord()->GetExecSummaryLock());
-        summary = exec_state->coord()->exec_summary();
-      } else {
+      lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
+      if (exec_state->coord() == NULL) {
         const string& err = Substitute("Invalid query id: $0", PrintId(query_id));
         Value json_error(err.c_str(), document->GetAllocator());
         document->AddMember("error", json_error, document->GetAllocator());
         return;
+      }
+      query_status = exec_state->query_status();
+      stmt = exec_state->sql_stmt();
+      plan = exec_state->exec_request().query_exec_request.query_plan;
+      if (include_json_plan || include_summary) {
+        ScopedSpinLock lock(exec_state->coord()->GetExecSummaryLock());
+        summary = exec_state->coord()->exec_summary();
+      }
+      if (include_json_plan) {
+        fragments = exec_state->exec_request().query_exec_request.fragments;
       }
     }
   }
@@ -457,22 +605,35 @@ void ImpalaServer::QuerySummaryCallback(const Webserver::ArgumentMap& args,
       document->AddMember("error", json_error, document->GetAllocator());
       return;
     }
-    summary = query_record->second->exec_summary;
+    if (include_json_plan || include_summary) {
+      summary = query_record->second->exec_summary;
+    }
     stmt = query_record->second->stmt;
     plan = query_record->second->plan;
     query_status = query_record->second->query_status;
+    if (include_json_plan) {
+      fragments = query_record->second->fragments;
+    }
   }
 
-  const string& printed_summary = PrintExecSummary(summary);
-  Value json_summary(printed_summary.c_str(), document->GetAllocator());
-  document->AddMember("summary", json_summary, document->GetAllocator());
-  Value json_stmt(stmt.c_str(), document->GetAllocator());
+  if (include_json_plan) {
+    Value v(kObjectType);
+    PlanToJson(fragments, summary, document, &v);
+    document->AddMember("plan_json", v, document->GetAllocator());
+  }
+  if (include_summary) {
+    const string& printed_summary = PrintExecSummary(summary);
+    Value json_summary(printed_summary.c_str(), document->GetAllocator());
+    document->AddMember("summary", json_summary, document->GetAllocator());
+  }
+  Value json_stmt(RedactCopy(stmt).c_str(), document->GetAllocator());
   document->AddMember("stmt", json_stmt, document->GetAllocator());
-  Value json_plan(plan.c_str(), document->GetAllocator());
-  document->AddMember("plan", json_plan, document->GetAllocator());
+  Value json_plan_text(RedactCopy(plan).c_str(), document->GetAllocator());
+  document->AddMember("plan", json_plan_text, document->GetAllocator());
 
-  Value json_status(query_status.ok() ? "OK" : query_status.GetErrorMsg().c_str(),
-      document->GetAllocator());
+  // Redact the error in case the query is contained in the error message.
+  Value json_status(query_status.ok() ? "OK" :
+      RedactCopy(query_status.GetDetail()).c_str(), document->GetAllocator());
   document->AddMember("status", json_status, document->GetAllocator());
   Value json_id(PrintId(query_id).c_str(), document->GetAllocator());
   document->AddMember("query_id", json_id, document->GetAllocator());

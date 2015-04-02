@@ -1,0 +1,27 @@
+From 0580b0a477d4b1b1e238d0722968ca9206469dc6 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Wed, 4 Mar 2015 07:18:52 -0800
+Subject: [PATCH 088/110] HBASE-13152 NPE in ExpiredMobFileCleanerChore (Jingcheng Du)
+
+Reason: Mob Testing
+Author: Jingcheng Du
+Ref: CDH-23959
+---
+ .../hbase/master/ExpiredMobFileCleanerChore.java   |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
+index cc0d0aa..25c9a71 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ExpiredMobFileCleanerChore.java
+@@ -52,6 +52,7 @@ public class ExpiredMobFileCleanerChore extends Chore {
+     this.master = master;
+     this.tableLockManager = master.getTableLockManager();
+     cleaner = new ExpiredMobFileCleaner();
++    cleaner.setConf(master.getConfiguration());
+   }
+ 
+   @Override
+-- 
+1.7.0.4
+

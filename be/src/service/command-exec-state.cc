@@ -48,7 +48,7 @@ void CommandMgr::CommandExecState::ReportStatusCb(const Status& status,
   if (!coord_status.ok()) {
     std::stringstream s;
     s << "couldn't get a client for " << coord_address();
-    UpdateStatus(Status(TStatusCode::INTERNAL_ERROR, s.str()));
+    UpdateStatus(Status(ErrorMsg(TErrorCode::INTERNAL_ERROR, s.str())));
     return;
   }
 
@@ -67,7 +67,7 @@ void CommandMgr::CommandExecState::ReportStatusCb(const Status& status,
   Status rpc_status;
   try {
     try {
-    	// reply back to cordinator the execution status
+    	// reply back to coordinator the execution status
       coord->ReportCommandStatus(res, params);
     } catch (const apache::thrift::TException& e) {
       VLOG_RPC << "Retrying ReportExecStatus: " << e.what();
@@ -85,7 +85,7 @@ void CommandMgr::CommandExecState::ReportStatusCb(const Status& status,
     std::stringstream msg;
     msg << "ReportExecStatus() to " << coord_address() << " failed:\n" << e.what();
     VLOG_QUERY << msg.str();
-    rpc_status = Status(TStatusCode::INTERNAL_ERROR, msg.str());
+    rpc_status = Status(ErrorMsg(TErrorCode::INTERNAL_ERROR, msg.str()));
   }
 
   if (!rpc_status.ok()) {

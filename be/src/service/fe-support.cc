@@ -30,13 +30,14 @@
 #include "runtime/hdfs-fs-cache.h"
 #include "runtime/lib-cache.h"
 #include "runtime/client-cache.h"
+#include "service/impala-server.h"
 #include "util/cpu-info.h"
 #include "util/disk-info.h"
 #include "util/dynamic-util.h"
 #include "util/jni-util.h"
 #include "util/mem-info.h"
 #include "util/symbols-util.h"
-#include "rpc/thrift-util.h"
+#include "rpc/jni-thrift-util.h"
 #include "rpc/thrift-server.h"
 #include "util/debug-util.h"
 #include "gen-cpp/Data_types.h"
@@ -153,7 +154,7 @@ static void ResolveSymbolLookup(const TSymbolLookupParams params,
         params.location, type, &dummy_local_path);
     if (!status.ok()) {
       result->__set_result_code(TSymbolLookupResultCode::BINARY_NOT_FOUND);
-      result->__set_error_msg(status.GetErrorMsg());
+      result->__set_error_msg(status.GetDetail());
       return;
     }
   }
@@ -179,7 +180,7 @@ static void ResolveSymbolLookup(const TSymbolLookupParams params,
     stringstream ss;
     ss << "Could not find symbol '" << params.symbol << "' in: " << params.location;
     result->__set_error_msg(ss.str());
-    VLOG(1) << ss.str() << endl << status.GetErrorMsg();
+    VLOG(1) << ss.str() << endl << status.GetDetail();
     return;
   }
 
@@ -286,10 +287,10 @@ Java_com_cloudera_impala_service_FeSupport_NativePrioritizeLoad(
   TPrioritizeLoadResponse result;
   Status status = catalog_op_executor.PrioritizeLoad(request, &result);
   if (!status.ok()) {
-    LOG(ERROR) << status.GetErrorMsg();
+    LOG(ERROR) << status.GetDetail();
     // Create a new Status, copy in this error, then update the result.
     Status catalog_service_status(result.status);
-    catalog_service_status.AddError(status);
+    catalog_service_status.MergeStatus(status);
     status.ToThrift(&result.status);
   }
 
@@ -299,6 +300,19 @@ Java_com_cloudera_impala_service_FeSupport_NativePrioritizeLoad(
   return result_bytes;
 }
 
+extern "C"
+JNIEXPORT jbyteArray JNICALL
+Java_com_cloudera_impala_service_FeSupport_NativeGetStartupOptions(JNIEnv* env,
+    jclass caller_class) {
+  TStartupOptions options;
+  ExecEnv* exec_env = ExecEnv::GetInstance();
+  ImpalaServer* impala_server = exec_env->impala_server();
+  options.__set_compute_lineage(impala_server->IsLineageLoggingEnabled());
+  jbyteArray result_bytes = NULL;
+  THROW_IF_ERROR_RET(SerializeThriftMsg(env, &options, &result_bytes), env,
+                     JniUtil::internal_exc_class(), result_bytes);
+  return result_bytes;
+}
 
 namespace impala {
 
@@ -322,6 +336,10 @@ static JNINativeMethod native_methods[] = {
   {
     (char*)"NativePrioritizeLoad", (char*)"([B)[B",
     (void*)::Java_com_cloudera_impala_service_FeSupport_NativePrioritizeLoad
+  },
+  {
+    (char*)"NativeGetStartupOptions", (char*)"()[B",
+    (void*)::Java_com_cloudera_impala_service_FeSupport_NativeGetStartupOptions
   },
 };
 

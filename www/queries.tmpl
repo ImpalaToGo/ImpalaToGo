@@ -15,9 +15,9 @@ limitations under the License.
 -->
 {{> www/common-header.tmpl }}
 <h2>Queries</h2>
-<p>This page lists all running queries, plus any completed queries that are archived in
-memory. The size of that archive is controlled with the <tt>--query_log_size</tt> command
-line parameter.</p>
+<p class="lead">This page lists all running queries, plus any completed queries that are
+archived in memory. The size of that archive is controlled with the
+<samp>--query_log_size</samp> command line parameter.</p>
 
 <h3>{{num_in_flight_queries}} queries in flight</h3>
 
@@ -28,25 +28,25 @@ line parameter.</p>
     <th>Statement</th>
     <th>Query Type</th>
     <th>Start Time</th>
-    <th>Backend Progress</th>
+    <th>Scan Progress</th>
     <th>State</th>
+    <th>Last Event</th>
     <th># rows fetched</th>
-    <th>Profile</th>
-    <th>Summary</th>
+    <th>Details</th>
     <th>Action</th>
   </tr>
 {{#in_flight_queries}}
   <tr>
     <td>{{effective_user}}</td>
     <td>{{default_db}}</td>
-    <td>{{stmt}}</td>
-    <td>{{stmt_type}}</td>
+    <td><samp>{{stmt}}</samp></td>
+    <td><samp>{{stmt_type}}</samp></td>
     <td>{{start_time}}</td>
     <td>{{progress}}</td>
-    <td>{{state}}</td>
+    <td><samp>{{state}}</samp></td>
+    <td><samp>{{last_event}}</samp></td>
     <td>{{rows_fetched}}</td>
-    <td><a href='/query_profile?query_id={{query_id}}'>Profile</a></td>
-    <td><a href='/query_summary?query_id={{query_id}}'>Summary</a></td>
+    <td><a href='/query_plan?query_id={{query_id}}'>Details</a></td>
     <td><a href='/cancel_query?query_id={{query_id}}'>Cancel</a></td>
   </tr>
 {{/in_flight_queries}}
@@ -62,25 +62,23 @@ line parameter.</p>
     <th>Query Type</th>
     <th>Start Time</th>
     <th>End Time</th>
-    <th>Backend Progress</th>
+    <th>Scan Progress</th>
     <th>State</th>
     <th># rows fetched</th>
-    <th>Profile</th>
-    <th>Summary</th>
+    <th>Details</th>
   </tr>
 {{#completed_queries}}
   <tr>
     <td>{{effective_user}}</td>
     <td>{{default_db}}</td>
-    <td>{{stmt}}</td>
-    <td>{{stmt_type}}</td>
+    <td><samp>{{stmt}}</samp></td>
+    <td><samp>{{stmt_type}}</samp></td>
     <td>{{start_time}}</td>
     <td>{{end_time}}</td>
     <td>{{progress}}</td>
-    <td>{{state}}</td>
+    <td><samp>{{state}}</samp></td>
     <td>{{rows_fetched}}</td>
-    <td><a href='/query_profile?query_id={{query_id}}'>Profile</a></td>
-    <td><a href='/query_summary?query_id={{query_id}}'>Summary</a></td>
+    <td><a href='/query_plan?query_id={{query_id}}'>Details</a></td>
   </tr>
 {{/completed_queries}}
 </table>

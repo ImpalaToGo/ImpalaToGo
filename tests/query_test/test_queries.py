@@ -4,12 +4,14 @@
 #
 import copy
 import logging
+import os
 import pytest
-from tests.common.test_vector import *
 from tests.common.impala_test_suite import ImpalaTestSuite
+from tests.common.test_vector import *
 from tests.common.test_dimensions import create_uncompressed_text_dimension
-from tests.util.test_file_parser import QueryTestSectionReader
 from tests.common.test_dimensions import create_exec_option_dimension
+from tests.common.skip import *
+from tests.util.test_file_parser import QueryTestSectionReader
 
 class TestQueries(ImpalaTestSuite):
   @classmethod
@@ -35,12 +37,6 @@ class TestQueries(ImpalaTestSuite):
   @classmethod
   def get_workload(cls):
     return 'functional-query'
-
-  def test_distinct(self, vector):
-    if vector.get_value('table_format').file_format == 'hbase':
-      pytest.xfail("HBase returns columns in alphabetical order for select distinct *, "
-                    "making result verication fail.")
-    self.run_test_case('QueryTest/distinct', vector)
 
   def test_exprs(self, vector):
     # TODO: Enable some of these tests for Avro if possible
@@ -162,7 +158,6 @@ class TestQueriesTextTables(ImpalaTestSuite):
   def test_mixed_format(self, vector):
     self.run_test_case('QueryTest/mixed-format', vector)
 
+  @skip_if_s3_insert
   def test_values(self, vector):
     self.run_test_case('QueryTest/values', vector)
-
-

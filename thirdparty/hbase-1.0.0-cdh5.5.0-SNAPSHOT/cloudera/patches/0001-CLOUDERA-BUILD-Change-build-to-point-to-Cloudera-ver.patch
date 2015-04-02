@@ -1,0 +1,498 @@
+From 8a11c3cf5dd70ce49628ebd488f203cad067ae5f Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Sat, 31 Jan 2015 00:58:56 -0800
+Subject: [PATCH 001/110] CLOUDERA-BUILD Change build to point to Cloudera versions and repositories.
+
+---
+ hbase-annotations/pom.xml    |    2 +-
+ hbase-assembly/pom.xml       |    4 +-
+ hbase-checkstyle/pom.xml     |    4 +-
+ hbase-client/pom.xml         |    2 +-
+ hbase-common/pom.xml         |    2 +-
+ hbase-examples/pom.xml       |    2 +-
+ hbase-hadoop-compat/pom.xml  |    2 +-
+ hbase-hadoop2-compat/pom.xml |    2 +-
+ hbase-it/pom.xml             |    4 +-
+ hbase-prefix-tree/pom.xml    |    4 +-
+ hbase-protocol/pom.xml       |    2 +-
+ hbase-rest/pom.xml           |    4 +-
+ hbase-server/pom.xml         |    6 ++--
+ hbase-shell/pom.xml          |    4 +-
+ hbase-testing-util/pom.xml   |    6 ++--
+ hbase-thrift/pom.xml         |    4 +-
+ pom.xml                      |   82 +++++++++++++++++++++++++++++++----------
+ 17 files changed, 89 insertions(+), 47 deletions(-)
+
+diff --git a/hbase-annotations/pom.xml b/hbase-annotations/pom.xml
+index 2be235f..5eb78d7 100644
+--- a/hbase-annotations/pom.xml
++++ b/hbase-annotations/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-assembly/pom.xml b/hbase-assembly/pom.xml
+index d4dc755..c6168e9 100644
+--- a/hbase-assembly/pom.xml
++++ b/hbase-assembly/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-assembly</artifactId>
+@@ -93,7 +93,7 @@
+     </dependency>
+     <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-checkstyle/pom.xml b/hbase-checkstyle/pom.xml
+index a3d149e..7a3a293 100644
+--- a/hbase-checkstyle/pom.xml
++++ b/hbase-checkstyle/pom.xml
+@@ -24,14 +24,14 @@
+ <modelVersion>4.0.0</modelVersion>
+ <groupId>org.apache.hbase</groupId>
+ <artifactId>hbase-checkstyle</artifactId>
+-<version>1.0.0</version>
++<version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+ <name>HBase - Checkstyle</name>
+ <description>Module to hold Checkstyle properties for HBase.</description>
+ 
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-client/pom.xml b/hbase-client/pom.xml
+index 6eda19f..73ba4f4 100644
+--- a/hbase-client/pom.xml
++++ b/hbase-client/pom.xml
+@@ -24,7 +24,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-common/pom.xml b/hbase-common/pom.xml
+index d82572b..1c0abcc 100644
+--- a/hbase-common/pom.xml
++++ b/hbase-common/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-examples/pom.xml b/hbase-examples/pom.xml
+index 91672ea..bf2c669 100644
+--- a/hbase-examples/pom.xml
++++ b/hbase-examples/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-examples</artifactId>
+diff --git a/hbase-hadoop-compat/pom.xml b/hbase-hadoop-compat/pom.xml
+index ce36176..206b9c1 100644
+--- a/hbase-hadoop-compat/pom.xml
++++ b/hbase-hadoop-compat/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>1.0.0</version>
++        <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+ 
+diff --git a/hbase-hadoop2-compat/pom.xml b/hbase-hadoop2-compat/pom.xml
+index 7c1c6ee..63b0eb2 100644
+--- a/hbase-hadoop2-compat/pom.xml
++++ b/hbase-hadoop2-compat/pom.xml
+@@ -21,7 +21,7 @@ limitations under the License.
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+diff --git a/hbase-it/pom.xml b/hbase-it/pom.xml
+index 391e147..84f5250 100644
+--- a/hbase-it/pom.xml
++++ b/hbase-it/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -172,7 +172,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-prefix-tree/pom.xml b/hbase-prefix-tree/pom.xml
+index edc3085..cb30180 100644
+--- a/hbase-prefix-tree/pom.xml
++++ b/hbase-prefix-tree/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+ 
+@@ -96,7 +96,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-protocol/pom.xml b/hbase-protocol/pom.xml
+index 3239586..19545f6 100644
+--- a/hbase-protocol/pom.xml
++++ b/hbase-protocol/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>1.0.0</version>
++        <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+ 
+diff --git a/hbase-rest/pom.xml b/hbase-rest/pom.xml
+index bf537a7..4a54837 100644
+--- a/hbase-rest/pom.xml
++++ b/hbase-rest/pom.xml
+@@ -25,7 +25,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-rest</artifactId>
+@@ -174,7 +174,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-server/pom.xml b/hbase-server/pom.xml
+index 6d9aed3..ba716ee 100644
+--- a/hbase-server/pom.xml
++++ b/hbase-server/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-server</artifactId>
+@@ -333,12 +333,12 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+       <type>test-jar</type>
+       <scope>test</scope>
+diff --git a/hbase-shell/pom.xml b/hbase-shell/pom.xml
+index edcdbea..8cb976e 100644
+--- a/hbase-shell/pom.xml
++++ b/hbase-shell/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-shell</artifactId>
+@@ -187,7 +187,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/hbase-testing-util/pom.xml b/hbase-testing-util/pom.xml
+index d2a74ee..1b71252 100644
+--- a/hbase-testing-util/pom.xml
++++ b/hbase-testing-util/pom.xml
+@@ -23,7 +23,7 @@
+     <parent>
+         <artifactId>hbase</artifactId>
+         <groupId>org.apache.hbase</groupId>
+-        <version>1.0.0</version>
++        <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+         <relativePath>..</relativePath>
+     </parent>
+     <artifactId>hbase-testing-util</artifactId>
+@@ -98,13 +98,13 @@
+         </dependency>
+         <dependency>
+             <groupId>org.apache.hbase</groupId>
+-            <artifactId>${compat.module}</artifactId>
++            <artifactId>hbase-hadoop2-compat</artifactId>
+             <type>jar</type>
+             <scope>compile</scope>
+         </dependency>
+         <dependency>
+             <groupId>org.apache.hbase</groupId>
+-            <artifactId>${compat.module}</artifactId>
++            <artifactId>hbase-hadoop2-compat</artifactId>
+             <type>test-jar</type>
+             <scope>compile</scope>
+         </dependency>
+diff --git a/hbase-thrift/pom.xml b/hbase-thrift/pom.xml
+index 301f157..70837cf 100644
+--- a/hbase-thrift/pom.xml
++++ b/hbase-thrift/pom.xml
+@@ -23,7 +23,7 @@
+   <parent>
+     <artifactId>hbase</artifactId>
+     <groupId>org.apache.hbase</groupId>
+-    <version>1.0.0</version>
++    <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+     <relativePath>..</relativePath>
+   </parent>
+   <artifactId>hbase-thrift</artifactId>
+@@ -208,7 +208,7 @@
+     </dependency>
+     <dependency>
+       <groupId>org.apache.hbase</groupId>
+-      <artifactId>${compat.module}</artifactId>
++      <artifactId>hbase-hadoop2-compat</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+diff --git a/pom.xml b/pom.xml
+index 74e559d..f67d935 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -30,16 +30,16 @@
+ -->
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+-    <groupId>org.apache</groupId>
+-    <artifactId>apache</artifactId>
+-    <version>12</version>
++    <groupId>com.cloudera.cdh</groupId>
++    <artifactId>cdh-root</artifactId>
++    <version>5.4.0-SNAPSHOT</version>
+     <relativePath/>
+     <!-- no parent resolution -->
+   </parent>
+   <groupId>org.apache.hbase</groupId>
+   <artifactId>hbase</artifactId>
+   <packaging>pom</packaging>
+-  <version>1.0.0</version>
++  <version>1.0.0-cdh5.4.0-SNAPSHOT</version>
+   <name>HBase</name>
+   <description>
+     Apache HBase is the Hadoop database. Use it when you need
+@@ -412,6 +412,29 @@
+   </developers>
+   <repositories>
+     <repository>
++      <id>cdh.repo</id>
++      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
++      <name>Cloudera Repositories</name>
++      <snapshots>
++        <enabled>false</enabled>
++      </snapshots>
++    </repository>
++    <repository>
++      <id>cdh.snapshots.repo</id>
++      <url>https://repository.cloudera.com/artifactory/libs-snapshot-local</url>
++      <name>Cloudera Snapshots Repository</name>
++      <snapshots>
++        <enabled>true</enabled>
++      </snapshots>
++      <releases>
++        <enabled>false</enabled>
++      </releases>
++    </repository>
++    <repository>
++      <id>cloudbees netty</id>
++      <url>http://repository-netty.forge.cloudbees.com/snapshot/</url>
++    </repository>
++    <repository>
+       <id>apache release</id>
+       <url>https://repository.apache.org/content/repositories/releases/</url>
+     </repository>
+@@ -517,13 +540,19 @@
+             <systemPropertyVariables>
+               <jacoco-agent.destfile>target/jacoco.exec</jacoco-agent.destfile>
+             </systemPropertyVariables>
+-
++            <includes>
++              <include>${unittest.include}</include>
++            </includes>
+             <excludes>
+-	      <!-- users can add -D option to skip particular test classes
+-		   ex: mvn test -Dtest.exclude.pattern=**/TestFoo.java,**/TestBar.java
+-	      -->
+-	      <exclude>${test.exclude.pattern}</exclude>
+-	    </excludes>
++              <exclude>${integrationtest.include}</exclude>
++              <exclude>**/*$*</exclude>
++              <exclude>${test.exclude.pattern}</exclude>
++            </excludes>
++            <environmentVariables>
++              <LD_LIBRARY_PATH>${env.LD_LIBRARY_PATH}:${project.build.directory}/nativelib</LD_LIBRARY_PATH>
++              <DYLD_LIBRARY_PATH>${env.DYLD_LIBRARY_PATH}:${project.build.directory}/nativelib</DYLD_LIBRARY_PATH>
++              <MALLOC_ARENA_MAX>4</MALLOC_ARENA_MAX>
++            </environmentVariables>
+           </configuration>
+           <executions>
+             <execution>
+@@ -693,6 +722,8 @@
+               <exclude>.svn/**</exclude>
+               <exclude>**/.settings/**</exclude>
+               <exclude>**/patchprocess/**</exclude>
++              <exclude>**/cloudera/**</exclude>
++              <exclude>**/debian/**</exclude>
+             </excludes>
+           </configuration>
+         </plugin>
+@@ -1000,7 +1031,7 @@
+     <maven.min.version>3.0.3</maven.min.version>
+     <java.min.version>${compileSource}</java.min.version>
+     <!-- Dependencies -->
+-    <hadoop-two.version>2.5.1</hadoop-two.version>
++    <hadoop-two.version>${cdh.hadoop.version}</hadoop-two.version>
+     <hadoop-three.version>3.0.0-SNAPSHOT</hadoop-three.version>
+     <commons-cli.version>1.2</commons-cli.version>
+     <commons-codec.version>1.9</commons-codec.version>
+@@ -1018,8 +1049,8 @@
+     <jsr305.version>1.3.9</jsr305.version>
+     <jackson.version>1.8.8</jackson.version>
+     <jasper.version>5.5.23</jasper.version>
+-    <jaxb-api.version>2.2.2</jaxb-api.version>
+-    <jetty.version>6.1.26</jetty.version>
++    <jaxb-api.version>2.1</jaxb-api.version>
++    <jetty.version>6.1.26.cloudera.4</jetty.version>
+     <jetty.jspapi.version>6.1.14</jetty.jspapi.version>
+     <jersey.version>1.9</jersey.version>
+     <jruby.version>1.6.8</jruby.version>
+@@ -1031,9 +1062,10 @@
+     <protobuf.version>2.5.0</protobuf.version>
+     <thrift.path>thrift</thrift.path>
+     <thrift.version>0.9.0</thrift.version>
+-    <zookeeper.version>3.4.6</zookeeper.version>
+-    <slf4j.version>1.7.7</slf4j.version>
+-    <hadoop-snappy.version>0.0.1-SNAPSHOT</hadoop-snappy.version>
++    <zookeeper.version>${cdh.zookeeper.version}</zookeeper.version>
++    <slf4j.version>${cdh.slf4j.version}</slf4j.version>
++    <hadoop-snappy.version>${cdh.hadoop-snappy.version}</hadoop-snappy.version>
++    <jets3.version>0.9.0</jets3.version>
+     <clover.version>2.6.3</clover.version>
+     <jamon-runtime.version>2.3.1</jamon-runtime.version>
+     <jettison.version>1.3.3</jettison.version>
+@@ -1072,10 +1104,15 @@
+     <surefire.testFailureIgnore>false</surefire.testFailureIgnore>
+     <test.output.tofile>true</test.output.tofile>
+     <surefire.timeout>900</surefire.timeout>
+-    <test.exclude.pattern></test.exclude.pattern>
++    <!-- For flaky tests exclusion -->
++    <test.exclude></test.exclude>
++    <test.exclude.pattern>**/${test.exclude}.java</test.exclude.pattern>
++    <!-- Test inclusion patterns -->
++    <unittest.include>**/Test*.java</unittest.include>
++    <integrationtest.include>**/IntegrationTest*.java</integrationtest.include>
+     <!-- default Xmx value is 1900m. Use -Dsurefire.Xmx=xxg to run tests with different JVM Xmx value -->
+     <surefire.Xmx>1900m</surefire.Xmx>
+-    <surefire.cygwinXmx>1900m</surefire.cygwinXmx>
++    <surefire.cygwinXmx>1900m</surefire.cygwinXmx>    
+     <hbase-surefire.argLine>-enableassertions -XX:MaxDirectMemorySize=1G -Xmx${surefire.Xmx}
+       -XX:MaxPermSize=256m -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true
+       -Djava.awt.headless=true
+@@ -1141,12 +1178,12 @@
+       </dependency>
+       <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.hbase</groupId>
+-        <artifactId>${compat.module}</artifactId>
++        <artifactId>hbase-hadoop2-compat</artifactId>
+         <version>${project.version}</version>
+         <type>test-jar</type>
+         <scope>test</scope>
+@@ -1543,6 +1580,11 @@
+         <artifactId>disruptor</artifactId>
+         <version>${disruptor.version}</version>
+       </dependency>
++      <dependency>
++        <groupId>net.java.dev.jets3t</groupId>
++        <artifactId>jets3t</artifactId>
++        <version>${jets3.version}</version>
++      </dependency>
+     </dependencies>
+   </dependencyManagement>
+   <!-- Dependencies needed by subprojects -->
+-- 
+1.7.0.4
+

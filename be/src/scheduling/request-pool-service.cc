@@ -18,8 +18,8 @@
 #include <string>
 
 #include "common/logging.h"
-#include "rpc/thrift-util.h"
-#include "util/jni-util.h"
+#include "rpc/jni-thrift-util.h"
+#include "util/mem-info.h"
 #include "util/parse-util.h"
 #include "util/time.h"
 
@@ -79,7 +79,7 @@ RequestPoolService::RequestPoolService(MetricGroup* metrics) :
     default_pool_only_ = true;
     bool is_percent; // not used
     int64_t bytes_limit = ParseUtil::ParseMemSpec(FLAGS_default_pool_mem_limit,
-        &is_percent);
+        &is_percent, MemInfo::physical_mem());
     // -1 indicates an error occurred
     if (bytes_limit < 0) {
       LOG(ERROR) << "Unable to parse default pool mem limit from '"
@@ -141,10 +141,10 @@ Status RequestPoolService::ResolveRequestPool(const string& requested_pool_name,
   params.__set_user(user);
   params.__set_requested_pool(requested_pool_name);
 
-  int64_t start_time = ms_since_epoch();
+  int64_t start_time = MonotonicMillis();
   Status status = JniUtil::CallJniMethod(request_pool_service_, resolve_request_pool_id_,
       params, resolved_pool);
-  resolve_pool_ms_metric_->Update(ms_since_epoch() - start_time);
+  resolve_pool_ms_metric_->Update(MonotonicMillis() - start_time);
   return status;
 }
 

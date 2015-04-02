@@ -16,6 +16,7 @@ package com.cloudera.impala.analysis;
 
 import java.io.StringReader;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,7 @@ public class AnalysisContext {
     public boolean isShowCreateTableStmt() {
       return stmt_ instanceof ShowCreateTableStmt;
     }
+    public boolean isShowFilesStmt() { return stmt_ instanceof ShowFilesStmt; }
     public boolean isDescribeStmt() { return stmt_ instanceof DescribeStmt; }
     public boolean isResetMetadataStmt() { return stmt_ instanceof ResetMetadataStmt; }
     public boolean isExplainStmt() { return stmt_.isExplain(); }
@@ -114,7 +116,7 @@ public class AnalysisContext {
     }
 
     private boolean isViewMetadataStmt() {
-      return isShowTablesStmt() || isShowDbsStmt() || isShowFunctionsStmt() ||
+      return isShowFilesStmt() || isShowTablesStmt() || isShowDbsStmt() || isShowFunctionsStmt() ||
           isShowRolesStmt() || isShowGrantRoleStmt() || isShowCreateTableStmt() ||
           isShowDataSrcsStmt() || isShowStatsStmt() || isDescribeStmt();
     }
@@ -250,6 +252,11 @@ public class AnalysisContext {
       return (ShowFunctionsStmt) stmt_;
     }
 
+    public ShowFilesStmt getShowFilesStmt() {
+      Preconditions.checkState(isShowFilesStmt());
+      return (ShowFilesStmt) stmt_;
+    }
+
     public DescribeStmt getDescribeStmt() {
       Preconditions.checkState(isDescribeStmt());
       return (DescribeStmt) stmt_;
@@ -262,10 +269,12 @@ public class AnalysisContext {
 
     public StatementBase getStmt() { return stmt_; }
     public Analyzer getAnalyzer() { return analyzer_; }
-    public List<TAccessEvent> getAccessEvents() { return analyzer_.getAccessEvents(); }
+    public Set<TAccessEvent> getAccessEvents() { return analyzer_.getAccessEvents(); }
     public boolean requiresRewrite() {
-      return analyzer_.containsSubquery() && !(stmt_ instanceof CreateViewStmt);
+      return analyzer_.containsSubquery() && !(stmt_ instanceof CreateViewStmt)
+          && !(stmt_ instanceof AlterViewStmt);
     }
+    public String getJsonLineageGraph() { return analyzer_.getSerializedLineageGraph(); }
   }
 
   /**

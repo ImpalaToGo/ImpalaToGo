@@ -112,10 +112,10 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   // Number of initial partitions to create. Must be a power of two.
   // TODO: this is set to a lower than actual value for testing.
-  static const int PARTITION_FANOUT = 32;
+  static const int PARTITION_FANOUT = 16;
 
   // Needs to be the log(PARTITION_FANOUT)
-  static const int NUM_PARTITIONING_BITS = 5;
+  static const int NUM_PARTITIONING_BITS = 4;
 
   // Maximum number of times we will repartition. The maximum build table we
   // can process is:
@@ -124,8 +124,9 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // there is no skew.
   // In the case where there is skew, repartitioning is unlikely to help (assuming a
   // reasonable hash function).
+  // Note that we need to have at least as many SEED_PRIMES in HashTableCtx.
   // TODO: we can revisit and try harder to explicitly detect skew.
-  static const int MAX_PARTITION_DEPTH = 4;
+  static const int MAX_PARTITION_DEPTH = 16;
 
   // Maximum number of build tables that can be in memory at any time. This is in
   // addition to the memory constraints and is used for testing to trigger code paths
@@ -154,7 +155,7 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // Partitions the entire build input (either from child(1) or input_partition_) into
   // hash_partitions_. When this call returns, hash_partitions_ is ready to consume
   // the probe input.
-  // level is the level new partitions (in hash_partitions_) should be created with.
+  // 'level' is the level new partitions (in hash_partitions_) should be created with.
   Status ProcessBuildInput(RuntimeState* state, int level);
 
   // Reads the rows in build_batch and partitions them in hash_partitions_.
@@ -186,7 +187,7 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // rows. If reaches the end of the hash table it closes that partition, removes it from
   // flush_build_partitions_ and moves hash_tbl_iterator_ to the beginning of the
   // partition in the front of flush_build_partitions_.
-  Status OutputUnmatchedBuild(RowBatch* out_batch);
+  void OutputUnmatchedBuild(RowBatch* out_batch);
 
   // Initializes null_aware_partition_ and nulls_build_batch_ to output rows.
   Status PrepareNullAwarePartition();
@@ -238,6 +239,10 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
   // initialize hash_partitions_.
   Status PrepareNextPartition(RuntimeState*);
 
+  // Iterates over all the partitions in hash_partitions_ and returns the number of rows
+  // of the largest partition (in terms of number of aggregated and unaggregated rows).
+  int64_t LargestSpilledPartition() const;
+
   // Prepares for probing the next batch.
   void ResetForProbe();
 
@@ -281,12 +286,12 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
 
   RuntimeState* runtime_state_;
 
-  // our equi-join predicates "<lhs> = <rhs>" are separated into
+  // Our equi-join predicates "<lhs> = <rhs>" are separated into
   // build_expr_ctxs_ (over child(1)) and probe_expr_ctxs_ (over child(0))
   std::vector<ExprContext*> probe_expr_ctxs_;
   std::vector<ExprContext*> build_expr_ctxs_;
 
-  // non-equi-join conjuncts from the JOIN clause
+  // Non-equi-join conjuncts from the JOIN clause.
   std::vector<ExprContext*> other_join_conjunct_ctxs_;
 
   // If true, the partitions in hash_partitions_ are using small buffers.
@@ -375,7 +380,7 @@ class PartitionedHashJoinNode : public BlockingJoinNode {
     Status BuildHashTable(RuntimeState* state, bool* built, const bool add_probe_filters);
 
     // Spills this partition, cleaning up and unpinning blocks.
-    // If unpin_all_build is true, the build stream is completely unpinned, otherwise,
+    // If 'unpin_all_build' is true, the build stream is completely unpinned, otherwise,
     // it is unpinned with one buffer remaining.
     Status Spill(bool unpin_all_build);
 

@@ -1,0 +1,581 @@
+From d45e0c71495a68843c295d248d1722f942ad15b2 Mon Sep 17 00:00:00 2001
+From: Enis Soztutar <enis@apache.org>
+Date: Tue, 27 Jan 2015 14:42:42 -0800
+Subject: [PATCH 053/110] HBASE-11908 Region replicas should be added to the meta table at the time of table creation
+
+Reason: Task
+Author: Enis Soztutar
+Ref: CDH-16914
+---
+ .../org/apache/hadoop/hbase/MetaTableAccessor.java |   54 ++++++++++--
+ .../hadoop/hbase/master/RegionStateStore.java      |    8 +-
+ .../apache/hadoop/hbase/master/RegionStates.java   |   17 +++-
+ .../hbase/master/handler/CreateTableHandler.java   |    6 +-
+ .../hbase/master/handler/TruncateTableHandler.java |    3 +-
+ .../master/snapshot/CloneSnapshotHandler.java      |    5 +-
+ .../master/snapshot/RestoreSnapshotHandler.java    |    5 +-
+ .../hbase/regionserver/RegionMergeTransaction.java |   27 +++++-
+ .../hbase/regionserver/SplitTransaction.java       |   23 +++++-
+ .../apache/hadoop/hbase/TestMetaTableAccessor.java |   91 +++++++++++++++++++-
+ .../hadoop/hbase/client/TestMetaScanner.java       |    2 +-
+ .../coprocessor/TestRegionServerObserver.java      |    3 +-
+ 12 files changed, 209 insertions(+), 35 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/MetaTableAccessor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/MetaTableAccessor.java
+index 04d6a54..b6ef128 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/MetaTableAccessor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/MetaTableAccessor.java
+@@ -747,8 +747,14 @@ public class MetaTableAccessor {
+       if (replicaId < 0) {
+         break;
+       }
+-
+-      locations.add(getRegionLocation(r, regionInfo, replicaId));
++      HRegionLocation location = getRegionLocation(r, regionInfo, replicaId);
++      // In case the region replica is newly created, it's location might be null. We usually do not
++      // have HRL's in RegionLocations object with null ServerName. They are handled as null HRLs.
++      if (location == null || location.getServerName() == null) {
++        locations.add(null);
++      } else {
++        locations.add(location);
++      }
+     }
+ 
+     return new RegionLocations(locations);
+@@ -1097,8 +1103,7 @@ public class MetaTableAccessor {
+    * Adds a (single) hbase:meta row for the specified new region and its daughters. Note that this
+    * does not add its daughter's as different rows, but adds information about the daughters
+    * in the same row as the parent. Use
+-   * {@link #splitRegion(org.apache.hadoop.hbase.client.Connection,
+-   *   HRegionInfo, HRegionInfo, HRegionInfo, ServerName)}
++   * {@link #splitRegion(Connection, HRegionInfo, HRegionInfo, HRegionInfo, ServerName, int)
+    * if you want to do that.
+    * @param meta the Table for META
+    * @param regionInfo region information
+@@ -1120,7 +1125,7 @@ public class MetaTableAccessor {
+    * Adds a (single) hbase:meta row for the specified new region and its daughters. Note that this
+    * does not add its daughter's as different rows, but adds information about the daughters
+    * in the same row as the parent. Use
+-   * {@link #splitRegion(Connection, HRegionInfo, HRegionInfo, HRegionInfo, ServerName)}
++   * {@link #splitRegion(Connection, HRegionInfo, HRegionInfo, HRegionInfo, ServerName, int)
+    * if you want to do that.
+    * @param connection connection we're using
+    * @param regionInfo region information
+@@ -1145,12 +1150,19 @@ public class MetaTableAccessor {
+    * @throws IOException if problem connecting or updating meta
+    */
+   public static void addRegionsToMeta(Connection connection,
+-                                      List<HRegionInfo> regionInfos)
++                                      List<HRegionInfo> regionInfos, int regionReplication)
+     throws IOException {
+     List<Put> puts = new ArrayList<Put>();
+     for (HRegionInfo regionInfo : regionInfos) {
+       if (RegionReplicaUtil.isDefaultReplica(regionInfo)) {
+         puts.add(makePutFromRegionInfo(regionInfo));
++        Put put = makePutFromRegionInfo(regionInfo);
++        // Add empty locations for region replicas so that number of replicas can be cached
++        // whenever the primary region is looked up from meta
++        for (int i = 1; i < regionReplication; i++) {
++          addEmptyLocation(put, i);
++        }
++        puts.add(put);
+       }
+     }
+     putsToMetaTable(connection, puts);
+@@ -1188,7 +1200,8 @@ public class MetaTableAccessor {
+    * @throws IOException
+    */
+   public static void mergeRegions(final Connection connection, HRegionInfo mergedRegion,
+-      HRegionInfo regionA, HRegionInfo regionB, ServerName sn) throws IOException {
++      HRegionInfo regionA, HRegionInfo regionB, ServerName sn, int regionReplication)
++          throws IOException {
+     Table meta = getMetaHTable(connection);
+     try {
+       HRegionInfo copyOfMerged = new HRegionInfo(mergedRegion);
+@@ -1207,6 +1220,12 @@ public class MetaTableAccessor {
+       // The merged is a new region, openSeqNum = 1 is fine.
+       addLocation(putOfMerged, sn, 1, mergedRegion.getReplicaId());
+ 
++      // Add empty locations for region replicas of the merged region so that number of replicas can
++      // be cached whenever the primary region is looked up from meta
++      for (int i = 1; i < regionReplication; i++) {
++        addEmptyLocation(putOfMerged, i);
++      }
++
+       byte[] tableRow = Bytes.toBytes(mergedRegion.getRegionNameAsString()
+         + HConstants.DELIMITER);
+       multiMutate(meta, tableRow, putOfMerged, deleteA, deleteB);
+@@ -1228,7 +1247,7 @@ public class MetaTableAccessor {
+    */
+   public static void splitRegion(final Connection connection,
+                                  HRegionInfo parent, HRegionInfo splitA, HRegionInfo splitB,
+-                                 ServerName sn) throws IOException {
++                                 ServerName sn, int regionReplication) throws IOException {
+     Table meta = getMetaHTable(connection);
+     try {
+       HRegionInfo copyOfParent = new HRegionInfo(parent);
+@@ -1246,6 +1265,13 @@ public class MetaTableAccessor {
+       addLocation(putA, sn, 1, splitA.getReplicaId()); //new regions, openSeqNum = 1 is fine.
+       addLocation(putB, sn, 1, splitB.getReplicaId());
+ 
++      // Add empty locations for region replicas of daughters so that number of replicas can be
++      // cached whenever the primary region is looked up from meta
++      for (int i = 1; i < regionReplication; i++) {
++        addEmptyLocation(putA, i);
++        addEmptyLocation(putB, i);
++      }
++
+       byte[] tableRow = Bytes.toBytes(parent.getRegionNameAsString() + HConstants.DELIMITER);
+       multiMutate(meta, tableRow, putParent, putA, putB);
+     } finally {
+@@ -1393,14 +1419,14 @@ public class MetaTableAccessor {
+    * @throws IOException
+    */
+   public static void overwriteRegions(Connection connection,
+-                                      List<HRegionInfo> regionInfos) throws IOException {
++      List<HRegionInfo> regionInfos, int regionReplication) throws IOException {
+     deleteRegions(connection, regionInfos);
+     // Why sleep? This is the easiest way to ensure that the previous deletes does not
+     // eclipse the following puts, that might happen in the same ts from the server.
+     // See HBASE-9906, and HBASE-9879. Once either HBASE-9879, HBASE-8770 is fixed,
+     // or HBASE-9905 is fixed and meta uses seqIds, we do not need the sleep.
+     Threads.sleep(20);
+-    addRegionsToMeta(connection, regionInfos);
++    addRegionsToMeta(connection, regionInfos, regionReplication);
+     LOG.info("Overwritten " + regionInfos);
+   }
+ 
+@@ -1441,4 +1467,12 @@ public class MetaTableAccessor {
+       Bytes.toBytes(openSeqNum));
+     return p;
+   }
++
++  public static Put addEmptyLocation(final Put p, int replicaId) {
++    long now = EnvironmentEdgeManager.currentTime();
++    p.addImmutable(HConstants.CATALOG_FAMILY, getServerColumn(replicaId), now, null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, getStartCodeColumn(replicaId), now, null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, getSeqNumColumn(replicaId), now, null);
++    return p;
++  }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStateStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStateStore.java
+index 823b180..352c5ac 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStateStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStateStore.java
+@@ -250,12 +250,12 @@ public class RegionStateStore {
+   }
+ 
+   void splitRegion(HRegionInfo p,
+-      HRegionInfo a, HRegionInfo b, ServerName sn) throws IOException {
+-    MetaTableAccessor.splitRegion(server.getConnection(), p, a, b, sn);
++      HRegionInfo a, HRegionInfo b, ServerName sn, int regionReplication) throws IOException {
++    MetaTableAccessor.splitRegion(server.getConnection(), p, a, b, sn, regionReplication);
+   }
+ 
+   void mergeRegions(HRegionInfo p,
+-      HRegionInfo a, HRegionInfo b, ServerName sn) throws IOException {
+-    MetaTableAccessor.mergeRegions(server.getConnection(), p, a, b, sn);
++      HRegionInfo a, HRegionInfo b, ServerName sn, int regionReplication) throws IOException {
++    MetaTableAccessor.mergeRegions(server.getConnection(), p, a, b, sn, regionReplication);
+   }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
+index 781c62c..75529c6 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
+@@ -36,6 +36,8 @@ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.RegionTransition;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.MetaTableAccessor;
+ import org.apache.hadoop.hbase.Server;
+ import org.apache.hadoop.hbase.ServerLoad;
+ import org.apache.hadoop.hbase.ServerName;
+@@ -826,7 +828,8 @@ public class RegionStates {
+ 
+   void splitRegion(HRegionInfo p,
+       HRegionInfo a, HRegionInfo b, ServerName sn) throws IOException {
+-    regionStateStore.splitRegion(p, a, b, sn);
++
++    regionStateStore.splitRegion(p, a, b, sn, getRegionReplication(p));
+     synchronized (this) {
+       // After PONR, split is considered to be done.
+       // Update server holdings to be aligned with the meta.
+@@ -842,7 +845,7 @@ public class RegionStates {
+ 
+   void mergeRegions(HRegionInfo p,
+       HRegionInfo a, HRegionInfo b, ServerName sn) throws IOException {
+-    regionStateStore.mergeRegions(p, a, b, sn);
++    regionStateStore.mergeRegions(p, a, b, sn, getRegionReplication(a));
+     synchronized (this) {
+       // After PONR, merge is considered to be done.
+       // Update server holdings to be aligned with the meta.
+@@ -856,6 +859,16 @@ public class RegionStates {
+     }
+   }
+ 
++  private int getRegionReplication(HRegionInfo r) throws IOException {
++    if (tableStateManager != null) {
++      HTableDescriptor htd = ((MasterServices)server).getTableDescriptors().get(r.getTable());
++      if (htd != null) {
++        return htd.getRegionReplication();
++      }
++    }
++    return 1;
++  }
++
+   /**
+    * At cluster clean re/start, mark all user regions closed except those of tables
+    * that are excluded, such as disabled/disabling/enabling tables. All user regions
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/CreateTableHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/CreateTableHandler.java
+index 4633845..f9d0d24 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/CreateTableHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/CreateTableHandler.java
+@@ -258,7 +258,7 @@ public class CreateTableHandler extends EventHandler {
+ 
+     if (regionInfos != null && regionInfos.size() > 0) {
+       // 4. Add regions to META
+-      addRegionsToMeta(regionInfos);
++      addRegionsToMeta(regionInfos, hTableDescriptor.getRegionReplication());
+       // 5. Add replicas if needed
+       regionInfos = addReplicas(hTableDescriptor, regionInfos);
+ 
+@@ -334,8 +334,8 @@ public class CreateTableHandler extends EventHandler {
+   /**
+    * Add the specified set of regions to the hbase:meta table.
+    */
+-  protected void addRegionsToMeta(final List<HRegionInfo> regionInfos)
++  protected void addRegionsToMeta(final List<HRegionInfo> regionInfos, int regionReplication)
+       throws IOException {
+-    MetaTableAccessor.addRegionsToMeta(this.server.getConnection(), regionInfos);
++    MetaTableAccessor.addRegionsToMeta(this.server.getConnection(), regionInfos, regionReplication);
+   }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/TruncateTableHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/TruncateTableHandler.java
+index c264824..4d4e331 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/TruncateTableHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/handler/TruncateTableHandler.java
+@@ -124,7 +124,8 @@ public class TruncateTableHandler extends DeleteTableHandler {
+       }
+ 
+       // 4. Add regions to META
+-      MetaTableAccessor.addRegionsToMeta(masterServices.getConnection(), regionInfos);
++      MetaTableAccessor.addRegionsToMeta(masterServices.getConnection(),
++        regionInfos, hTableDescriptor.getRegionReplication());
+ 
+       // 5. Trigger immediate assignment of the regions in round-robin fashion
+       ModifyRegionUtils.assignRegions(assignmentManager, regionInfos);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
+index c9fc93b..2a6dca8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/CloneSnapshotHandler.java
+@@ -138,9 +138,10 @@ public class CloneSnapshotHandler extends CreateTableHandler implements Snapshot
+   }
+ 
+   @Override
+-  protected void addRegionsToMeta(final List<HRegionInfo> regionInfos)
++  protected void addRegionsToMeta(final List<HRegionInfo> regionInfos,
++      int regionReplication)
+       throws IOException {
+-    super.addRegionsToMeta(regionInfos);
++    super.addRegionsToMeta(regionInfos, regionReplication);
+     metaChanges.updateMetaParentRegions(this.server.getConnection(), regionInfos);
+   }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
+index 57895e9..56faf76 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/RestoreSnapshotHandler.java
+@@ -159,9 +159,10 @@ public class RestoreSnapshotHandler extends TableEventHandler implements Snapsho
+       // in the snapshot folder.
+       hris.clear();
+       if (metaChanges.hasRegionsToAdd()) hris.addAll(metaChanges.getRegionsToAdd());
+-      MetaTableAccessor.addRegionsToMeta(conn, hris);
++      MetaTableAccessor.addRegionsToMeta(conn, hris, hTableDescriptor.getRegionReplication());
+       if (metaChanges.hasRegionsToRestore()) {
+-        MetaTableAccessor.overwriteRegions(conn, metaChanges.getRegionsToRestore());
++        MetaTableAccessor.overwriteRegions(conn, metaChanges.getRegionsToRestore(),
++          hTableDescriptor.getRegionReplication());
+       }
+       metaChanges.updateMetaParentRegions(this.server.getConnection(), hris);
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RegionMergeTransaction.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RegionMergeTransaction.java
+index e49193d..279514c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RegionMergeTransaction.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RegionMergeTransaction.java
+@@ -326,11 +326,11 @@ public class RegionMergeTransaction {
+       if (metaEntries.isEmpty()) {
+         MetaTableAccessor.mergeRegions(server.getConnection(),
+           mergedRegion.getRegionInfo(), region_a.getRegionInfo(), region_b.getRegionInfo(),
+-          server.getServerName());
++          server.getServerName(), region_a.getTableDesc().getRegionReplication());
+       } else {
+         mergeRegionsAndPutMetaEntries(server.getConnection(),
+           mergedRegion.getRegionInfo(), region_a.getRegionInfo(), region_b.getRegionInfo(),
+-          server.getServerName(), metaEntries);
++          server.getServerName(), metaEntries, region_a.getTableDesc().getRegionReplication());
+       }
+     } else if (services != null && !useCoordinationForAssignment) {
+       if (!services.reportRegionStateTransition(TransitionCode.MERGE_PONR,
+@@ -346,13 +346,16 @@ public class RegionMergeTransaction {
+ 
+   private void mergeRegionsAndPutMetaEntries(HConnection hConnection,
+       HRegionInfo mergedRegion, HRegionInfo regionA, HRegionInfo regionB,
+-      ServerName serverName, List<Mutation> metaEntries) throws IOException {
+-    prepareMutationsForMerge(mergedRegion, regionA, regionB, serverName, metaEntries);
++      ServerName serverName, List<Mutation> metaEntries, 
++      int regionReplication) throws IOException {
++    prepareMutationsForMerge(mergedRegion, regionA, regionB, serverName, metaEntries,
++      regionReplication);
+     MetaTableAccessor.mutateMetaTable(hConnection, metaEntries);
+   }
+ 
+   public void prepareMutationsForMerge(HRegionInfo mergedRegion, HRegionInfo regionA,
+-      HRegionInfo regionB, ServerName serverName, List<Mutation> mutations) throws IOException {
++      HRegionInfo regionB, ServerName serverName, List<Mutation> mutations,
++      int regionReplication) throws IOException {
+     HRegionInfo copyOfMerged = new HRegionInfo(mergedRegion);
+ 
+     // Put for parent
+@@ -365,6 +368,13 @@ public class RegionMergeTransaction {
+     Delete deleteB = MetaTableAccessor.makeDeleteFromRegionInfo(regionB);
+     mutations.add(deleteA);
+     mutations.add(deleteB);
++
++    // Add empty locations for region replicas of the merged region so that number of replicas can
++    // be cached whenever the primary region is looked up from meta
++    for (int i = 1; i < regionReplication; i++) {
++      addEmptyLocation(putOfMerged, i);
++    }
++
+     // The merged is a new region, openSeqNum = 1 is fine.
+     addLocation(putOfMerged, serverName, 1);
+   }
+@@ -378,6 +388,13 @@ public class RegionMergeTransaction {
+     return p;
+   }
+ 
++  private static Put addEmptyLocation(final Put p, int replicaId) {
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getServerColumn(replicaId), null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getStartCodeColumn(replicaId), null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getSeqNumColumn(replicaId), null);
++    return p;
++  }
++
+   public HRegion stepsBeforePONR(final Server server, final RegionServerServices services,
+       boolean testing) throws IOException {
+     if (rmd == null) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/SplitTransaction.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/SplitTransaction.java
+index f4d9ffe..5f4bd43 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/SplitTransaction.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/SplitTransaction.java
+@@ -341,11 +341,13 @@ public class SplitTransaction {
+       if (metaEntries == null || metaEntries.isEmpty()) {
+         MetaTableAccessor.splitRegion(server.getConnection(),
+           parent.getRegionInfo(), daughterRegions.getFirst().getRegionInfo(),
+-          daughterRegions.getSecond().getRegionInfo(), server.getServerName());
++          daughterRegions.getSecond().getRegionInfo(), server.getServerName(),
++          parent.getTableDesc().getRegionReplication());
+       } else {
+         offlineParentInMetaAndputMetaEntries(server.getConnection(),
+           parent.getRegionInfo(), daughterRegions.getFirst().getRegionInfo(), daughterRegions
+-              .getSecond().getRegionInfo(), server.getServerName(), metaEntries);
++              .getSecond().getRegionInfo(), server.getServerName(), metaEntries,
++              parent.getTableDesc().getRegionReplication());
+       }
+     } else if (services != null && !useZKForAssignment) {
+       if (!services.reportRegionStateTransition(TransitionCode.SPLIT_PONR,
+@@ -569,7 +571,7 @@ public class SplitTransaction {
+ 
+   private void offlineParentInMetaAndputMetaEntries(HConnection hConnection,
+       HRegionInfo parent, HRegionInfo splitA, HRegionInfo splitB,
+-      ServerName serverName, List<Mutation> metaEntries) throws IOException {
++      ServerName serverName, List<Mutation> metaEntries, int regionReplication) throws IOException {
+     List<Mutation> mutations = metaEntries;
+     HRegionInfo copyOfParent = new HRegionInfo(parent);
+     copyOfParent.setOffline(true);
+@@ -588,9 +590,24 @@ public class SplitTransaction {
+     addLocation(putB, serverName, 1);
+     mutations.add(putA);
+     mutations.add(putB);
++
++    // Add empty locations for region replicas of daughters so that number of replicas can be
++    // cached whenever the primary region is looked up from meta
++    for (int i = 1; i < regionReplication; i++) {
++      addEmptyLocation(putA, i);
++      addEmptyLocation(putB, i);
++    }
++
+     MetaTableAccessor.mutateMetaTable(hConnection, mutations);
+   }
+ 
++  private static Put addEmptyLocation(final Put p, int replicaId){
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getServerColumn(replicaId), null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getStartCodeColumn(replicaId), null);
++    p.addImmutable(HConstants.CATALOG_FAMILY, MetaTableAccessor.getSeqNumColumn(replicaId), null);
++    return p;
++  }
++
+   public Put addLocation(final Put p, final ServerName sn, long openSeqNum) {
+     p.addImmutable(HConstants.CATALOG_FAMILY, HConstants.SERVER_QUALIFIER,
+       Bytes.toBytes(sn.getHostAndPort()));
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestMetaTableAccessor.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestMetaTableAccessor.java
+index 69d4823..a79bb96 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestMetaTableAccessor.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestMetaTableAccessor.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.assertNull;
+ import static org.junit.Assert.assertTrue;
+ 
+@@ -46,6 +47,8 @@ import org.junit.BeforeClass;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
++import com.google.common.collect.Lists;
++
+ /**
+  * Test {@link org.apache.hadoop.hbase.MetaTableAccessor}.
+  */
+@@ -54,6 +57,7 @@ public class TestMetaTableAccessor {
+   private static final Log LOG = LogFactory.getLog(TestMetaTableAccessor.class);
+   private static final  HBaseTestingUtility UTIL = new HBaseTestingUtility();
+   private static Connection connection;
++  private Random random = new Random();
+ 
+   @BeforeClass public static void beforeClass() throws Exception {
+     UTIL.startMiniCluster(3);
+@@ -317,7 +321,6 @@ public class TestMetaTableAccessor {
+ 
+   @Test
+   public void testMetaLocationsForRegionReplicas() throws IOException {
+-    Random random = new Random();
+     ServerName serverName0 = ServerName.valueOf("foo", 60010, random.nextLong());
+     ServerName serverName1 = ServerName.valueOf("bar", 60010, random.nextLong());
+     ServerName serverName100 = ServerName.valueOf("baz", 60010, random.nextLong());
+@@ -378,5 +381,91 @@ public class TestMetaTableAccessor {
+         Bytes.toBytes(seqNum)));
+     }
+   }
++
++  public static void assertEmptyMetaLocation(Table meta, byte[] row, int replicaId)
++      throws IOException {
++    Get get = new Get(row);
++    Result result = meta.get(get);
++    Cell serverCell = result.getColumnLatestCell(HConstants.CATALOG_FAMILY,
++      MetaTableAccessor.getServerColumn(replicaId));
++    Cell startCodeCell = result.getColumnLatestCell(HConstants.CATALOG_FAMILY,
++      MetaTableAccessor.getStartCodeColumn(replicaId));
++    assertNotNull(serverCell);
++    assertNotNull(startCodeCell);
++    assertEquals(0, serverCell.getValueLength());
++    assertEquals(0, startCodeCell.getValueLength());
++  }
++
++  @Test
++  public void testMetaLocationForRegionReplicasIsAddedAtTableCreation() throws IOException {
++    long regionId = System.currentTimeMillis();
++    HRegionInfo primary = new HRegionInfo(TableName.valueOf("table_foo"),
++      HConstants.EMPTY_START_ROW, HConstants.EMPTY_END_ROW, false, regionId, 0);
++
++    Table meta = MetaTableAccessor.getMetaHTable(connection);
++    try {
++      List<HRegionInfo> regionInfos = Lists.newArrayList(primary);
++      MetaTableAccessor.addRegionsToMeta(connection, regionInfos, 3);
++
++      assertEmptyMetaLocation(meta, primary.getRegionName(), 1);
++      assertEmptyMetaLocation(meta, primary.getRegionName(), 2);
++    } finally {
++      meta.close();
++    }
++  }
++
++  @Test
++  public void testMetaLocationForRegionReplicasIsAddedAtRegionSplit() throws IOException {
++    long regionId = System.currentTimeMillis();
++    ServerName serverName0 = ServerName.valueOf("foo", 60010, random.nextLong());
++    HRegionInfo parent = new HRegionInfo(TableName.valueOf("table_foo"),
++      HConstants.EMPTY_START_ROW, HConstants.EMPTY_END_ROW, false, regionId, 0);
++    HRegionInfo splitA = new HRegionInfo(TableName.valueOf("table_foo"),
++      HConstants.EMPTY_START_ROW, Bytes.toBytes("a"), false, regionId+1, 0);
++    HRegionInfo splitB = new HRegionInfo(TableName.valueOf("table_foo"),
++      Bytes.toBytes("a"), HConstants.EMPTY_END_ROW, false, regionId+1, 0);
++
++
++    Table meta = MetaTableAccessor.getMetaHTable(connection);
++    try {
++      List<HRegionInfo> regionInfos = Lists.newArrayList(parent);
++      MetaTableAccessor.addRegionsToMeta(connection, regionInfos, 3);
++
++      MetaTableAccessor.splitRegion(connection, parent, splitA, splitB, serverName0, 3);
++
++      assertEmptyMetaLocation(meta, splitA.getRegionName(), 1);
++      assertEmptyMetaLocation(meta, splitA.getRegionName(), 2);
++      assertEmptyMetaLocation(meta, splitB.getRegionName(), 1);
++      assertEmptyMetaLocation(meta, splitB.getRegionName(), 2);
++    } finally {
++      meta.close();
++    }
++  }
++
++  @Test
++  public void testMetaLocationForRegionReplicasIsAddedAtRegionMerge() throws IOException {
++    long regionId = System.currentTimeMillis();
++    ServerName serverName0 = ServerName.valueOf("foo", 60010, random.nextLong());
++
++    HRegionInfo parentA = new HRegionInfo(TableName.valueOf("table_foo"),
++      Bytes.toBytes("a"), HConstants.EMPTY_END_ROW, false, regionId, 0);
++    HRegionInfo parentB = new HRegionInfo(TableName.valueOf("table_foo"),
++      HConstants.EMPTY_START_ROW, Bytes.toBytes("a"), false, regionId, 0);
++    HRegionInfo merged = new HRegionInfo(TableName.valueOf("table_foo"),
++      HConstants.EMPTY_START_ROW, HConstants.EMPTY_END_ROW, false, regionId+1, 0);
++
++    Table meta = MetaTableAccessor.getMetaHTable(connection);
++    try {
++      List<HRegionInfo> regionInfos = Lists.newArrayList(parentA, parentB);
++      MetaTableAccessor.addRegionsToMeta(connection, regionInfos, 3);
++
++      MetaTableAccessor.mergeRegions(connection, merged, parentA, parentB, serverName0, 3);
++
++      assertEmptyMetaLocation(meta, merged.getRegionName(), 1);
++      assertEmptyMetaLocation(meta, merged.getRegionName(), 2);
++    } finally {
++      meta.close();
++    }
++  }
+ }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
+index 332b990..35262b1 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMetaScanner.java
+@@ -169,7 +169,7 @@ public class TestMetaScanner {
+               end);
+ 
+             MetaTableAccessor.splitRegion(connection,
+-              parent, splita, splitb, ServerName.valueOf("fooserver", 1, 0));
++              parent, splita, splitb, ServerName.valueOf("fooserver", 1, 0), 1);
+ 
+             Threads.sleep(random.nextInt(200));
+           } catch (Throwable e) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/coprocessor/TestRegionServerObserver.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/coprocessor/TestRegionServerObserver.java
+index 638321c..6549825 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/coprocessor/TestRegionServerObserver.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/coprocessor/TestRegionServerObserver.java
+@@ -152,7 +152,8 @@ public class TestRegionServerObserver {
+       }
+       mergedRegion = rmt.stepsBeforePONR(rs, rs, false);
+       rmt.prepareMutationsForMerge(mergedRegion.getRegionInfo(), regionA.getRegionInfo(),
+-        regionB.getRegionInfo(), rs.getServerName(), metaEntries);
++        regionB.getRegionInfo(), rs.getServerName(), metaEntries,
++        regionA.getTableDesc().getRegionReplication());
+       MetaTableAccessor.mutateMetaTable(rs.getConnection(), metaEntries);
+     }
+ 
+-- 
+1.7.0.4
+

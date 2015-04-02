@@ -99,7 +99,7 @@ Status CommandExecutor::run() {
   if (!status.ok() && !status.IsCancelled() && !status.IsMemLimitExceeded()) {
 	  // Log error message in addition to returning in Status. Some requests
 	  // may not receive the message directly and can only retrieve the log.
-    LOG(ERROR) << "run() : an error occur : \"" << status.GetErrorMsg() << "\".";
+    LOG(ERROR) << "run() : an error occur : \"" << status.GetDetail() << "\".";
   }
   updateStatus(status);
   return status;

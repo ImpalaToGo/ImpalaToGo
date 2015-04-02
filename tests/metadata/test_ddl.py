@@ -23,6 +23,8 @@ from subprocess import call
 from tests.common.test_vector import *
 from tests.common.test_dimensions import ALL_NODES_ONLY
 from tests.common.impala_test_suite import *
+from tests.common.skip import *
+from tests.util.filesystem_utils import WAREHOUSE
 
 # Validates DDL statements (create, drop)
 class TestDdlStatements(ImpalaTestSuite):
@@ -82,6 +84,7 @@ class TestDdlStatements(ImpalaTestSuite):
     self.hdfs_client.delete_file_dir("test-warehouse/t1_tmp1/", recursive=True)
     self.hdfs_client.delete_file_dir("test-warehouse/t_part_tmp/", recursive=True)
 
+  @skip_if_s3_hdfs_client # S3: missing coverage: drop table/database
   @pytest.mark.execute_serially
   def test_drop_cleans_hdfs_dirs(self):
     self.hdfs_client.delete_file_dir("test-warehouse/ddl_test_db.db/", recursive=True)
@@ -105,6 +108,7 @@ class TestDdlStatements(ImpalaTestSuite):
     self.client.execute("drop database ddl_test_db")
     assert not self.hdfs_client.exists("test-warehouse/ddl_test_db.db/")
 
+  @skip_if_s3_insert
   @pytest.mark.execute_serially
   def test_create(self, vector):
     vector.get_value('exec_option')['abort_on_error'] = False
@@ -117,13 +121,20 @@ class TestDdlStatements(ImpalaTestSuite):
     """Verifies the catalog gets updated properly when dropping objects with sync_ddl
     enabled"""
     self.client.set_configuration({'sync_ddl': 0})
-    self.client.execute('create database ddl_test_db')
+    if IS_DEFAULT_FS:
+      self.client.execute('create database ddl_test_db')
+    else:
+      self.client.execute("create database ddl_test_db location "
+                          "'%s/ddl_test_db.db'" % WAREHOUSE)
+
     self.client.set_configuration({'sync_ddl': 1})
     # Drop the database immediately after creation (within a statestore heartbeat) and
     # verify the catalog gets updated properly.
     self.client.execute('drop database ddl_test_db')
     assert 'ddl_test_db' not in self.client.execute("show databases").data
 
+  # TODO: don't use hdfs_client
+  @skip_if_s3_insert # S3: missing coverage: alter table
   @pytest.mark.execute_serially
   def test_alter_table(self, vector):
     vector.get_value('exec_option')['abort_on_error'] = False
@@ -155,9 +166,9 @@ class TestDdlStatements(ImpalaTestSuite):
   def test_create_drop_function(self, vector):
     # This will create, run, and drop the same function repeatedly, exercising the
     # lib cache mechanism.
-    create_fn_stmt = """create function f() returns int
-        location '/test-warehouse/libTestUdfs.so' symbol='NoArgs'"""
-    select_stmt = """select f() from functional.alltypes limit 10"""
+    create_fn_stmt = ("create function f() returns int "
+                      "location '%s/libTestUdfs.so' symbol='NoArgs'" % WAREHOUSE)
+    select_stmt = "select f() from functional.alltypes limit 10"
     drop_fn_stmt = "drop function %s f()"
     self.create_drop_ddl(vector, "udf_test", [create_fn_stmt], [drop_fn_stmt],
         select_stmt)
@@ -166,10 +177,10 @@ class TestDdlStatements(ImpalaTestSuite):
   def test_create_drop_data_src(self, vector):
     # This will create, run, and drop the same data source repeatedly, exercising
     # the lib cache mechanism.
-    create_ds_stmt = """CREATE DATA SOURCE test_data_src
-        LOCATION '/test-warehouse/data-sources/test-data-source.jar'
-        CLASS 'com.cloudera.impala.extdatasource.AllTypesDataSource'
-        API_VERSION 'V1'"""
+    create_ds_stmt = ("CREATE DATA SOURCE test_data_src "
+        "LOCATION '%s/data-sources/test-data-source.jar' "
+        "CLASS 'com.cloudera.impala.extdatasource.AllTypesDataSource' "
+        "API_VERSION 'V1'" % WAREHOUSE)
     create_tbl_stmt = """CREATE TABLE data_src_tbl (x int)
         PRODUCED BY DATA SOURCE test_data_src"""
     drop_ds_stmt = "drop data source %s test_data_src"
@@ -289,7 +300,11 @@ class TestDdlStatements(ImpalaTestSuite):
     """
     cls.client.execute('use default')
     cls.client.set_configuration({'sync_ddl': 1})
-    cls.client.execute('create database %s' % db_name)
+    if IS_DEFAULT_FS:
+      cls.client.execute("create database %s" % db_name)
+    else:
+      cls.client.execute("create database %s location "
+                         "'%s/%s.db'" % (db_name, WAREHOUSE, db_name))
     cls.client.set_configuration(vector.get_value('exec_option'))
 
   def __get_tbl_properties(self, table_name):

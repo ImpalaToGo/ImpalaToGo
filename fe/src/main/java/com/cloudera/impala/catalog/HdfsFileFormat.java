@@ -105,6 +105,14 @@ public enum HdfsFileFormat {
     throw new IllegalArgumentException(className);
   }
 
+  public String toJavaClassName() {
+    for (Map.Entry<String, HdfsFileFormat> e: VALID_FORMATS.entrySet()) {
+      if (e.getValue().equals(this)) return e.getKey();
+    }
+
+    throw new IllegalArgumentException(this.toString());
+  }
+
   public static HdfsFileFormat fromThrift(THdfsFileFormat thriftFormat) {
     switch (thriftFormat) {
       case RC_FILE: return HdfsFileFormat.RC_FILE;
@@ -193,4 +201,22 @@ public enum HdfsFileFormat {
     }
   }
 
+  /**
+   * Returns true if this file format with the given compression format is splittable.
+   */
+  public boolean isSplittable(HdfsCompression compression) {
+    switch (this) {
+      case TEXT:
+        return compression == HdfsCompression.NONE;
+      case RC_FILE:
+      case SEQUENCE_FILE:
+      case AVRO:
+        return true;
+      case PARQUET:
+        return false;
+      default:
+        throw new RuntimeException("Unknown HdfsFormat: "
+            + this + " - should never happen!");
+    }
+  }
 }

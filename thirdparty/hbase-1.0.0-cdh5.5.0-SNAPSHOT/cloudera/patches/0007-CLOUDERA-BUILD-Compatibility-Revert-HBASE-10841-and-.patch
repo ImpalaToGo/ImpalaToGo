@@ -1,0 +1,1204 @@
+From 09aa1daa814cb68b1f3224aa09654db42c05c002 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Mon, 15 Dec 2014 18:24:49 +0000
+Subject: [PATCH 007/110] CLOUDERA-BUILD Compatibility Revert HBASE-10841 and HBASE-12046 HTD/HCD setters should be builder-style
+
+---
+ .../org/apache/hadoop/hbase/HColumnDescriptor.java |    3 +-
+ .../org/apache/hadoop/hbase/HTableDescriptor.java  |   57 ++++++-----------
+ .../java/org/apache/hadoop/hbase/ServerName.java   |    6 +-
+ .../org/apache/hadoop/hbase/client/Append.java     |   60 +-----------------
+ .../org/apache/hadoop/hbase/client/Attributes.java |    2 +-
+ .../org/apache/hadoop/hbase/client/Delete.java     |   60 +-----------------
+ .../java/org/apache/hadoop/hbase/client/Get.java   |   50 +--------------
+ .../org/apache/hadoop/hbase/client/Increment.java  |   57 -----------------
+ .../org/apache/hadoop/hbase/client/Mutation.java   |   24 +++-----
+ .../hbase/client/OperationWithAttributes.java      |    8 +--
+ .../java/org/apache/hadoop/hbase/client/Put.java   |   57 -----------------
+ .../java/org/apache/hadoop/hbase/client/Query.java |    9 +--
+ .../java/org/apache/hadoop/hbase/client/Scan.java  |   67 +++-----------------
+ .../hbase/client/UnmodifyableHTableDescriptor.java |   12 ++--
+ .../apache/hadoop/hbase/TestHColumnDescriptor.java |   17 -----
+ .../apache/hadoop/hbase/TestHTableDescriptor.java  |   17 -----
+ .../apache/hadoop/hbase/client/TestOperation.java  |   31 ---------
+ .../hbase/security/access/AccessControlLists.java  |   25 ++++----
+ 18 files changed, 73 insertions(+), 489 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+index 401e0da..660059a 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/HColumnDescriptor.java
+@@ -1419,13 +1419,12 @@ public class HColumnDescriptor implements WritableComparable<HColumnDescriptor>
+    * @param key Config key. Same as XML config key e.g. hbase.something.or.other.
+    * @param value String value. If null, removes the configuration.
+    */
+-  public HColumnDescriptor setConfiguration(String key, String value) {
++  public void setConfiguration(String key, String value) {
+     if (value == null) {
+       removeConfiguration(key);
+     } else {
+       configuration.put(key, value);
+     }
+-    return this;
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/HTableDescriptor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/HTableDescriptor.java
+index 9dfb374..ff7d434 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/HTableDescriptor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/HTableDescriptor.java
+@@ -491,19 +491,17 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param value The value.
+    * @see #values
+    */
+-  public HTableDescriptor setValue(byte[] key, byte[] value) {
++  public void setValue(byte[] key, byte[] value) {
+     setValue(new ImmutableBytesWritable(key), new ImmutableBytesWritable(value));
+-    return this;
+   }
+ 
+   /*
+    * @param key The key.
+    * @param value The value.
+    */
+-  private HTableDescriptor setValue(final ImmutableBytesWritable key,
++  private void setValue(final ImmutableBytesWritable key,
+       final String value) {
+     setValue(key, new ImmutableBytesWritable(Bytes.toBytes(value)));
+-    return this;
+   }
+ 
+   /*
+@@ -512,17 +510,16 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param key The key.
+    * @param value The value.
+    */
+-  public HTableDescriptor setValue(final ImmutableBytesWritable key,
++  public void setValue(final ImmutableBytesWritable key,
+       final ImmutableBytesWritable value) {
+     if (key.compareTo(DEFERRED_LOG_FLUSH_KEY) == 0) {
+       boolean isDeferredFlush = Boolean.valueOf(Bytes.toString(value.get()));
+       LOG.warn("HTableDescriptor property:" + DEFERRED_LOG_FLUSH + " is deprecated, " +
+           "use " + DURABILITY + " instead");
+       setDurability(isDeferredFlush ? Durability.ASYNC_WAL : DEFAULT_DURABLITY);
+-      return this;
++    } else {
++      values.put(key, value);
+     }
+-    values.put(key, value);
+-    return this;
+   }
+ 
+   /**
+@@ -532,13 +529,12 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param value The value.
+    * @see #values
+    */
+-  public HTableDescriptor setValue(String key, String value) {
++  public void setValue(String key, String value) {
+     if (value == null) {
+       remove(key);
+     } else {
+       setValue(Bytes.toBytes(key), Bytes.toBytes(value));
+     }
+-    return this;
+   }
+ 
+   /**
+@@ -589,8 +585,8 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param readOnly True if all of the columns in the table should be read
+    * only.
+    */
+-  public HTableDescriptor setReadOnly(final boolean readOnly) {
+-    return setValue(READONLY_KEY, readOnly? TRUE: FALSE);
++  public void setReadOnly(final boolean readOnly) {
++    setValue(READONLY_KEY, readOnly? TRUE: FALSE);
+   }
+ 
+   /**
+@@ -608,19 +604,17 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    *
+    * @param isEnable True if enable compaction.
+    */
+-  public HTableDescriptor setCompactionEnabled(final boolean isEnable) {
++  public void setCompactionEnabled(final boolean isEnable) {
+     setValue(COMPACTION_ENABLED_KEY, isEnable ? TRUE : FALSE);
+-    return this;
+   }
+ 
+   /**
+    * Sets the {@link Durability} setting for the table. This defaults to Durability.USE_DEFAULT.
+    * @param durability enum value
+    */
+-  public HTableDescriptor setDurability(Durability durability) {
++  public void setDurability(Durability durability) {
+     this.durability = durability;
+     setValue(DURABILITY_KEY, durability.name());
+-    return this;
+   }
+ 
+   /**
+@@ -703,16 +697,14 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param name name of table
+    */
+   @Deprecated
+-  public HTableDescriptor setName(byte[] name) {
++  public void setName(byte[] name) {
+     setName(TableName.valueOf(name));
+-    return this;
+   }
+ 
+   @Deprecated
+-  public HTableDescriptor setName(TableName name) {
++  public void setName(TableName name) {
+     this.name = name;
+     setMetaFlags(this.name);
+-    return this;
+   }
+ 
+   /**
+@@ -747,9 +739,8 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param maxFileSize The maximum file size that a store file can grow to
+    * before a split is triggered.
+    */
+-  public HTableDescriptor setMaxFileSize(long maxFileSize) {
++  public void setMaxFileSize(long maxFileSize) {
+     setValue(MAX_FILESIZE_KEY, Long.toString(maxFileSize));
+-    return this;
+   }
+ 
+   /**
+@@ -773,9 +764,8 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    *
+    * @param memstoreFlushSize memory cache flush size for each hregion
+    */
+-  public HTableDescriptor setMemStoreFlushSize(long memstoreFlushSize) {
++  public void setMemStoreFlushSize(long memstoreFlushSize) {
+     setValue(MEMSTORE_FLUSHSIZE_KEY, Long.toString(memstoreFlushSize));
+-    return this;
+   }
+ 
+   /**
+@@ -783,7 +773,7 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * For the updating purpose please use {@link #modifyFamily(HColumnDescriptor)} instead.
+    * @param family HColumnDescriptor of family to add.
+    */
+-  public HTableDescriptor addFamily(final HColumnDescriptor family) {
++  public void addFamily(final HColumnDescriptor family) {
+     if (family.getName() == null || family.getName().length <= 0) {
+       throw new IllegalArgumentException("Family name cannot be null or empty");
+     }
+@@ -792,7 +782,6 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+         family.getNameAsString() + "' already exists so cannot be added");
+     }
+     this.families.put(family.getName(), family);
+-    return this;
+   }
+ 
+   /**
+@@ -1205,9 +1194,8 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param className Full class name.
+    * @throws IOException
+    */
+-  public HTableDescriptor addCoprocessor(String className) throws IOException {
++  public void addCoprocessor(String className) throws IOException {
+     addCoprocessor(className, null, Coprocessor.PRIORITY_USER, null);
+-    return this;
+   }
+ 
+ 
+@@ -1225,7 +1213,7 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param kvs Arbitrary key-value parameter pairs passed into the coprocessor.
+    * @throws IOException
+    */
+-  public HTableDescriptor addCoprocessor(String className, Path jarFilePath,
++  public void addCoprocessor(String className, Path jarFilePath,
+                              int priority, final Map<String, String> kvs)
+   throws IOException {
+     if (hasCoprocessor(className)) {
+@@ -1272,7 +1260,6 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+         "|" + className + "|" + Integer.toString(priority) + "|" +
+         kvString.toString();
+     setValue(key, value);
+-    return this;
+   }
+ 
+ 
+@@ -1437,19 +1424,18 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+       });
+ 
+   @Deprecated
+-  public HTableDescriptor setOwner(User owner) {
+-    return setOwnerString(owner != null ? owner.getShortName() : null);
++  public void setOwner(User owner) {
++    setOwnerString(owner != null ? owner.getShortName() : null);
+   }
+ 
+   // used by admin.rb:alter(table_name,*args) to update owner.
+   @Deprecated
+-  public HTableDescriptor setOwnerString(String ownerString) {
++  public void setOwnerString(String ownerString) {
+     if (ownerString != null) {
+       setValue(OWNER_KEY, ownerString);
+     } else {
+       remove(OWNER_KEY);
+     }
+-    return this;
+   }
+ 
+   @Deprecated
+@@ -1561,13 +1547,12 @@ public class HTableDescriptor implements WritableComparable<HTableDescriptor> {
+    * @param key Config key. Same as XML config key e.g. hbase.something.or.other.
+    * @param value String value. If null, removes the setting.
+    */
+-  public HTableDescriptor setConfiguration(String key, String value) {
++  public void setConfiguration(String key, String value) {
+     if (value == null) {
+       removeConfiguration(key);
+     } else {
+       configuration.put(key, value);
+     }
+-    return this;
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+index dc5ba78..946af96 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/ServerName.java
+@@ -45,10 +45,10 @@ import java.util.regex.Pattern;
+  * For example, if hostname is <code>www.example.org</code>, port is <code>1234</code>,
+  * and the startcode for the regionserver is <code>1212121212</code>, then
+  * the {@link #toString()} would be <code>www.example.org,1234,1212121212</code>.
+- * 
++ *
+  * <p>You can obtain a versioned serialized form of this class by calling
+  * {@link #getVersionedBytes()}.  To deserialize, call {@link #parseVersionedServerName(byte[])}
+- * 
++ *
+  * <p>Immutable.
+  */
+ @InterfaceAudience.Public
+@@ -365,7 +365,7 @@ public class ServerName implements Comparable<ServerName>, Serializable {
+    * has a serialized {@link ServerName} in it.
+    * @return Returns null if <code>data</code> is null else converts passed data
+    * to a ServerName instance.
+-   * @throws DeserializationException 
++   * @throws DeserializationException
+    */
+   public static ServerName parseFrom(final byte [] data) throws DeserializationException {
+     if (data == null || data.length <= 0) return null;
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Append.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Append.java
+index 58c204b..a4d9d44 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Append.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Append.java
+@@ -54,9 +54,8 @@ public class Append extends Mutation {
+    *          A client that is not interested in the result can save network
+    *          bandwidth setting this to false.
+    */
+-  public Append setReturnResults(boolean returnResults) {
++  public void setReturnResults(boolean returnResults) {
+     setAttribute(RETURN_RESULTS, Bytes.toBytes(returnResults));
+-    return this;
+   }
+ 
+   /**
+@@ -131,61 +130,4 @@ public class Append extends Mutation {
+     this.familyMap.put(family, list);
+     return this;
+   }
+-
+-  @Override
+-  public Append setAttribute(String name, byte[] value) {
+-    return (Append) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Append setId(String id) {
+-    return (Append) super.setId(id);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Append setWriteToWAL(boolean write) {
+-    return (Append) super.setWriteToWAL(write);
+-  }
+-
+-  @Override
+-  public Append setDurability(Durability d) {
+-    return (Append) super.setDurability(d);
+-  }
+-
+-  @Override
+-  public Append setFamilyCellMap(NavigableMap<byte[], List<Cell>> map) {
+-    return (Append) super.setFamilyCellMap(map);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Append setFamilyMap(NavigableMap<byte[], List<KeyValue>> map) {
+-    return (Append) super.setFamilyMap(map);
+-  }
+-
+-  @Override
+-  public Append setClusterIds(List<UUID> clusterIds) {
+-    return (Append) super.setClusterIds(clusterIds);
+-  }
+-
+-  @Override
+-  public Append setCellVisibility(CellVisibility expression) {
+-    return (Append) super.setCellVisibility(expression);
+-  }
+-
+-  @Override
+-  public Append setACL(String user, Permission perms) {
+-    return (Append) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Append setACL(Map<String, Permission> perms) {
+-    return (Append) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Append setTTL(long ttl) {
+-    return (Append) super.setTTL(ttl);
+-  }
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Attributes.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Attributes.java
+index dbf9da9..562db8e 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Attributes.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Attributes.java
+@@ -34,7 +34,7 @@ public interface Attributes {
+    * @param name attribute name
+    * @param value attribute value
+    */
+-  Attributes setAttribute(String name, byte[] value);
++  void setAttribute(String name, byte[] value);
+ 
+   /**
+    * Gets an attribute
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
+index 4bbcb27..ab619fb 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Delete.java
+@@ -405,12 +405,11 @@ public class Delete extends Mutation implements Comparable<Row> {
+    *
+    * @param timestamp
+    */
+-  public Delete setTimestamp(long timestamp) {
++  public void setTimestamp(long timestamp) {
+     if (timestamp < 0) {
+       throw new IllegalArgumentException("Timestamp cannot be negative. ts=" + timestamp);
+     }
+     this.ts = timestamp;
+-    return this;
+   }
+ 
+   @Override
+@@ -421,61 +420,4 @@ public class Delete extends Mutation implements Comparable<Row> {
+     map.put("ts", this.ts);
+     return map;
+   }
+-
+-  @Override
+-  public Delete setAttribute(String name, byte[] value) {
+-    return (Delete) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Delete setId(String id) {
+-    return (Delete) super.setId(id);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Delete setWriteToWAL(boolean write) {
+-    return (Delete) super.setWriteToWAL(write);
+-  }
+-
+-  @Override
+-  public Delete setDurability(Durability d) {
+-    return (Delete) super.setDurability(d);
+-  }
+-
+-  @Override
+-  public Delete setFamilyCellMap(NavigableMap<byte[], List<Cell>> map) {
+-    return (Delete) super.setFamilyCellMap(map);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Delete setFamilyMap(NavigableMap<byte[], List<KeyValue>> map) {
+-    return (Delete) super.setFamilyMap(map);
+-  }
+-
+-  @Override
+-  public Delete setClusterIds(List<UUID> clusterIds) {
+-    return (Delete) super.setClusterIds(clusterIds);
+-  }
+-
+-  @Override
+-  public Delete setCellVisibility(CellVisibility expression) {
+-    return (Delete) super.setCellVisibility(expression);
+-  }
+-
+-  @Override
+-  public Delete setACL(String user, Permission perms) {
+-    return (Delete) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Delete setACL(Map<String, Permission> perms) {
+-    return (Delete) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Delete setTTL(long ttl) {
+-    throw new UnsupportedOperationException("Setting TTLs on Deletes is not supported");
+-  }
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
+index 1d3310e..0d9d8eb 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Get.java
+@@ -116,18 +116,16 @@ public class Get extends Query
+     return checkExistenceOnly;
+   }
+ 
+-  public Get setCheckExistenceOnly(boolean checkExistenceOnly) {
++  public void setCheckExistenceOnly(boolean checkExistenceOnly) {
+     this.checkExistenceOnly = checkExistenceOnly;
+-    return this;
+   }
+ 
+   public boolean isClosestRowBefore() {
+     return closestRowBefore;
+   }
+ 
+-  public Get setClosestRowBefore(boolean closestRowBefore) {
++  public void setClosestRowBefore(boolean closestRowBefore) {
+     this.closestRowBefore = closestRowBefore;
+-    return this;
+   }
+ 
+   /**
+@@ -257,9 +255,8 @@ public class Get extends Query
+    * @param cacheBlocks if false, default settings are overridden and blocks
+    * will not be cached
+    */
+-  public Get setCacheBlocks(boolean cacheBlocks) {
++  public void setCacheBlocks(boolean cacheBlocks) {
+     this.cacheBlocks = cacheBlocks;
+-    return this;
+   }
+ 
+   /**
+@@ -447,45 +444,4 @@ public class Get extends Query
+     // TODO: This is wrong.  Can't have two gets the same just because on same row.
+     return compareTo(other) == 0;
+   }
+-
+-  @Override
+-  public Get setAttribute(String name, byte[] value) {
+-    return (Get) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Get setId(String id) {
+-    return (Get) super.setId(id);
+-  }
+-
+-  @Override
+-  public Get setAuthorizations(Authorizations authorizations) {
+-    return (Get) super.setAuthorizations(authorizations);
+-  }
+-
+-  @Override
+-  public Get setACL(Map<String, Permission> perms) {
+-    return (Get) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Get setACL(String user, Permission perms) {
+-    return (Get) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Get setConsistency(Consistency consistency) {
+-    return (Get) super.setConsistency(consistency);
+-  }
+-
+-  @Override
+-  public Get setReplicaId(int Id) {
+-    return (Get) super.setReplicaId(Id);
+-  }
+-
+-  @Override
+-  public Get setIsolationLevel(IsolationLevel level) {
+-      return (Get) super.setIsolationLevel(level);
+-  }
+-
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Increment.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Increment.java
+index af0ea56..fb29ab0 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Increment.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Increment.java
+@@ -277,61 +277,4 @@ public class Increment extends Mutation implements Comparable<Row> {
+   protected long extraHeapSize(){
+     return HEAP_OVERHEAD;
+   }
+-
+-  @Override
+-  public Increment setAttribute(String name, byte[] value) {
+-    return (Increment) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Increment setId(String id) {
+-    return (Increment) super.setId(id);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Increment setWriteToWAL(boolean write) {
+-    return (Increment) super.setWriteToWAL(write);
+-  }
+-
+-  @Override
+-  public Increment setDurability(Durability d) {
+-    return (Increment) super.setDurability(d);
+-  }
+-
+-  @Override
+-  public Increment setFamilyCellMap(NavigableMap<byte[], List<Cell>> map) {
+-    return (Increment) super.setFamilyCellMap(map);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Increment setFamilyMap(NavigableMap<byte[], List<KeyValue>> map) {
+-    return (Increment) super.setFamilyMap(map);
+-  }
+-
+-  @Override
+-  public Increment setClusterIds(List<UUID> clusterIds) {
+-    return (Increment) super.setClusterIds(clusterIds);
+-  }
+-
+-  @Override
+-  public Increment setCellVisibility(CellVisibility expression) {
+-    return (Increment) super.setCellVisibility(expression);
+-  }
+-
+-  @Override
+-  public Increment setACL(String user, Permission perms) {
+-    return (Increment) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Increment setACL(Map<String, Permission> perms) {
+-    return (Increment) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Increment setTTL(long ttl) {
+-    return (Increment) super.setTTL(ttl);
+-  }
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
+index dbc1317..f17d764 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Mutation.java
+@@ -249,18 +249,16 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * @deprecated Use {@link #setDurability(Durability)} instead.
+    */
+   @Deprecated
+-  public Mutation setWriteToWAL(boolean write) {
++  public void setWriteToWAL(boolean write) {
+     setDurability(write ? Durability.USE_DEFAULT : Durability.SKIP_WAL);
+-    return this;
+   }
+ 
+   /**
+    * Set the durability for this mutation
+    * @param d
+    */
+-  public Mutation setDurability(Durability d) {
++  public void setDurability(Durability d) {
+     this.durability = d;
+-    return this;
+   }
+ 
+   /** Get the current durability */
+@@ -279,11 +277,10 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+   /**
+    * Method for setting the put's familyMap
+    */
+-  public Mutation setFamilyCellMap(NavigableMap<byte [], List<Cell>> map) {
++  public void setFamilyCellMap(NavigableMap<byte [], List<Cell>> map) {
+     // TODO: Shut this down or move it up to be a Constructor.  Get new object rather than change
+     // this internal data member.
+     this.familyMap = map;
+-    return this;
+   }
+ 
+   /**
+@@ -310,13 +307,12 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * @deprecated use {@link #setFamilyCellMap(NavigableMap)} instead.
+    */
+   @Deprecated
+-  public Mutation setFamilyMap(NavigableMap<byte [], List<KeyValue>> map) {
++  public void setFamilyMap(NavigableMap<byte [], List<KeyValue>> map) {
+     TreeMap<byte[], List<Cell>> fm = new TreeMap<byte[], List<Cell>>(Bytes.BYTES_COMPARATOR);
+     for (Map.Entry<byte[], List<KeyValue>> e : map.entrySet()) {
+       fm.put(e.getKey(), Lists.<Cell>newArrayList(e.getValue()));
+     }
+     this.familyMap = fm;
+-    return this;
+   }
+ 
+   /**
+@@ -353,7 +349,7 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * Marks that the clusters with the given clusterIds have consumed the mutation
+    * @param clusterIds of the clusters that have consumed the mutation
+    */
+-  public Mutation setClusterIds(List<UUID> clusterIds) {
++  public void setClusterIds(List<UUID> clusterIds) {
+     ByteArrayDataOutput out = ByteStreams.newDataOutput();
+     out.writeInt(clusterIds.size());
+     for (UUID clusterId : clusterIds) {
+@@ -361,7 +357,6 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+       out.writeLong(clusterId.getLeastSignificantBits());
+     }
+     setAttribute(CONSUMED_CLUSTER_IDS, out.toByteArray());
+-    return this;
+   }
+ 
+   /**
+@@ -385,10 +380,9 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * It is illegal to set <code>CellVisibility</code> on <code>Delete</code> mutation.
+    * @param expression
+    */
+-  public Mutation setCellVisibility(CellVisibility expression) {
++  public void setCellVisibility(CellVisibility expression) {
+     this.setAttribute(VisibilityConstants.VISIBILITY_LABELS_ATTR_KEY, ProtobufUtil
+         .toCellVisibility(expression).toByteArray());
+-    return this;
+   }
+ 
+   /**
+@@ -465,23 +459,21 @@ public abstract class Mutation extends OperationWithAttributes implements Row, C
+    * @param user User short name
+    * @param perms Permissions for the user
+    */
+-  public Mutation setACL(String user, Permission perms) {
++  public void setACL(String user, Permission perms) {
+     setAttribute(AccessControlConstants.OP_ATTRIBUTE_ACL,
+       ProtobufUtil.toUsersAndPermissions(user, perms).toByteArray());
+-    return this;
+   }
+ 
+   /**
+    * @param perms A map of permissions for a user or users
+    */
+-  public Mutation setACL(Map<String, Permission> perms) {
++  public void setACL(Map<String, Permission> perms) {
+     ListMultimap<String, Permission> permMap = ArrayListMultimap.create();
+     for (Map.Entry<String, Permission> entry : perms.entrySet()) {
+       permMap.put(entry.getKey(), entry.getValue());
+     }
+     setAttribute(AccessControlConstants.OP_ATTRIBUTE_ACL,
+       ProtobufUtil.toUsersAndPermissions(permMap).toByteArray());
+-    return this;
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/OperationWithAttributes.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/OperationWithAttributes.java
+index d9d54ea..3bb0b62 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/OperationWithAttributes.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/OperationWithAttributes.java
+@@ -38,9 +38,9 @@ public abstract class OperationWithAttributes extends Operation implements Attri
+   public static final String ID_ATRIBUTE = "_operation.attributes.id";
+ 
+   @Override
+-  public OperationWithAttributes setAttribute(String name, byte[] value) {
++  public void setAttribute(String name, byte[] value) {
+     if (attributes == null && value == null) {
+-      return this;
++      return;
+     }
+ 
+     if (attributes == null) {
+@@ -55,7 +55,6 @@ public abstract class OperationWithAttributes extends Operation implements Attri
+     } else {
+       attributes.put(name, value);
+     }
+-    return this;
+   }
+ 
+   @Override
+@@ -96,9 +95,8 @@ public abstract class OperationWithAttributes extends Operation implements Attri
+    * @param id
+    *          id to set for the scan
+    */
+-  public OperationWithAttributes setId(String id) {
++  public void setId(String id) {
+     setAttribute(ID_ATRIBUTE, Bytes.toBytes(id));
+-    return this;
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Put.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Put.java
+index d72492c..a8d8a5d 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Put.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Put.java
+@@ -462,61 +462,4 @@ public class Put extends Mutation implements HeapSize, Comparable<Row> {
+     }
+     return filteredList;
+   }
+-
+-  @Override
+-  public Put setAttribute(String name, byte[] value) {
+-    return (Put) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Put setId(String id) {
+-    return (Put) super.setId(id);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Put setWriteToWAL(boolean write) {
+-    return (Put) super.setWriteToWAL(write);
+-  }
+-
+-  @Override
+-  public Put setDurability(Durability d) {
+-    return (Put) super.setDurability(d);
+-  }
+-
+-  @Override
+-  public Put setFamilyCellMap(NavigableMap<byte[], List<Cell>> map) {
+-    return (Put) super.setFamilyCellMap(map);
+-  }
+-
+-  @Override
+-  @Deprecated
+-  public Put setFamilyMap(NavigableMap<byte[], List<KeyValue>> map) {
+-    return (Put) super.setFamilyMap(map);
+-  }
+-
+-  @Override
+-  public Put setClusterIds(List<UUID> clusterIds) {
+-    return (Put) super.setClusterIds(clusterIds);
+-  }
+-
+-  @Override
+-  public Put setCellVisibility(CellVisibility expression) {
+-    return (Put) super.setCellVisibility(expression);
+-  }
+-
+-  @Override
+-  public Put setACL(String user, Permission perms) {
+-    return (Put) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Put setACL(Map<String, Permission> perms) {
+-    return (Put) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Put setTTL(long ttl) {
+-    return (Put) super.setTTL(ttl);
+-  }
+ }
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Query.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Query.java
+index 26e36e5..a0a7138 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Query.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Query.java
+@@ -62,10 +62,9 @@ public abstract class Query extends OperationWithAttributes {
+    * Sets the authorizations to be used by this Query
+    * @param authorizations
+    */
+-  public Query setAuthorizations(Authorizations authorizations) {
++  public void setAuthorizations(Authorizations authorizations) {
+     this.setAttribute(VisibilityConstants.VISIBILITY_LABELS_ATTR_KEY, ProtobufUtil
+         .toAuthorizations(authorizations).toByteArray());
+-    return this;
+   }
+ 
+   /**
+@@ -89,23 +88,21 @@ public abstract class Query extends OperationWithAttributes {
+    * @param user User short name
+    * @param perms Permissions for the user
+    */
+-  public Query setACL(String user, Permission perms) {
++  public void setACL(String user, Permission perms) {
+     setAttribute(AccessControlConstants.OP_ATTRIBUTE_ACL,
+       ProtobufUtil.toUsersAndPermissions(user, perms).toByteArray());
+-    return this;
+   }
+ 
+   /**
+    * @param perms A map of permissions for a user or users
+    */
+-  public Query setACL(Map<String, Permission> perms) {
++  public void setACL(Map<String, Permission> perms) {
+     ListMultimap<String, Permission> permMap = ArrayListMultimap.create();
+     for (Map.Entry<String, Permission> entry : perms.entrySet()) {
+       permMap.put(entry.getKey(), entry.getValue());
+     }
+     setAttribute(AccessControlConstants.OP_ATTRIBUTE_ACL,
+       ProtobufUtil.toUsersAndPermissions(permMap).toByteArray());
+-    return this;
+   }
+ 
+   /**
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
+index 76bd7d1..8f45b5b 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/Scan.java
+@@ -459,32 +459,29 @@ public class Scan extends Query {
+    * Set the maximum number of values to return for each call to next()
+    * @param batch the maximum number of values
+    */
+-  public Scan setBatch(int batch) {
++  public void setBatch(int batch) {
+     if (this.hasFilter() && this.filter.hasFilterRow()) {
+       throw new IncompatibleFilterException(
+         "Cannot set batch on a scan using a filter" +
+         " that returns true for filter.hasFilterRow");
+     }
+     this.batch = batch;
+-    return this;
+   }
+ 
+   /**
+    * Set the maximum number of values to return per row per Column Family
+    * @param limit the maximum number of values returned / row / CF
+    */
+-  public Scan setMaxResultsPerColumnFamily(int limit) {
++  public void setMaxResultsPerColumnFamily(int limit) {
+     this.storeLimit = limit;
+-    return this;
+   }
+ 
+   /**
+    * Set offset for the row per Column Family.
+    * @param offset is the number of kvs that will be skipped.
+    */
+-  public Scan setRowOffsetPerColumnFamily(int offset) {
++  public void setRowOffsetPerColumnFamily(int offset) {
+     this.storeOffset = offset;
+-    return this;
+   }
+ 
+   /**
+@@ -494,9 +491,8 @@ public class Scan extends Query {
+    * Higher caching values will enable faster scanners but will use more memory.
+    * @param caching the number of rows for caching
+    */
+-  public Scan setCaching(int caching) {
++  public void setCaching(int caching) {
+     this.caching = caching;
+-    return this;
+   }
+ 
+   /**
+@@ -513,9 +509,8 @@ public class Scan extends Query {
+    *
+    * @param maxResultSize The maximum result size in bytes.
+    */
+-  public Scan setMaxResultSize(long maxResultSize) {
++  public void setMaxResultSize(long maxResultSize) {
+     this.maxResultSize = maxResultSize;
+-    return this;
+   }
+ 
+   @Override
+@@ -652,9 +647,8 @@ public class Scan extends Query {
+    * @param cacheBlocks if false, default settings are overridden and blocks
+    * will not be cached
+    */
+-  public Scan setCacheBlocks(boolean cacheBlocks) {
++  public void setCacheBlocks(boolean cacheBlocks) {
+     this.cacheBlocks = cacheBlocks;
+-    return this;
+   }
+ 
+   /**
+@@ -703,9 +697,8 @@ public class Scan extends Query {
+    * - if there's a concurrent split and you have more than 2 column families, some rows may be
+    *   missing some column families.
+    */
+-  public Scan setLoadColumnFamiliesOnDemand(boolean value) {
++  public void setLoadColumnFamiliesOnDemand(boolean value) {
+     this.loadColumnFamiliesOnDemand = value;
+-    return this;
+   }
+ 
+   /**
+@@ -818,9 +811,8 @@ public class Scan extends Query {
+    * It is an error to specify any column when "raw" is set.
+    * @param raw True/False to enable/disable "raw" mode.
+    */
+-  public Scan setRaw(boolean raw) {
++  public void setRaw(boolean raw) {
+     setAttribute(RAW_ATTR, Bytes.toBytes(raw));
+-    return this;
+   }
+ 
+   /**
+@@ -853,9 +845,8 @@ public class Scan extends Query {
+    *
+    * @param small
+    */
+-  public Scan setSmall(boolean small) {
++  public void setSmall(boolean small) {
+     this.small = small;
+-    return this;
+   }
+ 
+   /**
+@@ -866,46 +857,6 @@ public class Scan extends Query {
+     return small;
+   }
+ 
+-  @Override
+-  public Scan setAttribute(String name, byte[] value) {
+-    return (Scan) super.setAttribute(name, value);
+-  }
+-
+-  @Override
+-  public Scan setId(String id) {
+-    return (Scan) super.setId(id);
+-  }
+-
+-  @Override
+-  public Scan setAuthorizations(Authorizations authorizations) {
+-    return (Scan) super.setAuthorizations(authorizations);
+-  }
+-
+-  @Override
+-  public Scan setACL(Map<String, Permission> perms) {
+-    return (Scan) super.setACL(perms);
+-  }
+-
+-  @Override
+-  public Scan setACL(String user, Permission perms) {
+-    return (Scan) super.setACL(user, perms);
+-  }
+-
+-  @Override
+-  public Scan setConsistency(Consistency consistency) {
+-    return (Scan) super.setConsistency(consistency);
+-  }
+-
+-  @Override
+-  public Scan setReplicaId(int Id) {
+-    return (Scan) super.setReplicaId(Id);
+-  }
+-
+-  @Override
+-  public Scan setIsolationLevel(IsolationLevel level) {
+-    return (Scan) super.setIsolationLevel(level);
+-  }
+-
+   /**
+    * Utility that creates a Scan that will do a  small scan in reverse from passed row
+    * looking for next closest row.
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/UnmodifyableHTableDescriptor.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/UnmodifyableHTableDescriptor.java
+index c5a93e1..13564bb 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/UnmodifyableHTableDescriptor.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/UnmodifyableHTableDescriptor.java
+@@ -63,7 +63,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @param family HColumnDescriptor of familyto add.
+    */
+   @Override
+-  public HTableDescriptor addFamily(final HColumnDescriptor family) {
++  public void addFamily(final HColumnDescriptor family) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+@@ -86,7 +86,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @see org.apache.hadoop.hbase.HTableDescriptor#setReadOnly(boolean)
+    */
+   @Override
+-  public HTableDescriptor setReadOnly(boolean readOnly) {
++  public void setReadOnly(boolean readOnly) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+@@ -94,7 +94,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @see org.apache.hadoop.hbase.HTableDescriptor#setValue(byte[], byte[])
+    */
+   @Override
+-  public HTableDescriptor setValue(byte[] key, byte[] value) {
++  public void setValue(byte[] key, byte[] value) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+@@ -102,7 +102,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @see org.apache.hadoop.hbase.HTableDescriptor#setValue(java.lang.String, java.lang.String)
+    */
+   @Override
+-  public HTableDescriptor setValue(String key, String value) {
++  public void setValue(String key, String value) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+@@ -110,7 +110,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @see org.apache.hadoop.hbase.HTableDescriptor#setMaxFileSize(long)
+    */
+   @Override
+-  public HTableDescriptor setMaxFileSize(long maxFileSize) {
++  public void setMaxFileSize(long maxFileSize) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+@@ -118,7 +118,7 @@ public class UnmodifyableHTableDescriptor extends HTableDescriptor {
+    * @see org.apache.hadoop.hbase.HTableDescriptor#setMemStoreFlushSize(long)
+    */
+   @Override
+-  public HTableDescriptor setMemStoreFlushSize(long memstoreFlushSize) {
++  public void setMemStoreFlushSize(long memstoreFlushSize) {
+     throw new UnsupportedOperationException("HTableDescriptor is read-only");
+   }
+ 
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+index 8e23f97..2843b31 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHColumnDescriptor.java
+@@ -95,21 +95,4 @@ public class TestHColumnDescriptor {
+     desc.removeConfiguration(key);
+     assertEquals(null, desc.getConfigurationValue(key));
+   }
+-
+-  @Test
+-  public void testClassMethodsAreBuilderStyle() {
+-    /* HColumnDescriptor should have a builder style setup where setXXX/addXXX methods
+-     * can be chainable together:
+-     * . For example:
+-     * HColumnDescriptor hcd
+-     *   = new HColumnDescriptor()
+-     *     .setFoo(foo)
+-     *     .setBar(bar)
+-     *     .setBuz(buz)
+-     *
+-     * This test ensures that all methods starting with "set" returns the declaring object
+-     */
+-
+-    BuilderStyleTest.assertClassesAreBuilderStyle(HColumnDescriptor.class);
+-  }
+ }
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHTableDescriptor.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHTableDescriptor.java
+index 8dc141b..61f1185 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHTableDescriptor.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/TestHTableDescriptor.java
+@@ -209,23 +209,6 @@ public class TestHTableDescriptor {
+   }
+ 
+   @Test
+-  public void testClassMethodsAreBuilderStyle() {
+-    /* HTableDescriptor should have a builder style setup where setXXX/addXXX methods
+-     * can be chainable together:
+-     * . For example:
+-     * HTableDescriptor htd
+-     *   = new HTableDescriptor()
+-     *     .setFoo(foo)
+-     *     .setBar(bar)
+-     *     .setBuz(buz)
+-     *
+-     * This test ensures that all methods starting with "set" returns the declaring object
+-     */
+-
+-    BuilderStyleTest.assertClassesAreBuilderStyle(HTableDescriptor.class);
+-  }
+-
+-  @Test
+   public void testModifyFamily() {
+     HTableDescriptor htd = new HTableDescriptor(TableName.valueOf("table"));
+     byte[] familyName = Bytes.toBytes("cf");
+diff --git a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestOperation.java b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestOperation.java
+index 1e81f28..e22856f 100644
+--- a/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestOperation.java
++++ b/hbase-client/src/test/java/org/apache/hadoop/hbase/client/TestOperation.java
+@@ -417,36 +417,5 @@ public class TestOperation {
+     Assert.assertEquals(1970L, p.getTimeStamp());
+     Assert.assertEquals(0, KeyValue.COMPARATOR.compare(c.get(0), new KeyValue(c.get(0))));
+   }
+-
+-  @Test
+-  @SuppressWarnings("rawtypes")
+-  public void testOperationSubClassMethodsAreBuilderStyle() {
+-    /* All Operation subclasses should have a builder style setup where setXXX/addXXX methods
+-     * can be chainable together:
+-     * . For example:
+-     * Scan scan = new Scan()
+-     *     .setFoo(foo)
+-     *     .setBar(bar)
+-     *     .setBuz(buz)
+-     *
+-     * This test ensures that all methods starting with "set" returns the declaring object
+-     */
+-
+-    // TODO: We should ensure all subclasses of Operation is checked.
+-    Class[] classes = new Class[] {
+-        Operation.class,
+-        OperationWithAttributes.class,
+-        Mutation.class,
+-        Query.class,
+-        Delete.class,
+-        Increment.class,
+-        Append.class,
+-        Put.class,
+-        Get.class,
+-        Scan.class};
+-
+-    BuilderStyleTest.assertClassesAreBuilderStyle(classes);
+-  }
+-
+ }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+index a2648e9..7556f54 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlLists.java
+@@ -127,18 +127,19 @@ public class AccessControlLists {
+    * @throws IOException
+    */
+   static void createACLTable(MasterServices master) throws IOException {
+-    master.createTable(new HTableDescriptor(ACL_TABLE_NAME)
+-      .addFamily(new HColumnDescriptor(ACL_LIST_FAMILY)
+-        .setMaxVersions(1)
+-        .setInMemory(true)
+-        .setBlockCacheEnabled(true)
+-        .setBlocksize(8 * 1024)
+-        .setBloomFilterType(BloomType.NONE)
+-        .setScope(HConstants.REPLICATION_SCOPE_LOCAL)
+-        // Set cache data blocks in L1 if more than one cache tier deployed; e.g. this will
+-        // be the case if we are using CombinedBlockCache (Bucket Cache).
+-        .setCacheDataInL1(true)),
+-    null);
++    HTableDescriptor htd = new HTableDescriptor(ACL_TABLE_NAME);
++    HColumnDescriptor hcd = new HColumnDescriptor(ACL_LIST_FAMILY);
++    hcd.setMaxVersions(1);
++    hcd.setInMemory(true);
++    hcd.setBlockCacheEnabled(true);
++    hcd.setBlocksize(8 * 1024);
++    hcd.setBloomFilterType(BloomType.NONE);
++    hcd.setScope(HConstants.REPLICATION_SCOPE_LOCAL);
++    // Set cache data blocks in L1 if more than one cache tier deployed; e.g. this will
++    // be the case if we are using CombinedBlockCache (Bucket Cache).
++    hcd.setCacheDataInL1(true);
++    htd.addFamily(hcd);
++    master.createTable(htd, null);
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

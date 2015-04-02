@@ -12,12 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from tests.common.test_vector import *
 from tests.common.impala_test_suite import *
 from tests.common.test_dimensions import create_uncompressed_text_dimension
+from tests.common.skip import *
 
 # Tests the COMPUTE STATS command for gathering table and column stats.
 # TODO: Merge this test file with test_col_stats.py
+@skip_if_s3_insert # S3: missing coverage: compute stats
 class TestComputeStats(ImpalaTestSuite):
   TEST_DB_NAME = "compute_stats_db"
   TEST_ALIASING_DB_NAME = "parquet"
@@ -46,6 +49,7 @@ class TestComputeStats(ImpalaTestSuite):
     self.cleanup_db(self.TEST_DB_NAME)
     self.cleanup_db(self.TEST_ALIASING_DB_NAME)
 
+  @pytest.mark.execute_serially
   def test_compute_stats(self, vector):
     self.run_test_case('QueryTest/compute-stats', vector)
     # Test compute stats on decimal columns separately so we can vary between CDH4/5
@@ -55,5 +59,7 @@ class TestComputeStats(ImpalaTestSuite):
     if self.exploration_strategy() != 'exhaustive': return
     self.run_test_case('QueryTest/compute-stats-many-partitions', vector)
 
+  @pytest.mark.execute_serially
   def test_compute_stats_incremental(self, vector):
     self.run_test_case('QueryTest/compute-stats-incremental', vector)
+

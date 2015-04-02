@@ -98,8 +98,11 @@ public class SingleNodePlanner {
    */
   public PlanNode createSingleNodePlan() throws ImpalaException {
     QueryStmt queryStmt = ctx_.getQueryStmt();
-    Analyzer analyzer = ctx_.getRootAnalyzer();
+    // Use the stmt's analyzer which is not necessarily the root analyzer
+    // to detect empty result sets.
+    Analyzer analyzer = queryStmt.getAnalyzer();
     analyzer.computeEquivClasses();
+    analyzer.getTimeline().markEvent("Equivalence classes computed");
 
     // Mark slots referenced by output exprs as materialized, prior to generating the
     // plan tree.
@@ -119,56 +122,6 @@ public class SingleNodePlanner {
         ctx_.getQueryOptions().isDisable_outermost_topn());
     Preconditions.checkNotNull(singleNodePlan);
     return singleNodePlan;
-  }
-
-  /**
-   * Return combined explain string for all plan fragments.
-   * Includes the estimated resource requirements from the request if set.
-   */
-  public String getExplainString(ArrayList<PlanFragment> fragments,
-      TQueryExecRequest request, TExplainLevel explainLevel) {
-    StringBuilder str = new StringBuilder();
-    boolean hasHeader = false;
-    if (request.isSetPer_host_mem_req() && request.isSetPer_host_vcores()) {
-      str.append(
-          String.format("Estimated Per-Host Requirements: Memory=%s VCores=%s\n",
-          PrintUtils.printBytes(request.getPer_host_mem_req()),
-          request.per_host_vcores));
-      hasHeader = true;
-    }
-    // Append warning about tables missing stats.
-    if (request.query_ctx.isSetTables_missing_stats() &&
-        !request.query_ctx.getTables_missing_stats().isEmpty()) {
-      List<String> tableNames = Lists.newArrayList();
-      for (TTableName tableName: request.query_ctx.getTables_missing_stats()) {
-        tableNames.add(tableName.db_name + "." + tableName.table_name);
-      }
-      str.append("WARNING: The following tables are missing relevant table " +
-          "and/or column statistics.\n" + Joiner.on(", ").join(tableNames) + "\n");
-      hasHeader = true;
-    }
-    if (request.query_ctx.isDisable_spilling()) {
-      str.append("WARNING: Spilling is disabled for this query as a safety guard.\n" +
-          "Reason: Query option disable_unsafe_spills is set, at least one table\n" +
-          "is missing relevant stats, and no plan hints were given.\n");
-      hasHeader = true;
-    }
-    if (hasHeader) str.append("\n");
-
-    if (explainLevel.ordinal() < TExplainLevel.VERBOSE.ordinal()) {
-      // Print the non-fragmented parallel plan.
-      str.append(fragments.get(0).getExplainString(explainLevel));
-    } else {
-      // Print the fragmented parallel plan.
-      for (int i = 0; i < fragments.size(); ++i) {
-        PlanFragment fragment = fragments.get(i);
-        str.append(fragment.getExplainString(explainLevel));
-        if (explainLevel == TExplainLevel.VERBOSE && i + 1 != fragments.size()) {
-          str.append("\n");
-        }
-      }
-    }
-    return str.toString();
   }
 
   /**
@@ -648,6 +601,7 @@ public class SingleNodePlanner {
     for (int i = 0; i < resultExprs.size(); ++i) {
       SlotDescriptor slotDesc = analyzer.addSlotDescriptor(tupleDesc);
       slotDesc.setLabel(colLabels.get(i));
+      slotDesc.setSourceExpr(resultExprs.get(i));
       slotDesc.setType(resultExprs.get(i).getType());
       slotDesc.setStats(ColumnStats.fromExpr(resultExprs.get(i)));
       slotDesc.setIsMaterialized(true);

@@ -336,6 +336,17 @@
       <version>${tachyon.version}</version>
     </dependency>
 
+
+    <dependency>
+      <groupId>com.googlecode.json-simple</groupId>
+      <artifactId>json-simple</artifactId>
+      <version>1.1.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish</groupId>
+      <artifactId>javax.json</artifactId>
+      <version>1.0.2</version>
+    </dependency>
   </dependencies>
 
   <reporting>
@@ -355,8 +366,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>2.3.2</version>
         <configuration>
-          <source>1.6</source>
-          <target>1.6</target>
+          <source>1.7</source>
+          <target>1.7</target>
 	  <encoding>UTF-8</encoding>
         </configuration>
       </plugin>
@@ -597,6 +608,18 @@
   </build>
 
   <repositories>
+    <repository>
+       <id>apache.snapshots</id>
+       <name>Apache Development Snapshot Repository</name>
+        <url>https://repository.apache.org/content/repositories/snapshots/</url>
+        <releases>
+            <enabled>false</enabled>
+        </releases>
+        <snapshots>
+            <enabled>true</enabled>
+        </snapshots>
+    </repository>
+
     <repository>
       <id>cdh.rcs.releases.repo</id>
       <url>https://repository.cloudera.com/content/groups/cdh-releases-rcs</url>

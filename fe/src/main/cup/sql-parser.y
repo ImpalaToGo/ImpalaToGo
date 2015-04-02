@@ -23,7 +23,7 @@ import com.cloudera.impala.catalog.StructField;
 import com.cloudera.impala.catalog.RowFormat;
 import com.cloudera.impala.catalog.View;
 import com.cloudera.impala.common.AnalysisException;
-import com.cloudera.impala.analysis.ColumnDesc;
+import com.cloudera.impala.analysis.ColumnDef;
 import com.cloudera.impala.analysis.UnionStmt.UnionOperand;
 import com.cloudera.impala.analysis.UnionStmt.Qualifier;
 import com.cloudera.impala.thrift.TFunctionCategory;
@@ -236,7 +236,8 @@ terminal
   KW_COLUMNS, KW_COMMENT, KW_COMPUTE, KW_CREATE, KW_CROSS, KW_CURRENT, KW_DATA,
   KW_DATABASE, KW_DATABASES, KW_DATE, KW_DATETIME, KW_DECIMAL, KW_DELIMITED, KW_DESC,
   KW_DESCRIBE, KW_DISTINCT, KW_DIV, KW_DOUBLE, KW_DROP, KW_ELSE, KW_END, KW_ESCAPED,
-  KW_EXISTS, KW_EXPLAIN, KW_EXTERNAL, KW_FALSE, KW_FIELDS, KW_FILEFORMAT, KW_FINALIZE_FN,
+  KW_EXISTS, KW_EXPLAIN, KW_EXTERNAL, KW_FALSE, KW_FIELDS,
+  KW_FILEFORMAT, KW_FILES, KW_FINALIZE_FN,
   KW_FIRST, KW_FLOAT, KW_FOLLOWING, KW_FOR, KW_FORMAT, KW_FORMATTED, KW_FROM, KW_FULL,
   KW_FUNCTION, KW_FUNCTIONS, KW_GRANT, KW_GROUP, KW_HAVING, KW_IF, KW_IN, KW_INCREMENTAL,
   KW_INIT_FN, KW_INNER, KW_INPATH, KW_INSERT, KW_INT, KW_INTERMEDIATE, KW_INTERVAL,
@@ -245,17 +246,17 @@ terminal
   KW_OFFSET, KW_ON, KW_OR, KW_ORDER, KW_OUTER, KW_OVER, KW_OVERWRITE, KW_PARQUET,
   KW_PARQUETFILE, KW_PARTITION, KW_PARTITIONED, KW_PARTITIONS, KW_PRECEDING,
   KW_PREPARE_FN, KW_PRODUCED, KW_RANGE, KW_RCFILE, KW_REFRESH, KW_REGEXP, KW_RENAME,
-  KW_REPLACE, KW_RETURNS, KW_REVOKE, KW_RIGHT, KW_RLIKE, KW_ROLE, KW_ROLES, KW_ROW,
-  KW_ROWS, KW_SCHEMA, KW_SCHEMAS, KW_SELECT, KW_SEMI, KW_SEQUENCEFILE, KW_SERDEPROPERTIES,
-  KW_SERIALIZE_FN, KW_SET, KW_SHOW, KW_SMALLINT, KW_STORED, KW_STRAIGHT_JOIN,
-  KW_STRING, KW_STRUCT, KW_SYMBOL, KW_TABLE, KW_TABLES, KW_TBLPROPERTIES, KW_TERMINATED,
-  KW_TEXTFILE, KW_THEN,
+  KW_REPLACE, KW_REPLICATION, KW_RETURNS, KW_REVOKE, KW_RIGHT, KW_RLIKE, KW_ROLE,
+  KW_ROLES, KW_ROW, KW_ROWS, KW_SCHEMA, KW_SCHEMAS, KW_SELECT, KW_SEMI, KW_SEQUENCEFILE,
+  KW_SERDEPROPERTIES, KW_SERIALIZE_FN, KW_SET, KW_SHOW, KW_SMALLINT, KW_STORED,
+  KW_STRAIGHT_JOIN, KW_STRING, KW_STRUCT, KW_SYMBOL, KW_TABLE, KW_TABLES,
+  KW_TBLPROPERTIES, KW_TERMINATED, KW_TEXTFILE, KW_THEN,
   KW_TIMESTAMP, KW_TINYINT, KW_STATS, KW_TO, KW_TRUE, KW_UNBOUNDED, KW_UNCACHED,
   KW_UNION, KW_UPDATE_FN, KW_USE, KW_USING,
   KW_VALUES, KW_VARCHAR, KW_VIEW, KW_WHEN, KW_WHERE, KW_WITH;
 
-terminal COLON, COMMA, DOT, DOTDOTDOT, STAR, LPAREN, RPAREN, LBRACKET, RBRACKET,
-  DIVIDE, MOD, ADD, SUBTRACT;
+terminal COLON, SEMICOLON, COMMA, DOT, DOTDOTDOT, STAR, LPAREN, RPAREN, LBRACKET,
+  RBRACKET, DIVIDE, MOD, ADD, SUBTRACT;
 terminal BITAND, BITOR, BITXOR, BITNOT;
 terminal EQUAL, NOT, LESSTHAN, GREATERTHAN;
 terminal String IDENT;
@@ -266,6 +267,7 @@ terminal BigDecimal INTEGER_LITERAL;
 terminal BigDecimal DECIMAL_LITERAL;
 terminal String STRING_LITERAL;
 terminal String UNMATCHED_STRING_LITERAL;
+terminal String UNEXPECTED_CHAR;
 
 nonterminal StatementBase stmt;
 // Single select statement.
@@ -289,6 +291,7 @@ nonterminal ShowDbsStmt show_dbs_stmt;
 nonterminal ShowPartitionsStmt show_partitions_stmt;
 nonterminal ShowStatsStmt show_stats_stmt;
 nonterminal String show_pattern;
+nonterminal ShowFilesStmt show_files_stmt;
 nonterminal DescribeStmt describe_stmt;
 nonterminal ShowCreateTableStmt show_create_tbl_stmt;
 nonterminal TDescribeTableOutputStyle describe_output_style;
@@ -338,6 +341,7 @@ nonterminal Subquery subquery;
 nonterminal JoinOperator join_operator;
 nonterminal opt_inner, opt_outer;
 nonterminal ArrayList<String> opt_plan_hints;
+nonterminal TypeDef type_def;
 nonterminal Type type;
 nonterminal Expr sign_chain_expr;
 nonterminal InsertStmt insert_stmt;
@@ -369,12 +373,13 @@ nonterminal CreateDataSrcStmt create_data_src_stmt;
 nonterminal DropDataSrcStmt drop_data_src_stmt;
 nonterminal ShowDataSrcsStmt show_data_srcs_stmt;
 nonterminal StructField struct_field_def;
-nonterminal ColumnDesc column_def, view_column_def;
-nonterminal ArrayList<ColumnDesc> column_def_list, view_column_def_list;
-nonterminal ArrayList<ColumnDesc> partition_column_defs, view_column_defs;
+nonterminal ColumnDef column_def, view_column_def;
+nonterminal ArrayList<ColumnDef> column_def_list, view_column_def_list;
+nonterminal ArrayList<ColumnDef> partition_column_defs, view_column_defs;
 nonterminal ArrayList<StructField> struct_field_def_list;
 // Options for DDL commands - CREATE/DROP/ALTER
 nonterminal HdfsCachingOp cache_op_val;
+nonterminal BigDecimal opt_cache_op_replication;
 nonterminal String comment_val;
 nonterminal Boolean external_val;
 nonterminal String opt_init_string_val;
@@ -428,17 +433,17 @@ nonterminal Boolean option_ident;
 // For Create/Drop/Show function ddl
 nonterminal FunctionArgs function_def_args;
 nonterminal FunctionArgs function_def_arg_list;
+// Accepts space separated key='v' arguments.
+nonterminal HashMap function_def_args_map;
+nonterminal CreateFunctionStmtBase.OptArg function_def_arg_key;
 nonterminal Boolean opt_is_aggregate_fn;
 nonterminal Boolean opt_is_varargs;
-nonterminal Type opt_aggregate_fn_intermediate_type;
+nonterminal TypeDef opt_aggregate_fn_intermediate_type_def;
 nonterminal CreateUdfStmt create_udf_stmt;
 nonterminal CreateUdaStmt create_uda_stmt;
 nonterminal ShowFunctionsStmt show_functions_stmt;
 nonterminal DropFunctionStmt drop_function_stmt;
 nonterminal TFunctionCategory opt_function_category;
-// Accepts space separated key='v' arguments.
-nonterminal HashMap create_function_args_map;
-nonterminal CreateFunctionStmtBase.OptArg create_function_arg_key;
 
 precedence left KW_OR;
 precedence left KW_AND;
@@ -454,7 +459,7 @@ precedence left LPAREN, RPAREN;
 // Support chaining of timestamp arithmetic exprs.
 precedence left KW_INTERVAL;
 
-// These tokens need to be at the end for create_function_args_map to accept
+// These tokens need to be at the end for function_def_args_map to accept
 // no keys. Otherwise, the grammar has shift/reduce conflicts.
 precedence left KW_COMMENT;
 precedence left KW_SYMBOL;
@@ -491,6 +496,8 @@ stmt ::=
   {: RESULT = show_data_srcs; :}
   | show_create_tbl_stmt:show_create_tbl
   {: RESULT = show_create_tbl; :}
+  | show_files_stmt:show_files
+  {: RESULT = show_files; :}
   | describe_stmt:describe
   {: RESULT = describe; :}
   | alter_tbl_stmt:alter_tbl
@@ -551,6 +558,8 @@ stmt ::=
   {: RESULT = grant_privilege; :}
   | revoke_privilege_stmt:revoke_privilege
   {: RESULT = revoke_privilege; :}
+  | stmt:s SEMICOLON
+  {: RESULT = s; :}
   ;
 
 load_stmt ::=
@@ -839,8 +848,8 @@ create_tbl_as_select_stmt ::=
   {:
     // Initialize with empty List of columns and partition columns. The
     // columns will be added from the query statement during analysis
-    CreateTableStmt create_stmt = new CreateTableStmt(table, new ArrayList<ColumnDesc>(),
-        new ArrayList<ColumnDesc>(), external, comment, row_format,
+    CreateTableStmt create_stmt = new CreateTableStmt(table, new ArrayList<ColumnDef>(),
+        new ArrayList<ColumnDef>(), external, comment, row_format,
         file_format, location, cache_op, if_not_exists, tbl_props, serde_props);
     RESULT = new CreateTableAsSelectStmt(create_stmt, query);
   :}
@@ -859,7 +868,7 @@ create_unpartitioned_tbl_stmt ::=
   file_format_create_table_val:file_format location_val:location cache_op_val:cache_op
   tbl_properties:tbl_props
   {:
-    RESULT = new CreateTableStmt(table, col_defs, new ArrayList<ColumnDesc>(), external,
+    RESULT = new CreateTableStmt(table, col_defs, new ArrayList<ColumnDef>(), external,
         comment, row_format, file_format, location, cache_op, if_not_exists, tbl_props,
         serde_props);
   :}
@@ -868,8 +877,8 @@ create_unpartitioned_tbl_stmt ::=
     serde_properties:serde_props file_format_create_table_val:file_format
     location_val:location cache_op_val:cache_op tbl_properties:tbl_props
   {:
-    RESULT = new CreateTableStmt(table, new ArrayList<ColumnDesc>(),
-        new ArrayList<ColumnDesc>(), external, comment, row_format, file_format,
+    RESULT = new CreateTableStmt(table, new ArrayList<ColumnDef>(),
+        new ArrayList<ColumnDef>(), external, comment, row_format, file_format,
         location, cache_op, if_not_exists, tbl_props, serde_props);
   :}
   | KW_CREATE external_val:external KW_TABLE if_not_exists_val:if_not_exists
@@ -907,7 +916,7 @@ create_partitioned_tbl_stmt ::=
     file_format_create_table_val:file_format location_val:location cache_op_val:cache_op
     tbl_properties:tbl_props
   {:
-    RESULT = new CreateTableStmt(table, new ArrayList<ColumnDesc>(), partition_col_defs,
+    RESULT = new CreateTableStmt(table, new ArrayList<ColumnDef>(), partition_col_defs,
         external, comment, row_format, file_format, location, cache_op, if_not_exists,
         tbl_props, serde_props);
   :}
@@ -916,9 +925,9 @@ create_partitioned_tbl_stmt ::=
 create_udf_stmt ::=
   KW_CREATE KW_FUNCTION if_not_exists_val:if_not_exists
   function_name:fn_name function_def_args:fn_args
-  KW_RETURNS type:return_type
+  KW_RETURNS type_def:return_type
   KW_LOCATION STRING_LITERAL:binary_path
-  create_function_args_map:arg_map
+  function_def_args_map:arg_map
   {:
     RESULT = new CreateUdfStmt(fn_name, fn_args, return_type, new HdfsUri(binary_path),
         if_not_exists, arg_map);
@@ -928,10 +937,10 @@ create_udf_stmt ::=
 create_uda_stmt ::=
   KW_CREATE KW_AGGREGATE KW_FUNCTION if_not_exists_val:if_not_exists
   function_name:fn_name function_def_args:fn_args
-  KW_RETURNS type:return_type
-  opt_aggregate_fn_intermediate_type:intermediate_type
+  KW_RETURNS type_def:return_type
+  opt_aggregate_fn_intermediate_type_def:intermediate_type
   KW_LOCATION STRING_LITERAL:binary_path
-  create_function_args_map:arg_map
+  function_def_args_map:arg_map
   {:
     RESULT = new CreateUdaStmt(fn_name, fn_args, return_type, intermediate_type,
         new HdfsUri(binary_path), if_not_exists, arg_map);
@@ -939,10 +948,17 @@ create_uda_stmt ::=
   ;
 
 cache_op_val ::=
-  KW_CACHED KW_IN STRING_LITERAL:pool_name
-  {: RESULT = new HdfsCachingOp(pool_name); :}
+  KW_CACHED KW_IN STRING_LITERAL:pool_name opt_cache_op_replication:replication
+  {: RESULT = new HdfsCachingOp(pool_name, replication); :}
   | KW_UNCACHED
   {: RESULT = new HdfsCachingOp(); :}
+  | /* empty */
+  {: RESULT = null; :}
+  ;
+
+opt_cache_op_replication ::=
+  KW_WITH KW_REPLICATION EQUAL INTEGER_LITERAL:replication
+  {: RESULT = replication; :}
   | /* empty */
   {: RESULT = null; :}
   ;
@@ -1070,13 +1086,13 @@ partition_column_defs ::=
   KW_PARTITIONED KW_BY LPAREN column_def_list:col_defs RPAREN
   {: RESULT = col_defs; :}
   | /* Empty - not a partitioned table */
-  {: RESULT = new ArrayList<ColumnDesc>(); :}
+  {: RESULT = new ArrayList<ColumnDef>(); :}
   ;
 
 column_def_list ::=
   column_def:col_def
   {:
-    ArrayList<ColumnDesc> list = new ArrayList<ColumnDesc>();
+    ArrayList<ColumnDef> list = new ArrayList<ColumnDef>();
     list.add(col_def);
     RESULT = list;
   :}
@@ -1088,8 +1104,8 @@ column_def_list ::=
   ;
 
 column_def ::=
-  IDENT:col_name type:targetType comment_val:comment
-  {: RESULT = new ColumnDesc(col_name, targetType, comment); :}
+  IDENT:col_name type_def:type comment_val:comment
+  {: RESULT = new ColumnDef(col_name, type, comment); :}
   ;
 
 create_view_stmt ::=
@@ -1172,7 +1188,7 @@ view_column_defs ::=
 view_column_def_list ::=
   view_column_def:col_def
   {:
-    ArrayList<ColumnDesc> list = new ArrayList<ColumnDesc>();
+    ArrayList<ColumnDef> list = new ArrayList<ColumnDef>();
     list.add(col_def);
     RESULT = list;
   :}
@@ -1185,7 +1201,7 @@ view_column_def_list ::=
 
 view_column_def ::=
   IDENT:col_name comment_val:comment
-  {: RESULT = new ColumnDesc(col_name, null, comment); :}
+  {: RESULT = new ColumnDef(col_name, null, comment); :}
   ;
 
 alter_view_stmt ::=
@@ -1327,15 +1343,15 @@ function_def_args ::=
   ;
 
 function_def_arg_list ::=
-  type:type
+  type_def:type_def
   {:
     FunctionArgs args = new FunctionArgs();
-    args.argTypes.add(type);
+    args.getArgTypeDefs().add(type_def);
     RESULT = args;
   :}
-  | function_def_arg_list:args COMMA type:type
+  | function_def_arg_list:args COMMA type_def:type_def
   {:
-    args.argTypes.add(type);
+    args.getArgTypeDefs().add(type_def);
     RESULT = args;
   :}
   ;
@@ -1354,22 +1370,22 @@ opt_is_varargs ::=
   {: RESULT = false; :}
   ;
 
-opt_aggregate_fn_intermediate_type ::=
-  KW_INTERMEDIATE type:type
-  {: RESULT = type; :}
+opt_aggregate_fn_intermediate_type_def ::=
+  KW_INTERMEDIATE type_def:type_def
+  {: RESULT = type_def; :}
   |
   {: RESULT = null; :}
   ;
 
-create_function_args_map ::=
-  create_function_arg_key:key EQUAL STRING_LITERAL:value
+function_def_args_map ::=
+  function_def_arg_key:key EQUAL STRING_LITERAL:value
   {:
     HashMap<CreateFunctionStmtBase.OptArg, String> args =
         new HashMap<CreateFunctionStmtBase.OptArg, String>();
     args.put(key, value);
     RESULT = args;
   :}
-  | create_function_args_map:args create_function_arg_key:key EQUAL STRING_LITERAL:value
+  | function_def_args_map:args function_def_arg_key:key EQUAL STRING_LITERAL:value
   {:
     if (args.containsKey(key)) throw new Exception("Duplicate argument key: " + key);
     args.put(key, value);
@@ -1380,7 +1396,7 @@ create_function_args_map ::=
   ;
 
 // Any keys added here must also be added to the end of the precedence list.
-create_function_arg_key ::=
+function_def_arg_key ::=
   KW_COMMENT
   {: RESULT = CreateFunctionStmtBase.OptArg.COMMENT; :}
   | KW_SYMBOL
@@ -1645,6 +1661,11 @@ show_pattern ::=
 show_create_tbl_stmt ::=
   KW_SHOW KW_CREATE KW_TABLE table_name:table
   {: RESULT = new ShowCreateTableStmt(table); :}
+  ;
+
+show_files_stmt ::=
+  KW_SHOW KW_FILES KW_IN table_name:table opt_partition_spec:partition
+  {: RESULT = new ShowFilesStmt(table, partition); :}
   ;
 
 describe_stmt ::=
@@ -2001,8 +2022,8 @@ opt_offset_clause ::=
   ;
 
 cast_expr ::=
-  KW_CAST LPAREN expr:e KW_AS type:targetType RPAREN
-  {: RESULT = new CastExpr(targetType, e, false); :}
+  KW_CAST LPAREN expr:e KW_AS type_def:targetType RPAREN
+  {: RESULT = new CastExpr(targetType, e); :}
   ;
 
 case_expr ::=
@@ -2391,6 +2412,11 @@ column_ref ::=
   {: RESULT = new SlotRef(new TableName(null, tbl), col); :}
   | IDENT:db DOT IDENT:tbl DOT IDENT:col
   {: RESULT = new SlotRef(new TableName(db, tbl), col); :}
+  ;
+
+type_def ::=
+  type:t
+  {: RESULT = new TypeDef(t); :}
   ;
 
 type ::=

@@ -1,0 +1,130 @@
+From c864e821c9395669805f3bc9532b26227830de29 Mon Sep 17 00:00:00 2001
+From: casey <casey@cloudera.com>
+Date: Wed, 4 Feb 2015 01:03:43 -0800
+Subject: [PATCH] Allow glog to accept a message listener
+
+Change-Id: I5968866c9de632b913bd4a9fbaa9f69943c0a33f
+---
+ thirdparty/glog-0.3.2/src/glog/logging.h.in    |  8 ++++++++
+ thirdparty/glog-0.3.2/src/logging.cc           | 20 ++++++++++++++++++++
+ thirdparty/glog-0.3.2/src/logging_unittest.cc  | 18 ++++++++++++++++++
+ thirdparty/glog-0.3.2/src/logging_unittest.err |  4 ++++
+ 4 files changed, 50 insertions(+)
+
+diff --git a/thirdparty/glog-0.3.2/src/glog/logging.h.in b/thirdparty/glog-0.3.2/src/glog/logging.h.in
+index eb9ba40..9af12db 100644
+--- a/thirdparty/glog-0.3.2/src/glog/logging.h.in
++++ b/thirdparty/glog-0.3.2/src/glog/logging.h.in
+@@ -493,6 +493,14 @@ GOOGLE_GLOG_DLL_DECL void ShutdownGoogleLogging();
+ // Install a function which will be called after LOG(FATAL).
+ GOOGLE_GLOG_DLL_DECL void InstallFailureFunction(void (*fail_func)());
+ 
++// Install a function which will be called before logging a message so that
++// the message may be modified before logging. If the function changes the
++// message, the changed flag should be set to true. The installed function
++// must be thread-safe. Calling this function to install the listener is not
++// thread-safe and should be done before creating log messages.
++GOOGLE_GLOG_DLL_DECL void InstallLogMessageListenerFunction(
++    void (*listener_func)(std::string* message, bool* changed));
++
+ class LogSink;  // defined below
+ 
+ // If a non-NULL sink pointer is given, we push this message to that sink.
+diff --git a/thirdparty/glog-0.3.2/src/logging.cc b/thirdparty/glog-0.3.2/src/logging.cc
+index 83d4b20..22d20ef 100644
+--- a/thirdparty/glog-0.3.2/src/logging.cc
++++ b/thirdparty/glog-0.3.2/src/logging.cc
+@@ -1087,12 +1087,32 @@ LogMessage::~LogMessage() {
+   delete allocated_;
+ }
+ 
++void (*g_log_message_listener_func)(string*, bool*) = NULL;
++
++void InstallLogMessageListenerFunction(void (*listener_func)(string*, bool*)) {
++  g_log_message_listener_func = listener_func;
++}
++
+ // Flush buffered message, called by the destructor, or any other function
+ // that needs to synchronize the log.
+ void LogMessage::Flush() {
+   if (data_->has_been_flushed_ || data_->severity_ < FLAGS_minloglevel)
+     return;
+ 
++  if (g_log_message_listener_func != NULL) {
++    // Only pass the user provided part of the message and not the file name, severity,
++    // time, etc.
++    string message(data_->stream_->str() + data_->num_prefix_chars_,
++        data_->stream_->pcount() - data_->num_prefix_chars_);
++    data_->stream_->freeze(false);
++    bool changed = false;
++    g_log_message_listener_func(&message, &changed);
++    if (changed) {
++      data_->stream_->seekp(data_->num_prefix_chars_, std::ios::beg);
++      stream() << message;
++    }
++  }
++
+   data_->num_chars_to_log_ = data_->stream_->pcount();
+   data_->num_chars_to_syslog_ =
+     data_->num_chars_to_log_ - data_->num_prefix_chars_;
+diff --git a/thirdparty/glog-0.3.2/src/logging_unittest.cc b/thirdparty/glog-0.3.2/src/logging_unittest.cc
+index 824086c..cffc44d 100644
+--- a/thirdparty/glog-0.3.2/src/logging_unittest.cc
++++ b/thirdparty/glog-0.3.2/src/logging_unittest.cc
+@@ -94,6 +94,7 @@ static void TestLogging(bool check_counts);
+ static void TestRawLogging();
+ static void LogWithLevels(int v, int severity, bool err, bool alsoerr);
+ static void TestLoggingLevels();
++static void TestMessageListener();
+ static void TestLogString();
+ static void TestLogSink();
+ static void TestLogToString();
+@@ -207,6 +208,7 @@ int main(int argc, char **argv) {
+   TestLogging(true);
+   TestRawLogging();
+   TestLoggingLevels();
++  TestMessageListener();
+   TestLogString();
+   TestLogSink();
+   TestLogToString();
+@@ -429,6 +431,22 @@ void TestLoggingLevels() {
+   LogWithLevels(1, GLOG_FATAL, false, true);
+ }
+ 
++void MessageListener(string* message, bool* changed) {
++  if (*message == "Change me") {
++    *message = "Changed";
++    *changed = true;
++  }
++}
++
++void TestMessageListener() {
++  LOG(INFO) << "Message listener";
++  InstallLogMessageListenerFunction(MessageListener);
++  LOG(INFO) << "Unchanged";
++  LOG(INFO) << "Change me";
++  InstallLogMessageListenerFunction(NULL);
++  LOG(INFO) << "Change me";  // Won't actually change
++}
++
+ TEST(DeathRawCHECK, logging) {
+   ASSERT_DEATH(RAW_CHECK(false, "failure 1"),
+                "RAW: Check false failed: failure 1");
+diff --git a/thirdparty/glog-0.3.2/src/logging_unittest.err b/thirdparty/glog-0.3.2/src/logging_unittest.err
+index 4f80bf5..74a0cbe 100644
+--- a/thirdparty/glog-0.3.2/src/logging_unittest.err
++++ b/thirdparty/glog-0.3.2/src/logging_unittest.err
+@@ -248,6 +248,10 @@ EDATE TIME__ THREADID logging_unittest.cc:LINE] log_if error expr
+ IDATE TIME__ THREADID logging_unittest.cc:LINE] log_if info every 1 expr
+ EDATE TIME__ THREADID logging_unittest.cc:LINE] log_if error every 1 expr
+ IDATE TIME__ THREADID logging_unittest.cc:LINE] vlog_if 0 every 1 expr
++IDATE TIME__ THREADID logging_unittest.cc:LINE] Message listener
++IDATE TIME__ THREADID logging_unittest.cc:LINE] Unchanged
++IDATE TIME__ THREADID logging_unittest.cc:LINE] Changed
++IDATE TIME__ THREADID logging_unittest.cc:LINE] Change me
+ IDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported info
+ WDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported warning
+ EDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported error
+-- 
+2.2.1
+

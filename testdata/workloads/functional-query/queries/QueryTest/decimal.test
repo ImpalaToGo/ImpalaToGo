@@ -290,6 +290,26 @@ from decimal_tiny where c2 < 112
 DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL, DECIMAL
 ====
 ---- QUERY
+# IMPALA-1559: FIRST_VALUE rewrite function intermediate type not matching slot type
+select
+first_value(c3) over (order by c3 rows between 92 preceding and current row),
+first_value(c2) over (order by c3 rows between 92 preceding and 1 preceding)
+from decimal_tiny where c3 = 0.0
+---- RESULTS
+0.0,NULL
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+0.0,100.00000
+---- TYPES
+DECIMAL, DECIMAL
+====
+---- QUERY
 select histogram(d1) from decimal_tbl;
 ---- RESULTS
 '1234, 2345, 12345, 12345, 132842'
@@ -308,4 +328,26 @@ select sample(d1) from decimal_tbl;
 ---- TYPES
 # Results are unstable, just check that this doesn't crash
 STRING
+====
+---- QUERY
+# IMPALA-1837: Handle loss of precision when implicitly casting a literal to a decimal.
+# Here "1.8" will be implicitly cast to a decimal(38,38), losing precision.
+select coalesce(1.8, cast(0 as decimal(38,38)))
+---- TYPES
+DECIMAL
+---- RESULTS
+0.00000000000000000000000000000000000000
+---- ERRORS
+UDF WARNING: Expression overflowed, returning NULL
+====
+---- QUERY
+# IMPALA-1837: Handle loss of precision when implicitly casting a literal to a decimal.
+# Here "1.8" will be implicitly cast to a decimal(38,38), losing precision.
+# No error is reported because the overflowed expr is never evaluated.
+select coalesce(cast(0 as decimal(38,38)), 1.8)
+---- TYPES
+DECIMAL
+---- RESULTS
+0.00000000000000000000000000000000000000
+---- ERRORS
 ====

@@ -73,9 +73,10 @@ ImpalaServer::QueryExecState::QueryExecState(
     current_batch_(NULL),
     current_batch_row_(0),
     num_rows_fetched_(0),
+    fetched_rows_(false),
     frontend_(frontend),
     parent_server_(server),
-    start_time_(TimestampValue::local_time_micros()) {
+    start_time_(TimestampValue::LocalTime()) {
   row_materialization_timer_ = ADD_TIMER(&server_profile_, "RowMaterializationTimer");
   client_wait_timer_ = ADD_TIMER(&server_profile_, "ClientFetchWaitTimer");
   query_events_ = summary_profile_.AddEventSequence("Query Timeline");
@@ -320,6 +321,14 @@ Status ImpalaServer::QueryExecState::ExecLocalCatalogOp(
       SetResultSet(vector<string>(1, response));
       return Status::OK;
     }
+    case TCatalogOpType::SHOW_FILES: {
+      TResultSet response;
+      RETURN_IF_ERROR(frontend_->GetTableFiles(catalog_op.show_files_params, &response));
+      // Set the result set and its schema from the response.
+      request_result_set_.reset(new vector<TResultRow>(response.rows));
+      result_metadata_ = response.schema;
+      return Status::OK;
+    }
     default: {
       stringstream ss;
       ss << "Unexpected TCatalogOpType: " << catalog_op.op_type;
@@ -353,7 +362,8 @@ Status ImpalaServer::QueryExecState::ExecQueryOrDmlRequest(
     ss << query_exec_request.per_host_vcores;
     summary_profile_.AddInfoString(PER_HOST_VCORES_KEY, ss.str());
   }
-  if (query_exec_request.query_ctx.__isset.tables_missing_stats &&
+  if (!query_exec_request.query_ctx.__isset.parent_query_id &&
+      query_exec_request.query_ctx.__isset.tables_missing_stats &&
       !query_exec_request.query_ctx.tables_missing_stats.empty()) {
     stringstream ss;
     const vector<TTableName>& tbls = query_exec_request.query_ctx.tables_missing_stats;
@@ -482,7 +492,7 @@ void ImpalaServer::QueryExecState::Done() {
   // is destroyed).
   BlockOnWait();
   unique_lock<mutex> l(lock_);
-  end_time_ = TimestampValue::local_time_micros();
+  end_time_ = TimestampValue::LocalTime();
   summary_profile_.AddInfoString("End Time", end_time().DebugString());
   summary_profile_.AddInfoString("Query State", PrintQueryState(query_state_));
   query_events_->MarkEvent("Unregister query");
@@ -493,7 +503,7 @@ void ImpalaServer::QueryExecState::Done() {
     Status status = exec_env_->scheduler()->Release(schedule_.get());
     if (!status.ok()) {
       LOG(WARNING) << "Failed to release resources of query " << schedule_->query_id()
-            << " because of error: " << status.GetErrorMsg();
+            << " because of error: " << status.GetDetail();
     }
   }
 
@@ -591,15 +601,15 @@ Status ImpalaServer::QueryExecState::FetchRows(const int32_t max_rows,
 Status ImpalaServer::QueryExecState::RestartFetch() {
   // No result caching for this query. Restart is invalid.
   if (result_cache_max_size_ <= 0) {
-    return Status(TStatusCode::RECOVERABLE_ERROR,
-        "Restarting of fetch requires enabling of query result caching.");
+    return Status(ErrorMsg(TErrorCode::RECOVERABLE_ERROR,
+        "Restarting of fetch requires enabling of query result caching."));
   }
   // The cache overflowed on a previous fetch.
   if (result_cache_.get() == NULL) {
     stringstream ss;
     ss << "The query result cache exceeded its limit of " << result_cache_max_size_
        << " rows. Restarting the fetch is not possible.";
-    return Status(TStatusCode::RECOVERABLE_ERROR, ss.str());
+    return Status(ErrorMsg(TErrorCode::RECOVERABLE_ERROR, ss.str()));
   }
   // Reset fetch state to start over.
   eos_ = false;
@@ -617,7 +627,7 @@ Status ImpalaServer::QueryExecState::UpdateQueryStatus(const Status& status) {
   if (!status.ok() && query_status_.ok()) {
     query_state_ = QueryState::EXCEPTION;
     query_status_ = status;
-    summary_profile_.AddInfoString("Query Status", query_status_.GetErrorMsg());
+    summary_profile_.AddInfoString("Query Status", query_status_.GetDetail());
   }
 
   return status;
@@ -828,7 +838,7 @@ Status ImpalaServer::QueryExecState::UpdateCatalog() {
       }
 
       Status status(resp.result.status);
-      if (!status.ok()) LOG(ERROR) << "ERROR Finalizing DML: " << status.GetErrorMsg();
+      if (!status.ok()) LOG(ERROR) << "ERROR Finalizing DML: " << status.GetDetail();
       RETURN_IF_ERROR(status);
       RETURN_IF_ERROR(parent_server_->ProcessCatalogUpdateResult(resp.result,
           exec_request_.query_options.sync_ddl));
@@ -923,7 +933,7 @@ void ImpalaServer::QueryExecState::SetCreateTableAsSelectResultSet() {
 void ImpalaServer::QueryExecState::MarkInactive() {
   client_wait_sw_.Start();
   lock_guard<mutex> l(expiration_data_lock_);
-  last_active_time_ = ms_since_epoch();
+  last_active_time_ = UnixMillis();
   DCHECK(ref_count_ > 0) << "Invalid MarkInactive()";
   --ref_count_;
 }
@@ -933,7 +943,7 @@ void ImpalaServer::QueryExecState::MarkActive() {
   int64_t elapsed_time = client_wait_sw_.ElapsedTime();
   client_wait_timer_->Set(elapsed_time);
   lock_guard<mutex> l(expiration_data_lock_);
-  last_active_time_ = ms_since_epoch();
+  last_active_time_ = UnixMillis();
   ++ref_count_;
 }
 

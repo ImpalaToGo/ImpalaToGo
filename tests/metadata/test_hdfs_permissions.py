@@ -14,14 +14,17 @@
 # limitations under the License.
 
 import logging
+import os
 import pytest
 from tests.common.test_vector import *
 from tests.common.impala_test_suite import *
 from tests.common.test_dimensions import create_exec_option_dimension
+from tests.common.skip import *
 
 
 TEST_DB = 'read_only_table_test_db'
 
+@skip_if_s3_insert
 class TestHdfsPermissions(ImpalaTestSuite):
   @classmethod
   def get_workload(self):

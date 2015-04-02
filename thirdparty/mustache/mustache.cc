@@ -41,6 +41,7 @@ enum TagOperator {
   SECTION_END,
   PARTIAL,
   COMMENT,
+  LENGTH,
   NONE
 };
 
@@ -53,6 +54,7 @@ TagOperator GetOperator(const string& tag) {
     case '/': return SECTION_END;
     case '>': return PARTIAL;
     case '!': return COMMENT;
+    case '%': return LENGTH;
     default: return SUBSTITUTION;
   }
 }
@@ -283,7 +285,23 @@ int EvaluateSubstitution(const string& document, const int idx,
   return idx;
 }
 
-// Evaluates a 'partial' tempalte by reading it fully from disk, then rendering it
+// Evaluates a LENGTH tag by replacing its contents with the type-dependent 'size' of the
+// value.
+int EvaluateLength(const string& document, const int idx, const Value* parent_context,
+    const string& tag_name, stringstream* out) {
+  const Value* context;
+  ResolveJsonContext(tag_name, *parent_context, &context);
+  if (context == NULL) return idx;
+  if (context->IsArray()) {
+    (*out) << context->Size();
+  } else if (context->IsString()) {
+    (*out) << context->GetStringLength();
+  };
+
+  return idx;
+}
+
+// Evaluates a 'partial' template by reading it fully from disk, then rendering it
 // directly into the current output with the current context.
 //
 // TODO: This could obviously be more efficient (and there are lots of file accesses in a
@@ -322,6 +340,8 @@ int EvaluateTag(const string& document, const string& document_root, int idx,
     case PARTIAL:
       EvaluatePartial(tag_name, document_root, context, out);
       return idx;
+    case LENGTH:
+      return EvaluateLength(document, idx, context, tag_name, out);
     case NONE:
       return idx; // No tag was found
     default:

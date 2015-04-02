@@ -101,7 +101,7 @@ public class StringLiteral extends LiteralExpr {
       return convertToNumber();
     } else if (targetType.isDateType()) {
       // Let the BE do the cast so it is in Boost format
-      return new CastExpr(targetType, this, true);
+      return new CastExpr(targetType, this);
     }
     return this;
   }
@@ -155,7 +155,8 @@ public class StringLiteral extends LiteralExpr {
 
   @Override
   public int compareTo(LiteralExpr o) {
-    if (!(o instanceof StringLiteral)) return -1;
+    int ret = super.compareTo(o);
+    if (ret != 0) return ret;
     StringLiteral other = (StringLiteral) o;
     return value_.compareTo(other.getStringValue());
   }

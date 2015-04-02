@@ -319,12 +319,12 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
 
   SCOPED_TIMER(get_results_timer_);
   int count = 0;
-  const int N = state->batch_size();
+  const int N = BitUtil::NextPowerOfTwo(state->batch_size());
   // Keeping returning rows from the current partition.
   while (!output_iterator_.AtEnd() && !row_batch->AtCapacity()) {
     // This loop can go on for a long time if the conjuncts are very selective. Do query
     // maintenance every N iterations.
-    if (count++ % N == 0) {
+    if ((count++ & (N - 1)) == 0) {
       RETURN_IF_CANCELLED(state);
       RETURN_IF_ERROR(QueryMaintenance(state));
     }
@@ -334,7 +334,7 @@ Status PartitionedAggregationNode::GetNext(RuntimeState* state,
     Tuple* intermediate_tuple = output_iterator_.GetTuple();
     Tuple* output_tuple = FinalizeTuple(
         output_partition_->agg_fn_ctxs, intermediate_tuple, row_batch->tuple_data_pool());
-    output_iterator_.Next<false>(ht_ctx_.get());
+    output_iterator_.Next();
     row->SetTuple(0, output_tuple);
     if (ExecNode::EvalConjuncts(ctxs, num_ctxs, row)) {
       row_batch->CommitLastRow();
@@ -353,9 +353,9 @@ void PartitionedAggregationNode::CleanupHashTbl(const vector<FunctionContext*>& 
   if (!needs_finalize_ && !needs_serialize_) return;
   while (!it.AtEnd()) {
     FinalizeTuple(ctxs, it.GetTuple(), mem_pool_.get());
-    // Avoid consuming excessive memory.
+    // Avoid consuming excessive memory, so free whenever consumption is >1MB.
     if (mem_pool_->total_allocated_bytes() > 1024 * 1024) mem_pool_->FreeAll();
-    it.Next<false>(ht_ctx_.get());
+    it.Next();
   }
 }
 
@@ -440,10 +440,9 @@ bool PartitionedAggregationNode::Partition::InitHashTable() {
   // TODO: how many buckets?
   // TODO: we could switch to 64 bit hashes and then we don't need a max size.
   // It might be reasonable to limit individual hash table size for other reasons
-  // though.
-  // Only use small buffers on level 0 (no repartitioning).
+  // though. Always start with small buffers.
   hash_tbl.reset(new HashTable(parent->state_, parent->block_mgr_client_, 1, NULL,
-      level == 0, 1 << (32 - NUM_PARTITIONING_BITS)));
+      1 << (32 - NUM_PARTITIONING_BITS)));
   return hash_tbl->Init();
 }
 
@@ -460,7 +459,7 @@ Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
     // TODO: if it happens to not be a string, we could serialize in place. This is
     // a future optimization since it is very unlikely to have a serialize phase
     // for those UDAs.
-    DCHECK(parent->serialize_stream_.get() != NULL);
+    DCHECK_NOTNULL(parent->serialize_stream_.get());
     DCHECK(!parent->serialize_stream_->is_pinned());
     DCHECK(parent->serialize_stream_->has_write_block());
 
@@ -469,11 +468,10 @@ Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
     // Serialize and copy the spilled partition's stream into the new stream.
     bool failed_to_add = false;
     BufferedTupleStream* new_stream = parent->serialize_stream_.get();
-    HashTableCtx* ctx = parent->ht_ctx_.get();
-    HashTable::Iterator it = hash_tbl->Begin(ctx);
+    HashTable::Iterator it = hash_tbl->Begin(parent->ht_ctx_.get());
     while (!it.AtEnd()) {
       Tuple* tuple = it.GetTuple();
-      it.Next<false>(ctx);
+      it.Next();
       AggFnEvaluator::Serialize(evaluators, agg_fn_ctxs, tuple);
       if (UNLIKELY(!new_stream->AddRow(reinterpret_cast<TupleRow*>(&tuple)))) {
         failed_to_add = true;
@@ -512,7 +510,12 @@ Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
         parent->block_mgr_client_,
         false, /* use small buffers */
         true   /* delete on read */));
-    RETURN_IF_ERROR(parent->serialize_stream_->Init(parent->runtime_profile(), false));
+    Status s = parent->serialize_stream_->Init(parent->runtime_profile(), false);
+    if (!s.ok()) {
+      hash_tbl->Close();
+      hash_tbl.reset();
+      return s;
+    }
     DCHECK(parent->serialize_stream_->has_write_block());
   }
 
@@ -520,6 +523,7 @@ Status PartitionedAggregationNode::Partition::Spill(Tuple* intermediate_tuple) {
   for (int i = 0; i < agg_fn_ctxs.size(); ++i) {
     agg_fn_ctxs[i]->impl()->Close();
   }
+
   if (agg_fn_pool.get() != NULL) {
     agg_fn_pool->FreeAll();
     agg_fn_pool.reset();
@@ -708,9 +712,8 @@ void PartitionedAggregationNode::DebugString(int indentation_level,
 Status PartitionedAggregationNode::CreateHashPartitions(int level) {
   if (level >= MAX_PARTITION_DEPTH) {
     Status status = Status::MEM_LIMIT_EXCEEDED;
-    status.AddErrorMsg("Cannot perform hash aggregation. Partitioned input data too many"
-       " times. This could mean there is too much skew in the data or the memory"
-       " limit is set too low.");
+    status.SetErrorMsg(ErrorMsg(TErrorCode::PARTITIONED_AGG_MAX_PARTITION_DEPTH,
+        id_, MAX_PARTITION_DEPTH));
     state_->SetMemLimitExceeded();
     return status;
   }
@@ -733,6 +736,19 @@ Status PartitionedAggregationNode::CreateHashPartitions(int level) {
   COUNTER_ADD(partitions_created_, PARTITION_FANOUT);
   COUNTER_SET(max_partition_level_, level);
   return Status::OK;
+}
+
+int64_t PartitionedAggregationNode::LargestSpilledPartition() const {
+  int64_t max_rows = 0;
+  for (int i = 0; i < hash_partitions_.size(); ++i) {
+    Partition* partition = hash_partitions_[i];
+    if (partition->is_spilled()) {
+      int64_t rows = partition->aggregated_row_stream->num_rows() +
+          partition->unaggregated_row_stream->num_rows();
+      if (rows > max_rows) max_rows = rows;
+    }
+  }
+  return max_rows;
 }
 
 Status PartitionedAggregationNode::NextPartition() {
@@ -783,9 +799,22 @@ Status PartitionedAggregationNode::NextPartition() {
 
       // Done processing this partition. Move the new partitions into
       // spilled_partitions_/aggregated_partitions_.
-      int64_t num_input_rows = 0;
-      num_input_rows += partition->aggregated_row_stream->num_rows();
-      num_input_rows += partition->unaggregated_row_stream->num_rows();
+      int64_t num_input_rows = partition->aggregated_row_stream->num_rows() +
+          partition->unaggregated_row_stream->num_rows();
+
+      // Check if there was any reduction in the size of partitions after repartitioning.
+      int64_t largest_partition = LargestSpilledPartition();
+      DCHECK_GE(num_input_rows, largest_partition) << "Cannot have a partition with "
+          "more rows than the input";
+      if (num_input_rows == largest_partition) {
+        Status status = Status::MEM_LIMIT_EXCEEDED;
+        status.AddDetail(Substitute("Cannot perform aggregation at node with id $0. "
+            "Repartitioning did not reduce the size of a spilled partition. "
+            "Repartitioning level $1. Number of rows $2.",
+            id_, partition->level + 1, num_input_rows));
+        state_->SetMemLimitExceeded();
+        return status;
+      }
       RETURN_IF_ERROR(MoveHashPartitions(num_input_rows));
     }
   }
@@ -801,21 +830,23 @@ Status PartitionedAggregationNode::NextPartition() {
 
 template<bool AGGREGATED_ROWS>
 Status PartitionedAggregationNode::ProcessStream(BufferedTupleStream* input_stream) {
-  while (true) {
-    bool got_buffer = false;
-    RETURN_IF_ERROR(input_stream->PrepareForRead(&got_buffer));
-    if (got_buffer) break;
-    // Did not have a buffer to read the input stream. Spill and try again.
-    RETURN_IF_ERROR(SpillPartition());
-  }
+  if (input_stream->num_rows() > 0) {
+    while (true) {
+      bool got_buffer = false;
+      RETURN_IF_ERROR(input_stream->PrepareForRead(&got_buffer));
+      if (got_buffer) break;
+      // Did not have a buffer to read the input stream. Spill and try again.
+      RETURN_IF_ERROR(SpillPartition());
+    }
 
-  bool eos = false;
-  RowBatch batch(AGGREGATED_ROWS ? *intermediate_row_desc_ : children_[0]->row_desc(),
-      state_->batch_size(), mem_tracker());
-  while (!eos) {
-    RETURN_IF_ERROR(input_stream->GetNext(&batch, &eos));
-    RETURN_IF_ERROR(ProcessBatch<AGGREGATED_ROWS>(&batch, ht_ctx_.get()));
-    batch.Reset();
+    bool eos = false;
+    RowBatch batch(AGGREGATED_ROWS ? *intermediate_row_desc_ : children_[0]->row_desc(),
+                   state_->batch_size(), mem_tracker());
+    do {
+      RETURN_IF_ERROR(input_stream->GetNext(&batch, &eos));
+      RETURN_IF_ERROR(ProcessBatch<AGGREGATED_ROWS>(&batch, ht_ctx_.get()));
+      batch.Reset();
+    } while (!eos);
   }
   input_stream->Close();
   return Status::OK;
@@ -840,8 +871,8 @@ Status PartitionedAggregationNode::SpillPartition(Partition* curr_partition,
       }
       if (!got_buffer) {
         Status status = Status::MEM_LIMIT_EXCEEDED;
-        status.AddErrorMsg("Not enough memory to get the minimum required buffers for "
-                           "aggregation.");
+        status.AddDetail("Not enough memory to get the minimum required buffers for "
+            "aggregation.");
         return status;
       }
     }
@@ -1023,7 +1054,7 @@ llvm::Function* PartitionedAggregationNode::CodegenUpdateSlot(
   Function* agg_expr_fn;
   Status status = input_expr->GetCodegendComputeFn(state_, &agg_expr_fn);
   if (!status.ok()) {
-    VLOG_QUERY << "Could not codegen UpdateSlot(): " << status.GetErrorMsg();
+    VLOG_QUERY << "Could not codegen UpdateSlot(): " << status.GetDetail();
     return NULL;
   }
   DCHECK(agg_expr_fn != NULL);
@@ -1349,7 +1380,7 @@ Function* PartitionedAggregationNode::CodegenProcessBatch() {
 
     process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, true,
         equals_fn, "Equals", &replaced);
-    DCHECK_EQ(replaced, 1);
+    DCHECK_EQ(replaced, 3);
   }
 
   process_batch_fn = codegen->ReplaceCallSites(process_batch_fn, false,

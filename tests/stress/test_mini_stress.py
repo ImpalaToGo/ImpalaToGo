@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright (c) 2012 Cloudera, Inc. All rights reserved.
 #
-
 import os
 import pytest
 import re

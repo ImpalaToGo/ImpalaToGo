@@ -1,0 +1,648 @@
+From 52edda5067ec470bab80de3bd0b289f2960562ba Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@cloudera.com>
+Date: Tue, 10 Mar 2015 04:56:15 -0500
+Subject: [PATCH 109/110] Partial Revert "HBASE-10573 Use Netty 4"
+
+This reverts portions of commit b6646596c6aac2b6f91976eaad4993802d671f8e that require netty 4
+
+Conflicts:
+	hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClientIdGenerator.java
+	hbase-common/src/main/java/org/apache/hadoop/hbase/util/Addressing.java
+	hbase-server/pom.xml
+	hbase-server/src/main/java/org/apache/hadoop/hbase/master/ClusterStatusPublisher.java
+	hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestHCM.java
+	pom.xml
+
+Reason: backwards compatibility
+Ref: CDH-24807
+---
+ hbase-client/pom.xml                               |    2 +-
+ .../hadoop/hbase/client/ClusterStatusListener.java |  114 ++++++++----------
+ hbase-prefix-tree/pom.xml                          |    4 -
+ hbase-server/pom.xml                               |   35 +++---
+ .../hadoop/hbase/mapreduce/TableMapReduceUtil.java |    2 +-
+ .../hbase/master/ClusterStatusPublisher.java       |  127 ++++++--------------
+ .../filter/TestFuzzyRowAndColumnRangeFilter.java   |   19 ++--
+ pom.xml                                            |   32 +-----
+ 8 files changed, 119 insertions(+), 216 deletions(-)
+
+diff --git a/hbase-client/pom.xml b/hbase-client/pom.xml
+index 2c99bb6..dfcf385 100644
+--- a/hbase-client/pom.xml
++++ b/hbase-client/pom.xml
+@@ -131,7 +131,7 @@
+     </dependency>
+     <dependency>
+       <groupId>io.netty</groupId>
+-      <artifactId>netty-all</artifactId>
++      <artifactId>netty</artifactId>
+     </dependency>
+     <dependency>
+       <groupId>org.apache.zookeeper</groupId>
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClusterStatusListener.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClusterStatusListener.java
+index 475ae01..0bf8800 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClusterStatusListener.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ClusterStatusListener.java
+@@ -20,16 +20,18 @@
+ package org.apache.hadoop.hbase.client;
+ 
+ 
+-import io.netty.bootstrap.Bootstrap;
+-import io.netty.buffer.ByteBufInputStream;
+-import io.netty.channel.ChannelHandlerContext;
+-import io.netty.channel.ChannelOption;
+-import io.netty.channel.EventLoopGroup;
+-import io.netty.channel.SimpleChannelInboundHandler;
+-import io.netty.channel.nio.NioEventLoopGroup;
+-import io.netty.channel.socket.DatagramChannel;
+-import io.netty.channel.socket.DatagramPacket;
+-import io.netty.channel.socket.nio.NioDatagramChannel;
++import java.io.Closeable;
++import java.io.IOException;
++import java.lang.reflect.Constructor;
++import java.lang.reflect.InvocationTargetException;
++import java.net.InetAddress;
++import java.net.InetSocketAddress;
++import java.net.UnknownHostException;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+@@ -39,19 +41,17 @@ import org.apache.hadoop.hbase.ClusterStatus;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.protobuf.generated.ClusterStatusProtos;
+-import org.apache.hadoop.hbase.util.Addressing;
+-import org.apache.hadoop.hbase.util.ExceptionUtil;
+ import org.apache.hadoop.hbase.util.Threads;
+-
+-import java.io.Closeable;
+-import java.io.IOException;
+-import java.lang.reflect.Constructor;
+-import java.lang.reflect.InvocationTargetException;
+-import java.net.InetAddress;
+-import java.net.NetworkInterface;
+-import java.net.UnknownHostException;
+-import java.util.ArrayList;
+-import java.util.List;
++import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
++import org.jboss.netty.channel.ChannelHandlerContext;
++import org.jboss.netty.channel.Channels;
++import org.jboss.netty.channel.ExceptionEvent;
++import org.jboss.netty.channel.MessageEvent;
++import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
++import org.jboss.netty.channel.socket.DatagramChannel;
++import org.jboss.netty.channel.socket.DatagramChannelFactory;
++import org.jboss.netty.channel.socket.oio.OioDatagramChannelFactory;
++import org.jboss.netty.handler.codec.protobuf.ProtobufDecoder;
+ 
+ 
+ /**
+@@ -180,14 +180,22 @@ class ClusterStatusListener implements Closeable {
+   @InterfaceAudience.LimitedPrivate(HBaseInterfaceAudience.CONFIG)
+   class MulticastListener implements Listener {
+     private DatagramChannel channel;
+-    private final EventLoopGroup group = new NioEventLoopGroup(
+-        1, Threads.newDaemonThreadFactory("hbase-client-clusterStatusListener"));
++    private final ExecutorService service = Executors.newSingleThreadExecutor(
++        Threads.newDaemonThreadFactory("hbase-client-clusterStatus-multiCastListener"));
++
+ 
+     public MulticastListener() {
+     }
+ 
+     @Override
+     public void connect(Configuration conf) throws IOException {
++      // Can't be NiO with Netty today => not implemented in Netty.
++      DatagramChannelFactory f = new OioDatagramChannelFactory(service);
++
++      ConnectionlessBootstrap b = new ConnectionlessBootstrap(f);
++      b.setPipeline(Channels.pipeline(
++          new ProtobufDecoder(ClusterStatusProtos.ClusterStatus.getDefaultInstance()),
++          new ClusterStatusHandler()));
+ 
+       String mcAddress = conf.get(HConstants.STATUS_MULTICAST_ADDRESS,
+           HConstants.DEFAULT_STATUS_MULTICAST_ADDRESS);
+@@ -196,29 +204,17 @@ class ClusterStatusListener implements Closeable {
+       int port = conf.getInt(HConstants.STATUS_MULTICAST_PORT,
+           HConstants.DEFAULT_STATUS_MULTICAST_PORT);
+ 
++      channel = (DatagramChannel) b.bind(new InetSocketAddress(bindAddress, port));
++
++      channel.getConfig().setReuseAddress(true);
++
+       InetAddress ina;
+       try {
+         ina = InetAddress.getByName(mcAddress);
+       } catch (UnknownHostException e) {
+-        close();
+         throw new IOException("Can't connect to " + mcAddress, e);
+       }
+-
+-      try {
+-        Bootstrap b = new Bootstrap();
+-        b.group(group)
+-            .channel(NioDatagramChannel.class)
+-            .option(ChannelOption.SO_REUSEADDR, true)
+-            .handler(new ClusterStatusHandler());
+-
+-        channel = (DatagramChannel)b.bind(bindAddress, port).sync().channel();
+-      } catch (InterruptedException e) {
+-        close();
+-        throw ExceptionUtil.asInterrupt(e);
+-      }
+-
+-      NetworkInterface ni = NetworkInterface.getByInetAddress(Addressing.getIpAddress());
+-      channel.joinGroup(ina, ni, null, channel.newPromise());
++      channel.joinGroup(ina);
+     }
+ 
+     @Override
+@@ -227,40 +223,30 @@ class ClusterStatusListener implements Closeable {
+         channel.close();
+         channel = null;
+       }
+-      group.shutdownGracefully();
++      service.shutdown();
+     }
+ 
+ 
+-
+     /**
+      * Class, conforming to the Netty framework, that manages the message received.
+      */
+-    private class ClusterStatusHandler extends SimpleChannelInboundHandler<DatagramPacket> {
+-
+-      @Override
+-      public void exceptionCaught(
+-          ChannelHandlerContext ctx, Throwable cause)
+-          throws Exception {
+-        LOG.error("Unexpected exception, continuing.", cause);
+-      }
++    private class ClusterStatusHandler extends SimpleChannelUpstreamHandler {
+ 
+       @Override
+-      public boolean acceptInboundMessage(Object msg)
+-          throws Exception {
+-        return super.acceptInboundMessage(msg);
++      public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
++        ClusterStatusProtos.ClusterStatus csp = (ClusterStatusProtos.ClusterStatus) e.getMessage();
++        ClusterStatus ncs = ClusterStatus.convert(csp);
++        receive(ncs);
+       }
+ 
+-
++      /**
++       * Invoked when an exception was raised by an I/O thread or a
++       * {@link org.jboss.netty.channel.ChannelHandler}.
++       */
+       @Override
+-      protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket dp) throws Exception {
+-        ByteBufInputStream bis = new ByteBufInputStream(dp.content());
+-        try {
+-          ClusterStatusProtos.ClusterStatus csp = ClusterStatusProtos.ClusterStatus.parseFrom(bis);
+-          ClusterStatus ncs = ClusterStatus.convert(csp);
+-          receive(ncs);
+-        } finally {
+-          bis.close();
+-        }
++      public void exceptionCaught(
++          ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
++        LOG.error("Unexpected exception, continuing.", e.getCause());
+       }
+     }
+   }
+diff --git a/hbase-prefix-tree/pom.xml b/hbase-prefix-tree/pom.xml
+index 4a53b71..e38786b 100644
+--- a/hbase-prefix-tree/pom.xml
++++ b/hbase-prefix-tree/pom.xml
+@@ -107,10 +107,6 @@
+       <groupId>commons-logging</groupId>
+       <artifactId>commons-logging</artifactId>
+     </dependency>
+-    <dependency>
+-      <groupId>io.netty</groupId>
+-      <artifactId>netty-all</artifactId>
+-    </dependency>
+   </dependencies>
+ 
+   <profiles>
+diff --git a/hbase-server/pom.xml b/hbase-server/pom.xml
+index 7e5e166..8215410 100644
+--- a/hbase-server/pom.xml
++++ b/hbase-server/pom.xml
+@@ -446,9 +446,26 @@
+       <groupId>org.jamon</groupId>
+       <artifactId>jamon-runtime</artifactId>
+     </dependency>
++    <!-- REST dependencies -->
+     <dependency>
+-      <groupId>io.netty</groupId>
+-      <artifactId>netty-all</artifactId>
++      <groupId>com.google.protobuf</groupId>
++      <artifactId>protobuf-java</artifactId>
++    </dependency>
++    <dependency>
++      <groupId>com.sun.jersey</groupId>
++      <artifactId>jersey-core</artifactId>
++    </dependency>
++    <dependency>
++      <groupId>com.sun.jersey</groupId>
++      <artifactId>jersey-json</artifactId>
++    </dependency>
++    <dependency>
++      <groupId>com.sun.jersey</groupId>
++      <artifactId>jersey-server</artifactId>
++    </dependency>
++    <dependency>
++      <groupId>javax.xml.bind</groupId>
++      <artifactId>jaxb-api</artifactId>
+     </dependency>
+     <!-- tracing Dependencies -->
+     <dependency>
+@@ -622,13 +639,6 @@
+           <artifactId>hadoop-minicluster</artifactId>
+           <scope>test</scope>
+         </dependency>
+-        <!-- Hadoop needs Netty 3.x at test scope for the minicluster -->
+-        <dependency>
+-          <groupId>io.netty</groupId>
+-          <artifactId>netty</artifactId>
+-          <version>3.6.2.Final</version>
+-          <scope>test</scope>
+-        </dependency>
+       </dependencies>
+       <build>
+         <plugins>
+@@ -748,13 +758,6 @@
+           <groupId>org.apache.hadoop</groupId>
+           <artifactId>hadoop-minicluster</artifactId>
+         </dependency>
+-        <!-- Hadoop needs Netty 3.x at test scope for the minicluster -->
+-        <dependency>
+-          <groupId>io.netty</groupId>
+-          <artifactId>netty</artifactId>
+-          <version>3.6.2.Final</version>
+-          <scope>test</scope>
+-        </dependency>
+       </dependencies>
+       <build>
+         <plugins>
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
+index 149752b..73bc7bc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableMapReduceUtil.java
+@@ -725,7 +725,7 @@ public class TableMapReduceUtil {
+       org.apache.hadoop.hbase.mapreduce.TableMapper.class,           // hbase-server
+       // pull necessary dependencies
+       org.apache.zookeeper.ZooKeeper.class,
+-      io.netty.channel.Channel.class,
++      org.jboss.netty.channel.ChannelFactory.class,
+       com.google.protobuf.Message.class,
+       com.google.common.collect.Lists.class,
+       org.apache.htrace.Trace.class);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ClusterStatusPublisher.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ClusterStatusPublisher.java
+index 6e7024c..6b9085c 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ClusterStatusPublisher.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/ClusterStatusPublisher.java
+@@ -21,22 +21,7 @@
+ package org.apache.hadoop.hbase.master;
+ 
+ 
+-import io.netty.bootstrap.Bootstrap;
+-import io.netty.bootstrap.ChannelFactory;
+-import io.netty.buffer.Unpooled;
+-import io.netty.channel.Channel;
+-import io.netty.channel.ChannelException;
+-import io.netty.channel.ChannelHandlerContext;
+-import io.netty.channel.ChannelOption;
+-import io.netty.channel.EventLoopGroup;
+-import io.netty.channel.nio.NioEventLoopGroup;
+-import io.netty.channel.socket.DatagramChannel;
+-import io.netty.channel.socket.DatagramPacket;
+-import io.netty.channel.socket.InternetProtocolFamily;
+-import io.netty.channel.socket.nio.NioDatagramChannel;
+-import io.netty.handler.codec.MessageToMessageEncoder;
+ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+-import io.netty.util.internal.StringUtil;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.Chore;
+ import org.apache.hadoop.hbase.ClusterStatus;
+@@ -44,20 +29,26 @@ import org.apache.hadoop.hbase.HBaseInterfaceAudience;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.protobuf.generated.ClusterStatusProtos;
+-import org.apache.hadoop.hbase.util.Addressing;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+-import org.apache.hadoop.hbase.util.ExceptionUtil;
+ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.hbase.util.ReflectionUtils;
+ import org.apache.hadoop.hbase.util.Threads;
+ import org.apache.hadoop.hbase.util.VersionInfo;
++import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
++import org.jboss.netty.channel.ChannelEvent;
++import org.jboss.netty.channel.ChannelHandlerContext;
++import org.jboss.netty.channel.ChannelUpstreamHandler;
++import org.jboss.netty.channel.Channels;
++import org.jboss.netty.channel.socket.DatagramChannel;
++import org.jboss.netty.channel.socket.DatagramChannelFactory;
++import org.jboss.netty.channel.socket.oio.OioDatagramChannelFactory;
++import org.jboss.netty.handler.codec.protobuf.ProtobufEncoder;
+ 
+ import java.io.Closeable;
+ import java.io.IOException;
+ import java.net.Inet6Address;
+ import java.net.InetAddress;
+ import java.net.InetSocketAddress;
+-import java.net.NetworkInterface;
+ import java.net.UnknownHostException;
+ import java.util.ArrayList;
+ import java.util.Collections;
+@@ -66,6 +57,8 @@ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.ConcurrentMap;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
+ 
+ 
+ /**
+@@ -245,8 +238,8 @@ public class ClusterStatusPublisher extends Chore {
+   @InterfaceAudience.LimitedPrivate(HBaseInterfaceAudience.CONFIG)
+   public static class MulticastPublisher implements Publisher {
+     private DatagramChannel channel;
+-    private final EventLoopGroup group = new NioEventLoopGroup(
+-        1, Threads.newDaemonThreadFactory("hbase-master-clusterStatusPublisher"));
++    private final ExecutorService service = Executors.newSingleThreadExecutor(
++        Threads.newDaemonThreadFactory("hbase-master-clusterStatus-worker"));
+ 
+     public MulticastPublisher() {
+     }
+@@ -258,87 +251,37 @@ public class ClusterStatusPublisher extends Chore {
+       int port = conf.getInt(HConstants.STATUS_MULTICAST_PORT,
+           HConstants.DEFAULT_STATUS_MULTICAST_PORT);
+ 
+-      final InetAddress ina;
+-      try {
+-        ina = InetAddress.getByName(mcAddress);
+-      } catch (UnknownHostException e) {
+-        close();
+-        throw new IOException("Can't connect to " + mcAddress, e);
+-      }
++      // Can't be NiO with Netty today => not implemented in Netty.
++      DatagramChannelFactory f = new OioDatagramChannelFactory(service);
+ 
+-      final InetSocketAddress isa = new InetSocketAddress(mcAddress, port);
++      ConnectionlessBootstrap b = new ConnectionlessBootstrap(f);
++      b.setPipeline(Channels.pipeline(new ProtobufEncoder(),
++          new ChannelUpstreamHandler() {
++            @Override
++            public void handleUpstream(ChannelHandlerContext ctx, ChannelEvent e)
++                throws Exception {
++              // We're just writing here. Discard any incoming data. See HBASE-8466.
++            }
++          }));
+ 
+-      InternetProtocolFamily family;
+-      InetAddress localAddress;
+-      if (ina instanceof Inet6Address) {
+-        localAddress = Addressing.getIp6Address();
+-        family = InternetProtocolFamily.IPv6;
+-      }else{
+-        localAddress = Addressing.getIp4Address();
+-        family = InternetProtocolFamily.IPv4;
+-      }
+-      NetworkInterface ni = NetworkInterface.getByInetAddress(localAddress);
+ 
+-      Bootstrap b = new Bootstrap();
+-      b.group(group)
+-      .channelFactory(new HBaseDatagramChannelFactory<Channel>(NioDatagramChannel.class, family))
+-      .option(ChannelOption.SO_REUSEADDR, true)
+-      .handler(new ClusterStatusEncoder(isa));
++      channel = (DatagramChannel) b.bind(new InetSocketAddress(0));
++      channel.getConfig().setReuseAddress(true);
+ 
++      InetAddress ina;
+       try {
+-        channel = (DatagramChannel) b.bind(new InetSocketAddress(0)).sync().channel();
+-        channel.joinGroup(ina, ni, null, channel.newPromise()).sync();
+-        channel.connect(isa).sync();
+-      } catch (InterruptedException e) {
+-        close();
+-        throw ExceptionUtil.asInterrupt(e);
+-      }
+-    }
+-
+-    private static final class HBaseDatagramChannelFactory<T extends Channel> implements ChannelFactory<T> {
+-      private final Class<? extends T> clazz;
+-      private InternetProtocolFamily family;
+-
+-      HBaseDatagramChannelFactory(Class<? extends T> clazz, InternetProtocolFamily family) {
+-          this.clazz = clazz;
+-          this.family = family;
+-      }
+-
+-      @Override
+-      public T newChannel() {
+-          try {
+-            return ReflectionUtils.instantiateWithCustomCtor(clazz.getName(),
+-              new Class[] { InternetProtocolFamily.class }, new Object[] { family });
+-
+-          } catch (Throwable t) {
+-              throw new ChannelException("Unable to create Channel from class " + clazz, t);
+-          }
+-      }
+-
+-      @Override
+-      public String toString() {
+-          return StringUtil.simpleClassName(clazz) + ".class";
+-      }
+-  }
+-
+-    private static class ClusterStatusEncoder extends MessageToMessageEncoder<ClusterStatus> {
+-      final private InetSocketAddress isa;
+-
+-      private ClusterStatusEncoder(InetSocketAddress isa) {
+-        this.isa = isa;
+-      }
+-
+-      @Override
+-      protected void encode(ChannelHandlerContext channelHandlerContext,
+-                            ClusterStatus clusterStatus, List<Object> objects) {
+-        ClusterStatusProtos.ClusterStatus csp = clusterStatus.convert();
+-        objects.add(new DatagramPacket(Unpooled.wrappedBuffer(csp.toByteArray()), isa));
++        ina = InetAddress.getByName(mcAddress);
++      } catch (UnknownHostException e) {
++        throw new IOException("Can't connect to " + mcAddress, e);
+       }
++      channel.joinGroup(ina);
++      channel.connect(new InetSocketAddress(mcAddress, port));
+     }
+ 
+     @Override
+     public void publish(ClusterStatus cs) {
+-      channel.writeAndFlush(cs).syncUninterruptibly();
++      ClusterStatusProtos.ClusterStatus csp = cs.convert();
++      channel.write(csp);
+     }
+ 
+     @Override
+@@ -346,7 +289,7 @@ public class ClusterStatusPublisher extends Chore {
+       if (channel != null) {
+         channel.close();
+       }
+-      group.shutdownGracefully();
++      service.shutdown();
+     }
+   }
+ }
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/filter/TestFuzzyRowAndColumnRangeFilter.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/filter/TestFuzzyRowAndColumnRangeFilter.java
+index 51167fa..f306422 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/filter/TestFuzzyRowAndColumnRangeFilter.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/filter/TestFuzzyRowAndColumnRangeFilter.java
+@@ -18,7 +18,6 @@ package org.apache.hadoop.hbase.filter;
+ import static org.junit.Assert.assertEquals;
+ 
+ import java.io.IOException;
+-import java.nio.ByteBuffer;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -37,6 +36,8 @@ import org.apache.hadoop.hbase.client.Scan;
+ import org.apache.hadoop.hbase.client.Table;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.Pair;
++import org.jboss.netty.buffer.ChannelBuffer;
++import org.jboss.netty.buffer.ChannelBuffers;
+ import org.junit.After;
+ import org.junit.AfterClass;
+ import org.junit.Before;
+@@ -100,11 +101,11 @@ public class TestFuzzyRowAndColumnRangeFilter {
+       for (int i2 = 0; i2 < 5; i2++) {
+         byte[] rk = new byte[10];
+ 
+-        ByteBuffer buf = ByteBuffer.wrap(rk);
++        ChannelBuffer buf = ChannelBuffers.wrappedBuffer(rk);
+         buf.clear();
+-        buf.putShort((short) 2);
+-        buf.putInt(i1);
+-        buf.putInt(i2);
++        buf.writeShort((short) 2);
++        buf.writeInt(i1);
++        buf.writeInt(i2);
+ 
+         for (int c = 0; c < 5; c++) {
+           byte[] cq = new byte[4];
+@@ -132,12 +133,12 @@ public class TestFuzzyRowAndColumnRangeFilter {
+   private void runTest(Table hTable, int cqStart, int expectedSize) throws IOException {
+     // [0, 2, ?, ?, ?, ?, 0, 0, 0, 1]
+     byte[] fuzzyKey = new byte[10];
+-    ByteBuffer buf = ByteBuffer.wrap(fuzzyKey);
++    ChannelBuffer buf = ChannelBuffers.wrappedBuffer(fuzzyKey);
+     buf.clear();
+-    buf.putShort((short) 2);
++    buf.writeShort((short) 2);
+     for (int i = 0; i < 4; i++)
+-      buf.put((byte)63);
+-    buf.putInt((short)1);
++      buf.writeByte((short)63);
++    buf.writeInt((short)1);
+ 
+     byte[] mask = new byte[] {0 , 0, 1, 1, 1, 1, 0, 0, 0, 0};
+ 
+diff --git a/pom.xml b/pom.xml
+index 712c654..82a23cd 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1124,7 +1124,7 @@
+     <clover.version>2.6.3</clover.version>
+     <jamon-runtime.version>2.3.1</jamon-runtime.version>
+     <jettison.version>1.3.3</jettison.version>
+-    <netty.version>4.0.23.Final</netty.version>
++    <netty.version>3.6.6.Final</netty.version>
+     <joni.version>2.1.2</joni.version>
+     <jcodings.version>1.0.8</jcodings.version>
+     <!-- Plugin Dependencies -->
+@@ -1433,14 +1433,14 @@
+             <artifactId>netty</artifactId>
+           </exclusion>
+           <exclusion>
+-            <groupId>io.netty</groupId>
++            <groupId>org.jboss.netty</groupId>
+             <artifactId>netty</artifactId>
+           </exclusion>
+         </exclusions>
+       </dependency>
+       <dependency>
+         <groupId>io.netty</groupId>
+-        <artifactId>netty-all</artifactId>
++        <artifactId>netty</artifactId>
+         <version>${netty.version}</version>
+       </dependency>
+       <dependency>
+@@ -1819,23 +1819,11 @@
+             <groupId>org.apache.hadoop</groupId>
+             <artifactId>hadoop-mapreduce-client-core</artifactId>
+             <version>${hadoop-two.version}</version>
+-            <exclusions>
+-              <exclusion>
+-                <groupId>io.netty</groupId>
+-                <artifactId>netty</artifactId>
+-              </exclusion>
+-            </exclusions>
+           </dependency>
+           <dependency>
+             <groupId>org.apache.hadoop</groupId>
+             <artifactId>hadoop-mapreduce-client-jobclient</artifactId>
+             <version>${hadoop-two.version}</version>
+-            <exclusions>
+-              <exclusion>
+-                <groupId>io.netty</groupId>
+-                <artifactId>netty</artifactId>
+-              </exclusion>
+-            </exclusions>
+           </dependency>
+           <dependency>
+             <groupId>org.apache.hadoop</groupId>
+@@ -1843,12 +1831,6 @@
+             <version>${hadoop-two.version}</version>
+             <type>test-jar</type>
+             <scope>test</scope>
+-            <exclusions>
+-              <exclusion>
+-                <groupId>io.netty</groupId>
+-                <artifactId>netty</artifactId>
+-              </exclusion>
+-            </exclusions>
+           </dependency>
+           <dependency>
+             <groupId>org.apache.hadoop</groupId>
+@@ -1912,10 +1894,6 @@
+                 <groupId>stax</groupId>
+                 <artifactId>stax-api</artifactId>
+               </exclusion>
+-              <exclusion>
+-                <groupId>io.netty</groupId>
+-                <artifactId>netty</artifactId>
+-              </exclusion>
+             </exclusions>
+           </dependency>
+           <dependency>
+@@ -1942,10 +1920,6 @@
+                 <groupId>stax</groupId>
+                 <artifactId>stax-api</artifactId>
+               </exclusion>
+-              <exclusion>
+-                <groupId>io.netty</groupId>
+-                <artifactId>netty</artifactId>
+-              </exclusion>
+             </exclusions>
+           </dependency>
+         </dependencies>
+-- 
+1.7.0.4
+

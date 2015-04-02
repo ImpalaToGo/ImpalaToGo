@@ -77,7 +77,7 @@ class LibCache {
   // Returns status.ok() if the symbol exists in 'hdfs_lib_file', non-ok otherwise.
   // If 'quiet' is true, the error status for non-Java unfound symbols will not be logged.
   Status CheckSymbolExists(const std::string& hdfs_lib_file, LibType type,
-                           const std::string& symbol, bool quiet = false);
+      const std::string& symbol, bool quiet = false);
 
   // Returns a pointer to the function for the given library and symbol.
   // If 'hdfs_lib_file' is empty, the symbol is looked up in the impalad process.
@@ -92,7 +92,7 @@ class LibCache {
   //
   // If 'quiet' is true, returned error statuses will not be logged.
   Status GetSoFunctionPtr(const std::string& hdfs_lib_file, const std::string& symbol,
-                          void** fn_ptr, LibCacheEntry** entry, bool quiet = false);
+      void** fn_ptr, LibCacheEntry** entry, bool quiet = false);
 
   // Marks the entry for 'hdfs_lib_file' as needing to be refreshed if the file in HDFS is
   // newer than the local cached copied. The refresh will occur the next time the entry is

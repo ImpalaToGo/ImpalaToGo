@@ -51,6 +51,10 @@ class TScanRange;
 // Maintains per file information for files assigned to this scan node.  This includes
 // all the splits for the file. Note that it is not thread-safe.
 struct HdfsFileDesc {
+  // Connection to the filesystem containing the file.
+  dfsFS fs;
+
+  // File name including the path.
   std::string filename;
 
   // Length of the file. This is not related to which parts of the file have been
@@ -115,20 +119,15 @@ class HdfsScanNode : public ScanNode {
   // Currently this is always 0.
   int tuple_idx() const { return 0; }
 
-  // Returns number of partition keys in the schema, including non-materialized slots
+  // Returns number of partition keys in the table, including non-materialized slots
   int num_partition_keys() const { return hdfs_table_->num_clustering_cols(); }
 
   // Returns number of materialized partition key slots
   int num_materialized_partition_keys() const { return partition_key_slots_.size(); }
 
-  // Number of columns, including partition keys
-  int num_cols() const { return hdfs_table_->num_cols(); }
-
   const TupleDescriptor* tuple_desc() { return tuple_desc_; }
 
   const HdfsTableDescriptor* hdfs_table() { return hdfs_table_; }
-
-  dfsFS hdfs_connection() { return hdfs_connection_; }
 
   RuntimeState* runtime_state() { return runtime_state_; }
 
@@ -144,10 +143,12 @@ class HdfsScanNode : public ScanNode {
   // The returned contexts must be closed by the caller.
   Status GetConjunctCtxs(std::vector<ExprContext*>* ctxs);
 
-  // Returns index into materialized_slots with 'col_idx'.  Returns SKIP_COLUMN if
-  // that column is not materialized.
-  int GetMaterializedSlotIdx(int col_idx) const {
-    return column_idx_to_materialized_slot_idx_[col_idx];
+  // Returns index into materialized_slots with 'path'.  Returns SKIP_COLUMN if
+  // that path is not materialized.
+  int GetMaterializedSlotIdx(const std::vector<int>& path) const {
+    PathToSlotIdxMap::const_iterator result = path_to_materialized_slot_idx_.find(path);
+    if (result == path_to_materialized_slot_idx_.end()) return SKIP_COLUMN;
+    return result->second;
   }
 
   // The result array is of length num_cols(). The i-th element is true iff column i
@@ -180,8 +181,9 @@ class HdfsScanNode : public ScanNode {
   // range is not expected to require a remote read. The range must fall within the file
   // bounds.  That is, the offset must be >= 0, and offset + len <= file_length.
   // This is thread safe.
-  DiskIoMgr::ScanRange* AllocateScanRange(const char* file, int64_t len, int64_t offset,
-      int64_t partition_id, int disk_id, bool try_cache, bool expected_local);
+  DiskIoMgr::ScanRange* AllocateScanRange(
+      dfsFS fs, const char* file, int64_t len, int64_t offset, int64_t partition_id,
+      int disk_id, bool try_cache, bool expected_local);
 
   // Adds ranges to the io mgr queue and starts up new scanner threads if possible.
   Status AddDiskIoRanges(const std::vector<DiskIoMgr::ScanRange*>& ranges);
@@ -295,8 +297,9 @@ class HdfsScanNode : public ScanNode {
   typedef std::map<THdfsFileFormat::type, std::vector<HdfsFileDesc*> > FileFormatsMap;
   FileFormatsMap per_type_files_;
 
-  // Set to true when the initial scan ranges are issued to the IoMgr. This happens
-  // on the first call to GetNext().
+  // Set to true when the initial scan ranges are issued to the IoMgr. This happens on the
+  // first call to GetNext(). The token manager, in a different thread, will read this
+  // variable.
   bool initial_ranges_issued_;
 
   // The estimated memory required to start up a new scanner thread. If the memory
@@ -306,9 +309,6 @@ class HdfsScanNode : public ScanNode {
 
   // Number of files that have not been issued from the scanners.
   AtomicInt<int> num_unqueued_files_;
-
-  // Connection to hdfs, established in Open() and closed in Close().
-  dfsFS hdfs_connection_;
 
   // Map of HdfsScanner objects to file types.  Only one scanner object will be
   // created for each file type.  Objects stored in runtime_state's pool.
@@ -323,10 +323,9 @@ class HdfsScanNode : public ScanNode {
   // safely evaluated in parallel.
   std::vector<ExprContext*> conjunct_ctxs_;
 
-  // Vector containing indices into materialized_slots_.  The vector is indexed by
-  // the slot_desc's col_pos.  Non-materialized slots and partition key slots will
-  // have SKIP_COLUMN as its entry.
-  std::vector<int> column_idx_to_materialized_slot_idx_;
+  // Maps from a slot's path to its index into materialized_slots_.
+  typedef boost::unordered_map<std::vector<int>, int> PathToSlotIdxMap;
+  PathToSlotIdxMap path_to_materialized_slot_idx_;
 
   // is_materialized_col_[i] = <true i-th column should be materialized, false otherwise>
   // for 0 <= i < total # columns
@@ -409,9 +408,8 @@ class HdfsScanNode : public ScanNode {
   // This should not be explicitly set. Instead, call SetDone().
   bool done_;
 
-  // Set to true if all ranges have started. Some of the ranges may still be in
-  // flight being processed by scanner threads, but no new ScannerThreads
-  // should be started.
+  // Set to true if all ranges have started. Some of the ranges may still be in flight
+  // being processed by scanner threads, but no new ScannerThreads should be started.
   bool all_ranges_started_;
 
   // Pool for allocating some amounts of memory that is shared between scanners.
@@ -425,7 +423,7 @@ class HdfsScanNode : public ScanNode {
 
   // Mapping of file formats (file type, compression type) to the number of
   // splits of that type and the lock protecting it.
-  // This lock cannot be taken together with any other locks except lock_.
+  // This lock cannot be taken together with any other lock except lock_.
   SpinLock file_type_counts_lock_;
   typedef std::map<
       std::pair<THdfsFileFormat::type, THdfsCompression::type>, int> FileTypeCountsMap;

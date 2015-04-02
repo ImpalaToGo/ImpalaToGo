@@ -1,0 +1,649 @@
+From 0aa7d765d4923d08530a75a1f001e1660517bbcf Mon Sep 17 00:00:00 2001
+From: Srikanth Srungarapu <ssrungarapu@cloudera.com>
+Date: Wed, 4 Mar 2015 20:35:58 -0800
+Subject: [PATCH 103/110] CLOUDERA-BUILD Binary incompatibilities between our HBase 0.98.6 and 1.0 branches
+
+Reason: Product Requirement (Compatibility)
+Author: Srikanth Srungarapu
+Ref: CDH-24305
+---
+ .../org/apache/hadoop/hbase/client/HBaseAdmin.java |   24 +++
+ .../org/apache/hadoop/hbase/client/HTable.java     |   67 ++++++++-
+ .../hbase/security/access/AccessControlClient.java |  143 ++++++++++++++++
+ .../hadoop/hbase/mapred/TableRecordReaderImpl.java |   20 ++-
+ .../apache/hadoop/hbase/mapreduce/CopyTable.java   |  171 ++++++++++++++++++++
+ .../hbase/mapreduce/TableRecordReaderImpl.java     |   26 +++
+ .../hadoop/hbase/mapreduce/TestCopyTable.java      |   40 +++++-
+ 7 files changed, 485 insertions(+), 6 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+index adfa6e1..1968b07 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HBaseAdmin.java
+@@ -230,6 +230,30 @@ public class HBaseAdmin implements Admin {
+     this((ClusterConnection)connection);
+   }
+ 
++  /**
++   * Constructor for externally managed HConnections.
++   * The connection to master will be created when required by admin functions.
++   *
++   * @param connection The HConnection instance to use
++   * @throws MasterNotRunningException, ZooKeeperConnectionException are not
++   *  thrown anymore but kept into the interface for backward api compatibility
++   * @deprecated Use {@link #HBaseAdmin(Connection conn)} instead.
++   */
++  @Deprecated
++  public HBaseAdmin(HConnection connection)
++      throws MasterNotRunningException, ZooKeeperConnectionException {
++    this.conf = connection.getConfiguration();
++    this.connection = (ClusterConnection) connection;
++
++    this.pause = this.conf.getLong(HConstants.HBASE_CLIENT_PAUSE,
++        HConstants.DEFAULT_HBASE_CLIENT_PAUSE);
++    this.numRetries = this.conf.getInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER,
++        HConstants.DEFAULT_HBASE_CLIENT_RETRIES_NUMBER);
++    this.retryLongerMultiplier = this.conf.getInt(
++        "hbase.client.retries.longer.multiplier", 10);
++    this.rpcCallerFactory = RpcRetryingCallerFactory.instantiate(this.conf);
++  }
++
+   HBaseAdmin(ClusterConnection connection) {
+     this.conf = connection.getConfiguration();
+     this.connection = connection;
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HTable.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HTable.java
+index 5e4dd3c..9d6a856 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HTable.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HTable.java
+@@ -37,8 +37,6 @@ import java.util.concurrent.TimeUnit;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+-import org.apache.hadoop.hbase.classification.InterfaceAudience;
+-import org.apache.hadoop.hbase.classification.InterfaceStability;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.Cell;
+ import org.apache.hadoop.hbase.HBaseConfiguration;
+@@ -283,6 +281,71 @@ public class HTable implements HTableInterface, RegionLocator {
+   }
+ 
+   /**
++   * Creates an object to access a HBase table. Shares zookeeper connection and other resources with
++   * other HTable instances created with the same <code>connection</code> instance. Use this
++   * constructor when the HConnection instance is externally managed.
++   * @param tableName Name of the table.
++   * @param connection HConnection to be used.
++   * @throws IOException if a remote or network exception occurs
++   * @deprecated Use {@link #HTable(TableName, Connection) instead}
++   */
++  @Deprecated
++  public HTable(TableName tableName, HConnection connection) throws IOException {
++    this.tableName = tableName;
++    this.cleanupPoolOnClose = true;
++    this.cleanupConnectionOnClose = false;
++    this.connection = (ClusterConnection) connection;
++    this.configuration = connection.getConfiguration();
++    this.pool = getDefaultExecutor(this.configuration);
++    this.finishSetup();
++  }
++
++  /**
++   * Creates an object to access a HBase table.
++   * Shares zookeeper connection and other resources with other HTable instances
++   * created with the same <code>connection</code> instance.
++   * Use this constructor when the ExecutorService and HConnection instance are
++   * externally managed.
++   * @param tableName Name of the table.
++   * @param connection HConnection to be used.
++   * @param pool ExecutorService to be used.
++   * @throws IOException if a remote or network exception occurs
++   * @deprecated Use {@link #HTable(byte[], Connection, ExecutorService) instead}
++   */
++  @Deprecated
++  public HTable(final byte[] tableName, final HConnection connection,
++                final ExecutorService pool) throws IOException {
++    this(TableName.valueOf(tableName), connection, pool);
++  }
++
++  /**
++   * Creates an object to access a HBase table.
++   * Shares zookeeper connection and other resources with other HTable instances
++   * created with the same <code>connection</code> instance.
++   * Use this constructor when the ExecutorService and HConnection instance are
++   * externally managed.
++   * @param tableName Name of the table.
++   * @param connection HConnection to be used.
++   * @param pool ExecutorService to be used.
++   * @throws IOException if a remote or network exception occurs
++   * @deprecated Use {@link #HTable(TableName, Connection, ExecutorService) instead}
++   */
++  @Deprecated
++  public HTable(TableName tableName, final HConnection connection,
++                final ExecutorService pool) throws IOException {
++    if (connection == null || connection.isClosed()) {
++      throw new IllegalArgumentException("Connection is null or closed.");
++    }
++    this.tableName = tableName;
++    this.cleanupPoolOnClose = this.cleanupConnectionOnClose = false;
++    this.connection = (ClusterConnection) connection;
++    this.configuration = connection.getConfiguration();
++    this.pool = pool;
++
++    this.finishSetup();
++  }
++
++  /**
+    * Creates an object to access a HBase table.
+    * Used by HBase internally.  DO NOT USE. See {@link ConnectionFactory} class comment for how to
+    * get a {@link Table} instance (use {@link Table} instead of {@link HTable}).
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlClient.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlClient.java
+index 4500573..2f113bd 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlClient.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/security/access/AccessControlClient.java
+@@ -20,6 +20,7 @@ package org.apache.hadoop.hbase.security.access;
+ import java.io.IOException;
+ import java.util.ArrayList;
+ import java.util.List;
++import java.util.Map;
+ import java.util.regex.Pattern;
+ 
+ import org.apache.hadoop.conf.Configuration;
+@@ -34,13 +35,25 @@ import org.apache.hadoop.hbase.classification.InterfaceStability;
+ import org.apache.hadoop.hbase.client.Admin;
+ import org.apache.hadoop.hbase.client.Connection;
+ import org.apache.hadoop.hbase.client.ConnectionFactory;
++import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Table;
++import org.apache.hadoop.hbase.client.coprocessor.Batch;
++import org.apache.hadoop.hbase.ipc.BlockingRpcCallback;
+ import org.apache.hadoop.hbase.ipc.CoprocessorRpcChannel;
++import org.apache.hadoop.hbase.ipc.ServerRpcController;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos;
++import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.AccessControlService;
+ import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.AccessControlService.BlockingInterface;
++import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.GrantRequest;
++import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.GrantResponse;
++import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.RevokeRequest;
++import org.apache.hadoop.hbase.protobuf.generated.AccessControlProtos.RevokeResponse;
++import org.apache.hadoop.hbase.util.ByteStringer;
+ import org.apache.hadoop.hbase.util.Bytes;
+ 
++import com.google.protobuf.ByteString;
++
+ /**
+  * Utility client for doing access control admin operations.
+  */
+@@ -228,4 +241,134 @@ public class AccessControlClient {
+     }
+     return permList;
+   }
++
++  /**
++   * Grants permission on the specified table for the specified user
++   * @param conf
++   * @param tableName
++   * @param userName
++   * @param family
++   * @param qual
++   * @param actions
++   * @return GrantResponse
++   * @throws Throwable
++   * @deprecated Use {@link #grant(Configuration, TableName, String, byte[], byte[], Permission.Action...)}  instead.
++   */
++  @Deprecated
++  public static GrantResponse grant(Configuration conf, final TableName tableName,
++                                    final String userName, final byte[] family, final byte[] qual,
++                                    final AccessControlProtos.Permission.Action... actions) throws Throwable {
++    HTable ht = null;
++    try {
++      TableName aclTableName =
++          TableName.valueOf(NamespaceDescriptor.SYSTEM_NAMESPACE_NAME_STR, "acl");
++      ht = new HTable(conf, aclTableName.getName());
++      Batch.Call<AccessControlService, GrantResponse> callable =
++          new Batch.Call<AccessControlService, GrantResponse>() {
++            ServerRpcController controller = new ServerRpcController();
++            BlockingRpcCallback<GrantResponse> rpcCallback =
++                new BlockingRpcCallback<GrantResponse>();
++            @Override
++            public GrantResponse call(AccessControlService service) throws IOException {
++              GrantRequest.Builder builder = GrantRequest.newBuilder();
++              AccessControlProtos.Permission.Builder ret =
++                  AccessControlProtos.Permission.newBuilder();
++              AccessControlProtos.TablePermission.Builder permissionBuilder =
++                  AccessControlProtos.TablePermission
++                      .newBuilder();
++              for (AccessControlProtos.Permission.Action a : actions) {
++                permissionBuilder.addAction(a);
++              }
++              permissionBuilder.setTableName(ProtobufUtil.toProtoTableName(tableName));
++              if (family != null) {
++                permissionBuilder.setFamily(ByteStringer.wrap(family));
++              }
++              if (qual != null) {
++                permissionBuilder.setQualifier(ByteStringer.wrap(qual));
++              }
++              ret.setType(AccessControlProtos.Permission.Type.Table).setTablePermission(
++                  permissionBuilder);
++              builder.setUserPermission(AccessControlProtos.UserPermission.newBuilder()
++                  .setUser(ByteString.copyFromUtf8(userName)).setPermission(ret));
++              service.grant(controller, builder.build(), rpcCallback);
++              return rpcCallback.get();
++            }
++          };
++      Map<byte[], GrantResponse> result = ht.coprocessorService(AccessControlService.class,
++          HConstants.EMPTY_BYTE_ARRAY, HConstants.EMPTY_BYTE_ARRAY, callable);
++      return result.values().iterator().next(); // There will be exactly one
++      // region for labels
++      // table and so one entry in
++      // result Map.
++    } finally {
++      if (ht != null) {
++        ht.close();
++      }
++    }
++  }
++
++  /**
++   * Revokes the permission on the table
++   * @param conf
++   * @param username
++   * @param tableName
++   * @param family
++   * @param qualifier
++   * @param actions
++   * @return RevokeResponse
++   * @throws Throwable
++   * @deprecated Use {@link #revoke(Configuration, TableName, String, byte[], byte[], Permission.Action...)} instead
++   */
++  @Deprecated
++  public static RevokeResponse revoke(Configuration conf, final String username,
++                                      final TableName tableName, final byte[] family, final byte[] qualifier,
++                                      final AccessControlProtos.Permission.Action... actions) throws Throwable {
++    HTable ht = null;
++    try {
++      TableName aclTableName = TableName.valueOf(NamespaceDescriptor.SYSTEM_NAMESPACE_NAME_STR,
++          "acl");
++      ht = new HTable(conf, aclTableName.getName());
++      Batch.Call<AccessControlService, AccessControlProtos.RevokeResponse> callable =
++          new Batch.Call<AccessControlService, AccessControlProtos.RevokeResponse>() {
++            ServerRpcController controller = new ServerRpcController();
++            BlockingRpcCallback<AccessControlProtos.RevokeResponse> rpcCallback =
++                new BlockingRpcCallback<AccessControlProtos.RevokeResponse>();
++            @Override
++            public RevokeResponse call(AccessControlService service) throws IOException {
++              AccessControlProtos.Permission.Builder ret =
++                  AccessControlProtos.Permission.newBuilder();
++              AccessControlProtos.TablePermission.Builder permissionBuilder =
++                  AccessControlProtos.TablePermission.newBuilder();
++              for (AccessControlProtos.Permission.Action a : actions) {
++                permissionBuilder.addAction(a);
++              }
++              if (tableName != null) {
++                permissionBuilder.setTableName(ProtobufUtil.toProtoTableName(tableName));
++              }
++              if (family != null) {
++                permissionBuilder.setFamily(ByteStringer.wrap(family));
++              }
++              if (qualifier != null) {
++                permissionBuilder.setQualifier(ByteStringer.wrap(qualifier));
++              }
++              ret.setType(AccessControlProtos.Permission.Type.Table).setTablePermission(
++                  permissionBuilder);
++              RevokeRequest builder = AccessControlProtos.RevokeRequest
++                  .newBuilder()
++                  .setUserPermission(
++                      AccessControlProtos.UserPermission.newBuilder()
++                          .setUser(ByteString.copyFromUtf8(username)).setPermission(ret)).build();
++              service.revoke(controller, builder, rpcCallback);
++              return rpcCallback.get();
++            }
++          };
++      Map<byte[], RevokeResponse> result = ht.coprocessorService(AccessControlService.class,
++          HConstants.EMPTY_BYTE_ARRAY, HConstants.EMPTY_BYTE_ARRAY, callable);
++      return result.values().iterator().next();
++    } finally {
++      if (ht != null) {
++        ht.close();
++      }
++    }
++  }
+ }
+\ No newline at end of file
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
+index c577c54..1b6b72a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapred/TableRecordReaderImpl.java
+@@ -18,13 +18,16 @@
+  */
+ package org.apache.hadoop.hbase.mapred;
+ 
++import static org.apache.hadoop.hbase.mapreduce.TableRecordReaderImpl.LOG_PER_ROW_COUNT;
++
+ import java.io.IOException;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+ import org.apache.hadoop.hbase.classification.InterfaceStability;
+-import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.ResultScanner;
+ import org.apache.hadoop.hbase.client.Scan;
+@@ -36,8 +39,6 @@ import org.apache.hadoop.hbase.mapreduce.TableInputFormat;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.util.StringUtils;
+ 
+-import static org.apache.hadoop.hbase.mapreduce.TableRecordReaderImpl.LOG_PER_ROW_COUNT;
+-
+ /**
+  * Iterate over an HBase table data, return (Text, RowResult) pairs
+  */
+@@ -124,6 +125,19 @@ public class TableRecordReaderImpl {
+   }
+ 
+   /**
++   * @param htable the {@link org.apache.hadoop.hbase.HTableDescriptor} to scan.
++   * @deprecated Use {@link #setHTable(org.apache.hadoop.hbase.client.Table)} instead.
++   */
++  @Deprecated
++  public void setHTable(HTable htable) {
++    Configuration conf = htable.getConfiguration();
++    logScannerActivity = conf.getBoolean(
++        ScannerCallable.LOG_SCANNER_ACTIVITY, false);
++    logPerRowCount = conf.getInt(LOG_PER_ROW_COUNT, 100);
++    this.htable = htable;
++  }
++
++  /**
+    * @param inputColumns the columns to be placed in {@link Result}.
+    */
+   public void setInputColumns(final byte [][] inputColumns) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/CopyTable.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/CopyTable.java
+index 8d930d1..2c4a4a4 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/CopyTable.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/CopyTable.java
+@@ -73,9 +73,180 @@ public class CopyTable extends Configured implements Tool {
+ 
+   private final static String JOB_NAME_CONF_KEY = "mapreduce.job.name";
+ 
++
++  // The following variables are introduced to preserve the binary compatibility in 0.98.
++  // Please see HBASE-12836 for further details.
++  @Deprecated
++  static long startTime_ = 0;
++  @Deprecated
++  static long endTime_ = 0;
++  @Deprecated
++  static int versions_ = -1;
++  @Deprecated
++  static String tableName_ = null;
++  @Deprecated
++  static String startRow_ = null;
++  @Deprecated
++  static String stopRow_ = null;
++  @Deprecated
++  static String newTableName_ = null;
++  @Deprecated
++  static String peerAddress_ = null;
++  @Deprecated
++  static String families_ = null;
++  @Deprecated
++  static boolean allCells_ = false;
++
+   public CopyTable(Configuration conf) {
+     super(conf);
+   }
++
++  /**
++   * Sets up the actual job.
++   *
++   * @param conf The current configuration.
++   * @param args The command line parameters.
++   * @return The newly created job.
++   * @throws IOException When setting up the job fails.
++   * @deprecated Use {@link #createSubmittableJob(String[])} instead
++   */
++  @Deprecated
++  public static Job createSubmittableJob(Configuration conf, String[] args)
++      throws IOException {
++    if (!deprecatedDoCommandLine(args)) {
++      return null;
++    }
++    Job job = new Job(conf, NAME + "_" + tableName_);
++    job.setJarByClass(CopyTable.class);
++    Scan scan = new Scan();
++    scan.setCacheBlocks(false);
++    if (startTime_ != 0) {
++      scan.setTimeRange(startTime_,
++          endTime_ == 0 ? HConstants.LATEST_TIMESTAMP : endTime_);
++    }
++    if (allCells_) {
++      scan.setRaw(true);
++    }
++    if (versions_ >= 0) {
++      scan.setMaxVersions(versions_);
++    }
++    if (startRow_ != null) {
++      scan.setStartRow(Bytes.toBytes(startRow_));
++    }
++    if (stopRow_ != null) {
++      scan.setStopRow(Bytes.toBytes(stopRow_));
++    }
++    if(families_ != null) {
++      String[] fams = families_.split(",");
++      Map<String,String> cfRenameMap = new HashMap<String,String>();
++      for(String fam : fams) {
++        String sourceCf;
++        if(fam.contains(":")) {
++          // fam looks like "sourceCfName:destCfName"
++          String[] srcAndDest = fam.split(":", 2);
++          sourceCf = srcAndDest[0];
++          String destCf = srcAndDest[1];
++          cfRenameMap.put(sourceCf, destCf);
++        } else {
++         // fam is just "sourceCf"
++          sourceCf = fam;
++        }
++        scan.addFamily(Bytes.toBytes(sourceCf));
++      }
++      Import.configureCfRenaming(job.getConfiguration(), cfRenameMap);
++    }
++    TableMapReduceUtil.initTableMapperJob(tableName_, scan,
++        Import.Importer.class, null, null, job);
++    TableMapReduceUtil.initTableReducerJob(
++        newTableName_ == null ? tableName_ : newTableName_, null, job,
++        null, peerAddress_, null, null);
++    job.setNumReduceTasks(0);
++    return job;
++  }
++
++  private static boolean deprecatedDoCommandLine(final String[] args) {
++   // Process command-line args. TODO: Better cmd-line processing
++   // (but hopefully something not as painful as cli options).
++    if (args.length < 1) {
++      printUsage(null);
++      return false;
++    }
++    try {
++      for (int i = 0; i < args.length; i++) {
++        String cmd = args[i];
++        if (cmd.equals("-h") || cmd.startsWith("--h")) {
++          printUsage(null);
++          return false;
++        }
++        final String startRowArgKey = "--startrow=";
++        if (cmd.startsWith(startRowArgKey)) {
++          startRow_ = cmd.substring(startRowArgKey.length());
++          continue;
++        }
++        final String stopRowArgKey = "--stoprow=";
++        if (cmd.startsWith(stopRowArgKey)) {
++          stopRow_ = cmd.substring(stopRowArgKey.length());
++          continue;
++        }
++        final String startTimeArgKey = "--starttime=";
++        if (cmd.startsWith(startTimeArgKey)) {
++          startTime_ = Long.parseLong(cmd.substring(startTimeArgKey.length()));
++          continue;
++        }
++        final String endTimeArgKey = "--endtime=";
++        if (cmd.startsWith(endTimeArgKey)) {
++          endTime_ = Long.parseLong(cmd.substring(endTimeArgKey.length()));
++          continue;
++        }
++        final String versionsArgKey = "--versions=";
++        if (cmd.startsWith(versionsArgKey)) {
++          versions_ = Integer.parseInt(cmd.substring(versionsArgKey.length()));
++          continue;
++        }
++        final String newNameArgKey = "--new.name=";
++        if (cmd.startsWith(newNameArgKey)) {
++          newTableName_ = cmd.substring(newNameArgKey.length());
++          continue;
++        }
++        final String peerAdrArgKey = "--peer.adr=";
++        if (cmd.startsWith(peerAdrArgKey)) {
++          peerAddress_ = cmd.substring(peerAdrArgKey.length());
++          continue;
++        }
++        final String familiesArgKey = "--families=";
++        if (cmd.startsWith(familiesArgKey)) {
++          families_ = cmd.substring(familiesArgKey.length());
++          continue;
++        }
++        if (cmd.startsWith("--all.cells")) {
++          allCells_ = true;
++          continue;
++        }
++        if (i == args.length-1) {
++          tableName_ = cmd;
++        } else {
++          printUsage("Invalid argument '" + cmd + "'" );
++          return false;
++        }
++      }
++      if (newTableName_ == null && peerAddress_ == null) {
++        printUsage("At least a new table name or a " +
++            "peer address must be specified");
++        return false;
++      }
++      if ((endTime_ != 0) && (startTime_ > endTime_)) {
++        printUsage("Invalid time range filter: starttime=" + startTime_ + " > endtime="
++            + endTime_);
++        return false;
++      }
++    } catch (Exception e) {
++      e.printStackTrace();
++      printUsage("Can't start because " + e.getMessage());
++      return false;
++    }
++    return true;
++  }
++
+   /**
+    * Sets up the actual job.
+    *
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
+index 06fa712..aeb57b7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/TableRecordReaderImpl.java
+@@ -295,6 +295,32 @@ public class TableRecordReaderImpl {
+   }
+ 
+   /**
++   * @deprecated Use {@link #updateCounters(ScanMetrics, long, Method, TaskAttemptContext, long)}
++   * instead.
++   */
++  @Deprecated
++  protected static void updateCounters(ScanMetrics scanMetrics, long numScannerRestarts,
++                                       Method getCounter, TaskAttemptContext context) {
++    // we can get access to counters only if hbase uses new mapreduce APIs
++    if (getCounter == null) {
++      return;
++    }
++
++    try {
++      for (Map.Entry<String, Long> entry:scanMetrics.getMetricsMap().entrySet()) {
++        Counter ct = (Counter)getCounter.invoke(context,
++            HBASE_COUNTER_GROUP_NAME, entry.getKey());
++
++        ct.increment(entry.getValue());
++      }
++      ((Counter) getCounter.invoke(context, HBASE_COUNTER_GROUP_NAME,
++          "NUM_SCANNER_RESTARTS")).increment(numScannerRestarts);
++    } catch (Exception e) {
++      LOG.debug("can't update counter." + StringUtils.stringifyException(e));
++    }
++  }
++
++  /**
+    * The current progress of the record reader through its data.
+    *
+    * @return A number between 0.0 and 1.0, the fraction of the data read.
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestCopyTable.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestCopyTable.java
+index 5492938..5d63533 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestCopyTable.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mapreduce/TestCopyTable.java
+@@ -30,12 +30,13 @@ import java.io.PrintStream;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.CellUtil;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+-import org.apache.hadoop.hbase.testclassification.LargeTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Get;
++import org.apache.hadoop.hbase.client.HTable;
+ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.Table;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.LauncherSecurityManager;
+ import org.apache.hadoop.mapreduce.Job;
+@@ -262,4 +263,41 @@ public class TestCopyTable {
+     job.waitForCompletion(false);
+     return job.isSuccessful();
+   }
++
++  /**
++   * Simple end-to-end test
++   * @throws Exception
++   */
++  @Test
++  public void testDeprecatedCopyTable() throws Exception {
++    final byte[] TABLENAME1 = Bytes.toBytes("testCopyTable1");
++    final byte[] TABLENAME2 = Bytes.toBytes("testCopyTable2");
++    final byte[] FAMILY = Bytes.toBytes("family");
++    final byte[] COLUMN1 = Bytes.toBytes("c1");
++    HTable t1 = TEST_UTIL.createTable(TABLENAME1, FAMILY);
++    HTable t2 = TEST_UTIL.createTable(TABLENAME2, FAMILY);
++    // put rows into the first table
++    for (int i = 0; i < 10; i++) {
++      Put p = new Put(Bytes.toBytes("row" + i));
++      p.add(FAMILY, COLUMN1, COLUMN1);
++      t1.put(p);
++    }
++    CopyTable copy = new CopyTable(TEST_UTIL.getConfiguration());
++    assertEquals(
++        0,
++        copy.run(new String[] { "--new.name=" + Bytes.toString(TABLENAME2),
++            Bytes.toString(TABLENAME1) }));
++    // verify the data was copied into table 2
++    for (int i = 0; i < 10; i++) {
++      Get g = new Get(Bytes.toBytes("row" + i));
++      Result r = t2.get(g);
++      assertEquals(1, r.size());
++      assertTrue(CellUtil.matchingQualifier(r.rawCells()[0], COLUMN1));
++    }
++    t1.close();
++    t2.close();
++    TEST_UTIL.deleteTable(TABLENAME1);
++    TEST_UTIL.deleteTable(TABLENAME2);
++  }
++
+ }
+-- 
+1.7.0.4
+

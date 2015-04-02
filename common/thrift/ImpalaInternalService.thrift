@@ -19,6 +19,7 @@ namespace cpp impala
 namespace java com.cloudera.impala.thrift
 
 include "Status.thrift"
+include "ErrorCodes.thrift"
 include "Types.thrift"
 include "Exprs.thrift"
 include "CatalogObjects.thrift"
@@ -146,6 +147,9 @@ struct TClientRequest {
 
   // query options
   2: required TQueryOptions query_options
+
+  // Redacted SQL stmt
+  3: optional string redacted_stmt
 }
 
 // Context of this query, including the client request, session state and
@@ -423,6 +427,16 @@ struct TInsertExecStatus {
   2: optional map<string, TInsertPartitionStatus> per_partition_status
 }
 
+// Error message exchange format
+struct TErrorLogEntry {
+
+  // Number of error messages reported using the above identifier
+  1: i32 count
+
+  // Sample messages from the above error code
+  2: list<string> messages
+}
+
 struct TReportExecStatusParams {
   1: required ImpalaInternalServiceVersion protocol_version
 
@@ -453,8 +467,7 @@ struct TReportExecStatusParams {
   8: optional TInsertExecStatus insert_exec_status;
 
   // New errors that have not been reported to the coordinator
-  // optional in V1
-  9: optional list<string> error_log
+  9: optional map<ErrorCodes.TErrorCode, TErrorLogEntry> error_log;
 }
 
 struct TReportExecStatusResult {

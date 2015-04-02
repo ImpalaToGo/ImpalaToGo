@@ -101,6 +101,7 @@ import com.cloudera.impala.thrift.TDdlExecRequest;
 import com.cloudera.impala.thrift.TDdlType;
 import com.cloudera.impala.thrift.TDescribeTableOutputStyle;
 import com.cloudera.impala.thrift.TDescribeTableResult;
+import com.cloudera.impala.thrift.TErrorCode;
 import com.cloudera.impala.thrift.TExecRequest;
 import com.cloudera.impala.thrift.TExplainLevel;
 import com.cloudera.impala.thrift.TExplainResult;
@@ -118,12 +119,13 @@ import com.cloudera.impala.thrift.TResetMetadataRequest;
 import com.cloudera.impala.thrift.TResultRow;
 import com.cloudera.impala.thrift.TResultSet;
 import com.cloudera.impala.thrift.TResultSetMetadata;
+import com.cloudera.impala.thrift.TShowFilesParams;
 import com.cloudera.impala.thrift.TStatus;
-import com.cloudera.impala.thrift.TStatusCode;
 import com.cloudera.impala.thrift.TStmtType;
 import com.cloudera.impala.thrift.TTableName;
 import com.cloudera.impala.thrift.TUpdateCatalogCacheRequest;
 import com.cloudera.impala.thrift.TUpdateCatalogCacheResponse;
+import com.cloudera.impala.util.EventSequence;
 import com.cloudera.impala.util.PatternMatcher;
 import com.cloudera.impala.util.TResultRowBuilder;
 import com.cloudera.impala.util.TSessionStateUtil;
@@ -273,6 +275,10 @@ public class Frontend {
       ddl.setShow_create_table_params(analysis.getShowCreateTableStmt().toThrift());
       metadata.setColumns(Arrays.asList(
           new TColumn("result", Type.STRING.toThrift())));
+    } else if (analysis.isShowFilesStmt()) {
+      ddl.op_type = TCatalogOpType.SHOW_FILES;
+      ddl.setShow_files_params(analysis.getShowFilesStmt().toThrift());
+      metadata.setColumns(Collections.<TColumn>emptyList());
     } else if (analysis.isDescribeStmt()) {
       ddl.op_type = TCatalogOpType.DESCRIBE;
       ddl.setDescribe_table_params(analysis.getDescribeStmt().toThrift());
@@ -500,7 +506,7 @@ public class Frontend {
     }
 
     Path destPath = new Path(destPathString);
-    FileSystem fs = FileSystemUtil.getFileSystem(destPath);
+    FileSystem fs = destPath.getFileSystem(FileSystemUtil.getConfiguration());
 
     // Create a temporary directory within the final destination directory to stage the
     // file move.
@@ -509,9 +515,9 @@ public class Frontend {
     Path sourcePath = new Path(request.source_path);
     int filesLoaded = 0;
     if (fs.isDirectory(sourcePath)) {
-      filesLoaded = FileSystemUtil.moveAllVisibleFiles(sourcePath, tmpDestPath);
+      filesLoaded = FileSystemUtil.relocateAllVisibleFiles(sourcePath, tmpDestPath);
     } else {
-      FileSystemUtil.moveFile(sourcePath, tmpDestPath, true);
+      FileSystemUtil.relocateFile(sourcePath, tmpDestPath, true);
       filesLoaded = 1;
     }
 
@@ -521,7 +527,7 @@ public class Frontend {
     }
 
     // Move the files from the temporary location to the final destination.
-    FileSystemUtil.moveAllVisibleFiles(tmpDestPath, destPath);
+    FileSystemUtil.relocateAllVisibleFiles(tmpDestPath, destPath);
     // Cleanup the tmp directory.
     fs.delete(tmpDestPath, true);
     TLoadDataResp response = new TLoadDataResp();
@@ -722,7 +728,7 @@ public class Frontend {
     LOG.info(String.format("Requesting prioritized load of table(s): %s",
         Joiner.on(", ").join(missingTbls)));
     TStatus status = FeSupport.PrioritizeLoad(missingTbls);
-    if (status.getStatus_code() != TStatusCode.OK) {
+    if (status.getStatus_code() != TErrorCode.OK) {
       throw new InternalException("Error requesting prioritized load: " +
           Joiner.on("\n").join(status.getError_msgs()));
     }
@@ -809,8 +815,9 @@ public class Frontend {
       throws ImpalaException {
     // Analyze the statement
     AnalysisContext.AnalysisResult analysisResult = analyzeStmt(queryCtx);
+    EventSequence timeline = analysisResult.getAnalyzer().getTimeline();
+    timeline.markEvent("Analysis finished");
     Preconditions.checkNotNull(analysisResult.getStmt());
-
     TExecRequest result = new TExecRequest();
     result.setQuery_options(queryCtx.request.getQuery_options());
     result.setAccess_events(analysisResult.getAccessEvents());
@@ -820,7 +827,10 @@ public class Frontend {
       result.stmt_type = TStmtType.DDL;
       Log.info("Create Execution request : DDL statement.");
       createCatalogOpRequest(analysisResult, result);
-
+      String jsonLineageGraph = analysisResult.getJsonLineageGraph();
+      if (jsonLineageGraph != null && !jsonLineageGraph.isEmpty()) {
+        result.catalog_op_request.setLineage_graph(jsonLineageGraph);
+      }
       // All DDL operations except for CTAS are done with analysis at this point.
       if (!analysisResult.isCreateTableAsSelectStmt()) return result;
     } else if (analysisResult.isLoadDataStmt()) {
@@ -847,6 +857,7 @@ public class Frontend {
     LOG.debug("create plan");
     Planner planner = new Planner(analysisResult, queryCtx);
     ArrayList<PlanFragment> fragments = planner.createPlan();
+
     List<ScanNode> scanNodes = Lists.newArrayList();
     // map from fragment to its index in queryExecRequest.fragments; needed for
     // queryExecRequest.dest_fragment_idx
@@ -923,6 +934,11 @@ public class Frontend {
     queryExecRequest.setQuery_plan(explainString.toString());
     queryExecRequest.setDesc_tbl(analysisResult.getAnalyzer().getDescTbl().toThrift());
 
+    String jsonLineageGraph = analysisResult.getJsonLineageGraph();
+    if (jsonLineageGraph != null && !jsonLineageGraph.isEmpty()) {
+      queryExecRequest.setLineage_graph(jsonLineageGraph);
+    }
+
     if (analysisResult.isExplainStmt()) {
       // Return the EXPLAIN request
       createExplainRequest(explainString.toString(), result);
@@ -972,6 +988,9 @@ public class Frontend {
         queryExecRequest.setFinalize_params(finalizeParams);
       }
     }
+
+    timeline.markEvent("Planning finished");
+    result.setTimeline(analysisResult.getAnalyzer().getTimeline().toThrift());
     return result;
   }
 
@@ -1036,6 +1055,21 @@ public class Frontend {
       }
       default:
         throw new NotImplementedException(request.opcode + " has not been implemented.");
+    }
+  }
+
+  /**
+   * Returns all files info of a table or partition.
+   */
+  public TResultSet getTableFiles(TShowFilesParams request)
+      throws ImpalaException{
+    Table table = impaladCatalog_.getTable(request.getTable_name().getDb_name(),
+        request.getTable_name().getTable_name());
+    if (table instanceof HdfsTable) {
+      return ((HdfsTable) table).getFiles(request.getPartition_spec());
+    } else {
+      throw new InternalException("SHOW FILES only supports Hdfs table. " +
+          "Unsupported table class: " + table.getClass());
     }
   }
 }

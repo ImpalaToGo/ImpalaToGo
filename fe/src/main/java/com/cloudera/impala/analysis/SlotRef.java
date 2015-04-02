@@ -17,9 +17,6 @@ package com.cloudera.impala.analysis;
 import java.util.List;
 import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.thrift.TExprNode;
@@ -29,8 +26,6 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 public class SlotRef extends Expr {
-  private final static Logger LOG = LoggerFactory.getLogger(SlotRef.class);
-
   private final TableName tblName_;
   private final String col_;
   private final String label_;  // printed in toSql()
@@ -70,8 +65,6 @@ public class SlotRef extends Expr {
     this.desc_ = desc;
     this.type_ = desc.getType();
     String alias = desc.getParent().getAlias();
-    //this.label =  desc.getLabel();
-    // TODO: should this simply be the SlotDescriptor's label?
     this.label_ = (alias != null ? alias + "." : "") + desc.getLabel();
     this.numDistinctValues_ = desc.getStats().getNumDistinctValues();
   }
@@ -105,7 +98,6 @@ public class SlotRef extends Expr {
       // HMS string.
       throw new AnalysisException("Unsupported type in '" + toSql() + "'.");
     }
-    type_.analyze();
     numDistinctValues_ = desc_.getStats().getNumDistinctValues();
     if (type_.isBoolean()) selectivity_ = DEFAULT_SELECTIVITY;
     isAnalyzed_ = true;

@@ -27,13 +27,16 @@ class ParseUtil {
   // Sets *is_percent to indicate whether the given spec is in percent.
   // Accepted formats:
   // '<int>[bB]?'  -> bytes (default if no unit given)
-  // '<float>[mM]' -> megabytes
-  // '<float>[gG]' -> in gigabytes
-  // '<int>%'      -> in percent of MemInfo::physical_mem()
+  // '<float>[mM(bB)]' -> megabytes
+  // '<float>[gG(bB)]' -> in gigabytes
+  // '<int>%'      -> in percent of relative_reference
+  // 'relative_reference' -> value used to compute the percentage value,
+  //     typically MemInfo::physical_mem()
   // Requires MemInfo to be initialized for the '%' spec to work.
   // Returns 0 if mem_spec_str is empty or '-1'.
   // Returns -1 if parsing failed.
-  static int64_t ParseMemSpec(const std::string& mem_spec_str, bool* is_percent);
+  static int64_t ParseMemSpec(const std::string& mem_spec_str,
+      bool* is_percent, int64_t relative_reference);
 };
 
 }

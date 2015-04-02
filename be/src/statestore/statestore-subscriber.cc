@@ -78,8 +78,8 @@ class StatestoreSubscriberThriftIf : public StatestoreSubscriberIf {
     response.__set_skipped(response.skipped);
   }
 
-  virtual void KeepAlive(TKeepAliveResponse& response, const TKeepAliveRequest& request) {
-    subscriber_->KeepAlive(request.registration_id);
+  virtual void Heartbeat(THeartbeatResponse& response, const THeartbeatRequest& request) {
+    subscriber_->Heartbeat(request.registration_id);
   }
 
  private:
@@ -111,8 +111,8 @@ StatestoreSubscriber::StatestoreSubscriber(const std::string& subscriber_id,
   topic_update_duration_metric_ = metrics->RegisterMetric(
       new StatsMetric<double>("statestore-subscriber.topic-update-duration",
           TUnit::TIME_S));
-  keepalive_interval_metric_ = metrics->RegisterMetric(
-      new StatsMetric<double>("statestore-subscriber.keepalive-interval-time",
+  heartbeat_interval_metric_ = metrics->RegisterMetric(
+      new StatsMetric<double>("statestore-subscriber.heartbeat-interval-time",
           TUnit::TIME_S));
 
   registration_id_metric_ = metrics->AddProperty<string>(
@@ -178,7 +178,7 @@ Status StatestoreSubscriber::Register() {
     VLOG(1) << "No subscriber registration ID received from statestore";
   }
   topic_update_interval_timer_.Start();
-  keepalive_interval_timer_.Start();
+  heartbeat_interval_timer_.Start();
   return status;
 }
 
@@ -206,7 +206,7 @@ Status StatestoreSubscriber::Start() {
       is_registered_ = true;
       LOG(INFO) << "statestore registration successful";
     } else {
-      LOG(INFO) << "statestore registration unsuccessful: " << status.GetErrorMsg();
+      LOG(INFO) << "statestore registration unsuccessful: " << status.GetDetail();
     }
   }
 
@@ -240,7 +240,7 @@ void StatestoreSubscriber::RecoveryModeChecker() {
         Status status = Register();
         if (status.ok()) {
           // Make sure to update failure detector so that we don't immediately fail on the
-          // next loop while we're waiting for keep-alive messages to resume.
+          // next loop while we're waiting for heartbeat messages to resume.
           failure_detector_->UpdateHeartbeat(STATESTORE_ID, true);
           LOG(INFO) << "Reconnected to statestore. Exiting recovery mode";
 
@@ -249,7 +249,7 @@ void StatestoreSubscriber::RecoveryModeChecker() {
         } else {
           // Don't exit recovery mode, continue
           LOG(WARNING) << "Failed to re-register with statestore: "
-                       << status.GetErrorMsg();
+                       << status.GetDetail();
           SleepForMs(SLEEP_INTERVAL_MS);
         }
         last_recovery_duration_metric_->set_value(
@@ -262,7 +262,7 @@ void StatestoreSubscriber::RecoveryModeChecker() {
       // we would otherwise have to cache updates here.
       last_recovery_duration_metric_->set_value(
           recovery_timer.ElapsedTime() / (1000.0 * 1000.0 * 1000.0));
-      last_recovery_time_metric_->set_value(TimestampValue::local_time().DebugString());
+      last_recovery_time_metric_->set_value(TimestampValue::LocalTime().DebugString());
     }
 
     SleepForMs(SLEEP_INTERVAL_MS);
@@ -285,14 +285,14 @@ Status StatestoreSubscriber::CheckRegistrationId(const TUniqueId& registration_i
   return Status::OK;
 }
 
-void StatestoreSubscriber::KeepAlive(const TUniqueId& registration_id) {
+void StatestoreSubscriber::Heartbeat(const TUniqueId& registration_id) {
   const Status& status = CheckRegistrationId(registration_id);
   if (status.ok()) {
-    keepalive_interval_metric_->Update(
-        keepalive_interval_timer_.Reset() / (1000.0 * 1000.0 * 1000.0));
+    heartbeat_interval_metric_->Update(
+        heartbeat_interval_timer_.Reset() / (1000.0 * 1000.0 * 1000.0));
     failure_detector_->UpdateHeartbeat(STATESTORE_ID, true);
   } else {
-    VLOG_RPC << "KeepAlive: " << status.GetErrorMsg();
+    VLOG_RPC << "Heartbeat: " << status.GetDetail();
   }
 }
 

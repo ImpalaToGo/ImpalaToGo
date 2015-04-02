@@ -16,6 +16,7 @@
 # Tests Impala properly handles errors when reading and writing data.
 
 from tests.common.impala_test_suite import ImpalaTestSuite
+from tests.common.skip import *
 import pytest
 
 class TestDataErrors(ImpalaTestSuite):
@@ -28,6 +29,7 @@ class TestDataErrors(ImpalaTestSuite):
     return 'functional-query'
 
 
+@skip_if_s3_qualified_path
 class TestHdfsScanNodeErrors(TestDataErrors):
   @classmethod
   def add_test_dimensions(cls):
@@ -45,6 +47,7 @@ class TestHdfsScanNodeErrors(TestDataErrors):
     self.run_test_case('DataErrorsTest/hdfs-scan-node-errors', vector)
 
 
+@skip_if_s3_qualified_path
 class TestHdfsSeqScanNodeErrors(TestHdfsScanNodeErrors):
   @classmethod
   def add_test_dimensions(cls):
@@ -57,6 +60,7 @@ class TestHdfsSeqScanNodeErrors(TestHdfsScanNodeErrors):
     self.run_test_case('DataErrorsTest/hdfs-sequence-scan-errors', vector)
 
 
+@skip_if_s3_qualified_path
 class TestHdfsRcFileScanNodeErrors(TestHdfsScanNodeErrors):
   @classmethod
   def add_test_dimensions(cls):
@@ -74,7 +78,7 @@ class TestHBaseDataErrors(TestDataErrors):
   def add_test_dimensions(cls):
     super(TestHBaseDataErrors, cls).add_test_dimensions()
 
-    # Only run on delimited text with no compression.
+    # Only run on hbase.
     cls.TestMatrix.add_constraint(lambda v:\
         v.get_value('table_format').file_format == 'hbase' and\
         v.get_value('table_format').compression_codec == 'none')

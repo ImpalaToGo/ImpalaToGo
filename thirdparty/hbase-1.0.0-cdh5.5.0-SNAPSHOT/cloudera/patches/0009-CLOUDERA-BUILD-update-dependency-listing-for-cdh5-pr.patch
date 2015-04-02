@@ -1,0 +1,242 @@
+From a622b753ec6962302de71973b72ba9ba596e73f1 Mon Sep 17 00:00:00 2001
+From: Sean Busbey <busbey@apache.org>
+Date: Fri, 23 Jan 2015 09:20:04 -0600
+Subject: [PATCH 009/110] CLOUDERA-BUILD update dependency listing for cdh5 profile.
+
+* move some dep scopes back to compile from test
+* add cdh5 profile where missing
+* ensure compilation against mrv1
+
+Reason: build
+Ref: CDH-23876
+---
+ hbase-client/pom.xml         |   14 +++++---------
+ hbase-hadoop2-compat/pom.xml |   10 ----------
+ hbase-it/pom.xml             |    5 +++++
+ hbase-prefix-tree/pom.xml    |   17 ++++++++++++++++-
+ hbase-rest/pom.xml           |   27 +++++++++++++++++++++++++--
+ hbase-server/pom.xml         |   12 ++++++++----
+ pom.xml                      |    1 -
+ 7 files changed, 59 insertions(+), 27 deletions(-)
+
+diff --git a/hbase-client/pom.xml b/hbase-client/pom.xml
+index 0a500b5..85511f2 100644
+--- a/hbase-client/pom.xml
++++ b/hbase-client/pom.xml
+@@ -117,6 +117,11 @@
+       <artifactId>commons-logging</artifactId>
+     </dependency>
+     <dependency>
++       <groupId>com.google.code.findbugs</groupId>
++       <artifactId>jsr305</artifactId>
++       <optional>true</optional>
++    </dependency>
++    <dependency>
+       <groupId>com.google.guava</groupId>
+       <artifactId>guava</artifactId>
+     </dependency>
+@@ -201,11 +206,6 @@
+       </activation>
+       <dependencies>
+         <dependency>
+-           <groupId>com.google.code.findbugs</groupId>
+-           <artifactId>jsr305</artifactId>
+-           <optional>true</optional>
+-        </dependency>
+-        <dependency>
+           <groupId>org.apache.hadoop</groupId>
+           <artifactId>hadoop-auth</artifactId>
+         </dependency>
+@@ -341,10 +341,6 @@
+         </dependency>
+         <dependency>
+           <groupId>org.apache.hadoop</groupId>
+-          <artifactId>hadoop-auth</artifactId>
+-        </dependency>
+-        <dependency>
+-          <groupId>org.apache.hadoop</groupId>
+           <artifactId>hadoop-core</artifactId>
+           <scope>provided</scope>
+           <exclusions>
+diff --git a/hbase-hadoop2-compat/pom.xml b/hbase-hadoop2-compat/pom.xml
+index 3588c76..dc332ff 100644
+--- a/hbase-hadoop2-compat/pom.xml
++++ b/hbase-hadoop2-compat/pom.xml
+@@ -147,16 +147,6 @@ limitations under the License.
+       <artifactId>commons-math</artifactId>
+     </dependency>
+     <dependency>
+-      <groupId>org.apache.hadoop</groupId>
+-      <artifactId>hadoop-mapreduce-client-core</artifactId>
+-      <version>${hadoop-two.version}</version>
+-    </dependency>
+-    <dependency>
+-      <groupId>org.apache.hadoop</groupId>
+-      <artifactId>hadoop-common</artifactId>
+-      <version>${hadoop-two.version}</version>
+-    </dependency>
+-    <dependency>
+       <groupId>com.yammer.metrics</groupId>
+       <artifactId>metrics-core</artifactId>
+     </dependency>
+diff --git a/hbase-it/pom.xml b/hbase-it/pom.xml
+index 1fab24c..90fde7d 100644
+--- a/hbase-it/pom.xml
++++ b/hbase-it/pom.xml
+@@ -344,6 +344,11 @@
+           <groupId>org.apache.hadoop</groupId>
+           <artifactId>hadoop-common</artifactId>
+         </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-test</artifactId>
++          <scope>test</scope>
++        </dependency>
+       </dependencies>
+       <build>
+         <plugins>
+diff --git a/hbase-prefix-tree/pom.xml b/hbase-prefix-tree/pom.xml
+index cb30180..ed611ec 100644
+--- a/hbase-prefix-tree/pom.xml
++++ b/hbase-prefix-tree/pom.xml
+@@ -114,6 +114,21 @@
+   </dependencies>
+ 
+   <profiles>
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++      </dependencies>
++    </profile>
+     <!-- Profiles for building against different hadoop versions -->
+     <profile>
+       <id>hadoop-1.1</id>
+@@ -154,7 +169,7 @@
+       <activation>
+         <property>
+             <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-            <!--h2--><name>!hadoop.profile</name>
++            <!--h2--><name>2.0</name>
+         </property>
+       </activation>
+       <dependencies>
+diff --git a/hbase-rest/pom.xml b/hbase-rest/pom.xml
+index 4a54837..a5bb939 100644
+--- a/hbase-rest/pom.xml
++++ b/hbase-rest/pom.xml
+@@ -281,7 +281,6 @@
+     <dependency>
+       <groupId>org.codehaus.jackson</groupId>
+       <artifactId>jackson-mapper-asl</artifactId>
+-      <scope>test</scope>
+     </dependency>
+   </dependencies>
+   <profiles>
+@@ -347,6 +346,30 @@
+       </build>
+     </profile>
+     <!-- Hadoop-specific dependencies -->
++    <!-- profile for building against CDH5. This is the default profile. -->
++    <profile>
++      <id>cdh5</id>
++      <activation>
++        <property>
++            <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
++            <!--h2--><name>!hadoop.profile</name>
++        </property>
++      </activation>
++      <dependencies>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-core</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-common</artifactId>
++        </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-auth</artifactId>
++        </dependency>
++      </dependencies>
++    </profile>
+     <!-- profile for building against Hadoop 2.0.x
+          This is the default.
+          -->
+@@ -355,7 +378,7 @@
+       <activation>
+         <property>
+           <!--Below formatting for dev-support/generate-hadoopX-poms.sh-->
+-          <!--h2--><name>!hadoop.profile</name>
++          <!--h2--><name>2.0</name>
+         </property>
+       </activation>
+       <dependencies>
+diff --git a/hbase-server/pom.xml b/hbase-server/pom.xml
+index 75314f0..9e1b65c 100644
+--- a/hbase-server/pom.xml
++++ b/hbase-server/pom.xml
+@@ -458,7 +458,6 @@
+     <dependency>
+       <groupId>org.hamcrest</groupId>
+       <artifactId>hamcrest-core</artifactId>
+-      <scope>test</scope>
+     </dependency>
+   </dependencies>
+   <profiles>
+@@ -662,15 +661,15 @@
+       <dependencies>
+         <dependency>
+           <groupId>org.apache.hadoop</groupId>
+-          <artifactId>hadoop-common</artifactId>
++          <artifactId>hadoop-core</artifactId>
+         </dependency>
+         <dependency>
+           <groupId>org.apache.hadoop</groupId>
+-          <artifactId>hadoop-auth</artifactId>
++          <artifactId>hadoop-common</artifactId>
+         </dependency>
+         <dependency>
+           <groupId>org.apache.hadoop</groupId>
+-          <artifactId>hadoop-core</artifactId>
++          <artifactId>hadoop-auth</artifactId>
+         </dependency>
+         <dependency>
+           <groupId>org.apache.hadoop</groupId>
+@@ -690,6 +689,11 @@
+           <artifactId>hadoop-minicluster</artifactId>
+           <scope>test</scope>
+         </dependency>
++        <dependency>
++          <groupId>org.apache.hadoop</groupId>
++          <artifactId>hadoop-test</artifactId>
++          <scope>test</scope>
++        </dependency>
+       </dependencies>
+       <build>
+         <plugins>
+diff --git a/pom.xml b/pom.xml
+index 6774b51..4c4f102 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1616,7 +1616,6 @@
+         <groupId>org.hamcrest</groupId>
+         <artifactId>hamcrest-core</artifactId>
+         <version>${hamcrest.version}</version>
+-        <scope>test</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.mockito</groupId>
+-- 
+1.7.0.4
+

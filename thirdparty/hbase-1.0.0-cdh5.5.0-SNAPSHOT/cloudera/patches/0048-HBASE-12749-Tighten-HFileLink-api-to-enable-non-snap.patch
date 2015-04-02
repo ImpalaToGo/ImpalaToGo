@@ -1,0 +1,696 @@
+From 0b7b740e457c7ae7803dec8b5013fc844eeffeff Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Mon, 22 Dec 2014 19:24:25 -0800
+Subject: [PATCH 048/110] HBASE-12749 Tighten HFileLink api to enable non-snapshot uses
+
+---
+ .../java/org/apache/hadoop/hbase/io/FileLink.java  |   21 +++-
+ .../java/org/apache/hadoop/hbase/io/HFileLink.java |   53 +++++++----
+ .../java/org/apache/hadoop/hbase/io/Reference.java |   23 ++++-
+ .../java/org/apache/hadoop/hbase/mob/MobUtils.java |    2 +-
+ .../hadoop/hbase/regionserver/StoreFile.java       |   16 ++--
+ .../hadoop/hbase/regionserver/StoreFileInfo.java   |  105 ++++++++++++--------
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   10 +-
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |    2 +-
+ .../apache/hadoop/hbase/snapshot/SnapshotInfo.java |    6 +-
+ .../hbase/snapshot/SnapshotReferenceUtil.java      |    6 +-
+ .../apache/hadoop/hbase/util/HFileV1Detector.java  |    4 +-
+ .../hadoop/hbase/util/ServerRegionReplicaUtil.java |    5 +-
+ .../hadoop/hbase/migration/TestUpgradeTo96.java    |    3 +-
+ .../hbase/snapshot/SnapshotTestingUtils.java       |    2 +-
+ 14 files changed, 164 insertions(+), 94 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+index 4c1f8c5..7d96920 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/FileLink.java
+@@ -18,11 +18,13 @@
+ 
+ package org.apache.hadoop.hbase.io;
+ 
++import java.util.ArrayList;
+ import java.util.Collection;
+ 
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.io.FileNotFoundException;
++import java.util.List;
+ 
+ import org.apache.commons.logging.Log;
+ import org.apache.commons.logging.LogFactory;
+@@ -137,12 +139,12 @@ public class FileLink {
+     }
+ 
+     @Override
+-    public int read(byte b[]) throws IOException {
++    public int read(byte[] b) throws IOException {
+        return read(b, 0, b.length);
+     }
+ 
+     @Override
+-    public int read(byte b[], int off, int len) throws IOException {
++    public int read(byte[] b, int off, int len) throws IOException {
+       int n;
+       try {
+         n = in.read(b, off, len);
+@@ -422,9 +424,18 @@ public class FileLink {
+    */
+   protected void setLocations(Path originPath, Path... alternativePaths) {
+     assert this.locations == null : "Link locations already set";
+-    this.locations = new Path[1 + alternativePaths.length];
+-    this.locations[0] = originPath;
+-    System.arraycopy(alternativePaths, 0, this.locations, 1, alternativePaths.length);
++
++    List<Path> paths = new ArrayList<Path>(alternativePaths.length +1);
++    if (originPath != null) {
++      paths.add(originPath);
++    }
++
++    for (int i = 0; i < alternativePaths.length; i++) {
++      if (alternativePaths[i] != null) {
++        paths.add(alternativePaths[i]);
++      }
++    }
++    this.locations = paths.toArray(new Path[0]);
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+index 2ef59d1..ff33951 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+@@ -92,25 +92,41 @@ public class HFileLink extends FileLink {
+   private final Path tempPath;
+ 
+   /**
++   * Dead simple hfile link constructor
++   */
++  public HFileLink(final Path originPath, final Path tempPath,
++                   final Path archivePath) {
++    this.tempPath  = tempPath;
++    this.originPath = originPath;
++    this.archivePath = archivePath;
++
++    setLocations(originPath, tempPath, archivePath);
++  }
++
++  /**
+    * @param conf {@link Configuration} from which to extract specific archive locations
+-   * @param path The path of the HFile Link.
++   * @param hFileLinkPattern The path ending with a HFileLink pattern. (table=region-hfile)
+    * @throws IOException on unexpected error.
+    */
+-  public HFileLink(Configuration conf, Path path) throws IOException {
+-    this(FSUtils.getRootDir(conf), HFileArchiveUtil.getArchivePath(conf), path);
++  public static final HFileLink buildFromHFileLinkPattern(Configuration conf, Path hFileLinkPattern)
++          throws IOException {
++    return buildFromHFileLinkPattern(FSUtils.getRootDir(conf),
++            HFileArchiveUtil.getArchivePath(conf), hFileLinkPattern);
+   }
+ 
+   /**
+    * @param rootDir Path to the root directory where hbase files are stored
+    * @param archiveDir Path to the hbase archive directory
+-   * @param path The path of the HFile Link.
++   * @param hFileLinkPattern The path of the HFile Link.
+    */
+-  public HFileLink(final Path rootDir, final Path archiveDir, final Path path) {
+-    Path hfilePath = getRelativeTablePath(path);
+-    this.tempPath = new Path(new Path(rootDir, HConstants.HBASE_TEMP_DIRECTORY), hfilePath);
+-    this.originPath = new Path(rootDir, hfilePath);
+-    this.archivePath = new Path(archiveDir, hfilePath);
+-    setLocations(originPath, tempPath, archivePath);
++  public final static HFileLink buildFromHFileLinkPattern(final Path rootDir,
++                                                          final Path archiveDir,
++                                                          final Path hFileLinkPattern) {
++    Path hfilePath = getHFileLinkPatternRelativePath(hFileLinkPattern);
++    Path tempPath = new Path(new Path(rootDir, HConstants.HBASE_TEMP_DIRECTORY), hfilePath);
++    Path originPath = new Path(rootDir, hfilePath);
++    Path archivePath = new Path(archiveDir, hfilePath);
++    return new HFileLink(originPath, tempPath, archivePath);
+   }
+ 
+   /**
+@@ -122,7 +138,7 @@ public class HFileLink extends FileLink {
+    * @return the relative Path to open the specified table/region/family/hfile link
+    */
+   public static Path createPath(final TableName table, final String region,
+-      final String family, final String hfile) {
++                                final String family, final String hfile) {
+     if (HFileLink.isHFileLink(hfile)) {
+       return new Path(family, hfile);
+     }
+@@ -139,9 +155,10 @@ public class HFileLink extends FileLink {
+    * @return Link to the file with the specified table/region/family/hfile location
+    * @throws IOException on unexpected error.
+    */
+-  public static HFileLink create(final Configuration conf, final TableName table,
+-      final String region, final String family, final String hfile) throws IOException {
+-    return new HFileLink(conf, createPath(table, region, family, hfile));
++  public static HFileLink build(final Configuration conf, final TableName table,
++                                 final String region, final String family, final String hfile)
++          throws IOException {
++    return HFileLink.buildFromHFileLinkPattern(conf, createPath(table, region, family, hfile));
+   }
+ 
+   /**
+@@ -186,11 +203,11 @@ public class HFileLink extends FileLink {
+    * @return Relative table path
+    * @throws IOException on unexpected error.
+    */
+-  private static Path getRelativeTablePath(final Path path) {
++  private static Path getHFileLinkPatternRelativePath(final Path path) {
+     // table=region-hfile
+     Matcher m = REF_OR_HFILE_LINK_PATTERN.matcher(path.getName());
+     if (!m.matches()) {
+-      throw new IllegalArgumentException(path.getName() + " is not a valid HFileLink name!");
++      throw new IllegalArgumentException(path.getName() + " is not a valid HFileLink pattern!");
+     }
+ 
+     // Convert the HFileLink name into a real table/region/cf/hfile path.
+@@ -255,7 +272,7 @@ public class HFileLink extends FileLink {
+   public static String createHFileLinkName(final HRegionInfo hfileRegionInfo,
+       final String hfileName) {
+     return createHFileLinkName(hfileRegionInfo.getTable(),
+-                      hfileRegionInfo.getEncodedName(), hfileName);
++            hfileRegionInfo.getEncodedName(), hfileName);
+   }
+ 
+   /**
+@@ -397,7 +414,7 @@ public class HFileLink extends FileLink {
+     Path tablePath = regionPath.getParent();
+ 
+     String linkName = createHFileLinkName(FSUtils.getTableName(tablePath),
+-        regionPath.getName(), hfileName);
++            regionPath.getName(), hfileName);
+     Path linkTableDir = FSUtils.getTableDir(rootDir, linkTableName);
+     Path regionDir = HRegion.getRegionDir(linkTableDir, linkRegionName);
+     return new Path(new Path(regionDir, familyPath.getName()), linkName);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/Reference.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/Reference.java
+index 59943fb..a38e3c1 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/Reference.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/Reference.java
+@@ -23,6 +23,7 @@ import java.io.DataInput;
+ import java.io.DataInputStream;
+ import java.io.IOException;
+ import java.io.InputStream;
++import java.util.Arrays;
+ 
+ import org.apache.hadoop.hbase.util.ByteStringer;
+ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+@@ -96,9 +97,11 @@ public class Reference {
+ 
+   /**
+    * Used by serializations.
++   * @deprecated need by pb serialization
+    */
+   @Deprecated
+-  // Make this private when it comes time to let go of this constructor.  Needed by pb serialization.
++  // Make this private when it comes time to let go of this constructor.
++  // Needed by pb serialization.
+   public Reference() {
+     this(null, Range.bottom);
+   }
+@@ -213,4 +216,22 @@ public class Reference {
+   byte [] toByteArray() throws IOException {
+     return ProtobufUtil.prependPBMagic(convert().toByteArray());
+   }
++
++  @Override
++  public int hashCode() {
++    return Arrays.hashCode(splitkey) + region.hashCode();
++  }
++
++  public boolean equals(Object o) {
++    if (this == o) return true;
++    if (o == null) return false;
++    if (!(o instanceof Reference)) return false;
++
++    Reference r = (Reference) o;
++    if (splitkey != null && r.splitkey == null) return false;
++    if (splitkey == null && r.splitkey != null) return false;
++    if (splitkey != null && !Arrays.equals(splitkey, r.splitkey)) return false;
++
++    return region.equals(r.region);
++  }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+index 067d4c5..07775bc 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+@@ -230,7 +230,7 @@ public class MobUtils {
+         if (!HFileLink.isHFileLink(file.getPath())) {
+           mobFileName = MobFileName.create(fileName);
+         } else {
+-          HFileLink hfileLink = new HFileLink(conf, file.getPath());
++          HFileLink hfileLink = HFileLink.buildFromHFileLinkPattern(conf, file.getPath());
+           mobFileName = MobFileName.create(hfileLink.getOriginPath().getName());
+         }
+         Date fileDate = parseDate(mobFileName.getDate());
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
+index 03bd794..2182e86 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFile.java
+@@ -162,9 +162,6 @@ public class StoreFile {
+    */
+   private final BloomType cfBloomType;
+ 
+-  // the last modification time stamp
+-  private long modificationTimeStamp = 0L;
+-
+   /**
+    * Constructor, loads a reader and it's indices, etc. May allocate a
+    * substantial amount of ram depending on the underlying files (10-20MB?).
+@@ -214,9 +211,6 @@ public class StoreFile {
+           "cfBloomType=" + cfBloomType + " (disabled in config)");
+       this.cfBloomType = BloomType.NONE;
+     }
+-
+-    // cache the modification time stamp of this store file
+-    this.modificationTimeStamp = fileInfo.getModificationTime();
+   }
+ 
+   /**
+@@ -228,7 +222,6 @@ public class StoreFile {
+     this.fileInfo = other.fileInfo;
+     this.cacheConf = other.cacheConf;
+     this.cfBloomType = other.cfBloomType;
+-    this.modificationTimeStamp = other.modificationTimeStamp;
+   }
+ 
+   /**
+@@ -285,10 +278,15 @@ public class StoreFile {
+     return this.sequenceid;
+   }
+ 
+-  public long getModificationTimeStamp() {
+-    return modificationTimeStamp;
++  public long getModificationTimeStamp() throws IOException {
++    return (fileInfo == null) ? 0 : fileInfo.getModificationTime();
+   }
+ 
++  /**
++   * Only used by the Striped Compaction Policy
++   * @param key
++   * @return value associated with the metadata key
++   */
+   public byte[] getMetadataValue(byte[] key) {
+     return metadataMap.get(key);
+   }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
+index 59da86a..5a66433 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/StoreFileInfo.java
+@@ -43,7 +43,7 @@ import org.apache.hadoop.hbase.util.FSUtils;
+  * Describe a StoreFile (hfile, reference, link)
+  */
+ @InterfaceAudience.Private
+-public class StoreFileInfo implements Comparable<StoreFileInfo> {
++public class StoreFileInfo {
+   public static final Log LOG = LogFactory.getLog(StoreFileInfo.class);
+ 
+   /**
+@@ -70,6 +70,9 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+   // Configuration
+   private Configuration conf;
+ 
++  // FileSystem handle
++  private final FileSystem fs;
++
+   // HDFS blocks distribution information
+   private HDFSBlocksDistribution hdfsBlocksDistribution = null;
+ 
+@@ -79,8 +82,7 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+   // If this storefile is a link to another, this is the link instance.
+   private final HFileLink link;
+ 
+-  // FileSystem information for the file.
+-  private final FileStatus fileStatus;
++  private final Path initialPath;
+ 
+   private RegionCoprocessorHost coprocessorHost;
+ 
+@@ -88,41 +90,35 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+    * Create a Store File Info
+    * @param conf the {@link Configuration} to use
+    * @param fs The current file system to use.
+-   * @param path The {@link Path} of the file
++   * @param initialPath The {@link Path} of the file
+    */
+-  public StoreFileInfo(final Configuration conf, final FileSystem fs, final Path path)
++  public StoreFileInfo(final Configuration conf, final FileSystem fs, final Path initialPath)
+       throws IOException {
+-    this(conf, fs, fs.getFileStatus(path));
+-  }
++    assert fs != null;
++    assert initialPath != null;
++    assert conf != null;
+ 
+-  /**
+-   * Create a Store File Info
+-   * @param conf the {@link Configuration} to use
+-   * @param fs The current file system to use.
+-   * @param fileStatus The {@link FileStatus} of the file
+-   */
+-  public StoreFileInfo(final Configuration conf, final FileSystem fs, final FileStatus fileStatus)
+-      throws IOException {
++    this.fs = fs;
+     this.conf = conf;
+-    this.fileStatus = fileStatus;
+-    Path p = fileStatus.getPath();
++    this.initialPath = initialPath;
++    Path p = initialPath;
+     if (HFileLink.isHFileLink(p)) {
+       // HFileLink
+       this.reference = null;
+-      this.link = new HFileLink(conf, p);
++      this.link = HFileLink.buildFromHFileLinkPattern(conf, p);
+       if (LOG.isTraceEnabled()) LOG.trace(p + " is a link");
+     } else if (isReference(p)) {
+       this.reference = Reference.read(fs, p);
+       Path referencePath = getReferredToFile(p);
+       if (HFileLink.isHFileLink(referencePath)) {
+         // HFileLink Reference
+-        this.link = new HFileLink(conf, referencePath);
++        this.link = HFileLink.buildFromHFileLinkPattern(conf, referencePath);
+       } else {
+         // Reference
+         this.link = null;
+       }
+       if (LOG.isTraceEnabled()) LOG.trace(p + " is a " + reference.getFileRegion() +
+-        " reference to " + referencePath);
++              " reference to " + referencePath);
+     } else if (isHFile(p)) {
+       // HFile
+       this.reference = null;
+@@ -133,6 +129,17 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+   }
+ 
+   /**
++   * Create a Store File Info
++   * @param conf the {@link Configuration} to use
++   * @param fs The current file system to use.
++   * @param fileStatus The {@link FileStatus} of the file
++   */
++  public StoreFileInfo(final Configuration conf, final FileSystem fs, final FileStatus fileStatus)
++      throws IOException {
++    this(conf, fs, fileStatus.getPath());
++  }
++
++  /**
+    * Create a Store File Info from an HFileLink
+    * @param conf the {@link Configuration} to use
+    * @param fs The current file system to use.
+@@ -141,8 +148,10 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+   public StoreFileInfo(final Configuration conf, final FileSystem fs, final FileStatus fileStatus,
+       final HFileLink link)
+       throws IOException {
++    this.fs = fs;
+     this.conf = conf;
+-    this.fileStatus = fileStatus;
++    // initialPath can be null only if we get a link.
++    this.initialPath = (fileStatus == null) ? null : fileStatus.getPath();
+       // HFileLink
+     this.reference = null;
+     this.link = link;
+@@ -206,7 +215,7 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+       status = fs.getFileStatus(referencePath);
+     } else {
+       in = new FSDataInputStreamWrapper(fs, this.getPath());
+-      status = fileStatus;
++      status = fs.getFileStatus(initialPath);
+     }
+     long length = status.getLen();
+     hdfsBlocksDistribution = computeHDFSBlocksDistribution(fs);
+@@ -221,7 +230,7 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+         reader = new HalfStoreFileReader(fs, this.getPath(), in, length, cacheConf, reference,
+           conf);
+       } else {
+-        reader = new StoreFile.Reader(fs, this.getPath(), in, length, cacheConf, conf);
++        reader = new StoreFile.Reader(fs, status.getPath(), in, length, cacheConf, conf);
+       }
+     }
+     if (this.coprocessorHost != null) {
+@@ -237,7 +246,7 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+   public HDFSBlocksDistribution computeHDFSBlocksDistribution(final FileSystem fs)
+       throws IOException {
+ 
+-    // guard agains the case where we get the FileStatus from link, but by the time we
++    // guard against the case where we get the FileStatus from link, but by the time we
+     // call compute the file is moved again
+     if (this.link != null) {
+       FileNotFoundException exToThrow = null;
+@@ -304,7 +313,7 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+         }
+         throw exToThrow;
+       } else {
+-        status = this.fileStatus;
++        status = fs.getFileStatus(initialPath);
+       }
+     }
+     return status;
+@@ -312,17 +321,17 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+ 
+   /** @return The {@link Path} of the file */
+   public Path getPath() {
+-    return this.fileStatus.getPath();
++    return initialPath;
+   }
+ 
+   /** @return The {@link FileStatus} of the file */
+-  public FileStatus getFileStatus() {
+-    return this.fileStatus;
++  public FileStatus getFileStatus() throws IOException {
++    return getReferencedFileStatus(fs);
+   }
+ 
+   /** @return Get the modification time of the file. */
+-  public long getModificationTime() {
+-    return this.fileStatus.getModificationTime();
++  public long getModificationTime() throws IOException {
++    return getFileStatus().getModificationTime();
+   }
+ 
+   @Override
+@@ -458,24 +467,36 @@ public class StoreFileInfo implements Comparable<StoreFileInfo> {
+ 
+   @Override
+   public boolean equals(Object that) {
+-    if (that == null) {
+-      return false;
+-    }
++    if (this == that) return true;
++    if (that == null) return false;
+ 
+-    if (that instanceof StoreFileInfo) {
+-      return this.compareTo((StoreFileInfo)that) == 0;
+-    }
++    if (!(that instanceof StoreFileInfo)) return false;
++
++    StoreFileInfo o = (StoreFileInfo)that;
++    if (initialPath != null && o.initialPath == null) return false;
++    if (initialPath == null && o.initialPath != null) return false;
++    if (initialPath != o.initialPath && initialPath != null
++            && !initialPath.equals(o.initialPath)) return false;
++
++    if (reference != null && o.reference == null) return false;
++    if (reference == null && o.reference != null) return false;
++    if (reference != o.reference && reference != null
++            && !reference.equals(o.reference)) return false;
+ 
+-    return false;
++    if (link != null && o.link == null) return false;
++    if (link == null && o.link != null) return false;
++    if (link != o.link && link != null && !link.equals(o.link)) return false;
++
++    return true;
+   };
+ 
+-  @Override
+-  public int compareTo(StoreFileInfo o) {
+-    return this.fileStatus.compareTo(o.fileStatus);
+-  }
+ 
+   @Override
+   public int hashCode() {
+-    return this.fileStatus.hashCode();
++    int hash = 17;
++    hash = hash * 31 + ((reference == null) ? 0 : reference.hashCode());
++    hash = hash * 31 + ((initialPath ==  null) ? 0 : initialPath.hashCode());
++    hash = hash * 31 + ((link == null) ? 0 : link.hashCode());
++    return  hash;
+   }
+ }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index e355665..2655e2b 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -400,13 +400,14 @@ public class ExportSnapshot extends Configured implements Tool {
+      * if the file is not found.
+      */
+     private FSDataInputStream openSourceFile(Context context, final SnapshotFileInfo fileInfo)
+-        throws IOException {
++            throws IOException {
+       try {
++        Configuration conf = context.getConfiguration();
+         FileLink link = null;
+         switch (fileInfo.getType()) {
+           case HFILE:
+             Path inputPath = new Path(fileInfo.getHfile());
+-            link = new HFileLink(inputRoot, inputArchive, inputPath);
++            link = HFileLink.buildFromHFileLinkPattern(conf, inputPath);
+             break;
+           case WAL:
+             String serverName = fileInfo.getWalServer();
+@@ -427,11 +428,12 @@ public class ExportSnapshot extends Configured implements Tool {
+     private FileStatus getSourceFileStatus(Context context, final SnapshotFileInfo fileInfo)
+         throws IOException {
+       try {
++        Configuration conf = context.getConfiguration();
+         FileLink link = null;
+         switch (fileInfo.getType()) {
+           case HFILE:
+             Path inputPath = new Path(fileInfo.getHfile());
+-            link = new HFileLink(inputRoot, inputArchive, inputPath);
++            link = HFileLink.buildFromHFileLinkPattern(conf, inputPath);
+             break;
+           case WAL:
+             link = new WALLink(inputRoot, fileInfo.getWalServer(), fileInfo.getWalName());
+@@ -519,7 +521,7 @@ public class ExportSnapshot extends Configured implements Tool {
+             if (storeFile.hasFileSize()) {
+               size = storeFile.getFileSize();
+             } else {
+-              size = new HFileLink(conf, path).getFileStatus(fs).getLen();
++              size = HFileLink.buildFromHFileLinkPattern(conf, path).getFileStatus(fs).getLen();
+             }
+             files.add(new Pair<SnapshotFileInfo, Long>(fileInfo, size));
+           }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index f28125e..08d776f 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -618,7 +618,7 @@ public class RestoreSnapshotHelper {
+     } else {
+       InputStream in;
+       if (linkPath != null) {
+-        in = new HFileLink(conf, linkPath).open(fs);
++        in = HFileLink.buildFromHFileLinkPattern(conf, linkPath).open(fs);
+       } else {
+         linkPath = new Path(new Path(HRegion.getRegionDir(snapshotManifest.getSnapshotDir(),
+                         regionInfo.getEncodedName()), familyDir.getName()), hfileName);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotInfo.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotInfo.java
+index 77b17d7..606b9c9 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotInfo.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotInfo.java
+@@ -208,13 +208,13 @@ public final class SnapshotInfo extends Configured implements Tool {
+      * Add the specified store file to the stats
+      * @param region region encoded Name
+      * @param family family name
+-     * @param hfile store file name
++     * @param storeFile store file name
+      * @return the store file information
+      */
+     FileInfo addStoreFile(final HRegionInfo region, final String family,
+         final SnapshotRegionManifest.StoreFile storeFile) throws IOException {
+-      HFileLink link = HFileLink.create(conf, snapshotTable, region.getEncodedName(),
+-                                        family, storeFile.getName());
++      HFileLink link = HFileLink.build(conf, snapshotTable, region.getEncodedName(),
++              family, storeFile.getName());
+       boolean isCorrupted = false;
+       boolean inArchive = false;
+       long size = -1;
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+index 9297ea0..d1f787a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+@@ -273,7 +273,7 @@ public final class SnapshotReferenceUtil {
+       refPath = StoreFileInfo.getReferredToFile(refPath);
+       String refRegion = refPath.getParent().getParent().getName();
+       refPath = HFileLink.createPath(table, refRegion, family, refPath.getName());
+-      if (!new HFileLink(conf, refPath).exists(fs)) {
++      if (!HFileLink.buildFromHFileLinkPattern(conf, refPath).exists(fs)) {
+         throw new CorruptedSnapshotException("Missing parent hfile for: " + fileName +
+           " path=" + refPath, snapshot);
+       }
+@@ -292,11 +292,11 @@ public final class SnapshotReferenceUtil {
+       linkPath = new Path(family, fileName);
+     } else {
+       linkPath = new Path(family, HFileLink.createHFileLinkName(
+-        table, regionInfo.getEncodedName(), fileName));
++              table, regionInfo.getEncodedName(), fileName));
+     }
+ 
+     // check if the linked file exists (in the archive, or in the table dir)
+-    HFileLink link = new HFileLink(conf, linkPath);
++    HFileLink link = HFileLink.buildFromHFileLinkPattern(conf, linkPath);
+     try {
+       FileStatus fstat = link.getFileStatus(fs);
+       if (storeFile.hasFileSize() && storeFile.getFileSize() != fstat.getLen()) {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HFileV1Detector.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HFileV1Detector.java
+index 51bd117..faced06 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HFileV1Detector.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/HFileV1Detector.java
+@@ -365,7 +365,7 @@ public class HFileV1Detector extends Configured implements Tool {
+    * @throws IOException
+    */
+   public FileLink getFileLinkWithPreNSPath(Path storeFilePath) throws IOException {
+-    HFileLink link = new HFileLink(getConf(), storeFilePath);
++    HFileLink link = HFileLink.buildFromHFileLinkPattern(getConf(), storeFilePath);
+     List<Path> pathsToProcess = getPreNSPathsForHFileLink(link);
+     pathsToProcess.addAll(Arrays.asList(link.getLocations()));
+     return new FileLink(pathsToProcess);
+@@ -383,7 +383,7 @@ public class HFileV1Detector extends Configured implements Tool {
+ 
+   /**
+    * Removes the prefix of defaultNamespace from the path.
+-   * @param originPath
++   * @param originalPath
+    */
+   private String removeDefaultNSPath(Path originalPath) {
+     String pathStr = originalPath.toString();
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/ServerRegionReplicaUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/ServerRegionReplicaUtil.java
+index 54bdc80..aa263fb 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/ServerRegionReplicaUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/ServerRegionReplicaUtil.java
+@@ -104,9 +104,8 @@ public class ServerRegionReplicaUtil extends RegionReplicaUtil {
+     }
+ 
+     // else create a store file link. The link file does not exists on filesystem though.
+-    HFileLink link = new HFileLink(conf,
+-      HFileLink.createPath(regionInfoForFs.getTable(), regionInfoForFs.getEncodedName()
+-        , familyName, status.getPath().getName()));
++    HFileLink link = HFileLink.build(conf, regionInfoForFs.getTable(),
++            regionInfoForFs.getEncodedName(), familyName, status.getPath().getName());
+     return new StoreFileInfo(conf, fs, status, link);
+   }
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestUpgradeTo96.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestUpgradeTo96.java
+index d3e93d2..2a8c9e3 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestUpgradeTo96.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/migration/TestUpgradeTo96.java
+@@ -202,7 +202,8 @@ public class TestUpgradeTo96 {
+     boolean preNSArchivePathExists = false;
+     boolean preNSTempPathExists = false;
+     assertTrue(HFileLink.isHFileLink(aFileLink));
+-    HFileLink hFileLink = new HFileLink(TEST_UTIL.getConfiguration(), aFileLink);
++    HFileLink hFileLink = 
++      HFileLink.buildFromHFileLinkPattern(TEST_UTIL.getConfiguration(), aFileLink);
+     assertTrue(hFileLink.getArchivePath().toString().startsWith(rootDir.toString()));
+ 
+     HFileV1Detector t = new HFileV1Detector();
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+index 11015a4..e5f91d7 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+@@ -424,7 +424,7 @@ public class SnapshotTestingUtils {
+             final SnapshotRegionManifest.StoreFile storeFile) throws IOException {
+         String region = regionInfo.getEncodedName();
+         String hfile = storeFile.getName();
+-        HFileLink link = HFileLink.create(conf, table, region, family, hfile);
++        HFileLink link = HFileLink.build(conf, table, region, family, hfile);
+         if (corruptedFiles.size() % 2 == 0) {
+           fs.delete(link.getAvailablePath(fs), true);
+           corruptedFiles.add(hfile);
+-- 
+1.7.0.4
+

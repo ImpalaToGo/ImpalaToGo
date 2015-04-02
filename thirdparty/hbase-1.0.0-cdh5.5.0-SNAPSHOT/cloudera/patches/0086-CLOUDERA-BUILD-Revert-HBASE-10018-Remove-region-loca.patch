@@ -1,0 +1,313 @@
+From cfe3a61d7cc944a89707a74ff8773aa330ee92a9 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Fri, 6 Mar 2015 12:51:33 -0800
+Subject: [PATCH 086/110] CLOUDERA-BUILD Revert "HBASE-10018 Remove region location prefetching"
+
+- Reverse scans are not supported in CDH5.0.x (HBase 0.96) this
+  partial revert keeps the prefetch methods as deprecated however
+  the old region prefetch is restored in ConnectionManager in
+  order to support rolling upgades between CDH 5.0.x and +CDH5.4.x
+
+Author: Esteban Gutierrez
+Reason: Backward Compatibility
+Ref: CDH-25837
+---
+ .../hadoop/hbase/client/ConnectionManager.java     |  137 +++++++++++++++++---
+ .../apache/hadoop/hbase/client/HConnectionKey.java |    1 +
+ .../java/org/apache/hadoop/hbase/HConstants.java   |   21 +++
+ 3 files changed, 138 insertions(+), 21 deletions(-)
+
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ConnectionManager.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ConnectionManager.java
+index b58946a..e7f26f5 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ConnectionManager.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/ConnectionManager.java
+@@ -34,6 +34,7 @@ import java.util.Set;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.ConcurrentMap;
+ import java.util.concurrent.ExecutorService;
++import java.util.concurrent.CopyOnWriteArraySet;
+ import java.util.concurrent.LinkedBlockingQueue;
+ import java.util.concurrent.ThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
+@@ -205,6 +206,7 @@ class ConnectionManager {
+    * Once it's set under nonceGeneratorCreateLock, it is never unset or changed.
+    */
+   private static volatile NonceGenerator nonceGenerator = null;
++
+   /** The nonce generator lock. Only taken when creating HConnection, which gets a private copy. */
+   private static Object nonceGeneratorCreateLock = new Object();
+ 
+@@ -540,6 +542,8 @@ class ConnectionManager {
+     private final int numTries;
+     final int rpcTimeout;
+     private NonceGenerator nonceGenerator = null;
++    private final boolean usePrefetch;
++    private final int prefetchRegionLimit;
+     private final AsyncProcess asyncProcess;
+     // single tracker per connection
+     private final ServerStatisticTracker stats;
+@@ -578,6 +582,12 @@ class ConnectionManager {
+     // Client rpc instance.
+     private RpcClient rpcClient;
+ 
++    // region cache prefetch is enabled by default. this set contains all
++    // tables whose region cache prefetch are disabled.
++    private final Set<Integer> regionCachePrefetchDisabledTables =
++      new CopyOnWriteArraySet<Integer>();
++
++
+     private MetaCache metaCache = new MetaCache();
+ 
+     private int refCount;
+@@ -676,6 +686,11 @@ class ConnectionManager {
+       }
+       stats = ServerStatisticTracker.create(conf);
+       this.asyncProcess = createAsyncProcess(this.conf);
++      this.usePrefetch = conf.getBoolean(HConstants.HBASE_CLIENT_PREFETCH,
++          HConstants.DEFAULT_HBASE_CLIENT_PREFETCH);
++      this.prefetchRegionLimit = conf.getInt(
++        HConstants.HBASE_CLIENT_PREFETCH_LIMIT,
++        HConstants.DEFAULT_HBASE_CLIENT_PREFETCH_LIMIT);
+       this.interceptor = (new RetryingCallerInterceptorFactory(conf)).build();
+       this.rpcCallerFactory = RpcRetryingCallerFactory.instantiate(conf, interceptor, this.stats);
+       this.backoffPolicy = ClientBackoffPolicyFactory.create(conf);
+@@ -1112,6 +1127,60 @@ class ConnectionManager {
+       }
+     }
+ 
++    /*
++     * Search hbase:meta for the HRegionLocation info that contains the table and
++     * row we're seeking. It will prefetch certain number of regions info and
++     * save them to the global region cache.
++     */
++    private void prefetchRegionCache(final TableName tableName,
++        final byte[] row) {
++      // Implement a new visitor for MetaScanner, and use it to walk through
++      // the hbase:meta
++      MetaScannerVisitor visitor = new MetaScannerVisitorBase() {
++        public boolean processRow(Result result) throws IOException {
++          try {
++            HRegionInfo regionInfo = MetaScanner.getHRegionInfo(result);
++            if (regionInfo == null) {
++              return true;
++            }
++
++            // possible we got a region of a different table...
++            if (!regionInfo.getTable().equals(tableName)) {
++              return false; // stop scanning
++            }
++            if (regionInfo.isOffline()) {
++              // don't cache offline regions
++              return true;
++            }
++
++            ServerName serverName = HRegionInfo.getServerName(result);
++            if (serverName == null) {
++              return true; // don't cache it
++            }
++            // instantiate the location
++            long seqNum = HRegionInfo.getSeqNumDuringOpen(result);
++            HRegionLocation loc = new HRegionLocation(regionInfo, serverName, seqNum);
++            // cache this meta entry
++            cacheLocation(tableName, null, loc);
++            return true;
++          } catch (RuntimeException e) {
++            throw new IOException(e);
++          }
++        }
++      };
++      try {
++        // pre-fetch certain number of regions info at region cache.
++        MetaScanner.metaScan(this, visitor, tableName, row,
++            this.prefetchRegionLimit, TableName.META_TABLE_NAME);
++      } catch (IOException e) {
++        if (ExceptionUtil.isInterrupt(e)) {
++          Thread.currentThread().interrupt();
++        } else {
++          LOG.warn("Encountered problems when prefetch hbase:meta table: ", e);
++        }
++      }
++    }
++
+     private RegionLocations locateMeta(final TableName tableName,
+         boolean useCache, int replicaId) throws IOException {
+       // HBASE-10785: We cache the location of the META itself, so that we are not overloading
+@@ -1152,11 +1221,11 @@ class ConnectionManager {
+       */
+     private RegionLocations locateRegionInMeta(TableName tableName, byte[] row,
+                    boolean useCache, boolean retry, int replicaId) throws IOException {
+-
++      RegionLocations locations;
+       // If we are supposed to be using the cache, look in the cache to see if
+       // we already have the region.
+       if (useCache) {
+-        RegionLocations locations = getCachedLocation(tableName, row);
++        locations = getCachedLocation(tableName, row);
+         if (locations != null && locations.getRegionLocation(replicaId) != null) {
+           return locations;
+         }
+@@ -1167,12 +1236,6 @@ class ConnectionManager {
+       // without knowing the precise region names.
+       byte[] metaKey = HRegionInfo.createRegionName(tableName, row, HConstants.NINES, false);
+ 
+-      Scan s = new Scan();
+-      s.setReversed(true);
+-      s.setStartRow(metaKey);
+-      s.setSmall(true);
+-      s.setCaching(1);
+-
+       int localNumRetries = (retry ? numTries : 1);
+ 
+       for (int tries = 0; true; tries++) {
+@@ -1182,7 +1245,7 @@ class ConnectionManager {
+               " after " + localNumRetries + " tries.");
+         }
+         if (useCache) {
+-          RegionLocations locations = getCachedLocation(tableName, row);
++          locations = getCachedLocation(tableName, row);
+           if (locations != null && locations.getRegionLocation(replicaId) != null) {
+             return locations;
+           }
+@@ -1192,26 +1255,50 @@ class ConnectionManager {
+           metaCache.clearCache(tableName, row);
+         }
+ 
++        RegionLocations metaLocation = null;
+         // Query the meta region
+         try {
+-          Result regionInfoRow = null;
+-          ReversedClientScanner rcs = null;
+-          try {
+-            rcs = new ClientSmallReversedScanner(conf, s, TableName.META_TABLE_NAME, this,
+-              rpcCallerFactory, rpcControllerFactory, getBatchPool(), 0);
+-            regionInfoRow = rcs.next();
+-          } finally {
+-            if (rcs != null) {
+-              rcs.close();
++          // locate the meta region
++          metaLocation = locateRegion(TableName.META_TABLE_NAME, metaKey, true, false);
++          // If null still, go around again.
++          if (metaLocation == null) continue;
++          ClientService.BlockingInterface service = getClient(metaLocation.getDefaultRegionLocation().getServerName());
++
++          Result regionInfoRow;
++          // This block guards against two threads trying to load the meta
++          // region at the same time. The first will load the meta region and
++          // the second will use the value that the first one found.
++          if (useCache) {
++            if (TableName.META_TABLE_NAME.equals(tableName) && getRegionCachePrefetch(tableName)) {
++              // Check the cache again for a hit in case some other thread made the
++              // same query while we were waiting on the lock.
++              locations = getCachedLocation(tableName, row);
++              if (locations != null) {
++                return locations;
++              }
++              // If the parent table is META, we may want to pre-fetch some
++              // region info into the global region cache for this table.
++              prefetchRegionCache(tableName, row);
++            }
++            locations = getCachedLocation(tableName, row);
++            if (locations != null) {
++              return locations;
+             }
++            // If we are not supposed to be using the cache, delete any existing cached location
++            // so it won't interfere.
++            metaCache.clearCache(tableName, row);
+           }
+ 
++          // Query the meta region for the location of the meta region
++          regionInfoRow = ProtobufUtil.getRowOrBefore(service,
++            metaLocation.getDefaultRegionLocation().getRegionInfo().getRegionName(), metaKey, HConstants.CATALOG_FAMILY);
++
+           if (regionInfoRow == null) {
+             throw new TableNotFoundException(tableName);
+           }
+ 
+           // convert the row result into the HRegionLocation we need!
+-          RegionLocations locations = MetaTableAccessor.getRegionLocations(regionInfoRow);
++          locations = MetaTableAccessor.getRegionLocations(regionInfoRow);
+           if (locations == null || locations.getRegionLocation(replicaId) == null) {
+             throw new IOException("HRegionInfo was null in " +
+               tableName + ", row=" + regionInfoRow);
+@@ -2258,24 +2345,32 @@ class ConnectionManager {
+     @Override
+     @Deprecated
+     public void setRegionCachePrefetch(final TableName tableName, final boolean enable) {
++      if (!enable) {
++        regionCachePrefetchDisabledTables.add(Bytes.mapKey(tableName.getName()));
++      }
++      else {
++        regionCachePrefetchDisabledTables.remove(Bytes.mapKey(tableName.getName()));
++      }
+     }
+ 
+     @Override
+     @Deprecated
+     public void setRegionCachePrefetch(final byte[] tableName,
+         final boolean enable) {
++      setRegionCachePrefetch(TableName.valueOf(tableName), enable);
+     }
+ 
+     @Override
+     @Deprecated
+     public boolean getRegionCachePrefetch(TableName tableName) {
+-      return false;
++      return usePrefetch &&
++        !regionCachePrefetchDisabledTables.contains(Bytes.mapKey(tableName.getName()));
+     }
+ 
+     @Override
+     @Deprecated
+     public boolean getRegionCachePrefetch(byte[] tableName) {
+-      return false;
++      return getRegionCachePrefetch(TableName.valueOf(tableName));
+     }
+ 
+     @Override
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionKey.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionKey.java
+index 0c20181..0c2e3da 100644
+--- a/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionKey.java
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/client/HConnectionKey.java
+@@ -46,6 +46,7 @@ class HConnectionKey {
+       HConstants.ZOOKEEPER_RECOVERABLE_WAITTIME,
+       HConstants.HBASE_CLIENT_PAUSE, HConstants.HBASE_CLIENT_RETRIES_NUMBER,
+       HConstants.HBASE_RPC_TIMEOUT_KEY,
++      HConstants.HBASE_CLIENT_PREFETCH_LIMIT,
+       HConstants.HBASE_META_SCANNER_CACHING,
+       HConstants.HBASE_CLIENT_INSTANCE_ID,
+       HConstants.RPC_CODEC_CONF_KEY,
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
+index 13cf01c..49a636e 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/HConstants.java
+@@ -674,6 +674,27 @@ public final class HConstants {
+   public static final int DEFAULT_HBASE_CLIENT_RETRIES_NUMBER = 31;
+ 
+   /**
++   * Parameter name for client region location prefetch toggle.
++   */
++  public static String HBASE_CLIENT_PREFETCH = "hbase.client.prefetch";
++
++  /**
++   * Default value of {@link #HBASE_CLIENT_PREFETCH}.
++   */
++  public static boolean DEFAULT_HBASE_CLIENT_PREFETCH = true;
++
++  /**
++   * Parameter name for client prefetch limit, used as the maximum number of regions
++   * info that will be prefetched.
++   */
++  public static String HBASE_CLIENT_PREFETCH_LIMIT = "hbase.client.prefetch.limit";
++
++  /**
++   * Default value of {@link #HBASE_CLIENT_PREFETCH_LIMIT}.
++   */
++  public static int DEFAULT_HBASE_CLIENT_PREFETCH_LIMIT = 10;
++
++  /**
+    * Parameter name to set the default scanner caching for all clients.
+    */
+   public static final String HBASE_CLIENT_SCANNER_CACHING = "hbase.client.scanner.caching";
+-- 
+1.7.0.4
+

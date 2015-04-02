@@ -103,6 +103,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("false", new Integer(SqlParserSymbols.KW_FALSE));
     keywordMap.put("fields", new Integer(SqlParserSymbols.KW_FIELDS));
     keywordMap.put("fileformat", new Integer(SqlParserSymbols.KW_FILEFORMAT));
+    keywordMap.put("files", new Integer(SqlParserSymbols.KW_FILES));
     keywordMap.put("finalize_fn", new Integer(SqlParserSymbols.KW_FINALIZE_FN));
     keywordMap.put("first", new Integer(SqlParserSymbols.KW_FIRST));
     keywordMap.put("float", new Integer(SqlParserSymbols.KW_FLOAT));
@@ -168,6 +169,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("regexp", new Integer(SqlParserSymbols.KW_REGEXP));
     keywordMap.put("rename", new Integer(SqlParserSymbols.KW_RENAME));
     keywordMap.put("replace", new Integer(SqlParserSymbols.KW_REPLACE));
+    keywordMap.put("replication", new Integer(SqlParserSymbols.KW_REPLICATION));
     keywordMap.put("returns", new Integer(SqlParserSymbols.KW_RETURNS));
     keywordMap.put("revoke", new Integer(SqlParserSymbols.KW_REVOKE));
     keywordMap.put("right", new Integer(SqlParserSymbols.KW_RIGHT));
@@ -229,6 +231,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     // add non-keyword tokens
     tokenIdMap.put(new Integer(SqlParserSymbols.IDENT), "IDENTIFIER");
     tokenIdMap.put(new Integer(SqlParserSymbols.COLON), ":");
+    tokenIdMap.put(new Integer(SqlParserSymbols.SEMICOLON), ";");
     tokenIdMap.put(new Integer(SqlParserSymbols.COMMA), "COMMA");
     tokenIdMap.put(new Integer(SqlParserSymbols.BITNOT), "~");
     tokenIdMap.put(new Integer(SqlParserSymbols.LPAREN), "(");
@@ -254,7 +257,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     tokenIdMap.put(new Integer(SqlParserSymbols.EOF), "EOF");
     tokenIdMap.put(new Integer(SqlParserSymbols.SUBTRACT), "-");
     tokenIdMap.put(new Integer(SqlParserSymbols.BITAND), "&");
-    tokenIdMap.put(new Integer(SqlParserSymbols.error), "ERROR");
+    tokenIdMap.put(new Integer(SqlParserSymbols.UNEXPECTED_CHAR), "Unexpected character");
     tokenIdMap.put(new Integer(SqlParserSymbols.BITXOR), "^");
     tokenIdMap.put(new Integer(SqlParserSymbols.NUMERIC_OVERFLOW), "NUMERIC OVERFLOW");
     tokenIdMap.put(new Integer(SqlParserSymbols.EMPTY_IDENT), "EMPTY IDENTIFIER");
@@ -311,6 +314,7 @@ EndOfLineComment = "--" {NonTerminator}* {LineTerminator}?
 
 // single-character tokens
 ":" { return newToken(SqlParserSymbols.COLON, null); }
+";" { return newToken(SqlParserSymbols.SEMICOLON, null); }
 "," { return newToken(SqlParserSymbols.COMMA, null); }
 "." { return newToken(SqlParserSymbols.DOT, null); }
 "*" { return newToken(SqlParserSymbols.STAR, null); }
@@ -399,3 +403,7 @@ EndOfLineComment = "--" {NonTerminator}* {LineTerminator}?
 
 {Comment} { /* ignore */ }
 {Whitespace} { /* ignore */ }
+
+// Provide a default error token when nothing matches, otherwise the user sees
+// "Error: could not match input" which is confusing.
+[^] { return newToken(SqlParserSymbols.UNEXPECTED_CHAR, yytext()); }

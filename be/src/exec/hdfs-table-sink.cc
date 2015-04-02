@@ -608,8 +608,9 @@ void HdfsTableSink::ClosePartitionFile(RuntimeState* state, OutputPartition* par
   int hdfs_ret = dfsCloseFile(hdfs_connection_, partition->tmp_hdfs_file);
   VLOG_FILE << "dfsCloseFile() file=" << partition->current_file_name;
   if (hdfs_ret != 0) {
-    state->LogError(GetHdfsErrorMsg("Failed to close DFS file: ",
-        partition->current_file_name));
+    state->LogError(ErrorMsg(TErrorCode::GENERAL,
+        GetHdfsErrorMsg("Failed to close HDFS file: ",
+        partition->current_file_name)));
   }
   partition->tmp_hdfs_file = NULL;
   ImpaladMetrics::NUM_FILES_OPEN_FOR_INSERT->Increment(-1);

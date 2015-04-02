@@ -57,6 +57,8 @@ add_library(Util
 # TODO: not supported on RHEL 5
 #  perf-counters.cc
   progress-updater.cc
+  process-state-info.cc
+  redactor.cc
   runtime-profile.cc
   simple-logger.cc
   symbols-util.cc
@@ -109,8 +111,15 @@ ADD_BE_TEST(dict-test)
 ADD_BE_TEST(thread-pool-test)
 ADD_BE_TEST(internal-queue-test)
 ADD_BE_TEST(string-parser-test)
+ADD_BE_TEST(parse-util-test)
 ADD_BE_TEST(promise-test)
 ADD_BE_TEST(symbols-util-test)
 #ADD_BE_TEST(perf-counters-test)
 ADD_BE_TEST(webserver-test)
 ADD_BE_TEST(pretty-printer-test)
+ADD_BE_TEST(redactor-config-parser-test)
+ADD_BE_TEST(redactor-test)
+ADD_BE_TEST(redactor-unconfigured-test)
+ADD_BE_TEST(error-util-test)
+target_link_libraries(error-util-test Util)
+ADD_BE_TEST(proc-info-test)

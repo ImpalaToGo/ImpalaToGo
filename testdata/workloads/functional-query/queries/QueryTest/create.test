@@ -5,7 +5,7 @@ drop table if exists ddl_test_db.temp_decimal_table
 ====
 ---- QUERY
 create table ddl_test_db.temp_decimal_table like parquet
-'/test-warehouse/schemas/decimal.parquet'
+'$FILESYSTEM_PREFIX/test-warehouse/schemas/decimal.parquet'
 ---- RESULTS
 ====
 ---- QUERY
@@ -23,7 +23,7 @@ drop table if exists ddl_test_db.temp_decimal_table
 ====
 ---- QUERY
 create table ddl_test_db.test_like_file_create like parquet
-'/test-warehouse/schemas/zipcode_incomes.parquet'
+'$FILESYSTEM_PREFIX/test-warehouse/schemas/zipcode_incomes.parquet'
 ---- RESULTS
 ====
 ---- QUERY
@@ -43,7 +43,7 @@ drop table ddl_test_db.test_like_file_create
 ====
 ---- QUERY
 create table if not exists ddl_test_db.test_like_file_create like parquet
-'/test-warehouse/schemas/alltypestiny.parquet'
+'$FILESYSTEM_PREFIX/test-warehouse/schemas/alltypestiny.parquet'
 ---- RESULTS
 ====
 ---- QUERY
@@ -65,7 +65,7 @@ STRING, STRING, STRING
 ====
 ---- QUERY
 create table if not exists ddl_test_db.test_like_file_create like parquet
-'/test-warehouse/schemas/zipcode_incomes.parquet'
+'$FILESYSTEM_PREFIX/test-warehouse/schemas/zipcode_incomes.parquet'
 ---- RESULTS
 ====
 ---- QUERY
@@ -273,11 +273,11 @@ STRING, STRING, STRING
 ---- QUERY
 show table stats like_view
 ---- LABELS
-#ROWS, #FILES, SIZE, BYTES CACHED, FORMAT, INCREMENTAL STATS
+#ROWS, #FILES, SIZE, BYTES CACHED, CACHE REPLICATION, FORMAT, INCREMENTAL STATS
 ---- RESULTS
--1,0,'0B','NOT CACHED','TEXT','false'
+-1,0,'0B','NOT CACHED','NOT CACHED','TEXT','false'
 ---- TYPES
-BIGINT, BIGINT, STRING, STRING, STRING, STRING
+BIGINT, BIGINT, STRING, STRING, STRING, STRING, STRING
 ====
 ---- QUERY
 drop table like_view
@@ -290,11 +290,11 @@ create table like_view_parquet like functional.view_view stored as parquet
 ---- QUERY
 show table stats like_view_parquet
 ---- LABELS
-#ROWS, #FILES, SIZE, BYTES CACHED, FORMAT, INCREMENTAL STATS
+#ROWS, #FILES, SIZE, BYTES CACHED, CACHE REPLICATION, FORMAT, INCREMENTAL STATS
 ---- RESULTS
--1,0,'0B','NOT CACHED','PARQUET','false'
+-1,0,'0B','NOT CACHED','NOT CACHED','PARQUET','false'
 ---- TYPES
-BIGINT, BIGINT, STRING, STRING, STRING, STRING
+BIGINT, BIGINT, STRING, STRING, STRING, STRING, STRING
 ====
 ---- QUERY
 drop table like_view_parquet
@@ -329,7 +329,7 @@ BIGINT
 ---- QUERY
 # This should copy the file format from the source table (rc)
 create external table jointbl_like like functional_rc_gzip.jointbl
-location '/test-warehouse/jointbl_rc_gzip'
+location '$FILESYSTEM_PREFIX/test-warehouse/jointbl_rc_gzip'
 ---- RESULTS
 ====
 ---- QUERY
@@ -537,7 +537,7 @@ STRING, STRING, STRING
 # Test creating an unpartitioned Avro table without column definitions.
 create table avro_alltypes_nopart
 with serdeproperties
-('avro.schema.url'='hdfs:///test-warehouse/avro_schemas/functional/alltypes.json')
+('avro.schema.url'='$FILESYSTEM_PREFIX/test-warehouse/avro_schemas/functional/alltypes.json')
 stored as avro
 ---- RESULTS
 ====
@@ -563,7 +563,7 @@ STRING, STRING, STRING
 create table avro_alltypes_part
 partitioned by (year int, month int)
 with serdeproperties
-('avro.schema.url'='hdfs:///test-warehouse/avro_schemas/functional/alltypes.json')
+('avro.schema.url'='$FILESYSTEM_PREFIX/test-warehouse/avro_schemas/functional/alltypes.json')
 stored as avro
 ---- RESULTS
 ====

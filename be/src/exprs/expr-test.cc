@@ -12,47 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <string>
+#include <map>
 #include <math.h>
-#include <gtest/gtest.h>
+#include <string>
+#include <time.h>
+
 #include <boost/assign/list_of.hpp>
+#include <boost/date_time/c_local_time_adjustor.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/unordered_map.hpp>
+#include <gtest/gtest.h>
 
+#include "codegen/llvm-codegen.h"
 #include "common/init.h"
 #include "common/object-pool.h"
-#include "runtime/raw-value.h"
-#include "runtime/string-value.h"
-#include "gen-cpp/Exprs_types.h"
 #include "exprs/expr-context.h"
 #include "exprs/is-null-predicate.h"
 #include "exprs/like-predicate.h"
 #include "exprs/literal.h"
 #include "exprs/null-literal.h"
-#include "codegen/llvm-codegen.h"
+#include "gen-cpp/Exprs_types.h"
+#include "gen-cpp/hive_metastore_types.h"
+#include "rpc/thrift-client.h"
+#include "rpc/thrift-server.h"
+#include "runtime/raw-value.h"
+#include "runtime/string-value.h"
+#include "runtime/timestamp-value.h"
+#include "service/fe-support.h"
+#include "service/impala-server.h"
+#include "testutil/impalad-query-executor.h"
+#include "testutil/in-process-servers.h"
 #include "util/debug-util.h"
 #include "util/string-parser.h"
 #include "util/test-info.h"
-#include "rpc/thrift-server.h"
-#include "rpc/thrift-client.h"
-#include "testutil/in-process-servers.h"
-#include "testutil/impalad-query-executor.h"
-#include "service/impala-server.h"
-#include "service/fe-support.h"
-#include "gen-cpp/hive_metastore_types.h"
 
 DECLARE_int32(be_port);
 DECLARE_int32(beeswax_port);
 DECLARE_string(impalad);
 DECLARE_bool(abort_on_config_error);
 DECLARE_bool(disable_optimization_passes);
+DECLARE_bool(use_utc_for_unix_timestamp_conversions);
 
 using namespace impala;
 using namespace llvm;
 using namespace std;
 using namespace boost;
 using namespace boost::assign;
+using namespace boost::date_time;
+using namespace boost::posix_time;
 using namespace Apache::Hadoop::Hive;
 
 namespace impala {
@@ -91,12 +100,49 @@ string LiteralToString<double, double>(double val) {
   return ss.str();
 }
 
+// Override the time zone for the duration of the scope. The time zone is overridden
+// using an environment variable there is no risk of making a permanent system change
+// and no special permissions are needed. This is not thread-safe.
+class ScopedTimeZoneOverride {
+ public:
+  ScopedTimeZoneOverride(string time_zone) {
+    original_time_zone_ = getenv("TZ");
+    setenv("TZ", time_zone.c_str(), /*overwrite*/ true);
+    tzset();
+  }
+
+  ~ScopedTimeZoneOverride() {
+    if (original_time_zone_ == NULL) {
+      unsetenv("TZ");
+    } else {
+      setenv("TZ", original_time_zone_, /*overwrite*/ true);
+    }
+    tzset();
+  }
+
+ private:
+  char* original_time_zone_;
+};
+
+// Enable FLAGS_use_local_tz_for_unix_timestamp_conversions for the duration of the scope.
+class ScopedLocalUnixTimestampConversionOverride {
+ public:
+  ScopedLocalUnixTimestampConversionOverride() {
+    FLAGS_use_local_tz_for_unix_timestamp_conversions = true;
+  }
+
+  ~ScopedLocalUnixTimestampConversionOverride() {
+    FLAGS_use_local_tz_for_unix_timestamp_conversions = false;
+  }
+};
+
 class ExprTest : public testing::Test {
  protected:
-  // Maps from enum value of primitive integer type to
-  // the minimum value that is outside of the next smaller-resolution type.
-  // For example the value for type TYPE_SMALLINT is numeric_limits<int8_t>::max()+1.
-  typedef unordered_map<int, int64_t> IntValMap;
+  // Maps from enum value of primitive integer type to the minimum value that is
+  // outside of the next smaller-resolution type. For example the value for type
+  // TYPE_SMALLINT is numeric_limits<int8_t>::max()+1. There is a GREATEST test in
+  // the MathFunctions tests that requires this to be an ordered map.
+  typedef map<int, int64_t> IntValMap;
   IntValMap min_int_values_;
 
   // Maps from primitive float type to smallest positive value that is larger
@@ -104,11 +150,10 @@ class ExprTest : public testing::Test {
   typedef unordered_map<int, double> FloatValMap;
   FloatValMap min_float_values_;
 
-  // Maps from enum value of primitive type to
-  // a string representation of a default value for testing.
-  // For int and float types the strings represent
-  // the corresponding min values (in the maps above).
-  // For non-numeric types the default values are listed below.
+  // Maps from enum value of primitive type to a string representation of a default
+  // value for testing. For int and float types the strings represent the corresponding
+  // min values (in the maps above). For non-numeric types the default values are listed
+  // below.
   unordered_map<int, string> default_type_strs_;
   string default_bool_str_;
   string default_string_str_;
@@ -175,7 +220,7 @@ class ExprTest : public testing::Test {
       ASSERT_FALSE(status.ok()) << "Expected error\nstmt: " << stmt;
       return;
     }
-    ASSERT_TRUE(status.ok()) << "stmt: " << stmt << "\nerror: " << status.GetErrorMsg();
+    ASSERT_TRUE(status.ok()) << "stmt: " << stmt << "\nerror: " << status.GetDetail();
     string result_row;
     ASSERT_TRUE(executor_->FetchResult(&result_row).ok()) << expr;
     EXPECT_EQ(TypeToOdbcString(expr_type.type), result_types[0].type) << expr;
@@ -256,10 +301,16 @@ class ExprTest : public testing::Test {
 
   // We can't put this into TestValue() because GTest can't resolve
   // the ambiguity in TimestampValue::operator==, even with the appropriate casts.
-  void TestTimestampValue(const string& expr, const TimestampValue& expected_result) {
+  void TestTimestampValue(const string& expr, const TimestampValue& expected_result,
+      const int64_t tolerance_in_seconds = 0) {
     TimestampValue* result;
     GetValue(expr, TYPE_TIMESTAMP, reinterpret_cast<void**>(&result));
-    EXPECT_EQ(*result, expected_result);
+    if (tolerance_in_seconds == 0) {
+      EXPECT_EQ(*result, expected_result);
+    } else {
+      int64_t delta = abs(result->ToUnixTime() - expected_result.ToUnixTime());
+      EXPECT_LE(delta, tolerance_in_seconds);
+    }
   }
 
   // Tests whether the returned TimestampValue is valid.
@@ -267,7 +318,40 @@ class ExprTest : public testing::Test {
   void TestValidTimestampValue(const string& expr) {
     TimestampValue* result;
     GetValue(expr, TYPE_TIMESTAMP, reinterpret_cast<void**>(&result));
-    EXPECT_FALSE(result->NotADateTime());
+    EXPECT_TRUE(result->HasDateOrTime());
+  }
+
+  // Test conversions of Timestamps to and from string/int with values related to the
+  // Unix epoch. The caller should set the current time zone before calling.
+  // 'unix_time_at_local_epoch' should be the expected value of the Unix time when it
+  // was 1970-01-01 in the current time zone. 'local_time_at_unix_epoch' should be the
+  // local time at the Unix epoch (1970-01-01 UTC).
+  void TestTimestampUnixEpochConversions(int64_t unix_time_at_local_epoch,
+      string local_time_at_unix_epoch) {
+    TestValue("unix_timestamp(cast('" + local_time_at_unix_epoch + "' as timestamp))",
+        TYPE_BIGINT, 0);
+    TestValue("unix_timestamp('" + local_time_at_unix_epoch + "')", TYPE_BIGINT, 0);
+    TestValue("unix_timestamp('" + local_time_at_unix_epoch +
+        "', 'yyyy-MM-dd HH:mm:ss')", TYPE_BIGINT, 0);
+    TestValue("unix_timestamp('1970-01-01', 'yyyy-MM-dd')", TYPE_BIGINT,
+        unix_time_at_local_epoch);
+    TestValue("unix_timestamp('1970-01-01 10:10:10', 'yyyy-MM-dd')", TYPE_BIGINT,
+        unix_time_at_local_epoch);
+    TestValue("unix_timestamp('" + local_time_at_unix_epoch
+        + " extra text', 'yyyy-MM-dd HH:mm:ss')", TYPE_BIGINT, 0);
+    TestStringValue("cast(cast(0 as timestamp) as string)", local_time_at_unix_epoch);
+    TestStringValue("cast(cast(0 as timestamp) as string)", local_time_at_unix_epoch);
+    TestStringValue("from_unixtime(0)", local_time_at_unix_epoch);
+    TestStringValue("from_unixtime(cast(0 as bigint))", local_time_at_unix_epoch);
+    TestIsNull("from_unixtime(NULL)", TYPE_STRING);
+    TestStringValue("from_unixtime(0, 'yyyy-MM-dd HH:mm:ss')",
+        local_time_at_unix_epoch);
+    TestStringValue("from_unixtime(cast(0 as bigint), 'yyyy-MM-dd HH:mm:ss')",
+        local_time_at_unix_epoch);
+    TestStringValue("from_unixtime(" + lexical_cast<string>(unix_time_at_local_epoch)
+        + ", 'yyyy-MM-dd')", "1970-01-01");
+    TestStringValue("from_unixtime(cast(" + lexical_cast<string>(unix_time_at_local_epoch)
+        + " as bigint), 'yyyy-MM-dd')", "1970-01-01");
   }
 
   // Decimals don't work with TestValue.
@@ -289,6 +373,8 @@ class ExprTest : public testing::Test {
     GetValue(expr, expr_type, &result);
 
     string expected_str;
+    float expected_float;
+    double expected_double;
     switch (expr_type.type) {
       case TYPE_BOOLEAN:
         EXPECT_EQ(*reinterpret_cast<bool*>(result), expected_result) << expr;
@@ -308,12 +394,15 @@ class ExprTest : public testing::Test {
       case TYPE_FLOAT:
         // Converting the float back from a string is inaccurate so convert
         // the expected result to a string.
-        RawValue::PrintValue(reinterpret_cast<const void*>(&expected_result),
+        // In case the expected_result was passed in as an int or double, convert it.
+        expected_float = static_cast<float>(expected_result);
+        RawValue::PrintValue(reinterpret_cast<const void*>(&expected_float),
                              TYPE_FLOAT, -1, &expected_str);
         EXPECT_EQ(*reinterpret_cast<string*>(result), expected_str) << expr;
         break;
       case TYPE_DOUBLE:
-        RawValue::PrintValue(reinterpret_cast<const void*>(&expected_result),
+        expected_double = static_cast<double>(expected_result);
+        RawValue::PrintValue(reinterpret_cast<const void*>(&expected_double),
                              TYPE_DOUBLE, -1, &expected_str);
         EXPECT_EQ(*reinterpret_cast<string*>(result), expected_str) << expr;
         break;
@@ -684,7 +773,7 @@ class ExprTest : public testing::Test {
 
   // Test casting stmt to all types.  Expected result is val.
   template<typename T>
-  void TestCast(const string& stmt, T val) {
+  void TestCast(const string& stmt, T val, bool timestamp_out_of_range = false) {
     TestValue("cast(" + stmt + " as boolean)", TYPE_BOOLEAN, static_cast<bool>(val));
     TestValue("cast(" + stmt + " as tinyint)", TYPE_TINYINT, static_cast<int8_t>(val));
     TestValue("cast(" + stmt + " as smallint)", TYPE_SMALLINT, static_cast<int16_t>(val));
@@ -695,15 +784,19 @@ class ExprTest : public testing::Test {
     TestValue("cast(" + stmt + " as double)", TYPE_DOUBLE, static_cast<double>(val));
     TestValue("cast(" + stmt + " as real)", TYPE_DOUBLE, static_cast<double>(val));
     TestStringValue("cast(" + stmt + " as string)", lexical_cast<string>(val));
-    TestStringValue("cast(cast(" + stmt + " as timestamp) as string)",
-                    lexical_cast<string>(TimestampValue(val)));
+    if (!timestamp_out_of_range) {
+      TestTimestampValue("cast(" + stmt + " as timestamp)", TimestampValue(val));
+    } else {
+      TestIsNull("cast(" + stmt + " as timestamp)", TYPE_TIMESTAMP);
+    }
   }
 };
 
 // Test casting 'stmt' to each of the native types.  The result should be 'val'
 // 'stmt' is a partial stmt that could be of any valid type.
 template<>
-void ExprTest::TestCast(const string& stmt, const char* val) {
+void ExprTest::TestCast(const string& stmt, const char* val,
+                        bool timestamp_out_of_range) {
   try {
     int8_t val8 = static_cast<int8_t>(lexical_cast<int16_t>(val));
 #if 0
@@ -928,7 +1021,7 @@ TEST_F(ExprTest, ArithmeticExprs) {
       min_int_values_[TYPE_BIGINT], TYPE_BIGINT);
 
   // Test behavior of INT_DIVIDE and MOD with zero as second argument.
-  unordered_map<int, int64_t>::iterator int_iter;
+  IntValMap::iterator int_iter;
   for(int_iter = min_int_values_.begin(); int_iter != min_int_values_.end();
       ++int_iter) {
     string& val = default_type_strs_[int_iter->first];
@@ -984,6 +1077,36 @@ TEST_F(ExprTest, DecimalArithmeticExprs) {
                    Decimal4Value(12), ColumnType::CreateDecimalType(38, 1));
   TestDecimalValue("cast(1 as decimal(38,0)) / cast(.2 as decimal(38,1))",
                    Decimal4Value(50), ColumnType::CreateDecimalType(38, 1));
+
+  // Test mod() UDF
+  TestDecimalValue("mod(cast('1' as decimal(2,0)), cast('10' as decimal(2,0)))",
+      Decimal4Value(1), ColumnType::CreateDecimalType(2, 0));
+  TestDecimalValue("mod(cast('1.1' as decimal(2,1)), cast('1.0' as decimal(2,1)))",
+      Decimal4Value(1), ColumnType::CreateDecimalType(2,1));
+  TestDecimalValue("mod(cast('-1.23' as decimal(5,2)), cast('1.0' as decimal(5,2)))",
+      Decimal4Value(-23), ColumnType::CreateDecimalType(5,2));
+  TestDecimalValue("mod(cast('1' as decimal(12,0)), cast('10' as decimal(12,0)))",
+      Decimal8Value(1), ColumnType::CreateDecimalType(12, 0));
+  TestDecimalValue("mod(cast('1.1' as decimal(12,1)), cast('1.0' as decimal(12,1)))",
+      Decimal8Value(1), ColumnType::CreateDecimalType(12,1));
+  TestDecimalValue("mod(cast('-1.23' as decimal(12,2)), cast('1.0' as decimal(12,2)))",
+      Decimal8Value(-23), ColumnType::CreateDecimalType(12,2));
+  TestDecimalValue("mod(cast('1' as decimal(32,0)), cast('10' as decimal(32,0)))",
+      Decimal16Value(1), ColumnType::CreateDecimalType(32, 0));
+  TestDecimalValue("mod(cast('1.1' as decimal(32,1)), cast('1.0' as decimal(32,1)))",
+      Decimal16Value(1), ColumnType::CreateDecimalType(32,1));
+  TestDecimalValue("mod(cast('-1.23' as decimal(32,2)), cast('1.0' as decimal(32,2)))",
+      Decimal16Value(-23), ColumnType::CreateDecimalType(32,2));
+  TestIsNull("mod(cast(NULL as decimal(2,0)), cast('10' as decimal(2,0)))",
+      ColumnType::CreateDecimalType(2,0));
+  TestIsNull("mod(cast('10' as decimal(2,0)), cast(NULL as decimal(2,0)))",
+      ColumnType::CreateDecimalType(2,0));
+  TestIsNull("mod(cast('10' as decimal(2,0)), cast('0' as decimal(2,0)))",
+      ColumnType::CreateDecimalType(2,0));
+  TestIsNull("mod(cast('10' as decimal(2,0)), cast('0' as decimal(2,0)))",
+      ColumnType::CreateDecimalType(2,0));
+  TestIsNull("mod(cast(NULL as decimal(2,0)), NULL)",
+      ColumnType::CreateDecimalType(2,0));
 }
 
 // There are two tests of ranges, the second of which requires a cast
@@ -1034,11 +1157,39 @@ TEST_F(ExprTest, CastExprs) {
   TestCast("cast(0.0 as float)", 0.0f);
   TestCast("cast(5.0 as float)", 5.0f);
   TestCast("cast(-5.0 as float)", -5.0f);
+  TestCast("cast(0.1234567890123 as float)", 0.1234567890123f);
+  TestCast("cast(0.1234567890123 as float)", 0.123456791f); // same as above
+  TestCast("cast(0.00000000001234567890123 as float)", 0.00000000001234567890123f);
+  TestCast("cast(123456 as float)", 123456.0f);
+
+  // From http://en.wikipedia.org/wiki/Single-precision_floating-point_format
+  // Min positive normal value
+  TestCast("cast(1.1754944e-38 as float)", 1.1754944e-38f);
+  // Max representable value
+  TestCast("cast(3.4028234e38 as float)", 3.4028234e38f, true);
+
 
   // From Double
   TestCast("cast(0.0 as double)", 0.0);
   TestCast("cast(5.0 as double)", 5.0);
   TestCast("cast(-5.0 as double)", -5.0);
+  TestCast("cast(0.123e10 as double)", 0.123e10);
+  TestCast("cast(123.123e10 as double)", 123.123e10, true);
+  TestCast("cast(1.01234567890123456789 as double)", 1.01234567890123456789);
+  TestCast("cast(1.01234567890123456789 as double)", 1.0123456789012346); // same as above
+  TestCast("cast(0.01234567890123456789 as double)", 0.01234567890123456789);
+  TestCast("cast(0.1234567890123456789 as double)", 0.1234567890123456789);
+  TestCast("cast(-2.2250738585072020E-308 as double)", -2.2250738585072020e-308);
+
+  // From http://en.wikipedia.org/wiki/Double-precision_floating-point_format
+  // Min subnormal positive double
+  TestCast("cast(4.9406564584124654e-324 as double)", 4.9406564584124654e-324);
+  // Max subnormal double
+  TestCast("cast(2.2250738585072009e-308 as double)", 2.2250738585072009e-308);
+  // Min normal positive double
+  TestCast("cast(2.2250738585072014e-308 as double)", 2.2250738585072014e-308);
+  // Max Double
+  TestCast("cast(1.7976931348623157e+308 as double)", 1.7976931348623157e308, true);
 
   // From String
   TestCast("'0'", "0");
@@ -1049,6 +1200,41 @@ TEST_F(ExprTest, CastExprs) {
   // From Timestamp to Timestamp
   TestStringValue("cast(cast(cast('2012-01-01 09:10:11.123456789' as timestamp) as"
       " timestamp) as string)", "2012-01-01 09:10:11.123456789");
+
+
+  // Timestamp <--> Int
+  TestIsNull("cast(cast('09:10:11.000000' as timestamp) as int)", TYPE_INT);
+  TestValue("cast(cast('2000-01-01' as timestamp) as int)", TYPE_INT, 946684800);
+  // Check that casting to a TINYINT gives the same result as if the Unix time were
+  // cast instead.
+  TestValue("cast(cast('2000-01-01' as timestamp) as tinyint)", TYPE_TINYINT, -128);
+  TestValue("cast(946684800 as tinyint)", TYPE_TINYINT, -128);
+  TestValue("cast(cast('2000-01-01 09:10:11.000000' as timestamp) as int)", TYPE_INT,
+      946717811);
+  TestTimestampValue("cast(946717811 as timestamp)",
+      TimestampValue("2000-01-01 09:10:11", 19));
+  TestValue("cast(cast('1400-01-01' as timestamp) as bigint)", TYPE_BIGINT, -17987443200);
+  TestTimestampValue("cast(-17987443200 as timestamp)", TimestampValue("1400-01-01", 10));
+  TestIsNull("cast(-17987443201 as timestamp)", TYPE_TIMESTAMP);
+  // Timestamp <--> Float
+  TestIsNull("cast(cast('09:10:11.000000' as timestamp) as float)", TYPE_FLOAT);
+  TestValue("cast(cast('2000-01-01' as timestamp) as double)", TYPE_DOUBLE, 946684800);
+  TestValue("cast(cast('2000-01-01' as timestamp) as float)", TYPE_FLOAT, 946684800);
+  TestValue("cast(cast('2000-01-01 09:10:11.720000' as timestamp) as double)",
+      TYPE_DOUBLE, 946717811.72);
+  TestTimestampValue("cast(cast(946717811.033 as double) as timestamp)",
+      TimestampValue("2000-01-01 09:10:11.032999992", 29));
+  TestValue("cast(cast('1400-01-01' as timestamp) as double)", TYPE_DOUBLE,
+      -17987443200);
+  TestIsNull("cast(cast(-17987443201.03 as double) as timestamp)", TYPE_TIMESTAMP);
+  // Use 4 digit years otherwise string parsing will fail.
+  TestValue("cast(cast('9999-12-31 23:59:59' as timestamp) + interval 1 year as bigint)",
+      TYPE_BIGINT, 253433923199);
+  TestTimestampValue("cast(253433923199 as timestamp) - interval 1 year",
+      TimestampValue("9999-12-31 23:59:59", 19));
+  TestIsNull("cast(253433923200 as timestamp)", TYPE_TIMESTAMP);
+  TestIsNull("cast(cast(null as bigint) as timestamp)", TYPE_TIMESTAMP);
+  TestIsNull("cast(cast(null as timestamp) as bigint)", TYPE_BIGINT);
 
 #if 0
   // Test overflow.  TODO: Hive casting rules are very weird here also.  It seems for
@@ -1261,7 +1447,7 @@ TEST_F(ExprTest, BetweenPredicate) {
 // Tests with NULLs are in the FE QueryTest.
 TEST_F(ExprTest, InPredicate) {
   // Test integers.
-  unordered_map<int, int64_t>::iterator int_iter;
+  IntValMap::iterator int_iter;
   for(int_iter = min_int_values_.begin(); int_iter != min_int_values_.end();
       ++int_iter) {
     string& val = default_type_strs_[int_iter->first];
@@ -1315,6 +1501,33 @@ TEST_F(ExprTest, InPredicate) {
       "not in (cast('2011-11-22 09:10:11' as timestamp), "
       "cast('2011-11-23 09:11:12' as timestamp), "
       "cast('2011-11-24 09:12:13' as timestamp))", TYPE_BOOLEAN, true);
+
+  // Test decimals
+  vector<string> dec_strs; // Decimal of every physical type
+  dec_strs.push_back("cast(-1.23 as decimal(8,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(9,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(10,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(17,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(18,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(19,2))");
+  dec_strs.push_back("cast(-1.23 as decimal(32,2))");
+  BOOST_FOREACH(const string& dec_str, dec_strs) {
+    TestValue(dec_str + "in (0)", TYPE_BOOLEAN, false);
+    TestValue(dec_str + "in (-1.23)", TYPE_BOOLEAN, true);
+    TestValue(dec_str + "in (-1.230)", TYPE_BOOLEAN, true);
+    TestValue(dec_str + "in (-1.23, 1)", TYPE_BOOLEAN, true);
+    TestValue(dec_str + "in (1, 1, 1, 1, 1, -1.23, 1, 1, 1, 1, 1, 1, -1.23)",
+              TYPE_BOOLEAN, true);
+    TestValue(dec_str + "in (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1.23)",
+              TYPE_BOOLEAN, true);
+    TestValue(dec_str + "in (1)", TYPE_BOOLEAN, false);
+    TestValue(dec_str + "in (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)", TYPE_BOOLEAN, false);
+    TestIsNull(dec_str + "in (NULL)", TYPE_BOOLEAN);
+    TestIsNull("NULL in (-1.23)", TYPE_BOOLEAN);
+    TestIsNull(dec_str + "in (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, NULL)", TYPE_BOOLEAN);
+    TestValue(dec_str + "in (1, 1, 1, 1, 1, NULL, 1, 1, 1, 1, 1, 1, -1.23)",
+              TYPE_BOOLEAN, true);
+  }
 
   // Test operator precedence.
   TestValue("5+1 in (3, 6, 10)", TYPE_BOOLEAN, true);
@@ -1998,6 +2211,37 @@ TEST_F(ExprTest, UtilityFunctions) {
   TestValue("sleep(100)", TYPE_BOOLEAN, true);
   TestIsNull("sleep(NULL)", TYPE_BOOLEAN);
 
+  // Test typeOf
+  TestStringValue("typeOf(!true)", "BOOLEAN");
+  TestStringValue("typeOf(1)", "TINYINT");
+  TestStringValue("typeOf(0)", "TINYINT");
+  TestStringValue("typeOf(-1)", "TINYINT");
+  TestStringValue("typeOf(128)", "SMALLINT");
+  TestStringValue("typeOf(32768)", "INT");
+  TestStringValue("typeOf(2147483648)", "BIGINT");
+  TestStringValue("typeOf(4294967296)", "BIGINT");
+  TestStringValue("typeOf(-4294967296)", "BIGINT");
+  TestStringValue("typeOf(9223372036854775807)", "BIGINT");
+  TestStringValue("typeOf(-9223372036854775808)", "BIGINT");
+  TestStringValue("typeOf(cast(10 as FLOAT))", "FLOAT");
+  TestStringValue("typeOf(cast(10 as DOUBLE))", "DOUBLE");
+  TestStringValue("typeOf(current_database())", "STRING");
+  TestStringValue("typeOf(now())", "TIMESTAMP");
+  TestStringValue("typeOf(cast(10 as DECIMAL))", "DECIMAL(9,0)");
+  TestStringValue("typeOf(0.0)", "DECIMAL(1,1)");
+  TestStringValue("typeOf(3.14)", "DECIMAL(3,2)");
+  TestStringValue("typeOf(-1.23)", "DECIMAL(3,2)");
+  TestStringValue("typeOf(cast(NULL as STRING))", "STRING");
+  TestStringValue("typeOf(\"\")", "STRING");
+  TestStringValue("typeOf(NULL)", "BOOLEAN");
+  TestStringValue("typeOf(34 < NULL)", "BOOLEAN");
+  TestStringValue("typeOf(cast('a' as CHAR(2)))", "CHAR(2)");
+  TestStringValue("typeOf(cast('abcdef' as CHAR(4)))", "CHAR(4)");
+  TestStringValue("typeOf(cast('a' as VARCHAR(2)))", "VARCHAR(2)");
+  TestStringValue("typeOf(cast('abcdef' as VARCHAR(4)))", "VARCHAR(4)");
+  TestStringValue("typeOf(cast(NULL as CHAR(2)))", "CHAR(2)");
+  TestStringValue("typeOf(cast(NULL as VARCHAR(4)))", "VARCHAR(4)");
+
   // Test fnv_hash
   string s("hello world");
   uint64_t expected = HashUtil::FnvHash64(s.data(), s.size(), HashUtil::FNV_SEED);
@@ -2006,7 +2250,7 @@ TEST_F(ExprTest, UtilityFunctions) {
   expected = HashUtil::FnvHash64(s.data(), s.size(), HashUtil::FNV_SEED);
   TestValue("fnv_hash('')", TYPE_BIGINT, expected);
 
-  unordered_map<int, int64_t>::iterator int_iter;
+  IntValMap::iterator int_iter;
   for(int_iter = min_int_values_.begin(); int_iter != min_int_values_.end();
       ++int_iter) {
     ColumnType t = ColumnType(static_cast<PrimitiveType>(int_iter->first));
@@ -2065,6 +2309,8 @@ TEST_F(ExprTest, NonFiniteFloats) {
   // NaN != NaN, so we have to wrap the value in a string
   TestStringValue("CAST(CAST('nan' AS FLOAT) AS STRING)", string("nan"));
   TestStringValue("CAST(CAST('nan' AS DOUBLE) AS STRING)", string("nan"));
+  // 0/0 evalutes to -nan, test that we return "nan"
+  TestStringValue("CAST(0/0 AS STRING)", string("nan"));
 }
 
 TEST_F(ExprTest, MathTrigonometricFunctions) {
@@ -2293,6 +2539,29 @@ TEST_F(ExprTest, MathFunctions) {
   TestIsNull("cast(-12345.345 as float) % cast(0 as float)", TYPE_FLOAT);
   TestIsNull("cast(-12345.345 as double) % 0", TYPE_DOUBLE);
 
+  // Test int param.
+  TestValue("mod(cast(10 as tinyint), cast(3 as tinyint))", TYPE_TINYINT, 10 % 3);
+  TestValue("mod(cast(10 as smallint), cast(3 as smallint))", TYPE_SMALLINT, 10 % 3);
+  TestValue("mod(cast(10 as int), cast(3 as int))", TYPE_INT, 10 % 3);
+  TestValue("mod(cast(10 as bigint), cast(3 as bigint))", TYPE_BIGINT, 10 % 3);
+  TestIsNull("mod(cast(123 as tinyint), 0)", TYPE_TINYINT);
+  TestIsNull("mod(cast(123 as smallint), 0)", TYPE_SMALLINT);
+  TestIsNull("mod(cast(123 as int), 0)", TYPE_INT);
+  TestIsNull("mod(cast(123 as bigint), 0)", TYPE_BIGINT);
+  TestIsNull("mod(cast(123 as tinyint), NULL)", TYPE_TINYINT);
+  TestIsNull("mod(cast(123 as smallint), NULL)", TYPE_SMALLINT);
+  TestIsNull("mod(cast(123 as int), NULL)", TYPE_INT);
+  TestIsNull("mod(cast(123 as bigint), NULL)", TYPE_BIGINT);
+  TestIsNull("mod(cast(NULL as int), NULL)", TYPE_INT);
+  // Test numeric param.
+  TestValue("mod(cast(12.3 as float), cast(4.0 as float))", TYPE_FLOAT, fmodf(12.3f, 4.0f));
+  TestValue("mod(cast(12.3 as double), cast(4.0 as double))", TYPE_DOUBLE, fmod(12.3, 4.0));
+  TestIsNull("mod(cast(12345.345 as float), cast(0 as float))", TYPE_FLOAT);
+  TestIsNull("mod(cast(12345.345 as double), cast(0 as double))", TYPE_DOUBLE);
+  TestIsNull("mod(cast(12345.345 as float), NULL)", TYPE_FLOAT);
+  TestIsNull("mod(cast(12345.345 as double), NULL)", TYPE_DOUBLE);
+  TestIsNull("mod(cast(NULL as float), NULL)", TYPE_FLOAT);
+
   // Test positive().
   TestValue("positive(cast(123 as tinyint))", TYPE_TINYINT, 123);
   TestValue("positive(cast(123 as smallint))", TYPE_SMALLINT, 123);
@@ -2407,7 +2676,8 @@ TEST_F(ExprTest, MathFunctions) {
   TestValue("greatest(0, -2, 1)", TYPE_TINYINT, 1);
   TestValue<float>("greatest(cast(2.0 as float), 2.0, 1.0, 1.0)", TYPE_FLOAT, 2.0f);
   TestValue<float>("greatest(cast(0.0 as float), -2.0, 1.0)", TYPE_FLOAT, 1.0f);
-  // Test all int types.
+  // Test all int types. A list of values will be built, each iteration adds a bigger
+  // value. This requires min_int_values_ to be an ordered map.
   val_list = "0";
   BOOST_FOREACH(IntValMap::value_type& entry, min_int_values_) {
     string val_str = lexical_cast<string>(entry.second);
@@ -2588,11 +2858,17 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestStringValue("cast(date_sub(cast('2012-01-01 09:10:11.123456789' "
       "as timestamp), interval cast(10 as bigint) years) as string)",
       "2002-01-01 09:10:11.123456789");
-  // These return NULL because year is out of range (IMPALA-1493)
+  // These return NULL because year is out of range (IMPALA-1493). If very large
+  // intervals are used the results will be incorrect due to using boost (IMPALA-1675
+  // still unresolved).
   TestIsNull(
       "CAST('2005-10-11 00:00:00' AS TIMESTAMP) - INTERVAL 718 YEAR", TYPE_TIMESTAMP);
   TestIsNull(
       "CAST('2005-10-11 00:00:00' AS TIMESTAMP) + INTERVAL -718 YEAR", TYPE_TIMESTAMP);
+  TestIsNull(
+      "CAST('2005-10-11 00:00:00' AS TIMESTAMP) + INTERVAL 9718 YEAR", TYPE_TIMESTAMP);
+  TestIsNull(
+      "CAST('2005-10-11 00:00:00' AS TIMESTAMP) - INTERVAL -9718 YEAR", TYPE_TIMESTAMP);
   // Add/sub months.
   TestStringValue("cast(date_add(cast('2012-01-01 09:10:11.123456789' "
       "as timestamp), interval 13 months) as string)",
@@ -2754,26 +3030,46 @@ TEST_F(ExprTest, TimestampFunctions) {
       "as timestamp), " + max_long + ") as string)",
       "2001-01-01 00:00:00");
 
-  TestValue("unix_timestamp(cast('1970-01-01 00:00:00' as timestamp))", TYPE_INT, 0);
-  TestValue("unix_timestamp('1970-01-01 00:00:00')", TYPE_INT, 0);
-  TestValue("unix_timestamp('1970-01-01 00:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT, 0);
-  TestValue("unix_timestamp('1970-01-01', 'yyyy-MM-dd')", TYPE_INT, 0);
-  TestValue("unix_timestamp('1970-01-01 10:10:10', 'yyyy-MM-dd')", TYPE_INT, 0);
-  TestValue("unix_timestamp('1970-01-01 00:00:00 extra text', 'yyyy-MM-dd HH:mm:ss')",
-            TYPE_INT, 0);
-  TestIsNull("unix_timestamp(NULL)", TYPE_INT);
-  TestIsNull("unix_timestamp('00:00:00')", TYPE_INT);
-  TestIsNull("unix_timestamp(NULL, 'yyyy-MM-dd')", TYPE_INT);
-  TestIsNull("unix_timestamp('00:00:00', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
-  TestStringValue("cast(cast(0 as timestamp) as string)", "1970-01-01 00:00:00");
-  TestStringValue("from_unixtime(0)", "1970-01-01 00:00:00");
-  TestStringValue("from_unixtime(cast(0 as bigint))", "1970-01-01 00:00:00");
-  TestIsNull("from_unixtime(NULL)", TYPE_STRING);
-  TestStringValue("from_unixtime(0, 'yyyy-MM-dd HH:mm:ss')", "1970-01-01 00:00:00");
-  TestStringValue("from_unixtime(cast(0 as bigint), 'yyyy-MM-dd HH:mm:ss')",
-      "1970-01-01 00:00:00");
-  TestStringValue("from_unixtime(0, 'yyyy-MM-dd')", "1970-01-01");
-  TestStringValue("from_unixtime(cast(0 as bigint), 'yyyy-MM-dd')", "1970-01-01");
+  // Test Unix epoch conversions.
+  TestTimestampUnixEpochConversions(0, "1970-01-01 00:00:00");
+
+  // Regression tests for IMPALA-1579, Unix times should be BIGINTs instead of INTs.
+  TestValue("unix_timestamp('2038-01-19 03:14:07')", TYPE_BIGINT, 2147483647);
+  TestValue("unix_timestamp('2038-01-19 03:14:08')", TYPE_BIGINT, 2147483648);
+  TestValue("unix_timestamp('2038/01/19 03:14:08', 'yyyy/MM/dd HH:mm:ss')", TYPE_BIGINT,
+      2147483648);
+  TestValue("unix_timestamp(cast('2038-01-19 03:14:08' as timestamp))", TYPE_BIGINT,
+      2147483648);
+
+
+  // Test Unix epoch conversions again but now converting into local timestamp values.
+  {
+    ScopedLocalUnixTimestampConversionOverride use_local;
+    // Determine what the local time would have been when it was 1970-01-01 GMT
+    ptime local_time_at_epoch = c_local_adjustor<ptime>::utc_to_local(from_time_t(0));
+    // ... and as an Impala compatible string.
+    string local_time_at_epoch_as_str = to_iso_extended_string(local_time_at_epoch.date())
+        + " " + to_simple_string(local_time_at_epoch.time_of_day());
+    // Determine what the Unix timestamp would have been when it was 1970-01-01 in the
+    // local time zone.
+    int64_t unix_time_at_local_epoch =
+        (from_time_t(0) - local_time_at_epoch).total_seconds();
+    TestTimestampUnixEpochConversions(unix_time_at_local_epoch,
+        local_time_at_epoch_as_str);
+
+    // Check that daylight savings calculation is done.
+    {
+      ScopedTimeZoneOverride time_zone("PST8PDT");
+      TestValue("unix_timestamp('2015-01-01')", TYPE_BIGINT, 1420099200);   // PST applies
+      TestValue("unix_timestamp('2015-07-01')", TYPE_BIGINT, 1435734000);   // PDT applies
+    }
+    {
+      ScopedTimeZoneOverride time_zone("EST5EDT");
+      TestValue("unix_timestamp('2015-01-01')", TYPE_BIGINT, 1420088400);   // EST applies
+      TestValue("unix_timestamp('2015-07-01')", TYPE_BIGINT, 1435723200);   // EDT applies
+    }
+  }
+
   TestIsNull("from_unixtime(NULL, 'yyyy-MM-dd')", TYPE_STRING);
   TestStringValue("from_unixtime(unix_timestamp('1999-01-01 10:10:10'), \
       'yyyy-MM-dd')", "1999-01-01");
@@ -2820,6 +3116,11 @@ TEST_F(ExprTest, TimestampFunctions) {
       cast('2012-12-22' as timestamp))", TYPE_INT, -366);
   TestValue("datediff(cast('2012-12-22' as timestamp), \
       cast('2011-12-22 09:10:11.12345678' as timestamp))", TYPE_INT, 366);
+
+  TestIsNull("cast('24:59:59' as timestamp)", TYPE_TIMESTAMP);
+  TestIsNull("cast('10000-12-31' as timestamp)", TYPE_TIMESTAMP);
+  TestIsNull("cast('10000-12-31 23:59:59' as timestamp)", TYPE_TIMESTAMP);
+  TestIsNull("cast('2000-12-31 24:59:59' as timestamp)", TYPE_TIMESTAMP);
 
   TestIsNull("year(cast('09:10:11.000000' as timestamp))", TYPE_INT);
   TestIsNull("month(cast('09:10:11.000000' as timestamp))", TYPE_INT);
@@ -2889,6 +3190,40 @@ TEST_F(ExprTest, TimestampFunctions) {
       TYPE_TIMESTAMP);
   TestIsNull("from_utc_timestamp(NULL, NULL)", TYPE_TIMESTAMP);
 
+  // Tests from Hive. When casting from timestamp to numeric, timestamps are considered
+  // to be local values.
+  {
+    ScopedLocalUnixTimestampConversionOverride use_local;
+    ScopedTimeZoneOverride time_zone("PST8PDT");
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as boolean)", TYPE_BOOLEAN,
+        true);
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as tinyint)", TYPE_TINYINT,
+        77);
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as smallint)", TYPE_SMALLINT,
+        -4787);
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as int)", TYPE_INT,
+        1293872461);
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as bigint)", TYPE_BIGINT,
+        1293872461);
+    // We have some rounding errors going backend to front, so do it as a string.
+    TestStringValue("cast(cast(cast('2011-01-01 01:01:01' as timestamp) as float)"
+        " as string)", "1.29387251e+09");
+    TestValue("cast(cast('2011-01-01 01:01:01' as timestamp) as double)", TYPE_DOUBLE,
+        1.293872461E9);
+    TestValue("cast(cast('2011-01-01 01:01:01.1' as timestamp) as double)", TYPE_DOUBLE,
+        1.2938724611E9);
+    TestValue("cast(cast('2011-01-01 01:01:01.0001' as timestamp) as double)",
+        TYPE_DOUBLE, 1.2938724610001E9);
+    // We get some decimal-binary skew here
+    TestStringValue("cast(cast(1.3041352164485E9 as timestamp) as string)",
+        "2011-04-29 20:46:56.448499917");
+    // NULL arguments.
+    TestIsNull("from_utc_timestamp(NULL, 'PST')", TYPE_TIMESTAMP);
+    TestIsNull("from_utc_timestamp(cast('2011-01-01 01:01:01.1' as timestamp), NULL)",
+        TYPE_TIMESTAMP);
+    TestIsNull("from_utc_timestamp(NULL, NULL)", TYPE_TIMESTAMP);
+  }
+
   // Hive silently ignores bad timezones.  We log a problem.
   TestStringValue(
       "cast(from_utc_timestamp("
@@ -2904,15 +3239,43 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestValidTimestampValue("current_timestamp()");
   TestValidTimestampValue("cast(unix_timestamp() as timestamp)");
 
+  // Test that the epoch is reasonable. Allow a few seconds to compensate for execution
+  // time.
+  int tolerance_in_seconds = 5;
+  time_t unix_time = (posix_time::microsec_clock::local_time() - from_time_t(0))
+      .total_seconds();
+  stringstream expr_sql;
+  expr_sql << "unix_timestamp() between " << unix_time - tolerance_in_seconds
+      << " and " << unix_time + tolerance_in_seconds;
+  TestValue(expr_sql.str(), TYPE_BOOLEAN, true);
+  {
+    ScopedLocalUnixTimestampConversionOverride use_local;
+    unix_time = time(NULL);
+    expr_sql.str("");
+    expr_sql << "unix_timestamp() between " << unix_time - tolerance_in_seconds
+        << " and " << unix_time + tolerance_in_seconds;
+    TestValue(expr_sql.str(), TYPE_BOOLEAN, true);
+  }
+  // Test that the other current time functions are also reasonable.
+  ptime local_time = c_local_adjustor<ptime>::utc_to_local(from_time_t(unix_time));
+  TestTimestampValue("now()", TimestampValue(local_time), tolerance_in_seconds);
+  TestTimestampValue("current_timestamp()", TimestampValue(local_time),
+      tolerance_in_seconds);
+  TestTimestampValue("cast(unix_timestamp() as timestamp)", TimestampValue(local_time),
+      tolerance_in_seconds);
+
   // Test alias
   TestValue("now() = current_timestamp()", TYPE_BOOLEAN, true);
 
   // Test custom formats
-  TestValue("unix_timestamp('1970|01|01 00|00|00', 'yyyy|MM|dd HH|mm|ss')", TYPE_INT, 0);
-  TestValue("unix_timestamp('01,Jan,1970,00,00,00', 'dd,MMM,yyyy,HH,mm,ss')", TYPE_INT,
+  TestValue("unix_timestamp('1970|01|01 00|00|00', 'yyyy|MM|dd HH|mm|ss')", TYPE_BIGINT,
       0);
+  TestValue("unix_timestamp('01,Jan,1970,00,00,00', 'dd,MMM,yyyy,HH,mm,ss')", TYPE_BIGINT,
+      0);
+  // This time format is misleading because a trailing Z means UTC but a timestamp can
+  // have no time zone association. unix_timestamp() expects inputs to be in local time.
   TestValue<int64_t>("unix_timestamp('1983-08-05T05:00:00.000Z', "
-      "'yyyy-MM-ddTHH:mm:ss.SSSZ')", TYPE_INT, 428907600);
+      "'yyyy-MM-ddTHH:mm:ss.SSSZ')", TYPE_BIGINT, 428907600);
 
   TestStringValue("from_unixtime(0, 'yyyy|MM|dd HH|mm|ss')", "1970|01|01 00|00|00");
   TestStringValue("from_unixtime(0, 'dd,MMM,yyyy,HH,mm,ss')", "01,Jan,1970,00,00,00");
@@ -2937,13 +3300,13 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestError("from_unixtime(0, ' -=++=- ')");
 
   // Valid format string, but invalid Timestamp, should return null;
-  TestIsNull("unix_timestamp('1970-01-01', 'yyyy-MM-dd HH:mm:ss')", TYPE_INT);
-  TestIsNull("unix_timestamp('1970', 'yyyy-MM-dd')", TYPE_INT);
-  TestIsNull("unix_timestamp('', 'yyyy-MM-dd')", TYPE_INT);
-  TestIsNull("unix_timestamp('|1|1 00|00|00', 'yyyy|M|d HH|MM|ss')", TYPE_INT);
+  TestIsNull("unix_timestamp('1970-01-01', 'yyyy-MM-dd HH:mm:ss')", TYPE_BIGINT);
+  TestIsNull("unix_timestamp('1970', 'yyyy-MM-dd')", TYPE_BIGINT);
+  TestIsNull("unix_timestamp('', 'yyyy-MM-dd')", TYPE_BIGINT);
+  TestIsNull("unix_timestamp('|1|1 00|00|00', 'yyyy|M|d HH|MM|ss')", TYPE_BIGINT);
 
-  TestIsNull("unix_timestamp('1970-01', 'yyyy-MM-dd')", TYPE_INT);
-  TestIsNull("unix_timestamp('1970-20-01', 'yyyy-MM-dd')", TYPE_INT);
+  TestIsNull("unix_timestamp('1970-01', 'yyyy-MM-dd')", TYPE_BIGINT);
+  TestIsNull("unix_timestamp('1970-20-01', 'yyyy-MM-dd')", TYPE_BIGINT);
 
 
   // regression test for IMPALA-1105
@@ -3152,8 +3515,10 @@ TEST_F(ExprTest, TimestampFunctions) {
   TestStringValue(
         "cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'MI') as string)",
           "2012-09-10 07:59:00");
-  TestNonOkStatus("cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'MIN') as string)");
-  TestNonOkStatus("cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'XXYYZZ') as string)");
+  TestNonOkStatus(
+      "cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'MIN') as string)");
+  TestNonOkStatus(
+      "cast(trunc(cast('2012-09-10 07:59:59' as timestamp), 'XXYYZZ') as string)");
 
   // Extract as a regular function
   TestValue("extract(cast('2006-05-12 18:27:28.12345' as timestamp), 'YEAR')",
@@ -3378,7 +3743,7 @@ TEST_F(ExprTest, ConditionalFunctions) {
 
   // Test all int types in then and else exprs.
   // Also tests implicit casting in all exprs.
-  unordered_map<int, int64_t>::iterator int_iter;
+  IntValMap::iterator int_iter;
   for (int_iter = min_int_values_.begin(); int_iter != min_int_values_.end();
       ++int_iter) {
     PrimitiveType t = static_cast<PrimitiveType>(int_iter->first);
@@ -3470,6 +3835,118 @@ TEST_F(ExprTest, ConditionalFunctions) {
   TestValue("decode(NULL, NULL, 2)", TYPE_TINYINT, 2);
   TestIsNull("decode(1, NULL, 2)", TYPE_TINYINT);
   TestIsNull("decode(NULL, 1, 2)", TYPE_TINYINT);
+}
+
+TEST_F(ExprTest, ConditionalFunctionIsTrue) {
+  TestValue("istrue(cast(false as boolean))", TYPE_BOOLEAN, false);
+  TestValue("istrue(cast(true as boolean))", TYPE_BOOLEAN, true);
+  TestValue("istrue(cast(NULL as boolean))", TYPE_BOOLEAN, false);
+  TestValue("istrue(cast(0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("istrue(cast(5 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("istrue(cast(-5 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("istrue(cast(0.0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("istrue(cast(5.0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("istrue(cast(-5.0 as boolean))", TYPE_BOOLEAN, true);
+
+  TestError("istrue(0)");
+  TestError("istrue(5)");
+  TestError("istrue(-5)");
+  TestError("istrue(0.0)");
+  TestError("istrue(5.0)");
+  TestError("istrue(-5.0)");
+  TestError("istrue(\"\")");
+  TestError("istrue(\"abc\")");
+  TestError("istrue(cast('2012-01-01 09:10:11.123456789' as timestamp))");
+
+  TestError("istrue(999999999999999999999999999999999999999)");
+  TestError("istrue(-99999999999999999999999999999999999999)");
+  TestError("istrue(99999999999999999999999999999999999999.9)");
+  TestError("istrue(-9999999999999999999999999999999999999.9)");
+}
+
+TEST_F(ExprTest, ConditionalFunctionIsFalse) {
+  TestValue("isfalse(cast(false as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isfalse(cast(true as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isfalse(cast(NULL as boolean))", TYPE_BOOLEAN, false);
+  // The output of cast(0 as boolean) is false.
+  TestValue("isfalse(cast(0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isfalse(cast(5 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isfalse(cast(-5 as boolean))", TYPE_BOOLEAN, false);
+  // The output of cast(0.0 as boolean) is false.
+  TestValue("isfalse(cast(0.0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isfalse(cast(5.0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isfalse(cast(-5.0 as boolean))", TYPE_BOOLEAN, false);
+
+  TestError("isfalse(0)");
+  TestError("isfalse(5)");
+  TestError("isfalse(-5)");
+  TestError("isfalse(0.0)");
+  TestError("isfalse(5.0)");
+  TestError("isfalse(-5.0)");
+  TestError("isfalse(\"\")");
+  TestError("isfalse(\"abc\")");
+  TestError("isfalse(cast('2012-01-01 09:10:11.123456789' as timestamp))");
+
+  TestError("isfalse(999999999999999999999999999999999999999)");
+  TestError("isfalse(-99999999999999999999999999999999999999)");
+  TestError("isfalse(99999999999999999999999999999999999999.9)");
+  TestError("isfalse(-9999999999999999999999999999999999999.9)");
+}
+
+TEST_F(ExprTest, ConditionalFunctionIsNotTrue) {
+  TestValue("isnottrue(cast(false as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnottrue(cast(true as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnottrue(cast(NULL as boolean))", TYPE_BOOLEAN, true);
+  // The output of cast(0 as boolean) is false.
+  TestValue("isnottrue(cast(0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnottrue(cast(5 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnottrue(cast(-5 as boolean))", TYPE_BOOLEAN, false);
+  // The output of cast(0.0 as boolean) is false.
+  TestValue("isnottrue(cast(0.0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnottrue(cast(5.0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnottrue(cast(-5.0 as boolean))", TYPE_BOOLEAN, false);
+
+  TestError("isnottrue(0)");
+  TestError("isnottrue(5)");
+  TestError("isnottrue(-5)");
+  TestError("isnottrue(0.0)");
+  TestError("isnottrue(5.0)");
+  TestError("isnottrue(-5.0)");
+  TestError("isnottrue(\"\")");
+  TestError("isnottrue(\"abc\")");
+  TestError("isnottrue(cast('2012-01-01 09:10:11.123456789' as timestamp))");
+
+  TestError("isnottrue(999999999999999999999999999999999999999)");
+  TestError("isnottrue(-99999999999999999999999999999999999999)");
+  TestError("isnottrue(99999999999999999999999999999999999999.9)");
+  TestError("isnottrue(-9999999999999999999999999999999999999.9)");
+}
+
+TEST_F(ExprTest, ConditionalFunctionIsNotFalse) {
+  TestValue("isnotfalse(cast(false as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnotfalse(cast(true as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnotfalse(cast(NULL as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnotfalse(cast(0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnotfalse(cast(5 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnotfalse(cast(-5 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnotfalse(cast(0.0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("isnotfalse(cast(5.0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("isnotfalse(cast(-5.0 as boolean))", TYPE_BOOLEAN, true);
+
+  TestError("isnotfalse(0)");
+  TestError("isnotfalse(5)");
+  TestError("isnotfalse(-5)");
+  TestError("isnotfalse(0.0)");
+  TestError("isnotfalse(5.0)");
+  TestError("isnotfalse(-5.0)");
+  TestError("isnotfalse(\"\")");
+  TestError("isnotfalse(\"abc\")");
+  TestError("isnotfalse(cast('2012-01-01 09:10:11.123456789' as timestamp))");
+
+  TestError("isnotfalse(999999999999999999999999999999999999999)");
+  TestError("isnotfalse(-99999999999999999999999999999999999999)");
+  TestError("isnotfalse(99999999999999999999999999999999999999.9)");
+  TestError("isnotfalse(-9999999999999999999999999999999999999.9)");
 }
 
 // Validates that Expr::ComputeResultsLayout() for 'exprs' is correct.
@@ -4172,6 +4649,146 @@ TEST_F(ExprTest, DecimalOverflowCasts) {
   // Tests converting a non-trivial empty string to a decimal (IMPALA-1566).
   TestDecimalValue("cast(regexp_replace('','a','b') as decimal(15,2))",
       Decimal8Value(0), ColumnType::CreateDecimalType(15,2));
+}
+
+TEST_F(ExprTest, NullValueFunction) {
+  TestValue("nullvalue(cast(NULL as boolean))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as boolean))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(NULL as int))", TYPE_BOOLEAN, true);
+
+  TestValue("nullvalue(cast(0 as int))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as int))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as int))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as tinyint))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as tinyint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as tinyint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as tinyint))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as smallint))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as smallint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as smallint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as smallint))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as bigint))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as bigint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as bigint))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as bigint))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as float))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as float))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5.0 as float))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5.0 as float))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as double))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0.0 as double))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5.0 as double))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5.0 as double))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as decimal(38,0)))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast(0 as decimal(38,0)))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(5 as decimal(38,0)))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-5 as decimal(38,0)))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(0.0 as decimal(38,38)))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(0.1 as decimal(38,38)))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(-0.1 as decimal(38,38)))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as string))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast('0' as string))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast('5' as string))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast('-5' as string))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(\"abc\" as string))", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(cast(\"\" as string))", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(cast(NULL as timestamp))", TYPE_BOOLEAN, true);
+  TestValue("nullvalue(cast('2012-01-01 09:10:11.123456789' as timestamp))",
+      TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(0)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(-5)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(5)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(0.0)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(-1.2345)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(1.2345)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(\"\")", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(\"abc\")", TYPE_BOOLEAN, false);
+
+  TestValue("nullvalue(99999999999999999999999999999999999)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(-99999999999999999999999999999999999)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(99999999999999999999999999999999999.9)", TYPE_BOOLEAN, false);
+  TestValue("nullvalue(-99999999999999999999999999999999999.9)", TYPE_BOOLEAN, false);
+}
+
+TEST_F(ExprTest, NonNullValueFunction) {
+  TestValue("nonnullvalue(cast(NULL as boolean))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as boolean))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as boolean))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as int))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as int))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as int))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as int))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as tinyint))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as tinyint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as tinyint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as tinyint))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as smallint))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as smallint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as smallint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as smallint))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as bigint))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as bigint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as bigint))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as bigint))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as float))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as float))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5.0 as float))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5.0 as float))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as double))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0.0 as double))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5.0 as double))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5.0 as double))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as decimal(38,0)))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast(0 as decimal(38,0)))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(5 as decimal(38,0)))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-5 as decimal(38,0)))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(0.0 as decimal(38,38)))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(0.1 as decimal(38,38)))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(-0.1 as decimal(38,38)))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as string))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast('0' as string))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast('5' as string))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast('-5' as string))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(\"abc\" as string))", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(cast(\"\" as string))", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(cast(NULL as timestamp))", TYPE_BOOLEAN, false);
+  TestValue("nonnullvalue(cast('2012-01-01 09:10:11.123456789' as timestamp))",
+      TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(0)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(-5)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(5)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(0.0)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(-1.2345)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(1.2345)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(\"\")", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(\"abc\")", TYPE_BOOLEAN, true);
+
+  TestValue("nonnullvalue(99999999999999999999999999999999999)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(-99999999999999999999999999999999999)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(99999999999999999999999999999999999.9)", TYPE_BOOLEAN, true);
+  TestValue("nonnullvalue(-99999999999999999999999999999999999.9)", TYPE_BOOLEAN, true);
 }
 
 TEST_F(ExprTest, UdfInterfaceBuiltins) {

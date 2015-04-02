@@ -79,6 +79,7 @@ import com.cloudera.impala.thrift.TLogLevel;
 import com.cloudera.impala.thrift.TMetadataOpRequest;
 import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TResultSet;
+import com.cloudera.impala.thrift.TShowFilesParams;
 import com.cloudera.impala.thrift.TShowGrantRoleParams;
 import com.cloudera.impala.thrift.TShowRolesParams;
 import com.cloudera.impala.thrift.TShowRolesResult;
@@ -218,6 +219,25 @@ public class JniFrontend {
 
     TGetTablesResult result = new TGetTablesResult();
     result.setTables(tables);
+
+    TSerializer serializer = new TSerializer(protocolFactory_);
+    try {
+      return serializer.serialize(result);
+    } catch (TException e) {
+      throw new InternalException(e.getMessage());
+    }
+  }
+
+  /**
+   * Returns files info of a table or partition.
+   * The argument is a serialized TShowFilesParams object.
+   * The return type is a serialised TResultSet object.
+   * @see Frontend#getTableFiles
+   */
+  public byte[] getTableFiles(byte[] thriftShowFilesParams) throws ImpalaException {
+    TShowFilesParams params = new TShowFilesParams();
+    JniUtil.deserializeThrift(protocolFactory_, params, thriftShowFilesParams);
+    TResultSet result = frontend_.getTableFiles(params);
 
     TSerializer serializer = new TSerializer(protocolFactory_);
     try {
@@ -809,20 +829,21 @@ public class JniFrontend {
   }
 
   /**
-   * Return an empty string if the FileSystem configured in CONF refers to a
-   * DistributedFileSystem (the only one supported by Impala) and Impala can list the root
-   * directory "/". Otherwise, return an error string describing the issues.
+   * Return an empty string if the default FileSystem configured in CONF refers to a
+   * DistributedFileSystem and Impala can list the root directory "/". Otherwise,
+   * return an error string describing the issues.
    */
   private String checkFileSystem(Configuration conf) {
     try {
       FileSystem fs = FileSystem.get(CONF);
       /*
       if (!(fs instanceof DistributedFileSystem)) {
-        return "Unsupported filesystem. Impala only supports DistributedFileSystem " +
-            "but the configured filesystem is: " + fs.getClass().getSimpleName() + "." +
+        return "Unsupported default filesystem. The default filesystem must be " +
+            "a DistributedFileSystem but the configured default filesystem is " +
+            fs.getClass().getSimpleName() + ". " +
             CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY +
-            "(" + CONF.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY) + ")" +
-            " might be set incorrectly";
+            " (" + CONF.get(CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY) + ")" +
+            " might be set incorrectly.";
       }
       */
     } catch (IOException e) {

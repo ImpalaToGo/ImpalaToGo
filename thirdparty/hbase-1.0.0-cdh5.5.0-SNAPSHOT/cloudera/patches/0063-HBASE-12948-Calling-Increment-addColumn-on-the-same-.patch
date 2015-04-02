@@ -1,0 +1,126 @@
+From 3f36b1d17c67f58668f930a36f54026d9dfc0b11 Mon Sep 17 00:00:00 2001
+From: tedyu <yuzhihong@gmail.com>
+Date: Tue, 17 Feb 2015 12:42:32 -0800
+Subject: [PATCH 063/110] HBASE-12948 Calling Increment#addColumn on the same column multiple times produces wrong result
+
+Reason: Bug
+Author: hongyu bi
+Ref: CDH-25564
+---
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   21 +++++----
+ .../hadoop/hbase/client/TestFromClientSide.java    |   43 ++++++++++++++++++++
+ 2 files changed, 55 insertions(+), 9 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index 384e073..f79c3d8 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -3511,7 +3511,7 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver { //
+ 
+   protected void checkReadsEnabled() throws IOException {
+     if (!this.writestate.readsEnabled) {
+-      throw new IOException ("The region's reads are disabled. Cannot serve the request");
++      throw new IOException("The region's reads are disabled. Cannot serve the request");
+     }
+   }
+ 
+@@ -6640,17 +6640,19 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver { //
+             // Iterate the input columns and update existing values if they were
+             // found, otherwise add new column initialized to the increment amount
+             int idx = 0;
+-            for (Cell cell: family.getValue()) {
++            List<Cell> edits = family.getValue();
++            for (int i = 0; i < edits.size(); i++) {
++              Cell cell = edits.get(i);
+               long amount = Bytes.toLong(CellUtil.cloneValue(cell));
+               boolean noWriteBack = (amount == 0);
+               List<Tag> newTags = new ArrayList<Tag>();
+ 
+               // Carry forward any tags that might have been added by a coprocessor
+               if (cell.getTagsLength() > 0) {
+-                Iterator<Tag> i = CellUtil.tagsIterator(cell.getTagsArray(),
++                Iterator<Tag> itr = CellUtil.tagsIterator(cell.getTagsArray(),
+                   cell.getTagsOffset(), cell.getTagsLength());
+-                while (i.hasNext()) {
+-                  newTags.add(i.next());
++                while (itr.hasNext()) {
++                  newTags.add(itr.next());
+                 }
+               }
+ 
+@@ -6668,13 +6670,14 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver { //
+                 }
+                 // Carry tags forward from previous version
+                 if (c.getTagsLength() > 0) {
+-                  Iterator<Tag> i = CellUtil.tagsIterator(c.getTagsArray(),
++                  Iterator<Tag> itr = CellUtil.tagsIterator(c.getTagsArray(),
+                     c.getTagsOffset(), c.getTagsLength());
+-                  while (i.hasNext()) {
+-                    newTags.add(i.next());
++                  while (itr.hasNext()) {
++                    newTags.add(itr.next());
+                   }
+                 }
+-                idx++;
++                if (i < ( edits.size() - 1) && !CellUtil.matchingQualifier(cell, edits.get(i + 1)))
++                  idx++;
+               }
+ 
+               // Append new incremented KeyValue to list
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
+index acfd4ef..9220098 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestFromClientSide.java
+@@ -4610,6 +4610,49 @@ public class TestFromClientSide {
+   }
+ 
+   @Test
++  public void testIncrementOnSameColumn() throws Exception {
++    LOG.info("Starting testIncrementOnSameColumn");
++    final byte[] TABLENAME = Bytes.toBytes("testIncrementOnSameColumn");
++    HTable ht = TEST_UTIL.createTable(TABLENAME, FAMILY);
++
++    byte[][] QUALIFIERS =
++        new byte[][] { Bytes.toBytes("A"), Bytes.toBytes("B"), Bytes.toBytes("C") };
++
++    Increment inc = new Increment(ROW);
++    for (int i = 0; i < QUALIFIERS.length; i++) {
++      inc.addColumn(FAMILY, QUALIFIERS[i], 1);
++      inc.addColumn(FAMILY, QUALIFIERS[i], 1);
++    }
++    ht.increment(inc);
++
++    // Verify expected results
++    Result r = ht.get(new Get(ROW));
++    Cell[] kvs = r.rawCells();
++    assertEquals(3, kvs.length);
++    assertIncrementKey(kvs[0], ROW, FAMILY, QUALIFIERS[0], 1);
++    assertIncrementKey(kvs[1], ROW, FAMILY, QUALIFIERS[1], 1);
++    assertIncrementKey(kvs[2], ROW, FAMILY, QUALIFIERS[2], 1);
++
++    // Now try multiple columns again
++    inc = new Increment(ROW);
++    for (int i = 0; i < QUALIFIERS.length; i++) {
++      inc.addColumn(FAMILY, QUALIFIERS[i], 1);
++      inc.addColumn(FAMILY, QUALIFIERS[i], 1);
++    }
++    ht.increment(inc);
++
++    // Verify
++    r = ht.get(new Get(ROW));
++    kvs = r.rawCells();
++    assertEquals(3, kvs.length);
++    assertIncrementKey(kvs[0], ROW, FAMILY, QUALIFIERS[0], 2);
++    assertIncrementKey(kvs[1], ROW, FAMILY, QUALIFIERS[1], 2);
++    assertIncrementKey(kvs[2], ROW, FAMILY, QUALIFIERS[2], 2);
++    
++    ht.close();
++  }
++
++  @Test
+   public void testIncrement() throws Exception {
+     LOG.info("Starting testIncrement");
+     final TableName TABLENAME = TableName.valueOf("testIncrement");
+-- 
+1.7.0.4
+

@@ -1,0 +1,131 @@
+From de1cf959c5ef6e67076904169c37b8bb6282c562 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Sun, 14 Dec 2014 10:20:50 -0800
+Subject: [PATCH 070/110] HBASE-12691 Mob Sweeper job needs to exit with non-zero error value if job fails for any reason
+
+Reason: MOB feature
+Author: Jonathan Hsieh
+Ref: CDH-20651
+---
+ .../hadoop/hbase/mob/mapreduce/SweepJob.java       |   14 +++++++++-----
+ .../apache/hadoop/hbase/mob/mapreduce/Sweeper.java |   15 +++++++++------
+ 2 files changed, 18 insertions(+), 11 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
+index ab63e5c..8caa3b0 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/SweepJob.java
+@@ -120,7 +120,7 @@ public class SweepJob {
+    * @throws InterruptedException
+    * @throws KeeperException
+    */
+-  public void sweep(TableName tn, HColumnDescriptor family) throws IOException,
++  public int sweep(TableName tn, HColumnDescriptor family) throws IOException,
+       ClassNotFoundException, InterruptedException, KeeperException {
+     Configuration conf = new Configuration(this.conf);
+     // check whether the current user is the same one with the owner of hbase root
+@@ -148,7 +148,7 @@ public class SweepJob {
+       if (!zk.lockColumnFamily(tn.getNameAsString(), familyName)) {
+         LOG.warn("Can not lock the store " + familyName
+             + ". The major compaction in HBase may be in-progress. Please re-run the job.");
+-        return;
++        return 3;
+       }
+       try {
+         // Checks whether there're HBase major compaction now.
+@@ -156,13 +156,13 @@ public class SweepJob {
+         if (hasChildren) {
+           LOG.warn("The major compaction in HBase may be in-progress."
+               + " Please re-run the job.");
+-          return;
++          return 4;
+         } else {
+           // Checks whether there's sweep tool in progress.
+           boolean hasSweeper = zk.isSweeperZNodeExist(tn.getNameAsString(), familyName);
+           if (hasSweeper) {
+             LOG.warn("Another sweep job is running");
+-            return;
++            return 5;
+           } else {
+             // add the sweeper node, mark that there's one sweep tool in progress.
+             // All the HBase major compaction and sweep tool in this column family could not
+@@ -202,6 +202,9 @@ public class SweepJob {
+         if (job.waitForCompletion(true)) {
+           // Archive the unused mob files.
+           removeUnusedFiles(job, tn, family);
++        } else {
++          System.err.println("Job Failed");
++          return 6;
+         }
+       } finally {
+         cleanup(job, tn, familyName);
+@@ -210,6 +213,7 @@ public class SweepJob {
+     } finally {
+       zk.close();
+     }
++    return 0;
+   }
+ 
+   /**
+@@ -417,7 +421,7 @@ public class SweepJob {
+   /**
+    * Deletes the working directory.
+    * @param job The current job.
+-   * @param store The current MobFileStore.
++   * @param familyName The family to cleanup
+    * @throws IOException
+    */
+   private void cleanup(Job job, TableName tn, String familyName) throws IOException {
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
+index 451ee26..24b573e 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/mapreduce/Sweeper.java
+@@ -56,7 +56,7 @@ public class Sweeper extends Configured implements Tool {
+    * @throws KeeperException
+    * @throws ServiceException
+    */
+-  void sweepFamily(String tableName, String familyName) throws IOException, InterruptedException,
++  int sweepFamily(String tableName, String familyName) throws IOException, InterruptedException,
+       ClassNotFoundException, KeeperException, ServiceException {
+     Configuration conf = getConf();
+     // make sure the target HBase exists.
+@@ -68,11 +68,14 @@ public class Sweeper extends Configured implements Tool {
+       HTableDescriptor htd = admin.getTableDescriptor(tn);
+       HColumnDescriptor family = htd.getFamily(Bytes.toBytes(familyName));
+       if (family == null || !family.isMobEnabled()) {
+-        throw new IOException("Column family " + familyName + " is not a MOB column family");
++          throw new IOException("Column family " + familyName + " is not a MOB column family");
+       }
+       SweepJob job = new SweepJob(conf, fs);
+       // Run the sweeping
+-      job.sweep(tn, family);
++      return job.sweep(tn, family);
++    } catch (Exception e) {
++      System.err.println("Job failed. " + e);
++      return 2; // job failed
+     } finally {
+       try {
+         admin.close();
+@@ -84,7 +87,8 @@ public class Sweeper extends Configured implements Tool {
+ 
+   public static void main(String[] args) throws Exception {
+     Configuration conf = HBaseConfiguration.create();
+-    ToolRunner.run(conf, new Sweeper(), args);
++    int ret = ToolRunner.run(conf, new Sweeper(), args);
++    System.exit(ret);
+   }
+ 
+   private void printUsage() {
+@@ -101,7 +105,6 @@ public class Sweeper extends Configured implements Tool {
+     }
+     String table = args[0];
+     String family = args[1];
+-    sweepFamily(table, family);
+-    return 0;
++    return sweepFamily(table, family);
+   }
+ }
+\ No newline at end of file
+-- 
+1.7.0.4
+

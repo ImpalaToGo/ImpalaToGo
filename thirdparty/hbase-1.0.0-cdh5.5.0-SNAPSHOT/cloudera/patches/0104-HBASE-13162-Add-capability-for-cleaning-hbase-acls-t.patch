@@ -1,0 +1,175 @@
+From 1b5e17d3388460310e3c1dfb842c9a94a0e27878 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Thu, 12 Mar 2015 17:06:27 -0700
+Subject: [PATCH 104/110] HBASE-13162 Add capability for cleaning hbase acls to hbase cleanup script (Srikanth Srungarapu)
+
+Reason: Improvement
+Author: Srikanth Srungarapu
+Ref: CDH-23748
+---
+ bin/hbase-cleanup.sh                               |   12 ++-
+ .../apache/hadoop/hbase/zookeeper/ZkAclReset.java  |  108 ++++++++++++++++++++
+ 2 files changed, 118 insertions(+), 2 deletions(-)
+ create mode 100644 hbase-client/src/main/java/org/apache/hadoop/hbase/zookeeper/ZkAclReset.java
+
+diff --git a/bin/hbase-cleanup.sh b/bin/hbase-cleanup.sh
+index 40633fc..596e366 100755
+--- a/bin/hbase-cleanup.sh
++++ b/bin/hbase-cleanup.sh
+@@ -31,7 +31,7 @@
+ #   HBASE_SSH_OPTS Options passed to ssh when running remote commands.
+ #
+ 
+-usage="Usage: hbase-cleanup.sh (--cleanZk|--cleanHdfs|--cleanAll)"
++usage="Usage: hbase-cleanup.sh (--cleanZk|--cleanHdfs|--cleanAll|--cleanAcls)"
+ 
+ bin=`dirname "$0"`
+ bin=`cd "$bin">/dev/null; pwd`
+@@ -40,7 +40,7 @@ bin=`cd "$bin">/dev/null; pwd`
+ . "$bin"/hbase-config.sh
+ 
+ case $1 in
+-  --cleanZk|--cleanHdfs|--cleanAll) 
++  --cleanZk|--cleanHdfs|--cleanAll|--cleanAcls)
+     matches="yes" ;;
+   *) ;;
+ esac
+@@ -90,6 +90,11 @@ execute_hdfs_command() {
+   "$bin"/hbase org.apache.hadoop.fs.FsShell $command 2>&1
+ }
+ 
++execute_clean_acls() {
++  command=$1;
++  "$bin"/hbase org.apache.hadoop.hbase.zookeeper.ZkAclReset $command 2>&1
++}
++
+ clean_up() {
+   case $1 in
+   --cleanZk) 
+@@ -102,6 +107,9 @@ clean_up() {
+     execute_zk_command "rmr ${zparent}";
+     execute_hdfs_command "-rmr ${hrootdir}"
+     ;;
++  --cleanAcls)
++    execute_clean_acls;
++    ;;
+   *)
+     ;;
+   esac	
+diff --git a/hbase-client/src/main/java/org/apache/hadoop/hbase/zookeeper/ZkAclReset.java b/hbase-client/src/main/java/org/apache/hadoop/hbase/zookeeper/ZkAclReset.java
+new file mode 100644
+index 0000000..faf0950
+--- /dev/null
++++ b/hbase-client/src/main/java/org/apache/hadoop/hbase/zookeeper/ZkAclReset.java
+@@ -0,0 +1,108 @@
++/**
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.zookeeper;
++
++import java.util.List;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.conf.Configured;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.util.Tool;
++import org.apache.hadoop.util.ToolRunner;
++import org.apache.zookeeper.ZooDefs;
++import org.apache.zookeeper.ZooKeeper;
++import org.apache.zookeeper.Watcher;
++import org.apache.zookeeper.WatchedEvent;
++
++/**
++ * You may add the jaas.conf option
++ *    -Djava.security.auth.login.config=/PATH/jaas.conf
++ *
++ * You may also specify -D to set options
++ *    "hbase.zookeeper.quorum"    (it should be in hbase-site.xml)
++ *    "zookeeper.znode.parent"    (it should be in hbase-site.xml)
++ */
++public class ZkAclReset extends Configured implements Tool {
++  private static final Log LOG = LogFactory.getLog(ZkAclReset.class);
++
++  private static final int ZK_SESSION_TIMEOUT_DEFAULT = 5 * 1000;
++
++  private static class ZkWatcher implements Watcher {
++    public ZkWatcher() {
++    }
++
++    @Override
++    public void process(WatchedEvent event) {
++      LOG.info("Received ZooKeeper Event, " +
++          "type=" + event.getType() + ", " +
++          "state=" + event.getState() + ", " +
++          "path=" + event.getPath());
++    }
++  }
++
++  private static void resetAcls(final ZooKeeper zk, final String znode)
++      throws Exception {
++    List<String> children = zk.getChildren(znode, false);
++    if (children != null) {
++      for (String child: children) {
++        resetAcls(zk, znode + '/' + child);
++      }
++    }
++    LOG.info(" - reset acl for " + znode);
++    zk.setACL(znode, ZooDefs.Ids.OPEN_ACL_UNSAFE, -1);
++  }
++
++  private static void resetAcls(final String quorumServers, final int zkTimeout, final String znode)
++      throws Exception {
++    ZooKeeper zk = new ZooKeeper(quorumServers, zkTimeout, new ZkWatcher());
++    try {
++      resetAcls(zk, znode);
++    } finally {
++      zk.close();
++    }
++  }
++
++  private void resetHBaseAcls(final Configuration conf) throws Exception {
++    String quorumServers = conf.get("hbase.zookeeper.quorum", HConstants.LOCALHOST);
++    int sessionTimeout = conf.getInt("zookeeper.session.timeout", ZK_SESSION_TIMEOUT_DEFAULT);
++    String znode = conf.get("zookeeper.znode.parent", HConstants.DEFAULT_ZOOKEEPER_ZNODE_PARENT);
++    if (quorumServers == null) {
++      LOG.error("Unable to load hbase.zookeeper.quorum (try with: -conf hbase-site.xml)");
++      return;
++    }
++
++    LOG.info("Reset HBase ACLs for " + quorumServers + " " + znode);
++    resetAcls(quorumServers, sessionTimeout, znode);
++  }
++
++
++  @Override
++  public int run(String[] args) throws Exception {
++    Configuration conf = getConf();
++    resetHBaseAcls(conf);
++    return(0);
++  }
++
++  public static void main(String[] args) throws Exception {
++    System.exit(ToolRunner.run(new Configuration(), new ZkAclReset(), args));
++  }
++}
+-- 
+1.7.0.4
+

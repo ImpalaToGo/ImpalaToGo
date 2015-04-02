@@ -248,6 +248,10 @@ EDATE TIME__ THREADID logging_unittest.cc:LINE] log_if error expr
 IDATE TIME__ THREADID logging_unittest.cc:LINE] log_if info every 1 expr
 EDATE TIME__ THREADID logging_unittest.cc:LINE] log_if error every 1 expr
 IDATE TIME__ THREADID logging_unittest.cc:LINE] vlog_if 0 every 1 expr
+IDATE TIME__ THREADID logging_unittest.cc:LINE] Message listener
+IDATE TIME__ THREADID logging_unittest.cc:LINE] Unchanged
+IDATE TIME__ THREADID logging_unittest.cc:LINE] Changed
+IDATE TIME__ THREADID logging_unittest.cc:LINE] Change me
 IDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported info
 WDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported warning
 EDATE TIME__ THREADID logging_unittest.cc:LINE] LOG_STRING: reported error

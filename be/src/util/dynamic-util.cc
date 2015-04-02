@@ -29,7 +29,7 @@ Status DynamicLookup(void* handle, const char* symbol, void** fn_ptr, bool quiet
   if (error != NULL) {
     stringstream ss;
     ss << "Unable to find " << symbol << "\ndlerror: " << error;
-    return Status(ss.str(), quiet);
+    return quiet ? Status::Expected(ss.str()) : Status(ss.str());
   }
   return Status::OK;
 }

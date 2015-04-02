@@ -1,0 +1,111 @@
+From 26e0d507c62469f87bce202a44c3ffea151bd930 Mon Sep 17 00:00:00 2001
+From: stack <stack@apache.org>
+Date: Tue, 30 Dec 2014 11:37:13 -0800
+Subject: [PATCH 101/110] HBASE-12772 TestPerColumnFamilyFlush failing -- ADDENDUM
+
+Conflicts:
+	hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestPerColumnFamilyFlush.java
+
+(cherry picked from commit 1962d39bf6b772605ca6484de302ce68095cab4a)
+
+Reason: Test
+Author: stack
+Ref: CDH-25580
+---
+ .../regionserver/TestPerColumnFamilyFlush.java     |   27 ++++++++++++++------
+ 1 files changed, 19 insertions(+), 8 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestPerColumnFamilyFlush.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestPerColumnFamilyFlush.java
+index 7de9f40..498ec57 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestPerColumnFamilyFlush.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestPerColumnFamilyFlush.java
+@@ -52,6 +52,7 @@ import org.apache.hadoop.hbase.testclassification.LargeTests;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.JVMClusterUtil;
+ import org.apache.hadoop.hbase.util.Pair;
++import org.apache.hadoop.hbase.util.Threads;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
+ 
+@@ -120,7 +121,7 @@ public class TestPerColumnFamilyFlush {
+       Arrays.equals(r.getFamilyMap(family).get(qf), val));
+   }
+ 
+-  @Test
++  @Test (timeout=180000)
+   public void testSelectiveFlushWhenEnabled() throws IOException {
+     // Set up the configuration
+     Configuration conf = HBaseConfiguration.create();
+@@ -258,7 +259,7 @@ public class TestPerColumnFamilyFlush {
+     assertEquals(0, region.getMemstoreSize().get());
+   }
+ 
+-  @Test
++  @Test (timeout=180000)
+   public void testSelectiveFlushWhenNotEnabled() throws IOException {
+     // Set up the configuration
+     Configuration conf = HBaseConfiguration.create();
+@@ -413,7 +414,7 @@ public class TestPerColumnFamilyFlush {
+   // In distributed log replay, the log splitters ask the master for the
+   // last flushed sequence id for a region. This test would ensure that we
+   // are doing the book-keeping correctly.
+-  @Test
++  @Test (timeout=180000)
+   public void testLogReplayWithDistributedReplay() throws Exception {
+     TEST_UTIL.getConfiguration().setBoolean(HConstants.DISTRIBUTED_LOG_REPLAY_KEY, true);
+     doTestLogReplay();
+@@ -432,7 +433,7 @@ public class TestPerColumnFamilyFlush {
+    * test ensures that we do a full-flush in that scenario.
+    * @throws IOException
+    */
+-  @Test
++  @Test (timeout=180000)
+   public void testFlushingWhenLogRolling() throws Exception {
+     TableName tableName = TableName.valueOf("testFlushingWhenLogRolling");
+     Configuration conf = TEST_UTIL.getConfiguration();
+@@ -445,12 +446,22 @@ public class TestPerColumnFamilyFlush {
+     conf.setLong("hbase.regionserver.logroll.period", 2000);
+     // Keep the block size small so that we fill up the log files very fast.
+     conf.setLong("hbase.regionserver.hlog.blocksize", 6144);
+-    int maxLogs = conf.getInt("hbase.regionserver.maxlogs", 32);
++    // Make it 10 as max logs before a flush comes on.
++    final int walcount = 10;
++    conf.setInt("hbase.regionserver.maxlogs", walcount);
++    int maxLogs = conf.getInt("hbase.regionserver.maxlogs", walcount);
+ 
+     final int numRegionServers = 4;
+     try {
+       TEST_UTIL.startMiniCluster(numRegionServers);
+-      HTable table = TEST_UTIL.createTable(tableName, families);
++      HTable table = null;
++      table = TEST_UTIL.createTable(tableName, families);
++      // Force flush the namespace table so edits to it are not hanging around as oldest
++      // edits. Otherwise, below, when we make maximum number of WAL files, then it will be
++      // the namespace region that is flushed and not the below 'desiredRegion'.
++      try (Admin admin = TEST_UTIL.getConnection().getAdmin()) {
++        admin.flush(TableName.NAMESPACE_TABLE_NAME);
++      }
+       HRegion desiredRegion = getRegionWithName(tableName).getFirst();
+       assertTrue("Could not find a region which hosts the new region.", desiredRegion != null);
+       LOG.info("Writing to region=" + desiredRegion);
+@@ -474,7 +485,7 @@ public class TestPerColumnFamilyFlush {
+       }
+       table.close();
+       // Wait for some time till the flush caused by log rolling happens.
+-      Thread.sleep(4000);
++      while (((FSHLog) (desiredRegion.getWAL())).getNumLogFiles() > maxLogs) Threads.sleep(100);
+       LOG.info("Finished waiting on flush after too many WALs...");
+ 
+       // We have artificially created the conditions for a log roll. When a
+@@ -523,7 +534,7 @@ public class TestPerColumnFamilyFlush {
+ 
+   // Under the same write load, small stores should have less store files when
+   // percolumnfamilyflush enabled.
+-  @Test
++  @Test (timeout=180000)
+   public void testCompareStoreFileCount() throws Exception {
+     long memstoreFlushSize = 1024L * 1024;
+     Configuration conf = TEST_UTIL.getConfiguration();
+-- 
+1.7.0.4
+

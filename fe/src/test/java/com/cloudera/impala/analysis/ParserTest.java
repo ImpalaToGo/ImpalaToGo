@@ -83,7 +83,7 @@ public class ParserTest {
     Object result = null; // Save this object to make debugging easier
     try {
       result = parser.parse().value;
-    } catch (java.lang.Exception e) {
+    } catch (Exception e) {
       if (expectedErrorString != null) {
         String errorString = parser.getErrorMsg(stmt);
         assertTrue(errorString.startsWith(expectedErrorString));
@@ -91,24 +91,6 @@ public class ParserTest {
       return;
     }
     fail("Stmt didn't result in parsing error: " + stmt);
-  }
-
-  /**
-   * Asserts if stmt scans fine.
-   * @param stmt
-   */
-  public void ScannerError(String stmt) {
-    SqlScanner input = new SqlScanner(new StringReader(stmt));
-    SqlParser parser = new SqlParser(input);
-    try {
-      parser.parse();
-    } catch (java.lang.Exception e) {
-      fail("Stmt didn't result in scanning error but a parsing error instead: " + stmt);
-    } catch (java.lang.Error e) {
-      // Exception message is always 'failure occurred on input'.
-      return;
-    }
-    fail("Stmt didn't result in scanning or parsing error: " + stmt);
   }
 
   /**
@@ -1027,7 +1009,18 @@ public class ParserTest {
     // escaping non-escape chars should scan ok and result in the character itself
     testStringLiteral("\\a\\b\\c\\d\\1\\2\\3\\$\\&\\*");
     // Single backslash is a scanner error.
-    ScannerError("select \"\\\" from t");
+    ParserError("select \"\\\" from t",
+        "Syntax error in line 1:\n" +
+            "select \"\\\" from t\n" +
+            "        ^\n" +
+            "Encountered: Unexpected character");
+    // Unsupported character
+    ParserError("@",
+        "Syntax error in line 1:\n" +
+        "@\n" +
+        "^\n" +
+        "Encountered: Unexpected character");
+    ParsesOk("SELECT '@'");
   }
 
   // test string literal s with single and double quotes
@@ -1546,6 +1539,12 @@ public class ParserTest {
     ParsesOk("SHOW PARTITIONS db.tbl");
     ParsesOk("SHOW PARTITIONS `db`.`tbl`");
 
+    // Show files of table
+    ParsesOk("SHOW FILES IN tbl");
+    ParsesOk("SHOW FILES IN db.tbl");
+    ParsesOk("SHOW FILES IN `db`.`tbl`");
+    ParsesOk("SHOW FILES IN db.tbl PARTITION(x='a',y='b')");
+
     // Missing arguments
     ParserError("SHOW");
     // Malformed pattern (no quotes)
@@ -1562,6 +1561,10 @@ public class ParserTest {
     ParserError("SHOW COLUMN STATS");
     // String literal not accepted.
     ParserError("SHOW TABLE STATS 'strlit'");
+    // Missing table.
+    ParserError("SHOW FILES IN");
+    // Invalid partition.
+    ParserError("SHOW FILES IN db.tbl PARTITION(p)");
   }
 
   @Test
@@ -1774,9 +1777,14 @@ public class ParserTest {
     ParserError("ALTER TABLE Foo ADD PARTITION (j=2) CACHED 'pool'");
     ParserError("ALTER TABLE Foo ADD PARTITION (j=2) CACHED IN");
     ParserError("ALTER TABLE Foo ADD PARTITION (j=2) CACHED");
+    ParsesOk("ALTER TABLE Foo ADD PARTITION (j=2) CACHED IN 'pool' WITH replication = 3");
+    ParserError("ALTER TABLE Foo ADD PARTITION (j=2) CACHED IN 'pool' " +
+        "with replication = -1");
     ParsesOk("ALTER TABLE Foo ADD PARTITION (j=2) UNCACHED");
     ParsesOk("ALTER TABLE Foo ADD PARTITION (j=2) LOCATION 'a/b' UNCACHED");
     ParsesOk("ALTER TABLE Foo ADD PARTITION (j=2) LOCATION 'a/b' CACHED IN 'pool'");
+    ParsesOk("ALTER TABLE Foo ADD PARTITION (j=2) LOCATION 'a/b' CACHED IN 'pool' " +
+        "with replication = 3");
     ParserError("ALTER TABLE Foo ADD PARTITION (j=2) CACHED IN 'pool' LOCATION 'a/b'");
     ParserError("ALTER TABLE Foo ADD PARTITION (j=2) UNCACHED LOCATION 'a/b'");
 
@@ -1907,7 +1915,8 @@ public class ParserTest {
       }
     }
 
-    for (String cacheClause: Lists.newArrayList("UNCACHED", "CACHED in 'pool'")) {
+    for (String cacheClause: Lists.newArrayList("UNCACHED", "CACHED in 'pool'",
+        "CACHED in 'pool' with replication = 4")) {
       ParsesOk("ALTER TABLE Foo SET " + cacheClause);
       ParsesOk("ALTER TABLE Foo PARTITION(j=0) SET " + cacheClause);
       ParserError("ALTER TABLE Foo PARTITION(j=0) " + cacheClause);
@@ -2056,6 +2065,8 @@ public class ParserTest {
     ParserError("CREATE TABLE Foo (d double) LOCATION 'a' COMMENT 'c'");
     ParserError("CREATE TABLE Foo (d double) UNCACHED LOCATION '/a/b'");
     ParserError("CREATE TABLE Foo (d double) CACHED IN 'pool' LOCATION '/a/b'");
+    ParserError("CREATE TABLE Foo (d double) CACHED IN 'pool' REPLICATION = 8 " +
+        "LOCATION '/a/b'");
     ParserError("CREATE TABLE Foo (d double) LOCATION 'a' COMMENT 'c' STORED AS RCFILE");
     ParserError("CREATE TABLE Foo (d double) LOCATION 'a' STORED AS RCFILE");
     ParserError("CREATE TABLE Foo (d double) TBLPROPERTIES('a'='b') LOCATION 'a'");
@@ -2070,7 +2081,10 @@ public class ParserTest {
 
     // Caching
     ParsesOk("CREATE TABLE Foo (i int) CACHED IN 'myPool'");
+    ParsesOk("CREATE TABLE Foo (i int) CACHED IN 'myPool' WITH REPLICATION = 4");
     ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY(j int) CACHED IN 'myPool'");
+    ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY(j int) CACHED IN 'myPool'" +
+        " WITH REPLICATION = 4");
     ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY(j int) CACHED IN 'myPool'");
     ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY(j int) LOCATION '/a' " +
           "CACHED IN 'myPool'");
@@ -2080,6 +2094,10 @@ public class ParserTest {
     ParserError("CREATE TABLE Foo (i int) IN 'myPool'");
     ParserError("CREATE TABLE Foo (i int) PARTITIONED BY(j int) CACHED IN 'myPool' " +
         "LOCATION '/a'");
+    ParserError("CREATE TABLE Foo (i int) CACHED IN 'myPool' WITH REPLICATION = -1");
+    ParserError("CREATE TABLE Foo (i int) CACHED IN 'myPool' WITH REPLICATION = 1.0");
+    ParserError("CREATE TABLE Foo (i int) CACHED IN 'myPool' " +
+        "WITH REPLICATION = cast(1 as double)");
 
     // Invalid syntax
     ParserError("CREATE TABLE IF EXISTS Foo.Bar (i int)");
@@ -2873,5 +2891,28 @@ public class ParserTest {
     ParsesOk("DROP INCREMENTAL STATS functional.alltypes PARTITION(month=10, year=2010)");
     ParserError("DROP INCREMENTAL STATS functional.alltypes PARTITION(month, year)");
     ParserError("DROP INCREMENTAL STATS functional.alltypes");
+  }
+
+  @Test
+  public void TestSemiColon() {
+    ParserError(";", "Syntax error");
+    ParsesOk("SELECT 1;");
+    ParsesOk(" SELECT 1 ; ");
+    ParsesOk("  SELECT  1  ;  ");
+    ParserError("SELECT 1; SELECT 2;",
+        "Syntax error in line 1:\n" +
+        "SELECT 1; SELECT 2;\n" +
+        "          ^\n" +
+        "Encountered: SELECT\n" +
+        "Expected");
+    ParsesOk("SELECT 1;;;");
+    ParsesOk("SELECT 1 FROM functional.alltypestiny WHERE 1 = (SELECT 1);");
+    ParserError("SELECT 1 FROM functional.alltypestiny WHERE 1 = (SELECT 1;)",
+        "Syntax error");
+    ParserError("SELECT 1 FROM functional.alltypestiny WHERE 1 = (SELECT 1;);",
+        "Syntax error");
+    ParsesOk("CREATE TABLE functional.test_table (col INT);");
+    ParsesOk("DESCRIBE functional.alltypes;");
+    ParsesOk("SET num_nodes=1;");
   }
 }

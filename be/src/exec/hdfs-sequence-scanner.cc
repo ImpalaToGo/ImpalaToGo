@@ -68,7 +68,7 @@ Status HdfsSequenceScanner::InitNewRange() {
       scan_node_->hdfs_table()->null_column_value()));
 
   delimited_text_parser_.reset(new DelimitedTextParser(
-      scan_node_->num_cols(), scan_node_->num_partition_keys(),
+      scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
       scan_node_->is_materialized_col(), '\0', hdfs_partition->field_delim(),
       hdfs_partition->collection_delim(), hdfs_partition->escape_char()));
 
@@ -185,7 +185,7 @@ Status HdfsSequenceScanner::ProcessBlockCompressedScanRange() {
         ss << "Expecting sync indicator (-1) at file offset "
            << (stream_->file_offset() - sizeof(int)) << ".  "
            << "Sync indicator found " << sync_indicator << ".";
-        state_->LogError(ss.str());
+        state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
       }
       return Status("Bad sync hash");
     }
@@ -452,7 +452,7 @@ Status HdfsSequenceScanner::ReadCompressedBlock() {
       stringstream ss;
       ss << "Bad compressed block record count: "
          << num_buffered_records_in_compressed_block_;
-      state_->LogError(ss.str());
+      state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
     }
     return Status("bad record count");
   }

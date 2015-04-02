@@ -1087,11 +1087,30 @@ LogMessage::~LogMessage() {
   delete allocated_;
 }
 
+void (*g_log_message_listener_func)(string*, bool*) = NULL;
+
+void InstallLogMessageListenerFunction(void (*listener_func)(string*, bool*)) {
+  g_log_message_listener_func = listener_func;
+}
+
 // Flush buffered message, called by the destructor, or any other function
 // that needs to synchronize the log.
 void LogMessage::Flush() {
   if (data_->has_been_flushed_ || data_->severity_ < FLAGS_minloglevel)
     return;
+
+  if (g_log_message_listener_func != NULL) {
+    // Only pass the user provided part of the message and not the file name, severity,
+    // time, etc.
+    string message(data_->stream_->str() + data_->num_prefix_chars_,
+        data_->stream_->pcount() - data_->num_prefix_chars_);
+    bool changed = false;
+    g_log_message_listener_func(&message, &changed);
+    if (changed) {
+      data_->stream_->seekp(data_->num_prefix_chars_, std::ios::beg);
+      stream() << message;
+    }
+  }
 
   data_->num_chars_to_log_ = data_->stream_->pcount();
   data_->num_chars_to_syslog_ =

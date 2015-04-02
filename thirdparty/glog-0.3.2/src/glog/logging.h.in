@@ -493,6 +493,14 @@ GOOGLE_GLOG_DLL_DECL void ShutdownGoogleLogging();
 // Install a function which will be called after LOG(FATAL).
 GOOGLE_GLOG_DLL_DECL void InstallFailureFunction(void (*fail_func)());
 
+// Install a function which will be called before logging a message so that
+// the message may be modified before logging. If the function changes the
+// message, the changed flag should be set to true. The installed function
+// must be thread-safe. Calling this function to install the listener is not
+// thread-safe and should be done before creating log messages.
+GOOGLE_GLOG_DLL_DECL void InstallLogMessageListenerFunction(
+    void (*listener_func)(std::string* message, bool* changed));
+
 class LogSink;  // defined below
 
 // If a non-NULL sink pointer is given, we push this message to that sink.

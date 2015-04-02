@@ -46,8 +46,10 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Query-relevant information for one table partition. Partitions are comparable
@@ -251,9 +253,9 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
    * It's easy to add per-file metadata to FileDescriptor if this changes.
    */
   private final HdfsStorageDescriptor fileFormatDescriptor_;
-  private final org.apache.hadoop.hive.metastore.api.Partition msPartition_;
+
   private final List<FileDescriptor> fileDescriptors_;
-  private final String location_;
+  private String location_;
   private final static Logger LOG = LoggerFactory.getLogger(HdfsPartition.class);
   private boolean isDirty_ = false;
   // True if this partition is marked as cached. Does not necessarily mean the data is
@@ -267,15 +269,6 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
 
   public HdfsStorageDescriptor getInputFormatDescriptor() {
     return fileFormatDescriptor_;
-  }
-
-  /**
-   * Returns the metastore.api.Partition object this HdfsPartition represents. Returns
-   * null if this is the default partition, or if this belongs to a unpartitioned
-   * table.
-   */
-  public org.apache.hadoop.hive.metastore.api.Partition getMetaStorePartition() {
-    return msPartition_;
   }
 
   public boolean isDefaultPartition() {
@@ -298,12 +291,26 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
       partitionCols.add(getTable().getColumns().get(i).getName());
     }
 
-    for (LiteralExpr partValue: getPartitionValues()) {
-      partitionValues.add(PartitionKeyValue.getPartitionKeyValueString(partValue,
-          getTable().getNullPartitionKeyValue()));
-    }
     return org.apache.hadoop.hive.common.FileUtils.makePartName(
-        partitionCols, partitionValues);
+        partitionCols, getPartitionValuesAsStrings(true));
+  }
+
+  /**
+   * Returns a list of partition values as strings. If mapNullsToHiveKey is true, any NULL
+   * value is returned as the table's default null partition key string value, otherwise
+   * they are returned as 'NULL'.
+   */
+  public List<String> getPartitionValuesAsStrings(boolean mapNullsToHiveKey) {
+    List<String> ret = Lists.newArrayList();
+    for (LiteralExpr partValue: getPartitionValues()) {
+      if (mapNullsToHiveKey) {
+        ret.add(PartitionKeyValue.getPartitionKeyValueString(
+                partValue, getTable().getNullPartitionKeyValue()));
+      } else {
+        ret.add(partValue.getStringValue());
+      }
+    }
+    return ret;
   }
 
   /**
@@ -362,6 +369,16 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
   public boolean isMarkedCached() { return isMarkedCached_; }
   void markCached() { isMarkedCached_ = true; }
 
+  public void setFileFormat(HdfsFileFormat fileFormat) {
+    fileFormatDescriptor_.setFileFormat(fileFormat);
+  }
+
+  public void setLocation(String location) { location_ = location; }
+
+  public org.apache.hadoop.hive.metastore.api.SerDeInfo getSerdeInfo() {
+    return cachedMsPartitionDescriptor_.sdSerdeInfo;
+  }
+
   // May return null if no per-partition stats were recorded, or if the per-partition
   // stats could not be deserialised from the parameter map.
   public TPartitionStats getPartitionStats() {
@@ -380,16 +397,22 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
     return partStats != null && partStats.intermediate_col_stats != null;
   }
 
-  // Returns the HDFS permissions Impala has to this partition's directory - READ_ONLY,
-  // READ_WRITE, etc.
+  /**
+   * Returns the HDFS permissions Impala has to this partition's directory - READ_ONLY,
+   * READ_WRITE, etc.
+   */
   public TAccessLevel getAccessLevel() { return accessLevel_; }
 
   /**
    * Returns the HMS parameter with key 'key' if it exists, otherwise returns null.
    */
-   public String getHmsParameter(String key) {
+   public String getParameter(String key) {
      return hmsParameters_.get(key);
    }
+
+   public Map<String, String> getParameters() { return hmsParameters_; }
+
+   public void putToParameters(String k, String v) { hmsParameters_.put(k, v); }
 
   /**
    * Marks this partition's metadata as "dirty" indicating that changes have been
@@ -409,6 +432,85 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
 
   public boolean hasFileDescriptors() { return !fileDescriptors_.isEmpty(); }
 
+  // Struct-style class for caching all the information we need to reconstruct an
+  // HMS-compatible Partition object, for use in RPCs to the metastore. We do this rather
+  // than cache the Thrift partition object itself as the latter can be large - thanks
+  // mostly to the inclusion of the full FieldSchema list. This class is read-only - if
+  // any field can be mutated by Impala it should belong to HdfsPartition itself (see
+  // HdfsPartition.location_ for an example).
+  //
+  // TODO: Cache this descriptor in HdfsTable so that identical descriptors are shared
+  // between HdfsPartition instances.
+  private static class CachedHmsPartitionDescriptor {
+    public final String sdOutputFormat;
+    public final boolean sdCompressed;
+    public final int sdNumBuckets;
+    public final org.apache.hadoop.hive.metastore.api.SerDeInfo sdSerdeInfo;
+    public final List<String> sdBucketCols;
+    public final List<org.apache.hadoop.hive.metastore.api.Order> sdSortCols;
+    public final Map<String, String> sdParameters;
+    public final int msCreateTime;
+    public final int msLastAccessTime;
+
+    public CachedHmsPartitionDescriptor(
+        org.apache.hadoop.hive.metastore.api.Partition msPartition) {
+      org.apache.hadoop.hive.metastore.api.StorageDescriptor sd = null;
+      if (msPartition != null) {
+        sd = msPartition.getSd();
+        msCreateTime = msPartition.getCreateTime();
+        msLastAccessTime = msPartition.getLastAccessTime();
+      } else {
+        msCreateTime = msLastAccessTime = 0;
+      }
+      if (sd != null) {
+        sdOutputFormat = sd.getOutputFormat();
+        sdCompressed = sd.isCompressed();
+        sdNumBuckets = sd.getNumBuckets();
+        sdSerdeInfo = sd.getSerdeInfo();
+        sdBucketCols = ImmutableList.copyOf(sd.getBucketCols());
+        sdSortCols = ImmutableList.copyOf(sd.getSortCols());
+        sdParameters = ImmutableMap.copyOf(sd.getParameters());
+      } else {
+        sdOutputFormat = "";
+        sdCompressed = false;
+        sdNumBuckets = 0;
+        sdSerdeInfo = null;
+        sdBucketCols = ImmutableList.of();
+        sdSortCols = ImmutableList.of();
+        sdParameters = ImmutableMap.of();
+      }
+    }
+  }
+
+  private final CachedHmsPartitionDescriptor cachedMsPartitionDescriptor_;
+
+  /**
+   * Returns a Hive-compatible partition object that may be used in calls to the
+   * metastore.
+   */
+  public org.apache.hadoop.hive.metastore.api.Partition toHmsPartition() {
+    if (cachedMsPartitionDescriptor_ == null) return null;
+    Preconditions.checkNotNull(table_.getFieldSchemas());
+    org.apache.hadoop.hive.metastore.api.StorageDescriptor storageDescriptor =
+        new org.apache.hadoop.hive.metastore.api.StorageDescriptor(
+            table_.getNonPartitionFieldSchemas(), location_,
+            fileFormatDescriptor_.getFileFormat().toJavaClassName(),
+            cachedMsPartitionDescriptor_.sdOutputFormat,
+            cachedMsPartitionDescriptor_.sdCompressed,
+            cachedMsPartitionDescriptor_.sdNumBuckets,
+            cachedMsPartitionDescriptor_.sdSerdeInfo,
+            cachedMsPartitionDescriptor_.sdBucketCols,
+            cachedMsPartitionDescriptor_.sdSortCols,
+            cachedMsPartitionDescriptor_.sdParameters);
+    org.apache.hadoop.hive.metastore.api.Partition partition =
+        new org.apache.hadoop.hive.metastore.api.Partition(
+            getPartitionValuesAsStrings(true), getTable().getDb().getName(),
+            getTable().getName(), cachedMsPartitionDescriptor_.msCreateTime,
+            cachedMsPartitionDescriptor_.msLastAccessTime, storageDescriptor,
+            getParameters());
+    return partition;
+  }
+
   private HdfsPartition(HdfsTable table,
       org.apache.hadoop.hive.metastore.api.Partition msPartition,
       List<LiteralExpr> partitionKeyValues,
@@ -416,7 +518,11 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
       List<HdfsPartition.FileDescriptor> fileDescriptors, long id,
       String location, TAccessLevel accessLevel) {
     table_ = table;
-    msPartition_ = msPartition;
+    if (msPartition == null) {
+      cachedMsPartitionDescriptor_ = null;
+    } else {
+      cachedMsPartitionDescriptor_ = new CachedHmsPartitionDescriptor(msPartition);
+    }
     location_ = location;
     partitionKeyValues_ = ImmutableList.copyOf(partitionKeyValues);
     fileDescriptors_ = ImmutableList.copyOf(fileDescriptors);
@@ -424,7 +530,7 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
     id_ = id;
     accessLevel_ = accessLevel;
     if (msPartition != null && msPartition.getParameters() != null) {
-      isMarkedCached_ = HdfsCachingUtil.getCacheDirIdFromParams(
+      isMarkedCached_ = HdfsCachingUtil.getCacheDirectiveId(
           msPartition.getParameters()) != null;
       hmsParameters_ = msPartition.getParameters();
     } else {
@@ -592,10 +698,16 @@ public class HdfsPartition implements Comparable<HdfsPartition> {
    */
   @Override
   public int compareTo(HdfsPartition o) {
-    int sizeDiff = partitionKeyValues_.size() - o.getPartitionValues().size();
+    return comparePartitionKeyValues(partitionKeyValues_, o.getPartitionValues());
+  }
+
+  @VisibleForTesting
+  public static int comparePartitionKeyValues(List<LiteralExpr> lhs,
+      List<LiteralExpr> rhs) {
+    int sizeDiff = lhs.size() - rhs.size();
     if (sizeDiff != 0) return sizeDiff;
-    for (int i = 0; i < partitionKeyValues_.size(); ++i) {
-      int cmp = partitionKeyValues_.get(i).compareTo(o.getPartitionValues().get(i));
+    for(int i = 0; i < lhs.size(); ++i) {
+      int cmp = lhs.get(i).compareTo(rhs.get(i));
       if (cmp != 0) return cmp;
     }
     return 0;

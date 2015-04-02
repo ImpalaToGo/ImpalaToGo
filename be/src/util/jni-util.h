@@ -30,9 +30,7 @@
     if (!status.ok()) { \
       (adaptor)->WriteErrorLog(); \
       (adaptor)->WriteFileErrors(); \
-      string error_msg; \
-      status.GetErrorMsg(&error_msg); \
-      (env)->ThrowNew((adaptor)->impala_exc_cl(), error_msg.c_str()); \
+      (env)->ThrowNew((adaptor)->impala_exc_cl(), status.GetDetail().c_str()); \
       return; \
     } \
   } while (false)
@@ -41,19 +39,7 @@
   do { \
     Status status = (stmt); \
     if (!status.ok()) { \
-      string error_msg; \
-      status.GetErrorMsg(&error_msg); \
-      (env)->ThrowNew((impala_exc_cl), error_msg.c_str()); \
-      return; \
-    } \
-  } while (false)
-
-#define SET_TSTATUS_IF_ERROR(stmt, tstatus) \
-  do { \
-    Status status = (stmt); \
-    if (!status.ok()) { \
-      (tstatus)->status_code = TStatusCode::INTERNAL_ERROR; \
-      status.GetErrorMsgs(&(tstatus)->error_msgs); \
+      (env)->ThrowNew((impala_exc_cl), status.GetDetail().c_str()); \
       return; \
     } \
   } while (false)
@@ -62,9 +48,7 @@
   do { \
     Status status = (stmt); \
     if (!status.ok()) { \
-      string error_msg; \
-      status.GetErrorMsg(&error_msg); \
-      (env)->ThrowNew((impala_exc_cl), error_msg.c_str()); \
+      (env)->ThrowNew((impala_exc_cl), status.GetDetail().c_str()); \
       return (ret); \
     } \
   } while (false)

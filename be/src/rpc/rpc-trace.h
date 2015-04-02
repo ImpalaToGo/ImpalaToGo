@@ -66,6 +66,14 @@ class RpcEventHandler : public apache::thrift::TProcessorEventHandler {
   // }
   void ToJson(rapidjson::Value* server, rapidjson::Document* document);
 
+  // Resets the statistics for a single method
+  void Reset(const std::string& method_name);
+
+  // Resets the statistics for all methods
+  void ResetAll();
+
+  std::string server_name() const { return server_name_; }
+
  private:
   // Per-method descriptor
   struct MethodDescriptor {
@@ -84,7 +92,7 @@ class RpcEventHandler : public apache::thrift::TProcessorEventHandler {
 
   // Created per-Rpc invocation
   struct InvocationContext {
-    // Timestamp, in ms, since epoch when this call started.
+    // Monotonic milliseconds (typically boot time) when the call started.
     const int64_t start_time_ms;
 
     // Per-connection information, owned by ThriftServer. The lifetime of this struct is

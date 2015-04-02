@@ -1,0 +1,29 @@
+From 3e8fbeece51d82a845f71b27f7e0ff97990d864a Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Fri, 13 Mar 2015 09:41:40 -0700
+Subject: [PATCH 110/110] CLOUDERA-BUILD Revert "HBASE-10018 Remove region location prefetching" - ADDENDUM
+
+Author: Esteban Gutierrez
+Reason: Backward Compatibility
+Ref:  CDH-25972
+---
+ .../hbase/regionserver/TestRegionReplicas.java     |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionReplicas.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionReplicas.java
+index 9220a49..511dcd9 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionReplicas.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestRegionReplicas.java
+@@ -184,6 +184,9 @@ public class TestRegionReplicas {
+       getRS().getRegionByEncodedName(hriPrimary.getEncodedName()).flushcache();
+ 
+       openRegion(HTU, getRS(), hriSecondary);
++      // evict connection cache  since we have manually deployed hriSecondary after HTU.countRows()
++      Thread.sleep(5000);
++      table.clearRegionCache();
+ 
+       // try directly Get against region replica
+       byte[] row = Bytes.toBytes(String.valueOf(42));
+-- 
+1.7.0.4
+

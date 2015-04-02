@@ -99,7 +99,7 @@ Status HdfsTextScanner::IssueInitialRanges(HdfsScanNode* scan_node,
               ss << "For better performance, snappy, gzip and bzip-compressed files "
                  << "should not be split into multiple hdfs-blocks. file="
                  << files[i]->filename << " offset " << split->offset();
-              scan_node->runtime_state()->LogError(ss.str());
+              scan_node->runtime_state()->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
               warning_written = true;
             }
             // We assign the entire file to one scan range, so mark all but one split
@@ -113,7 +113,7 @@ Status HdfsTextScanner::IssueInitialRanges(HdfsScanNode* scan_node,
           ScanRangeMetadata* metadata =
               reinterpret_cast<ScanRangeMetadata*>(split->meta_data());
           DiskIoMgr::ScanRange* file_range = scan_node->AllocateScanRange(
-              files[i]->filename.c_str(), files[i]->file_length, 0,
+              files[i]->fs, files[i]->filename.c_str(), files[i]->file_length, 0,
               metadata->partition_id, split->disk_id(), split->try_cache(),
               split->expected_local());
           compressed_text_scan_ranges.push_back(file_range);
@@ -214,7 +214,7 @@ Status HdfsTextScanner::InitNewRange() {
   }
 
   delimited_text_parser_.reset(new DelimitedTextParser(
-      scan_node_->num_cols(), scan_node_->num_partition_keys(),
+      scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
       scan_node_->is_materialized_col(), hdfs_partition->line_delim(),
       field_delim, collection_delim, hdfs_partition->escape_char()));
   text_converter_.reset(new TextConverter(hdfs_partition->escape_char(),
@@ -259,7 +259,9 @@ Status HdfsTextScanner::FinishScanRange() {
     byte_buffer_read_size_ = 0;
 
     // If compressed text, then there is nothing more to be read.
-    if (decompressor_.get() == NULL) {
+    // TODO: calling FillByteBuffer() at eof() can cause
+    // ScannerContext::Stream::GetNextBuffer to DCHECK. Fix this.
+    if (decompressor_.get() == NULL && !stream_->eof()) {
       status = FillByteBuffer(&eosr, NEXT_BLOCK_READ_SIZE);
     }
 
@@ -269,8 +271,10 @@ Status HdfsTextScanner::FinishScanRange() {
       if (!status.ok()) {
         stringstream ss;
         ss << "Read failed while trying to finish scan range: " << stream_->filename()
-           << ":" << stream_->file_offset() << endl << status.GetErrorMsg();
-        if (state_->LogHasSpace()) state_->LogError(ss.str());
+           << ":" << stream_->file_offset() << endl << status.GetDetail();
+        if (state_->LogHasSpace()) {
+          state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
+        }
         if (state_->abort_on_error()) return Status(ss.str());
       } else if (!partial_tuple_empty_ || !boundary_column_.Empty() ||
           !boundary_row_.Empty()) {
@@ -292,6 +296,12 @@ Status HdfsTextScanner::FinishScanRange() {
         DCHECK_GE(num_tuples, 0);
         COUNTER_ADD(scan_node_->rows_read_counter(), num_tuples);
         RETURN_IF_ERROR(CommitRows(num_tuples));
+      } else if (delimited_text_parser_->HasUnfinishedTuple() &&
+          scan_node_->materialized_slots().empty()) {
+        // If no fields are materialized we do not update partial_tuple_empty_,
+        // boundary_column_, or boundary_row_. However, we still need to handle the case
+        // of partial tuple due to missing tuple delimiter at the end of file.
+        RETURN_IF_ERROR(CommitRows(1));
       }
       break;
     }
@@ -500,7 +510,9 @@ Status HdfsTextScanner::FillByteBufferGzip(bool* eosr) {
       stringstream ss;
       ss << "Unexpected end of gzip stream before end of file: ";
       ss << stream_->filename();
-      if (state_->LogHasSpace()) state_->LogError(ss.str());
+      if (state_->LogHasSpace()) {
+        state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
+      }
       if (state_->abort_on_error()) parse_status_ = Status(ss.str());
       RETURN_IF_ERROR(parse_status_);
     }
@@ -670,7 +682,7 @@ int HdfsTextScanner::WriteFields(MemPool* pool, TupleRow* tuple_row,
           stringstream ss;
           ss << "file: " << stream_->filename() << endl << "record: ";
           LogRowParseError(0, &ss);
-          state_->LogError(ss.str());
+          state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
         }
         if (state_->abort_on_error()) parse_status_ = Status(state_->ErrorLog());
         if (!parse_status_.ok()) return 0;

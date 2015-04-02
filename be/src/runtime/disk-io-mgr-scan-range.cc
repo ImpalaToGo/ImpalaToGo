@@ -206,7 +206,7 @@ bool DiskIoMgr::ScanRange::Validate() {
 DiskIoMgr::ScanRange::ScanRange(int capacity)
   : ready_buffers_capacity_(capacity) {
   request_type_ = RequestType::READ;
-  Reset("", -1, -1, -1, false, false);
+  Reset(FileSystemDescriptor::getNull(), "", -1, -1, -1, false, false);
 }
 
 DiskIoMgr::ScanRange::~ScanRange() {
@@ -214,9 +214,10 @@ DiskIoMgr::ScanRange::~ScanRange() {
   DCHECK(cached_buffer_ == NULL) << "Cached buffer was not released.";
 }
 
-void DiskIoMgr::ScanRange::Reset(const char* file, int64_t len, int64_t offset,
+void DiskIoMgr::ScanRange::Reset(dfsFS fs, const char* file, int64_t len, int64_t offset,
     int disk_id, bool try_cache, bool expected_local, void* meta_data) {
   DCHECK(ready_buffers_.empty());
+  fs_ = fs;
   file_ = file;
   len_ = len;
   offset_ = offset;
@@ -252,7 +253,7 @@ Status DiskIoMgr::ScanRange::Open() {
   unique_lock<mutex> hdfs_lock(hdfs_lock_);
   if (is_cancelled_) return Status::CANCELLED;
 
-  if (reader_->hdfs_connection_.valid) {
+  if (fs_.valid) {
     if (hdfs_file_ != NULL) return Status::OK;
 
     // TODO: is there much overhead opening hdfs files?  Should we try to preserve
@@ -260,7 +261,7 @@ Status DiskIoMgr::ScanRange::Open() {
     bool available;
     LOG(INFO) << "Scan range is going to open the file \"" << file() <<
     		"\" for read. \n";
-    hdfs_file_ = dfsOpenFile(reader_->hdfs_connection_, file(), O_RDONLY, 0, 0, 0, available);
+    hdfs_file_ = dfsOpenFile(fs_, file(), O_RDONLY, 0, 0, 0, available);
     VLOG_FILE << "dfsOpenFile() file =" << file();
     if (hdfs_file_ == NULL || !available) {
       return Status(GetHdfsErrorMsg("Failed to open DFS file ", file_));
@@ -269,8 +270,8 @@ Status DiskIoMgr::ScanRange::Open() {
     LOG(INFO) << "Scan range is completed file open for path \"" << file() <<
     		"\". For read. \n";
 
-    if (dfsSeek(reader_->hdfs_connection_, hdfs_file_, offset_) != status::OK) {
-    	dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
+    if (dfsSeek(fs_, hdfs_file_, offset_) != status::OK) {
+    	dfsCloseFile(fs_, hdfs_file_);
     	VLOG_FILE << "dfsCloseFile() (error) file=" << file();
     	hdfs_file_ = NULL;
 
@@ -308,12 +309,12 @@ Status DiskIoMgr::ScanRange::Open() {
 
 void DiskIoMgr::ScanRange::Close() {
   unique_lock<mutex> hdfs_lock(hdfs_lock_);
-  if (reader_->hdfs_connection_.valid) {
+  if (fs_.valid) {
     if (hdfs_file_ == NULL) return;
 
     dfsReadStatistics* read_statistics;
     if (IsDfsPath(file())) {
-    int success = dfsFileGetReadStatistics(reader_->hdfs_connection_, hdfs_file_, &read_statistics);
+    int success = dfsFileGetReadStatistics(fs_, hdfs_file_, &read_statistics);
     if (success == 0) {
       reader_->bytes_read_local_ += read_statistics->totalLocalBytesRead;
       reader_->bytes_read_short_circuit_ += read_statistics->totalShortCircuitBytesRead;
@@ -330,14 +331,14 @@ void DiskIoMgr::ScanRange::Close() {
 
           }
         }
-      dfsFileFreeReadStatistics(reader_->hdfs_connection_, read_statistics);
+      dfsFileFreeReadStatistics(fs_, read_statistics);
       }
     }
     if (cached_buffer_ != NULL) {
-      hadoopRzBufferFree(hdfs_file_, cached_buffer_);
+      _hadoopRzBufferFree(hdfs_file_, cached_buffer_);
       cached_buffer_ = NULL;
     }
-    dfsCloseFile(reader_->hdfs_connection_, hdfs_file_);
+    dfsCloseFile(fs_, hdfs_file_);
     VLOG_FILE << "dfsCloseFile() file=" << file();
     hdfs_file_ = NULL;
   } else {
@@ -350,6 +351,20 @@ void DiskIoMgr::ScanRange::Close() {
   }
 }
 
+int64_t DiskIoMgr::ScanRange::MaxReadChunkSize() const {
+  // S3 InputStreams don't support DIRECT_READ (i.e. java.nio.ByteBuffer read()
+  // interface).  So, hdfsRead() needs to allocate a Java byte[] and copy the data out.
+  // Profiles show that both the JNI array allocation and the memcpy adds much more
+  // overhead for larger buffers, so limit the size of each read request.  128K was
+  // chosen empirically by trying values between 4K and 8M and optimizing for lower CPU
+  // utilization and higher S3 througput.
+  if (disk_id_ == io_mgr_->RemoteS3DiskId()) {
+    DCHECK(IsS3APath(file()));
+    return 128 * 1024;
+  }
+  return numeric_limits<int64_t>::max();
+}
+
 // TODO: how do we best use the disk here.  e.g. is it good to break up a
 // 1MB read into 8 128K reads?
 // TODO: look at linux disk scheduling
@@ -359,20 +374,24 @@ Status DiskIoMgr::ScanRange::Read(char* buffer, int64_t* bytes_read, bool* eosr)
 
   *eosr = false;
   *bytes_read = 0;
+  // hdfsRead() length argument is an int.  Since max_buffer_size_ type is no bigger
+  // than an int, this min() will ensure that we don't overflow the length argument.
+  DCHECK_LE(sizeof(io_mgr_->max_buffer_size_), sizeof(int));
   int bytes_to_read =
       min(static_cast<int64_t>(io_mgr_->max_buffer_size_), len_ - bytes_read_);
 
   /** Elena connection is not the handle more and is not nullable */
-  if (reader_->hdfs_connection_.valid) {
-    DCHECK(hdfs_file_ != NULL);
-    // TODO: why is this loop necessary? Can hdfs reads come up short?
+  if (fs_.valid) {
+    DCHECK_NOTNULL(hdfs_file_);
+    int64_t max_chunk_size = MaxReadChunkSize();
+        
     while (*bytes_read < bytes_to_read) {
-      int last_read = dfsRead(reader_->hdfs_connection_, hdfs_file_,
-          buffer + *bytes_read, bytes_to_read - *bytes_read);
+      int chunk_size = min(bytes_to_read - *bytes_read, max_chunk_size);
+      int last_read = dfsRead(fs_, hdfs_file_, buffer + *bytes_read, chunk_size);
       if (last_read == -1) {
         return Status(GetHdfsErrorMsg("Error reading from HDFS file: ", file_));
       } else if (last_read == 0) {
-        // No more bytes in the file.  The scan range went past the end
+        // No more bytes in the file. The scan range went past the end.
         *eosr = true;
         break;
       }
@@ -403,8 +422,8 @@ Status DiskIoMgr::ScanRange::ReadFromCache(bool* read_succeeded) {
   if (!status.ok()) return status;
 
   // Cached reads not supported on local filesystem or tachyon.
-  if (reader_->hdfs_connection_.dfs_type == local ||
-		  reader_->hdfs_connection_.dfs_type == tachyon ) return Status::OK;
+  if (fs_.dfs_type == local ||
+		  fs_.dfs_type == tachyon ) return Status::OK;
 
   {
     unique_lock<mutex> hdfs_lock(hdfs_lock_);
@@ -441,4 +460,3 @@ Status DiskIoMgr::ScanRange::ReadFromCache(bool* read_succeeded) {
   ++reader_->num_used_buffers_;
   return Status::OK;
 }
-

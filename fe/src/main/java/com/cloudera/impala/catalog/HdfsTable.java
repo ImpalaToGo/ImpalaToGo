@@ -14,8 +14,6 @@
 
 package com.cloudera.impala.catalog;
 
-import static com.cloudera.impala.thrift.ImpalaInternalServiceConstants.DEFAULT_PARTITION_ID;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -60,6 +58,7 @@ import com.cloudera.impala.catalog.HdfsPartition.FileBlock;
 import com.cloudera.impala.catalog.HdfsPartition.FileDescriptor;
 import com.cloudera.impala.common.AnalysisException;
 import com.cloudera.impala.common.FileSystemUtil;
+import com.cloudera.impala.common.PrintUtils;
 import com.cloudera.impala.thrift.ImpalaInternalServiceConstants;
 import com.cloudera.impala.thrift.TAccessLevel;
 import com.cloudera.impala.thrift.TCatalogObjectType;
@@ -69,6 +68,7 @@ import com.cloudera.impala.thrift.THdfsPartition;
 import com.cloudera.impala.thrift.THdfsTable;
 import com.cloudera.impala.thrift.TNetworkAddress;
 import com.cloudera.impala.thrift.TPartitionKeyValue;
+import com.cloudera.impala.thrift.TResultRow;
 import com.cloudera.impala.thrift.TResultSet;
 import com.cloudera.impala.thrift.TResultSetMetadata;
 import com.cloudera.impala.thrift.TTable;
@@ -106,6 +106,14 @@ public class HdfsTable extends Table {
 
   // Number of times to retry fetching the partitions from the HMS should an error occur.
   private final static int NUM_PARTITION_FETCH_RETRIES = 5;
+
+  // An invalid network address, which will always be treated as remote.
+  private final static TNetworkAddress REMOTE_NETWORK_ADDRESS =
+      new TNetworkAddress("remote*addr", 0);
+
+  // Minimum block size in bytes allowed for synthetic file blocks (other than the last
+  // block, which may be shorter).
+  private final static long MIN_SYNTHETIC_BLOCK_SIZE = 1024 * 1024;
 
   // string to indicate NULL. set in load() from table properties
   private String nullColumnValue_;
@@ -180,6 +188,21 @@ public class HdfsTable extends Table {
 
   private static final boolean SUPPORTS_VOLUME_ID;
 
+  // Keeps track of newly added THdfsFileBlock metadata and its corresponding
+  // BlockLocation.  For each i, blocks.get(i) corresponds to locations.get(i).  Once
+  // all the new file blocks are collected, the disk volume IDs are retrieved in one
+  // batched DFS call.
+  private static class FileBlocksInfo {
+    final List<THdfsFileBlock> blocks = Lists.newArrayList();
+    final List<BlockLocation> locations = Lists.newArrayList();
+
+    public void addBlocks(List<THdfsFileBlock> b, List<BlockLocation> l) {
+      Preconditions.checkState(b.size() == l.size());
+      blocks.addAll(b);
+      locations.addAll(l);
+    }
+  }
+
   static {
     SUPPORTS_VOLUME_ID =
         CONF.getBoolean(DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED,
@@ -218,181 +241,161 @@ public class HdfsTable extends Table {
   public boolean spansMultipleFileSystems() { return multipleFileSystems_; }
 
   /**
-   * Loads the file block metadata for the given collection of FileDescriptors.  The
-   * FileDescriptors are passed as a tree, where the first level is indexed by
-   * filesystem, the second level is indexed by partition location, and the leaves are
-   * the list of files that exist under each directory.
+   * Queries the filesystem to load the file block metadata (e.g. DFS blocks) for the
+   * given file.  Adds the newly created block metadata and block location to the
+   * perFsFileBlocks, so that the disk IDs for each block can be retrieved with one
+   * call to DFS.
    */
-  private void loadBlockMd(Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescs)
-      throws RuntimeException {
-    Preconditions.checkNotNull(perFsFileDescs);
-    LOG.debug("load block md for " + name_);
+  private void loadBlockMetadata(FileSystem fs, FileStatus file, FileDescriptor fd,
+      HdfsFileFormat fileFormat, Map<FsKey, FileBlocksInfo> perFsFileBlocks) {
+    Preconditions.checkNotNull(fd);
+    Preconditions.checkNotNull(perFsFileBlocks);
+    Preconditions.checkArgument(!file.isDirectory());
+    LOG.debug("load block md for " + name_ + " file " + fd.getFileName());
 
-    for (FsKey fsEntry: perFsFileDescs.keySet()) {
-      FileSystem fs = fsEntry.filesystem;
+    if (!FileSystemUtil.hasGetFileBlockLocations(fs)) {
+      synthesizeBlockMetadata(fs, fd, fileFormat);
+      return;
+    }
+    try {
+      BridgeOpResult<BlockLocation[]> fileBlockLocationRes = HadoopFsBridge.getFileBlockLocations(fs, file, 0, file.getLen());
+      if(fileBlockLocationRes.getStatus() != BridgeOpStatus.OK){
+        // no way to proceed, we did not sync with remote FS, throw the exception
+        throw new IOException(fileBlockLocationRes.getError());
+      }
 
-      // Store all BlockLocations so they can be reused when loading the disk IDs.
-      List<BlockLocation> blockLocations = Lists.newArrayList();
-      int numCachedBlocks = 0;
+      BlockLocation[] locations = fileBlockLocationRes.getResult();
+      Preconditions.checkNotNull(locations);
+      // Loop over all blocks in the file.
+      for (BlockLocation loc: locations) {
+        Preconditions.checkNotNull(loc);
+        // Get the location of all block replicas in ip:port format.
+        String[] blockHostPorts = loc.getNames();
+        // Get the hostnames for all block replicas. Used to resolve which hosts
+        // contain cached data. The results are returned in the same order as
+        // block.getNames() so it allows us to match a host specified as ip:port to
+        // corresponding hostname using the same array index.
+        String[] blockHostNames = loc.getHosts();
+        Preconditions.checkState(blockHostNames.length == blockHostPorts.length);
+        // Get the hostnames that contain cached replicas of this block.
+        Set<String> cachedHosts =
+            Sets.newHashSet(Arrays.asList(loc.getCachedHosts()));
+        Preconditions.checkState(cachedHosts.size() <= blockHostNames.length);
 
-      Map<String, List<FileDescriptor>> partitionToFds = perFsFileDescs.get(fsEntry);
-      Preconditions.checkNotNull(partitionToFds);
-      // loop over all files and record their block metadata, minus volume ids
-      for (String partitionDir: partitionToFds.keySet()) {
-        Path partDirPath = new Path(partitionDir);
-        for (FileDescriptor fileDescriptor: partitionToFds.get(partitionDir)) {
-          Path p = new Path(partDirPath, fileDescriptor.getFileName());
-
-          try {
-            LOG.info("Going to query \"" + p + "\" for file status for \"" + name_ + "\"");
-            BridgeOpResult<FileStatus> fileStatRes = HadoopFsBridge.getFileStatus(fsEntry, p);
-            if(fileStatRes.getStatus() != BridgeOpStatus.OK){
-              // no way to proceed, we did not sync with remote FS, throw the exception
-              throw new IOException(fileStatRes.getError());
-            }
-            FileStatus fileStatus = fileStatRes.getResult();
-
-            // fileDescriptors should not contain directories.
-            Preconditions.checkArgument(!fileStatus.isDirectory());
-
-            long len = fileStatus.getLen();
-
-            BridgeOpResult<BlockLocation[]> fileBlockLocationRes = HadoopFsBridge.getFileBlockLocations(fs, fileStatus, 0, len);
-            if(fileBlockLocationRes.getStatus() != BridgeOpStatus.OK){
-              // no way to proceed, we did not sync with remote FS, throw the exception
-              throw new IOException(fileStatRes.getError());
-            }
-            LOG.info("Block locations retrieved for \"" + p + "\" on table \"" + name_ + "\"");
-            BlockLocation[] locations = fileBlockLocationRes.getResult();
-            Preconditions.checkNotNull(locations);
-            LOG.info("Block locations are not null for \"" + p + "\" on table \"" + name_ + "\"");
-            blockLocations.addAll(Arrays.asList(locations));
-
-            LOG.info("Added block locations for \"" + p + "\" on table \"" + name_ + "\"");
-
-            // Loop over all blocks in the file.
-            for (BlockLocation block: locations) {
-              Preconditions.checkNotNull(block);
-              LOG.info("Block is not null for \"" + p + "\" on table \"" + name_ + "\"");
-              // Get the location of all block replicas in ip:port format.
-              String[] blockHostPorts = block.getNames();
-              if(blockHostPorts == null){
-                LOG.error("blockHostPorts = null for \"" + p + "\" on table \"" + name_ + "\"");
-              }
-              // Get the hostnames for all block replicas. Used to resolve which hosts
-              // contain cached data. The results are returned in the same order as
-              // block.getNames() so it allows us to match a host specified as ip:port
-              // to corresponding hostname using the same array index.
-              String[] blockHostNames = block.getHosts();
-              if(blockHostNames == null){
-                LOG.error("blockHostNames = null for \"" + p + "\" on table \"" + name_ + "\"");
-              }
-              Preconditions.checkState(blockHostNames.length == blockHostPorts.length);
-              LOG.info("blockHostNames.length = blockHostPorts.length for \"" + p + "\" on table \"" + name_ + "\"");
-              // Get the hostnames that contain cached replicas of this block.
-              Set<String> cachedHosts =
-                  Sets.newHashSet(Arrays.asList(block.getCachedHosts()));
-              Preconditions.checkState(cachedHosts.size() <= blockHostNames.length);
-              LOG.info("cachedHosts.size <= blockHostNames.length for \"" + p + "\" on table \"" + name_ + "\"");
-              // Now enumerate all replicas of the block, adding any unknown hosts
-              // to hostMap_/hostList_. The host ID (index in to the hostList_) for each
-              // replica is stored in replicaHostIdxs.
-              List<BlockReplica> blockReplicas =
-                  new ArrayList<BlockReplica>(blockHostPorts.length);
-              for (int i = 0; i < blockHostPorts.length; ++i) {
-                TNetworkAddress networkAddress =
-                    BlockReplica.parseLocation(blockHostPorts[i]);
-
-                LOG.info("Network address is parsed from \"" + blockHostPorts[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
-
-                Preconditions.checkState(networkAddress != null);
-                LOG.info("Network address is not null from \"" + blockHostPorts[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
-                blockReplicas.add(
-                    new BlockReplica(hostIndex_.getIndex(networkAddress),
-                        cachedHosts.contains(blockHostNames[i])));
-                LOG.info("Block replica is added for networkAddress \"" + blockHostNames[i] + "\" for \"" + p + "\" on table \"" + name_ + "\"");
-              }
-              FileBlock fileBlock =
-                  new FileBlock(block.getOffset(), block.getLength(), blockReplicas);
-              LOG.info("File block is constructed for \"" + p + "\" on table \"" + name_ + "\"");
-              fileDescriptor.addFileBlock(fileBlock);
-              LOG.info("File block is added into file descriptor for \"" + p + "\" on table \"" + name_ + "\"");
-              if (fileBlock.isCached()) ++numCachedBlocks;
-            }
-          } catch (IOException e) {
-            LOG.error("IO exception happens for file : \"" + fileDescriptor.getFileName() + "\" on table \"" + name_ + "\". Ex : \"" +
-                e.getMessage() + "\".");
-            throw new RuntimeException("couldn't determine block locations for path '"
-                + p + "':\n" + e.getMessage(), e);
-          }
+        // Now enumerate all replicas of the block, adding any unknown hosts
+        // to hostMap_/hostList_. The host ID (index in to the hostList_) for each
+        // replica is stored in replicaHostIdxs.
+        List<BlockReplica> replicas = Lists.newArrayListWithExpectedSize(
+            blockHostPorts.length);
+        for (int i = 0; i < blockHostPorts.length; ++i) {
+          TNetworkAddress networkAddress = BlockReplica.parseLocation(blockHostPorts[i]);
+          Preconditions.checkState(networkAddress != null);
+          replicas.add(new BlockReplica(hostIndex_.getIndex(networkAddress),
+              cachedHosts.contains(blockHostNames[i])));
         }
+        fd.addFileBlock(new FileBlock(loc.getOffset(), loc.getLength(), replicas));
       }
-      LOG.info("Table: " + getFullName() + " on filesystem " + fsEntry + " contains " +
-          numCachedBlocks + "/" + blockLocations.size() + " cached blocks.");
-
-      if (SUPPORTS_VOLUME_ID && fs instanceof DistributedFileSystem) {
-        LOG.info("loading disk ids for \"" + getFullName() + ""
-            + ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
-        LOG.trace("loading disk ids for: " + getFullName() +
-            ". nodes: " + getNumNodes() + ". filesystem: " + fsEntry);
-        loadDiskIds((DistributedFileSystem)fs, blockLocations, partitionToFds);
-        LOG.trace("completed load of disk ids for: " + getFullName());
-      }
+      // Remember the THdfsFileBlocks and corresponding BlockLocations.  Once all the
+      // blocks are collected, the disk IDs will be queried in one batch per filesystem.
+      addPerFsFileBlocks(perFsFileBlocks, fs, fd.getFileBlocks(),
+          Arrays.asList(locations));
+    } catch (IOException e) {
+      LOG.error("IO exception happens for file : \"" + fd.getFileName() + "\" on table \"" + name_ + "\". Ex : \"" +
+          e.getMessage() + "\".");
+      throw new RuntimeException("couldn't determine block locations for path '" +
+          file.getPath() + "':\n" + e.getMessage(), e);
     }
   }
 
   /**
-   * Populates disk/volume ID metadata inside FileDescriptors given a list of
-   * BlockLocations. The FileDescriptors are passed as a Map of parent directory
-   * (partition location) to list of files (FileDescriptors) under that directory.
+   * For filesystems that don't override getFileBlockLocations, synthesize file blocks
+   * by manually splitting the file range into fixed-size blocks.  That way, scan
+   * ranges can be derived from file blocks as usual.  All synthesized blocks are given
+   * an invalid network address so that the scheduler will treat them as remote.
    */
-  private void loadDiskIds(DistributedFileSystem dfs, List<BlockLocation> blockLocations,
-      Map<String, List<FileDescriptor>> fileDescriptors) {
-    // BlockStorageLocations for all the blocks
-    // block described by blockMetadataList[i] is located at locations[i]
-    BlockStorageLocation[] locations = null;
+  private void synthesizeBlockMetadata(FileSystem fs, FileDescriptor fd,
+      HdfsFileFormat fileFormat) {
+    long start = 0;
+    long remaining = fd.getFileLength();
+    // Workaround HADOOP-11584 by using the filesystem default block size rather than
+    // the block size from the FileStatus.
+    // TODO: after HADOOP-11584 is resolved, get the block size from the FileStatus.
+    long blockSize = fs.getDefaultBlockSize();
+    if (blockSize < MIN_SYNTHETIC_BLOCK_SIZE) blockSize = MIN_SYNTHETIC_BLOCK_SIZE;
+    if (!fileFormat.isSplittable(HdfsCompression.fromFileName(fd.getFileName()))) {
+      blockSize = remaining;
+    }
+    while (remaining > 0) {
+      long len = Math.min(remaining, blockSize);
+      List<BlockReplica> replicas = Lists.newArrayList(
+          new BlockReplica(hostIndex_.getIndex(REMOTE_NETWORK_ADDRESS), false));
+      fd.addFileBlock(new FileBlock(start, len, replicas));
+      remaining -= len;
+      start += len;
+    }
+  }
 
+  /**
+   * Populates disk/volume ID metadata inside the newly created THdfsFileBlocks.
+   * perFsFileBlocks maps from each filesystem to a FileBLocksInfo.  The first list
+   * contains the newly created THdfsFileBlocks and the second contains the
+   * corresponding BlockLocations.
+   */
+  private void loadDiskIds(Map<FsKey, FileBlocksInfo> perFsFileBlocks) {
+    if (!SUPPORTS_VOLUME_ID) return;
+    // Loop over each filesystem.  If the filesystem is DFS, retrieve the volume IDs
+    // for all the blocks.
+    for (FsKey fsKey: perFsFileBlocks.keySet()) {
+      FileSystem fs = fsKey.filesystem;
+      // Only DistributedFileSystem has getFileBlockStorageLocations().  It's not even
+      // part of the FileSystem interface, so we'll need to downcast.
+      if (!(fs instanceof DistributedFileSystem)) continue;
+
+      LOG.trace("Loading disk ids for: " + getFullName() + ". nodes: " + getNumNodes() +
+          ". filesystem: " + fsKey);
+      DistributedFileSystem dfs = (DistributedFileSystem)fs;
+      FileBlocksInfo blockLists = perFsFileBlocks.get(fsKey);
+      Preconditions.checkNotNull(blockLists);
+      BlockStorageLocation[] storageLocs = null;
     // Get the BlockStorageLocations for all the blocks
-    BridgeOpResult<BlockStorageLocation[]> result = HadoopFsBridge.getFileBlockStorageLocations(dfs, blockLocations);
+    BridgeOpResult<BlockStorageLocation[]> result = HadoopFsBridge.getFileBlockStorageLocations(dfs, blockLists.locations);
     if(result.getStatus() != BridgeOpStatus.OK){
       LOG.error("Couldn't determine block storage locations: \"" + result.getError() + "\"");
-      return;
+      continue;
       }
 
-    locations = result.getResult();
+    storageLocs = result.getResult();
+      if (storageLocs == null || storageLocs.length == 0) {
+        LOG.warn("Attempted to get block locations for filesystem " + fs +
+            " but the call returned no results");
+        continue;
+      }
 
-    if (locations == null || locations.length == 0) {
-      LOG.warn("Attempted to get block locations but the call returned nulls");
-      return;
-    }
-
-    if (locations.length != blockLocations.size()) {
-      // blocks and locations don't match up
-      LOG.error("Number of block locations not equal to number of blocks: "
-          + "#locations=" + Long.toString(locations.length)
-          + " #blocks=" + Long.toString(blockLocations.size()));
-      return;
-    }
-
-    int locationsIdx = 0;
-    int unknownDiskIdCount = 0;
-    for (String parentPath: fileDescriptors.keySet()) {
-      for (FileDescriptor fileDescriptor: fileDescriptors.get(parentPath)) {
-        for (THdfsFileBlock blockMd: fileDescriptor.getFileBlocks()) {
-          VolumeId[] volumeIds = locations[locationsIdx++].getVolumeIds();
-          // Convert opaque VolumeId to 0 based ids.
-          // TODO: the diskId should be eventually retrievable from Hdfs when
-          // the community agrees this API is useful.
-          int[] diskIds = new int[volumeIds.length];
-          for (int i = 0; i < volumeIds.length; ++i) {
-            diskIds[i] = getDiskId(volumeIds[i]);
-            if (diskIds[i] < 0) ++unknownDiskIdCount;
-          }
-          FileBlock.setDiskIds(diskIds, blockMd);
+      if (storageLocs.length != blockLists.locations.size()) {
+        // Block locations and storage locations didn't match up.
+        LOG.error("Number of block storage locations not equal to number of blocks: "
+            + "#storage locations=" + Long.toString(storageLocs.length)
+            + " #blocks=" + Long.toString(blockLists.locations.size()));
+        continue;
+      }
+      long unknownDiskIdCount = 0;
+      // Attach volume IDs given by the storage location to the corresponding
+      // THdfsFileBlocks.
+      for (int locIdx = 0; locIdx < storageLocs.length; ++locIdx) {
+        VolumeId[] volumeIds = storageLocs[locIdx].getVolumeIds();
+        THdfsFileBlock block = blockLists.blocks.get(locIdx);
+        // Convert opaque VolumeId to 0 based ids.
+        // TODO: the diskId should be eventually retrievable from Hdfs when the
+        // community agrees this API is useful.
+        int[] diskIds = new int[volumeIds.length];
+        for (int i = 0; i < volumeIds.length; ++i) {
+          diskIds[i] = getDiskId(volumeIds[i]);
+          if (diskIds[i] < 0) ++unknownDiskIdCount;
         }
+        FileBlock.setDiskIds(diskIds, block);
       }
       if (unknownDiskIdCount > 0) {
-        LOG.warn("unknown disk id count " + unknownDiskIdCount);
+        LOG.warn("Unknown disk id count for filesystem " + fs + ":" + unknownDiskIdCount);
       }
     }
   }
@@ -428,6 +431,11 @@ public class HdfsTable extends Table {
    * Returns the storage location (HDFS path) of this table.
    */
   public String getLocation() { return super.getMetaStoreTable().getSd().getLocation(); }
+
+  public List<FieldSchema> getFieldSchemas() { return fields_; }
+  public List<FieldSchema> getNonPartitionFieldSchemas() {
+    return fields_.subList(getNumClusteringCols(), fields_.size());
+  }
 
   // True if Impala has HDFS write permissions on the hdfsBaseDir (for an unpartitioned
   // table) or if Impala has write permissions on all partition directories (for
@@ -555,7 +563,7 @@ public class HdfsTable extends Table {
       addColumn(col);
       ++pos;
     }
-
+    fields_ = fieldSchemas == null ? new ArrayList<FieldSchema>() : fieldSchemas;
     loadAllColumnStats(client);
   }
 
@@ -610,19 +618,20 @@ public class HdfsTable extends Table {
     partitions_.clear();
     hdfsBaseDir_ = msTbl.getSd().getLocation();
 
-    // Map of filesystem to parent path to a list of new/modified
-    // FileDescriptors. FileDescriptors in this Map will have their block location
-    // information (re)loaded. This is used to speed up the incremental refresh of a
-    // table's metadata by skipping unmodified, previously loaded FileDescriptors.
-    Map<FsKey, Map<String, List<FileDescriptor>>> fileDescsToLoad = Maps.newHashMap();
+    // Map of filesystem to the file blocks for new/modified FileDescriptors. Blocks in
+    // this map will have their disk volume IDs information (re)loaded. This is used to
+    // speed up the incremental refresh of a table's metadata by skipping unmodified,
+    // previously loaded blocks.
+    Map<FsKey, FileBlocksInfo> blocksToLoad = Maps.newHashMap();
 
     // INSERT statements need to refer to this if they try to write to new partitions
     // Scans don't refer to this because by definition all partitions they refer to
     // exist.
     addDefaultPartition(msTbl.getSd());
-    Long cacheDirectiveId =
-        HdfsCachingUtil.getCacheDirIdFromParams(msTbl.getParameters());
-    isMarkedCached_ = cacheDirectiveId != null;
+
+    // We silently ignore cache directives that no longer exist in HDFS, and remove
+    // non-existing cache directives from the parameters.
+    isMarkedCached_ = HdfsCachingUtil.validateCacheParams(msTbl.getParameters());
 
     if (msTbl.getPartitionKeysSize() == 0) {
       String partiotionsListEmpty = msPartitions.isEmpty() ? "" : "not";
@@ -633,7 +642,7 @@ public class HdfsTable extends Table {
       // files in the table's root directory.
       LOG.info("Going to create partition for \"" + msTbl.getTableName() + "\".");
       HdfsPartition part = createPartition(msTbl.getSd(), null, oldFileDescMap,
-          fileDescsToLoad, force);
+          blocksToLoad, force);
       LOG.info("partition created for \"" + msTbl.getTableName() + "\".");
       addPartition(part);
       if (isMarkedCached_) part.markCached();
@@ -658,7 +667,7 @@ public class HdfsTable extends Table {
     } else {
       for (org.apache.hadoop.hive.metastore.api.Partition msPartition: msPartitions) {
         HdfsPartition partition = createPartition(msPartition.getSd(), msPartition,
-            oldFileDescMap, fileDescsToLoad, force);
+            oldFileDescMap, blocksToLoad, force);
         addPartition(partition);
         // If the partition is null, its HDFS path does not exist, and it was not added to
         // this table's partition list. Skip the partition.
@@ -677,7 +686,7 @@ public class HdfsTable extends Table {
         }
       }
     }
-    loadBlockMd(fileDescsToLoad);
+    loadDiskIds(blocksToLoad);
   }
 
   /**
@@ -725,10 +734,10 @@ public class HdfsTable extends Table {
   public HdfsPartition createPartition(StorageDescriptor storageDescriptor,
       org.apache.hadoop.hive.metastore.api.Partition msPartition)
       throws CatalogException {
-    Map<FsKey, Map<String, List<FileDescriptor>>> fileDescsToLoad = Maps.newHashMap();
+    Map<FsKey, FileBlocksInfo> blocksToLoad = Maps.newHashMap();
     HdfsPartition hdfsPartition = createPartition(storageDescriptor, msPartition,
-        fileDescMap_, fileDescsToLoad, true);
-    loadBlockMd(fileDescsToLoad);
+        fileDescMap_, blocksToLoad, true);
+    loadDiskIds(blocksToLoad);
     return hdfsPartition;
   }
 
@@ -754,33 +763,19 @@ public class HdfsTable extends Table {
   private HdfsPartition createPartition(StorageDescriptor storageDescriptor,
       org.apache.hadoop.hive.metastore.api.Partition msPartition,
       Map<String, List<FileDescriptor>> oldFileDescMap,
-      Map<FsKey, Map<String, List<FileDescriptor>>> perFsFileDescMap,
+      Map<FsKey, FileBlocksInfo> perFsFileBlocks,
       boolean force)
       throws CatalogException {
-
-    HdfsStorageDescriptor fileFormatDescriptor = null;
-    Path partDirPath = null;
-
+    HdfsStorageDescriptor fileFormatDescriptor =
+        HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
+    Path partDirPath = new Path(storageDescriptor.getLocation());
     List<FileDescriptor> fileDescriptors = Lists.newArrayList();
-    List<LiteralExpr> keyValues = Lists.newArrayList();
-    boolean isMarkedCached = isMarkedCached_;
-
-    try{
-      fileFormatDescriptor = HdfsStorageDescriptor.fromStorageDescriptor(this.name_, storageDescriptor);
-    LOG.info("Created HDFS storage descriptor from storage desc for \"" + this.name_ + "\".");
-
-    partDirPath = new Path(storageDescriptor.getLocation());
-    LOG.info("Constructed Path from storage desc location for \"" + this.name_ + "\".");
-
-
     // If the partition is marked as cached, the block location metadata must be
     // reloaded, even if the file times have not changed.
-
-
+    boolean isMarkedCached = isMarkedCached_;
+    List<LiteralExpr> keyValues = Lists.newArrayList();
     if (msPartition != null) {
-      LOG.info("Partition is not null and will be processed for \"" + this.name_ + "\".");
-      isMarkedCached =
-          HdfsCachingUtil.getCacheDirIdFromParams(msPartition.getParameters()) != null;
+      isMarkedCached = HdfsCachingUtil.validateCacheParams(msPartition.getParameters());
       // Load key values
       for (String partitionKey: msPartition.getValues()) {
         Type type = getColumns().get(keyValues.size()).getType();
@@ -806,19 +801,6 @@ public class HdfsTable extends Table {
         // should never happen
         throw new IllegalStateException(e);
       }
-    }
-    }
-    catch(CatalogException e){
-      LOG.error("catalog exception occur in create partition : \"" + e.getMessage() + "\"");
-      throw e;
-    }
-    catch(IllegalStateException e){
-      LOG.error("illegal state exception occur in create partition : \"" + e.getMessage() + "\"");
-      throw e;
-    }
-    catch(Exception e){
-      LOG.error("general exception occur in create partition : \"" + e.getMessage() + "\"");
-      throw new IllegalStateException(e);
     }
 
     try {
@@ -886,11 +868,13 @@ public class HdfsTable extends Table {
           // value can be reused.
           if (fd == null || isMarkedCached || fd.getFileLength() != fileStatus.getLen()
               || fd.getModificationTime() != fileStatus.getModificationTime()) {
-            // Create a new file descriptor, the block metadata will be populated by
-            // loadBlockMd.
+            // Create a new file descriptor and load the file block metadata,
+            // collecting the block metadata into perFsFileBlocks.  The disk IDs for
+            // all the blocks of each filesystem will be loaded by loadDiskIds().
             fd = new FileDescriptor(fileName, fileStatus.getLen(),
                 fileStatus.getModificationTime());
-            addPerFsFileDesc(perFsFileDescMap, fs, partitionDir, fd);
+            loadBlockMetadata(fs, fileStatus, fd, fileFormatDescriptor.getFileFormat(),
+                perFsFileBlocks);
           }
 
           List<FileDescriptor> fds = fileDescMap_.get(partitionDir);
@@ -921,23 +905,18 @@ public class HdfsTable extends Table {
   }
 
   /**
-   * Add the appropriate nodes to the filesystem -> partition directory -> file
-   * descriptors tree, given fs, partitionDir and fd.
+   * Add the given THdfsFileBlocks and BlockLocations to the FileBlockInfo for the
+   * given filesystem.
    */
-  private void addPerFsFileDesc(Map<FsKey, Map<String, List<FileDescriptor>>> root,
-      FileSystem fs, String partitionDir, FileDescriptor fd) {
-    FsKey fsEntry = new FsKey(fs);
-    Map<String, List<FileDescriptor>> dirToFdList = root.get(fsEntry);
-    if (dirToFdList == null) {
-      dirToFdList = Maps.newHashMap();
-      root.put(fsEntry, dirToFdList);
+  private void addPerFsFileBlocks(Map<FsKey, FileBlocksInfo> fsToBlocks, FileSystem fs,
+      List<THdfsFileBlock> blocks, List<BlockLocation> locations) {
+    FsKey fsKey = new FsKey(fs);
+    FileBlocksInfo infos = fsToBlocks.get(fsKey);
+    if (infos == null) {
+      infos = new FileBlocksInfo();
+      fsToBlocks.put(fsKey, infos);
     }
-    List<FileDescriptor> fds = dirToFdList.get(partitionDir);
-    if (fds == null) {
-      fds = Lists.newArrayList();
-      dirToFdList.put(partitionDir, fds);
-    }
-    fds.add(fd);
+    infos.addBlocks(blocks, locations);
   }
 
   /**
@@ -1087,7 +1066,7 @@ public class HdfsTable extends Table {
         schemaSearchLocations.add(getMetaStoreTable().getParameters());
 
         avroSchema_ =
-            HdfsTable.getAvroSchema(schemaSearchLocations, getFullName(), true);
+            HdfsTable.getAvroSchema(schemaSearchLocations, getFullName());
         String serdeLib = msTbl.getSd().getSerdeInfo().getSerializationLib();
         if (serdeLib == null ||
             serdeLib.equals("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe")) {
@@ -1108,7 +1087,7 @@ public class HdfsTable extends Table {
           for (Column parsedCol: avroTypeList) {
             FieldSchema fs = new FieldSchema();
             fs.setName(parsedCol.getName());
-            String avroType = parsedCol.getType().toString();
+            String avroType = parsedCol.getType().toSql();
             if (avroType.toLowerCase().equals("string") && canFallBack) {
               fs.setType(sdTypes.get(i).getType());
             } else {
@@ -1164,15 +1143,13 @@ public class HdfsTable extends Table {
         // Get all the partitions from the cached entry that have not been modified.
         for (HdfsPartition cachedPart: cachedHdfsTableEntry.getPartitions()) {
           // Skip the default partition and any partitions that have been modified.
-          if (cachedPart.isDirty() || cachedPart.getMetaStorePartition() == null ||
-              cachedPart.getId() == DEFAULT_PARTITION_ID) {
+          if (cachedPart.isDirty() || cachedPart.isDefaultPartition()) {
             continue;
           }
 
           org.apache.hadoop.hive.metastore.api.Partition cachedMsPart =
-              cachedPart.getMetaStorePartition();
-
-          Preconditions.checkNotNull(cachedMsPart);
+              cachedPart.toHmsPartition();
+          if (cachedMsPart == null) continue;
 
           // This is a partition we already know about and it hasn't been modified.
           // No need to reload the metadata.
@@ -1226,17 +1203,16 @@ public class HdfsTable extends Table {
 
   /**
    * Gets an Avro table's JSON schema from the list of given table property search
-   * locations. The schema may be specified as a string literal or provided as an
-   * HDFS/http URL that points to the schema. This function does not perform any
-   * validation on the returned string (e.g., it may not be a valid schema).
-   * If downloadSchema is true and the schema was found to be specified as a SCHEMA_URL,
-   * this function will attempt to download the schema from the given URL. Otherwise,
-   * only the the URL string will be returned.
-   * Throws a TableLoadingException if no schema is found or if there was any error
-   * extracting the schema.
+   * locations. The schema may be specified as a string literal or provided as a
+   * Hadoop FileSystem or http URL that points to the schema. This function does not
+   * perform any validation on the returned string (e.g., it may not be a valid
+   * schema).  If the schema was found to be specified as a SCHEMA_URL, this function
+   * will attempt to download the schema from the given URL.  Throws a
+   * TableLoadingException if no schema is found or if there was any error extracting
+   * the schema.
    */
   public static String getAvroSchema(List<Map<String, String>> schemaSearchLocations,
-      String tableName, boolean downloadSchema) throws TableLoadingException {
+      String tableName) throws TableLoadingException {
     String url = null;
     // Search all locations and break out on the first valid schema found.
     for (Map<String, String> schemaLocation: schemaSearchLocations) {
@@ -1251,42 +1227,43 @@ public class HdfsTable extends Table {
         break;
       }
     }
-
     if (url == null || url.equals(AvroSerdeUtils.SCHEMA_NONE)) {
       throw new TableLoadingException(String.format("No Avro schema provided in " +
           "SERDEPROPERTIES or TBLPROPERTIES for table: %s ", tableName));
     }
-
-    if (!url.toLowerCase().startsWith("hdfs://") &&
-        !url.toLowerCase().startsWith("http://")) {
-      throw new TableLoadingException("avro.schema.url must be of form " +
-          "\"http://path/to/schema/file\" or " +
-          "\"hdfs://namenode:port/path/to/schema/file\", got " + url);
-    }
-    return downloadSchema ? loadAvroSchemaFromUrl(url) : url;
-  }
-
-  private static String loadAvroSchemaFromUrl(String url)
-      throws TableLoadingException {
-    if (url.toLowerCase().startsWith("hdfs://")) {
-      try {
-        return FileSystemUtil.readFile(new Path(url));
-      } catch (IOException e) {
-        throw new TableLoadingException(
-            "Problem reading Avro schema at: " + url, e);
-      }
-    } else {
-      Preconditions.checkState(url.toLowerCase().startsWith("http://"));
+    String schema = null;
+    if (url.toLowerCase().startsWith("http://")) {
       InputStream urlStream = null;
       try {
         urlStream = new URL(url).openStream();
-        return IOUtils.toString(urlStream);
+        schema = IOUtils.toString(urlStream);
       } catch (IOException e) {
         throw new TableLoadingException("Problem reading Avro schema from: " + url, e);
       } finally {
         IOUtils.closeQuietly(urlStream);
       }
+    } else {
+      Path path = new Path(url);
+      FileSystem fs = null;
+      try {
+        fs = path.getFileSystem(FileSystemUtil.getConfiguration());
+      } catch (Exception e) {
+        throw new TableLoadingException(String.format(
+            "Invalid avro.schema.url: %s. %s", path, e.getMessage()));
+      }
+      StringBuilder errorMsg = new StringBuilder();
+      if (!FileSystemUtil.isPathReachable(path, fs, errorMsg)) {
+        throw new TableLoadingException(String.format(
+            "Invalid avro.schema.url: %s. %s", path, errorMsg));
+      }
+      try {
+        schema = FileSystemUtil.readFile(path);
+      } catch (IOException e) {
+        throw new TableLoadingException(
+            "Problem reading Avro schema at: " + url, e);
+      }
     }
+    return schema;
   }
 
   @Override
@@ -1320,7 +1297,7 @@ public class HdfsTable extends Table {
       partitions_.add(hdfsPart);
     }
     avroSchema_ = hdfsTable.isSetAvroSchema() ? hdfsTable.getAvroSchema() : null;
-    isMarkedCached_ = HdfsCachingUtil.getCacheDirIdFromParams(
+    isMarkedCached_ = HdfsCachingUtil.getCacheDirectiveId(
         getMetaStoreTable().getParameters()) != null;
     populatePartitionMd();
   }
@@ -1436,6 +1413,7 @@ public class HdfsTable extends Table {
     resultSchema.addToColumns(new TColumn("#Files", Type.BIGINT.toThrift()));
     resultSchema.addToColumns(new TColumn("Size", Type.STRING.toThrift()));
     resultSchema.addToColumns(new TColumn("Bytes Cached", Type.STRING.toThrift()));
+    resultSchema.addToColumns(new TColumn("Cache Replication", Type.STRING.toThrift()));
     resultSchema.addToColumns(new TColumn("Format", Type.STRING.toThrift()));
     resultSchema.addToColumns(new TColumn("Incremental stats", Type.STRING.toThrift()));
 
@@ -1461,6 +1439,7 @@ public class HdfsTable extends Table {
         // Helps to differentiate partitions that have 0B cached versus partitions
         // that are not marked as cached.
         rowBuilder.add("NOT CACHED");
+        rowBuilder.add("NOT CACHED");
       } else {
         // Calculate the number the number of bytes that are cached.
         long cachedBytes = 0L;
@@ -1473,6 +1452,14 @@ public class HdfsTable extends Table {
         }
         totalCachedBytes += cachedBytes;
         rowBuilder.addBytes(cachedBytes);
+
+        // Extract cache replication factor from the parameters of the table
+        // if the table is not partitioned or directly from the partition.
+        Short rep = HdfsCachingUtil.getCachedCacheReplication(
+            numClusteringCols_ == 0 ?
+            p.getTable().getMetaStoreTable().getParameters() :
+            p.getParameters());
+        rowBuilder.add(rep.toString());
       }
       rowBuilder.add(p.getInputFormatDescriptor().getFileFormat().toString());
 
@@ -1491,8 +1478,43 @@ public class HdfsTable extends Table {
 
       // Total num rows, files, and bytes (leave format empty).
       rowBuilder.add(numRows_).add(numHdfsFiles_).addBytes(totalHdfsBytes_)
-          .addBytes(totalCachedBytes).add("").add("");
+          .addBytes(totalCachedBytes).add("").add("").add("");
       result.addToRows(rowBuilder.get());
+    }
+    return result;
+  }
+
+  /**
+   * Returns files info for the given dbname/tableName and partition spec.
+   * Returns files info for all partitions if partition spec is null.
+   */
+  public TResultSet getFiles(List<TPartitionKeyValue> partitionSpec) throws CatalogException {
+    TResultSet result = new TResultSet();
+    TResultSetMetadata resultSchema = new TResultSetMetadata();
+    result.setSchema(resultSchema);
+    resultSchema.addToColumns(new TColumn("path", Type.STRING.toThrift()));
+    resultSchema.addToColumns(new TColumn("size", Type.STRING.toThrift()));
+    resultSchema.addToColumns(new TColumn("partition", Type.STRING.toThrift()));
+    result.setRows(Lists.<TResultRow>newArrayList());
+
+    List<HdfsPartition> partitions = null;
+    if (partitionSpec == null) {
+      partitions = partitions_;
+    } else {
+      // Get the HdfsPartition object for the given partition spec.
+      HdfsPartition partition = getPartitionFromThriftPartitionSpec(partitionSpec);
+      Preconditions.checkState(partition != null);
+      partitions = Lists.newArrayList(partition);
+    }
+
+    for (HdfsPartition p: partitions) {
+      for (FileDescriptor fd: p.getFileDescriptors()) {
+        TResultRowBuilder rowBuilder = new TResultRowBuilder();
+        rowBuilder.add(p.getLocation() + "/" + fd.getFileName());
+        rowBuilder.add(PrintUtils.printBytes(fd.getFileLength()));
+        rowBuilder.add(p.getPartitionName());
+        result.addToRows(rowBuilder.get());
+      }
     }
     return result;
   }

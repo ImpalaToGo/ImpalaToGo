@@ -24,7 +24,7 @@ set -e
 
 # Allow picking up strategy from environment
 : ${EXPLORATION_STRATEGY:=core}
-NUM_ITERATIONS=1
+: ${NUM_TEST_ITERATIONS:=1}
 KERB_ARGS=""
 
 . ${IMPALA_HOME}/bin/impala-config.sh > /dev/null 2>&1
@@ -54,7 +54,7 @@ do
       EXPLORATION_STRATEGY=$OPTARG
       ;;
     n)
-      NUM_ITERATIONS=$OPTARG
+      NUM_TEST_ITERATIONS=$OPTARG
       ;;
     ?)
       echo "run-all-tests.sh [-e <exploration_strategy>] [-n <num_iters>]"
@@ -71,19 +71,19 @@ mkdir -p ${LOG_DIR}
 # Enable core dumps
 ulimit -c unlimited
 
-echo "Split and assign HBase regions"
-# To properly test HBase integeration, HBase regions are split and assigned by this
-# script. Restarting HBase will change the region server assignment. Run split-hbase.sh
-# before running any test.
-#${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
+if [ "${TARGET_FILESYSTEM}" = "hdfs" ]; then
+  echo "Split and assign HBase regions"
+  # To properly test HBase integeration, HBase regions are split and assigned by this
+  # script. Restarting HBase will change the region server assignment. Run split-hbase.sh
+  # before running any test.
+  ${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
+fi
 
-#${IMPALA_HOME}/testdata/bin/split-hbase.sh
-
-for i in $(seq 1 $NUM_ITERATIONS)
+for i in $(seq 1 $NUM_TEST_ITERATIONS)
 do
   # Preemptively force kill impalads and the statestore to clean up any running instances.
   # The BE unit tests cannot run when impalads are started.
-  #${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
+  ${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
 
   if [[ "$BE_TEST" = true ]]; then
   echo "Running BE tests...."
@@ -110,12 +110,12 @@ do
       ${EE_TEST_FILES} #${KERB_ARGS}
   fi
 
+  pushd $IMPALA_FE_DIR
   if [[ "$FE_TEST" = true ]]; then
     echo "Running FE tests...."
     # Run JUnit frontend tests
     # Requires a running impalad cluster because some tests (such as DataErrorTest and
     # JdbcTest) queries against an impala cluster.
-    cd $IMPALA_FE_DIR
     mvn test
   fi
 
@@ -126,6 +126,7 @@ do
       --catalogd_args=--load_catalog_in_background=false
     mvn test -Dtest=JdbcTest
   fi
+  popd
 
   if [[ "$CLUSTER_TEST" = true ]]; then
     # Run the custom-cluster tests after all other tests, since they will restart the

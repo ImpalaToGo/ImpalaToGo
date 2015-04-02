@@ -27,6 +27,15 @@ using namespace strings;
 
 namespace impala {
 
+// Number of pinned blocks required for a merge.
+const int BLOCKS_REQUIRED_FOR_MERGE = 3;
+
+// Error message when pinning fixed or variable length blocks failed.
+// TODO: Add the node id that iniated the sort
+const string PIN_FAILED_ERROR_MSG = "Failed to pin block for $0-length data needed "
+    "for sorting. Reducing query concurrency or increasing the memory available to "
+    "Impala may help running this query.";
+
 // A run is a sequence of blocks containing tuples that are or will eventually be in
 // sorted order.
 // A run may maintain two sequences of blocks - one containing the tuples themselves,
@@ -143,16 +152,15 @@ class Sorter::Run {
   // True if all blocks in the run are pinned.
   bool is_pinned_;
 
-  // Sequence of blocks in this run containing the fixed-length portion of the
-  // sort tuples comprising this run. The data pointed to by the var-len slots are in
-  // var_len_blocks_. If is_sorted_ is true, the tuples in fixed_len_blocks_ will be in
-  // sorted order.
+  // Sequence of blocks in this run containing the fixed-length portion of the sort tuples
+  // comprising this run. The data pointed to by the var-len slots are in var_len_blocks_.
+  // If is_sorted_ is true, the tuples in fixed_len_blocks_ will be in sorted order.
   // fixed_len_blocks_[i] is NULL iff it has been deleted.
   vector<BufferedBlockMgr::Block*> fixed_len_blocks_;
 
   // Sequence of blocks in this run containing the var-length data corresponding to the
-  // var-length column data from fixed_len_blocks_. These are reconstructed to be in
-  // sorted order in UnpinAllBlocks().
+  // var-length columns from fixed_len_blocks_. These are reconstructed to be in sorted
+  // order in UnpinAllBlocks().
   // var_len_blocks_[i] is NULL iff it has been deleted.
   vector<BufferedBlockMgr::Block*> var_len_blocks_;
 
@@ -188,10 +196,9 @@ class Sorter::Run {
 }; // class Sorter::Run
 
 // Sorts a sequence of tuples from a run in place using a provided tuple comparator.
-// Quick sort is used for sequences of tuples larger that 16 elements, and
-// insertion sort is used for smaller sequences.
-// The TupleSorter is initialized with a RuntimeState instance to check for
-// cancellation during an in-memory sort.
+// Quick sort is used for sequences of tuples larger that 16 elements, and insertion sort
+// is used for smaller sequences. The TupleSorter is initialized with a RuntimeState
+// instance to check for cancellation during an in-memory sort.
 class Sorter::TupleSorter {
  public:
   TupleSorter(const TupleRowComparator& less_than_comp, int64_t block_size,
@@ -401,9 +408,9 @@ Status Sorter::Run::AddBatch(RowBatch* batch, int start_index, int* num_processe
         new_tuple->MaterializeExprs<has_var_len_data>(input_row, *sort_tuple_desc_,
             sorter_->sort_tuple_slot_expr_ctxs_, NULL, &var_values, &total_var_len);
         if (total_var_len > sorter_->block_mgr_->max_block_size()) {
-          return Status(TStatusCode::INTERNAL_ERROR, Substitute(
+          return Status(ErrorMsg(TErrorCode::INTERNAL_ERROR, Substitute(
               "Variable length data in a single tuple larger than block size $0 > $1",
-              total_var_len, sorter_->block_mgr_->max_block_size()));
+              total_var_len, sorter_->block_mgr_->max_block_size())));
         }
       } else {
         memcpy(new_tuple, input_row->GetTuple(0), sort_tuple_size_);
@@ -538,17 +545,27 @@ Status Sorter::Run::PrepareRead() {
   // and the individual blocks do not need to be pinned.
   if (is_pinned_) return Status::OK;
 
+  // Attempt to pin the first fixed and var-length blocks. In either case, pinning may
+  // fail if the number of reserved blocks is oversubscribed, see IMPALA-1590.
   if (fixed_len_blocks_.size() > 0) {
-    bool pinned;
+    bool pinned = false;
     RETURN_IF_ERROR(fixed_len_blocks_[0]->Pin(&pinned));
-    DCHECK(pinned);
-  }
-  if (has_var_len_slots_ && var_len_blocks_.size() > 0) {
-    bool pinned;
-    RETURN_IF_ERROR(var_len_blocks_[0]->Pin(&pinned));
-    DCHECK(pinned);
+    if (!pinned) {
+      Status status = Status::MEM_LIMIT_EXCEEDED;
+      status.AddDetail(Substitute(PIN_FAILED_ERROR_MSG, "fixed"));
+      return status;
+    }
   }
 
+  if (has_var_len_slots_ && var_len_blocks_.size() > 0) {
+    bool pinned = false;
+    RETURN_IF_ERROR(var_len_blocks_[0]->Pin(&pinned));
+    if (!pinned) {
+      Status status = Status::MEM_LIMIT_EXCEEDED;
+      status.AddDetail(Substitute(PIN_FAILED_ERROR_MSG, "variable"));
+      return status;
+    }
+  }
   return Status::OK;
 }
 
@@ -582,7 +599,7 @@ Status Sorter::Run::GetNextBatch(RowBatch** output_batch) {
     }
   }
 
-  // *output_batch = NULL indicates eos.
+  // *output_batch == NULL indicates eos.
   *output_batch = buffered_batch_.get();
   return Status::OK;
 }
@@ -887,7 +904,12 @@ Status Sorter::Init() {
   in_mem_sort_timer_ = ADD_TIMER(profile_, "InMemorySortTime");
   sorted_data_size_ = ADD_COUNTER(profile_, "SortDataSize", TUnit::BYTES);
 
-  int min_blocks_required = Sorter::MinBuffersRequired(output_row_desc_);
+  int min_blocks_required = BLOCKS_REQUIRED_FOR_MERGE;
+  // Fixed and var-length blocks are separate, so we need BLOCKS_REQUIRED_FOR_MERGE
+  // blocks for both if there is var-length data.
+  if (output_row_desc_->tuple_descriptors()[0]->string_slots().size() > 0) {
+    min_blocks_required *= 2;
+  }
   RETURN_IF_ERROR(block_mgr_->RegisterClient(min_blocks_required, mem_tracker_, state_,
       &block_mgr_client_));
 
@@ -909,7 +931,6 @@ Status Sorter::AddBatch(RowBatch* batch) {
       RETURN_IF_ERROR(unsorted_run_->AddBatch<false>(
           batch, cur_batch_index, &num_processed));
     }
-
     cur_batch_index += num_processed;
     if (cur_batch_index < batch->num_rows()) {
       // The current run is full. Sort it and begin the next one.
@@ -964,7 +985,6 @@ Status Sorter::InputDone() {
     // Create the final merger.
     CreateMerger(sorted_runs_.size());
   }
-
   return Status::OK;
 }
 
@@ -978,7 +998,6 @@ Status Sorter::GetNext(RowBatch* output_batch, bool* eos) {
     // In this case, rows are deep copied into output_batch.
     RETURN_IF_ERROR(merger_->GetNext(output_batch, eos));
   }
-
   return Status::OK;
 }
 
@@ -1028,14 +1047,6 @@ uint64_t Sorter::EstimateMergeMem(uint64_t available_blocks,
   uint64_t output_batch_mem = RowBatch::AT_CAPACITY_MEM_USAGE;
 
   return input_batch_mem + output_batch_mem;
-}
-
-uint32_t Sorter::MinBuffersRequired(RowDescriptor* row_desc) {
-  bool has_var_len_slots = row_desc->tuple_descriptors()[0]->string_slots().size() > 0;
-  int blocks_per_run = has_var_len_slots ? 2 : 1;
-  // An intermediate merge requires at least 2 input runs and 1 output runs to be
-  // processed at a time.
-  return blocks_per_run * 3;
 }
 
 Status Sorter::MergeIntermediateRuns() {

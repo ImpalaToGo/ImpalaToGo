@@ -1,0 +1,304 @@
+From 32c8daa952ea8b86d4912be35cae73cf33cb857f Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Sun, 1 Feb 2015 02:00:52 -0800
+Subject: [PATCH 041/110] CLOUDERA-BUILD Move test annotations from MOB and Quotas to org.apache.hadoop.hbase.testclassification
+
+---
+ .../hadoop/hbase/IntegrationTestIngestWithMOB.java |    1 +
+ .../apache/hadoop/hbase/mob/TestCachedMobFile.java |    2 +-
+ .../hbase/mob/TestDefaultMobStoreFlusher.java      |    2 +-
+ .../hbase/mob/TestExpiredMobFileCleaner.java       |    2 +-
+ .../hadoop/hbase/mob/TestMobDataBlockEncoding.java |    2 +-
+ .../org/apache/hadoop/hbase/mob/TestMobFile.java   |    2 +-
+ .../apache/hadoop/hbase/mob/TestMobFileCache.java  |    2 +-
+ .../apache/hadoop/hbase/mob/TestMobFileName.java   |    2 +-
+ .../hbase/mob/mapreduce/TestMobSweepJob.java       |    2 +-
+ .../hbase/mob/mapreduce/TestMobSweepMapper.java    |    2 +-
+ .../hbase/mob/mapreduce/TestMobSweepReducer.java   |    2 +-
+ .../hadoop/hbase/mob/mapreduce/TestMobSweeper.java |    2 +-
+ .../apache/hadoop/hbase/quotas/TestQuotaAdmin.java |    2 +-
+ .../apache/hadoop/hbase/quotas/TestQuotaState.java |    2 +-
+ .../hadoop/hbase/quotas/TestQuotaTableUtil.java    |    2 +-
+ .../hadoop/hbase/quotas/TestQuotaThrottle.java     |    2 +-
+ .../hadoop/hbase/quotas/TestRateLimiter.java       |    2 +-
+ .../hbase/regionserver/TestDeleteMobTable.java     |    2 +-
+ .../hadoop/hbase/regionserver/TestHMobStore.java   |    2 +-
+ .../hbase/regionserver/TestMobCompaction.java      |    2 +-
+ .../hbase/regionserver/TestMobStoreScanner.java    |    2 +-
+ 21 files changed, 21 insertions(+), 20 deletions(-)
+
+diff --git a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+index f8a4412..a416238 100644
+--- a/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
++++ b/hbase-it/src/test/java/org/apache/hadoop/hbase/IntegrationTestIngestWithMOB.java
+@@ -31,6 +31,7 @@ import org.apache.hadoop.hbase.util.LoadTestTool;
+ import org.apache.hadoop.util.ToolRunner;
+ import org.junit.Test;
+ import org.junit.experimental.categories.Category;
++import org.apache.hadoop.hbase.testclassification.IntegrationTests;
+ 
+ /**
+  * Integration Test for MOB ingest.
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestCachedMobFile.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestCachedMobFile.java
+index b39dd2a..9252280 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestCachedMobFile.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestCachedMobFile.java
+@@ -29,7 +29,7 @@ import org.apache.hadoop.hbase.HBaseConfiguration;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.KeyValue.Type;
+ import org.apache.hadoop.hbase.KeyValueUtil;
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+ import org.apache.hadoop.hbase.io.hfile.HFileContext;
+ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
+index c234c52..418933d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestDefaultMobStoreFlusher.java
+@@ -26,7 +26,7 @@ import org.apache.hadoop.hbase.CellUtil;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.LargeTests;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
+ import org.apache.hadoop.hbase.MasterNotRunningException;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
+index ea50075..e22b4b5 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestExpiredMobFileCleaner.java
+@@ -27,7 +27,7 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Admin;
+ import org.apache.hadoop.hbase.client.HTable;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
+index a507de0..8648a43 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobDataBlockEncoding.java
+@@ -26,7 +26,7 @@ import org.apache.hadoop.hbase.CellUtil;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFile.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFile.java
+index f6511f7..20a8423 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFile.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFile.java
+@@ -29,7 +29,7 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.KeyValue.Type;
+ import org.apache.hadoop.hbase.KeyValueUtil;
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+ import org.apache.hadoop.hbase.io.hfile.HFileContext;
+ import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
+index 0ba77e6..a90900d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileCache.java
+@@ -34,7 +34,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.regionserver.HMobStore;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileName.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileName.java
+index 9a6cf7f..fd78e59 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileName.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/TestMobFileName.java
+@@ -24,7 +24,7 @@ import java.util.UUID;
+ 
+ import junit.framework.TestCase;
+ 
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.MD5Hash;
+ import org.junit.Test;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepJob.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepJob.java
+index e0b9a83..044499b 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepJob.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepJob.java
+@@ -27,7 +27,7 @@ import org.apache.hadoop.fs.CommonConfigurationKeys;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.mob.MobConstants;
+ import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.io.IOUtils;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepMapper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepMapper.java
+index a7e2538..9e5637a 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepMapper.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepMapper.java
+@@ -20,7 +20,7 @@ package org.apache.hadoop.hbase.mob.mapreduce;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.KeyValue;
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+ import org.apache.hadoop.hbase.mob.MobZookeeper;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
+index a45ed34..6549e02 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweepReducer.java
+@@ -35,7 +35,7 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Admin;
+ import org.apache.hadoop.hbase.client.HTable;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
+index 2021bd8..73d323c 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/mob/mapreduce/TestMobSweeper.java
+@@ -30,7 +30,7 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Admin;
+ import org.apache.hadoop.hbase.client.HTable;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaAdmin.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaAdmin.java
+index a8dd9d5..8837ff5 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaAdmin.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaAdmin.java
+@@ -32,7 +32,7 @@ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
+ import org.apache.hadoop.hbase.security.User;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManagerTestHelper;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaState.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaState.java
+index 5f58adf..efa031e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaState.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaState.java
+@@ -30,7 +30,7 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.QuotaProtos.Quotas;
+ import org.apache.hadoop.hbase.protobuf.generated.QuotaProtos.Throttle;
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ 
+ import org.junit.Assert;
+ import org.junit.Test;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaTableUtil.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaTableUtil.java
+index c83305e..6cb275d 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaTableUtil.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaTableUtil.java
+@@ -29,7 +29,7 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.QuotaProtos.Quotas;
+ import org.apache.hadoop.hbase.protobuf.generated.QuotaProtos.Throttle;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ 
+ import org.junit.AfterClass;
+ import org.junit.BeforeClass;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaThrottle.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaThrottle.java
+index fa73c69..21bf324 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaThrottle.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestQuotaThrottle.java
+@@ -32,7 +32,7 @@ import org.apache.hadoop.hbase.client.Put;
+ import org.apache.hadoop.hbase.client.Result;
+ import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
+ import org.apache.hadoop.hbase.security.User;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManager;
+ import org.apache.hadoop.hbase.util.EnvironmentEdgeManagerTestHelper;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestRateLimiter.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestRateLimiter.java
+index 1fb27a3..a6ca1e8 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestRateLimiter.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/quotas/TestRateLimiter.java
+@@ -20,7 +20,7 @@ package org.apache.hadoop.hbase.quotas;
+ 
+ import java.util.concurrent.TimeUnit;
+ 
+-import org.apache.hadoop.hbase.SmallTests;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
+ 
+ import org.junit.Assert;
+ import org.junit.Test;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+index 3ad196e..d180f75 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestDeleteMobTable.java
+@@ -25,7 +25,7 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+index bcd0e54..456d001 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestHMobStore.java
+@@ -40,7 +40,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.Get;
+ import org.apache.hadoop.hbase.client.Scan;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
+index abf41b8..034e80f 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobCompaction.java
+@@ -45,7 +45,7 @@ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.KeyValueUtil;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.client.Delete;
+ import org.apache.hadoop.hbase.client.Durability;
+ import org.apache.hadoop.hbase.client.Put;
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+index 6955ca6..1b480c9 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/regionserver/TestMobStoreScanner.java
+@@ -31,7 +31,7 @@ import org.apache.hadoop.hbase.HBaseTestingUtility;
+ import org.apache.hadoop.hbase.HColumnDescriptor;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+-import org.apache.hadoop.hbase.MediumTests;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.client.HBaseAdmin;
+ import org.apache.hadoop.hbase.client.HTable;
+-- 
+1.7.0.4
+

@@ -18,7 +18,7 @@
 #include <string>
 
 #include "common/logging.h"
-#include "rpc/thrift-util.h"
+#include "rpc/jni-thrift-util.h"
 #include "util/jni-util.h"
 #include "util/logging-support.h"
 
@@ -72,7 +72,8 @@ Frontend::Frontend() {
     {"getRolePrivileges", "([B)[B", &get_role_privileges_id_},
     {"execHiveServer2MetadataOp", "([B)[B", &exec_hs2_metadata_op_id_},
     {"setCatalogInitialized", "()V", &set_catalog_initialized_id_},
-    {"loadTableData", "([B)[B", &load_table_data_id_}};
+    {"loadTableData", "([B)[B", &load_table_data_id_},
+    {"getTableFiles", "([B)[B", &get_table_files_id_}};
 
   JNIEnv* jni_env = getJNIEnv();
   // create instance of java class JniFrontend
@@ -220,7 +221,7 @@ Status Frontend::LoadData(const TLoadDataReq& request, TLoadDataResp* response) 
 }
 
 bool Frontend::IsAuthorizationError(const Status& status) {
-  return !status.ok() && status.GetErrorMsg().find("AuthorizationException") == 0;
+  return !status.ok() && status.GetDetail().find("AuthorizationException") == 0;
 }
 
 Status Frontend::SetCatalogInitialized() {
@@ -230,4 +231,8 @@ Status Frontend::SetCatalogInitialized() {
   jni_env->CallObjectMethod(fe_, set_catalog_initialized_id_);
   RETURN_ERROR_IF_EXC(jni_env);
   return Status::OK;
+}
+
+Status Frontend::GetTableFiles(const TShowFilesParams& params, TResultSet* result) {
+  return JniUtil::CallJniMethod(fe_, get_table_files_id_, params, result);
 }

@@ -39,6 +39,7 @@
 #include "util/debug-util.h"
 #include "util/error-util.h"
 #include "util/llama-util.h"
+#include "util/mem-info.h"
 #include "util/parse-util.h"
 #include "gen-cpp/ResourceBrokerService_types.h"
 
@@ -113,7 +114,7 @@ SimpleScheduler::SimpleScheduler(StatestoreSubscriber* subscriber,
     }
     bool is_percent;
     int64_t mem_bytes =
-        ParseUtil::ParseMemSpec(FLAGS_rm_default_memory, &is_percent);
+        ParseUtil::ParseMemSpec(FLAGS_rm_default_memory, &is_percent, MemInfo::physical_mem());
     if (mem_bytes <= 1024 * 1024) {
       LOG(ERROR) << "Bad value for --rm_default_memory (must be larger than 1M):"
                  << FLAGS_rm_default_memory;
@@ -152,7 +153,7 @@ SimpleScheduler::SimpleScheduler(const vector<TNetworkAddress>& backends,
     Status status = HostnameToIpAddrs(backends[i].hostname, &ipaddrs);
     if (!status.ok()) {
       VLOG(1) << "Failed to resolve " << backends[i].hostname << ": "
-              << status.GetErrorMsg();
+              << status.GetDetail();
       continue;
     }
 
@@ -192,7 +193,7 @@ Status SimpleScheduler::Init() {
         bind<void>(mem_fn(&SimpleScheduler::UpdateMembership), this, _1, _2);
     Status status = statestore_subscriber_->AddTopic(IMPALA_MEMBERSHIP_TOPIC, true, cb);
     if (!status.ok()) {
-      status.AddErrorMsg("SimpleScheduler failed to register membership topic");
+      status.AddDetail("SimpleScheduler failed to register membership topic");
       return status;
     }
     if (!FLAGS_disable_admission_control) {
@@ -214,8 +215,8 @@ Status SimpleScheduler::Init() {
     const string& hostname = backend_descriptor_.address.hostname;
     Status status = HostnameToIpAddrs(hostname, &ipaddrs);
     if (!status.ok()) {
-      VLOG(1) << "Failed to resolve " << hostname << ": " << status.GetErrorMsg();
-      status.AddErrorMsg("SimpleScheduler failed to start");
+      VLOG(1) << "Failed to resolve " << hostname << ": " << status.GetDetail();
+      status.AddDetail("SimpleScheduler failed to start");
       return status;
     }
     // Find a non-localhost address for this host; if one can't be
@@ -259,7 +260,6 @@ void SimpleScheduler::BackendsUrlCallback(const Webserver::ArgumentMap& args,
   }
 
   document->AddMember("backends", backends_list, document->GetAllocator());
-  document->AddMember("num_backends", backends.size(), document->GetAllocator());
 }
 
 void SimpleScheduler::UpdateMembership(
@@ -346,7 +346,7 @@ void SimpleScheduler::UpdateMembership(
       Status status = thrift_serializer_.Serialize(&backend_descriptor_, &item.value);
       if (!status.ok()) {
         LOG(WARNING) << "Failed to serialize Impala backend address for statestore topic: "
-                     << status.GetErrorMsg();
+                     << status.GetDetail();
         subscriber_topic_updates->pop_back();
       }
     } else if (is_offline &&
@@ -829,7 +829,7 @@ Status SimpleScheduler::GetRequestPool(const string& user,
   const string& configured_pool = query_options.request_pool;
   RETURN_IF_ERROR(request_pool_service_->ResolveRequestPool(configured_pool, user,
         &resolve_pool_result));
-  if (resolve_pool_result.status.status_code != TStatusCode::OK) {
+  if (resolve_pool_result.status.status_code != TErrorCode::OK) {
     return Status(join(resolve_pool_result.status.error_msgs, "; "));
   }
   if (resolve_pool_result.resolved_pool.empty()) {
@@ -880,9 +880,10 @@ Status SimpleScheduler::Schedule(Coordinator* coord, QuerySchedule* schedule) {
     if (!status.ok()) {
       // Warn about missing table and/or column stats if necessary.
       const TQueryCtx& query_ctx = schedule->request().query_ctx;
-      if(query_ctx.__isset.tables_missing_stats &&
+      if(!query_ctx.__isset.parent_query_id &&
+          query_ctx.__isset.tables_missing_stats &&
           !query_ctx.tables_missing_stats.empty()) {
-        status.AddErrorMsg(GetTablesMissingStatsWarning(query_ctx.tables_missing_stats));
+        status.AddDetail(GetTablesMissingStatsWarning(query_ctx.tables_missing_stats));
       }
       return status;
     }
@@ -905,7 +906,7 @@ Status SimpleScheduler::Release(QuerySchedule* schedule) {
     // Remove the reservation from the active-resource maps even if there was an error
     // releasing the reservation because the query running in the reservation is done.
     RemoveFromActiveResourceMaps(*schedule->reservation());
-    if (response.status.status_code != TStatusCode::OK) {
+    if (response.status.status_code != TErrorCode::OK) {
       return Status(join(response.status.error_msgs, ", "));
     }
   }

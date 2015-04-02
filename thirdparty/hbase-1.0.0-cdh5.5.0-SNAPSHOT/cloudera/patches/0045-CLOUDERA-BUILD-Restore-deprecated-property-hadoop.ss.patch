@@ -1,0 +1,82 @@
+From 248c98bcffc9a22f8bb3934f49889f6fc4325b09 Mon Sep 17 00:00:00 2001
+From: Esteban Gutierrez <esteban@cloudera.com>
+Date: Tue, 10 Feb 2015 15:51:40 -0800
+Subject: [PATCH 045/110] CLOUDERA-BUILD Restore deprecated property hadoop.ssl.enabled
+
+Author: Esteban Gutierrez
+Reason: Product Requirement (Compatibility)
+Ref: CDH-25049
+---
+ .../org/apache/hadoop/hbase/http/HttpConfig.java   |    6 ++--
+ .../hadoop/hbase/http/ServerConfigurationKeys.java |    1 +
+ .../hadoop/hbase/TestHBaseTestingUtility.java      |   25 ++++++++++++++++++++
+ 3 files changed, 29 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/http/HttpConfig.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/http/HttpConfig.java
+index 4ed7fbd..1985e88 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/http/HttpConfig.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/http/HttpConfig.java
+@@ -52,9 +52,9 @@ public class HttpConfig {
+   }
+ 
+    public HttpConfig(final Configuration conf) {
+-    boolean sslEnabled = conf.getBoolean(
+-      ServerConfigurationKeys.HBASE_SSL_ENABLED_KEY,
+-      ServerConfigurationKeys.HBASE_SSL_ENABLED_DEFAULT);
++    boolean sslEnabled = conf.getBoolean(ServerConfigurationKeys.HBASE_SSL_ENABLED_KEY,
++      conf.getBoolean(ServerConfigurationKeys.HBASE_SSL_ENABLED_OLD_KEY,
++      ServerConfigurationKeys.HBASE_SSL_ENABLED_DEFAULT));
+     policy = sslEnabled ? Policy.HTTPS_ONLY : Policy.HTTP_ONLY;
+     if (sslEnabled) {
+       conf.addResource("ssl-server.xml");
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/http/ServerConfigurationKeys.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/http/ServerConfigurationKeys.java
+index 2b42f22..ef7ce67 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/http/ServerConfigurationKeys.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/http/ServerConfigurationKeys.java
+@@ -30,6 +30,7 @@ public interface ServerConfigurationKeys {
+ 
+   /** Enable/Disable ssl for http server */
+   public static final String HBASE_SSL_ENABLED_KEY = "hbase.ssl.enabled";
++  public static final String HBASE_SSL_ENABLED_OLD_KEY = "hadoop.ssl.enabled";
+ 
+   public static final boolean HBASE_SSL_ENABLED_DEFAULT = false;
+ 
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
+index 84ee963..de3c6f5 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/TestHBaseTestingUtility.java
+@@ -165,6 +165,31 @@ public class TestHBaseTestingUtility {
+     }
+   }
+ 
++  @Test
++  public void testMiniClusterWithSSLOnWithOldPropery() throws Exception {
++    final String BASEDIR = System.getProperty("test.build.dir",
++        "target/test-dir") + "/" + TestHBaseTestingUtility.class.getSimpleName();
++    String sslConfDir = KeyStoreTestUtil.getClasspathDir(TestHBaseTestingUtility.class);
++    String keystoresDir = new File(BASEDIR).getAbsolutePath();
++
++    HBaseTestingUtility hbt = new HBaseTestingUtility();
++    File base = new File(BASEDIR);
++    FileUtil.fullyDelete(base);
++    base.mkdirs();
++
++    KeyStoreTestUtil.setupSSLConfig(keystoresDir, sslConfDir, hbt.getConfiguration(), false);
++
++    hbt.getConfiguration().set("hadoop.ssl.enabled", "true");
++    hbt.getConfiguration().addResource("ssl-server.xml");
++    hbt.getConfiguration().addResource("ssl-client.xml");
++
++    MiniHBaseCluster cluster = hbt.startMiniCluster();
++    try {
++      assertEquals(1, cluster.getLiveRegionServerThreads().size());
++    } finally {
++      hbt.shutdownMiniCluster();
++    }
++  }
+   /**
+    *  Test that we can start and stop multiple time a cluster
+    *   with the same HBaseTestingUtility.
+-- 
+1.7.0.4
+

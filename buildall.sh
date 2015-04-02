@@ -27,7 +27,11 @@ if [ ! -z "${MINIKDC_REALM}" ]; then
 fi
 
 export IMPALA_HOME=$ROOT
-. "$ROOT"/bin/impala-config.sh > /dev/null 2>&1
+. "$ROOT"/bin/impala-config.sh
+if [ $? = 1 ]; then
+  echo "Bad configuration, aborting buildall."
+  exit 1
+fi
 
 # Defaults that are only changable via the commandline.
 CLEAN_ACTION=1
@@ -92,6 +96,9 @@ do
       ;;
     -asan)
       TARGET_BUILD_TYPE=ADDRESS_SANITIZER
+      ;;
+    -release)
+      TARGET_BUILD_TYPE=Release
       ;;
     -testpairwise)
       EXPLORATION_STRATEGY=pairwise
@@ -170,7 +177,7 @@ Examples of common tasks:
   ./buildall.sh -snapshot_file <file>
 
   # Build, load the hive metastore and the hdfs snapshot, run tests
-  ./buildall.sh -snapshot_file <file> -hive_metastore_snapshot <file>
+  ./buildall.sh -snapshot_file <file> -metastore_snapshot_file <file>
 
   # Build, generate, and incrementally load test data without formatting the mini-cluster
   # (reuses existing data in HDFS if it exists). Can be faster than loading from a
@@ -191,6 +198,14 @@ if [ ${IMPALA_KERBERIZE} -eq 0 ]; then
   NEEDS_RE_SOURCE_NOTE=0
 fi
 
+if [[ "${TARGET_FILESYSTEM}" = "s3" && $TESTDATA_ACTION -eq 1 &&
+      ! -n $METASTORE_SNAPSHOT_FILE ]]
+then
+  # Loading on s3 won't work if the metastore snapshot is not provided.
+  echo "-metastore_snapshot_file <file> is required for loading data into s3"
+  exit 1
+fi
+
 # Sanity check that thirdparty is built.
 if [ ! -e $IMPALA_HOME/thirdparty/gflags-${IMPALA_GFLAGS_VERSION}/libgflags.la ]
 then
@@ -207,16 +222,17 @@ else
 fi
 
 # Stop any running Impala services.
-#${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
+${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
 
-#if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ]]
-#then
+if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ||
+      -n $METASTORE_SNAPSHOT_FILE ]]
+then
   # Kill any processes that may be accessing postgres metastore. To be safe, this is done
   # before we make any changes to the config files.
-#  set +e
-#  ${IMPALA_HOME}/testdata/bin/kill-all.sh
-#  set -e
-#fi
+  set +e
+  ${IMPALA_HOME}/testdata/bin/kill-all.sh
+  set -e
+fi
 
 # option to clean everything first
 if [ $CLEAN_ACTION -eq 1 ]
@@ -297,11 +313,11 @@ mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/query_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/fe_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/data_loading
 
-#if [ $FORMAT_CLUSTER -eq 1 ]; then
-#  $IMPALA_HOME/testdata/bin/run-all.sh -format
-#elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
-#  $IMPALA_HOME/testdata/bin/run-all.sh
-#fi
+if [ $FORMAT_CLUSTER -eq 1 ]; then
+  $IMPALA_HOME/testdata/bin/run-all.sh -format
+elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
+  $IMPALA_HOME/testdata/bin/run-all.sh
+fi
 
 #
 # KERBEROS TODO
@@ -331,16 +347,16 @@ fi
 #
 # Don't try to run tests without data!
 #
-#TESTWH_ITEMS=`hadoop fs -ls /test-warehouse 2> /dev/null | \
-#    grep test-warehouse |wc -l`
-#if [ ${TESTS_ACTION} -eq 1 -a \
-#     ${TESTDATA_ACTION} -eq 0 -a \
-#     ${TESTWH_ITEMS} -lt 5 ]; then
-#  set +x
-#  echo "You just asked buildall to run tests, but did not supply any data."
-#  echo "Running tests without data doesn't work. Exiting now."
-#  exit 1
-#fi
+TESTWH_ITEMS=`hadoop fs -ls ${FILESYSTEM_PREFIX}/test-warehouse 2> /dev/null | \
+    grep test-warehouse |wc -l`
+if [ ${TESTS_ACTION} -eq 1 -a \
+     ${TESTDATA_ACTION} -eq 0 -a \
+     ${TESTWH_ITEMS} -lt 5 ]; then
+  set +x
+  echo "You just asked buildall to run tests, but did not supply any data."
+  echo "Running tests without data doesn't work. Exiting now."
+  exit 1
+fi
 
 if [ $TESTDATA_ACTION -eq 1 ]; then
   # Create testdata.
@@ -354,9 +370,9 @@ if [ $TESTDATA_ACTION -eq 1 ]; then
   CREATE_LOAD_DATA_ARGS=""
   if [[ $SNAPSHOT_FILE  && $METASTORE_SNAPSHOT_FILE ]]; then
     CREATE_LOAD_DATA_ARGS="-snapshot_file ${SNAPSHOT_FILE} -skip_metadata_load"
-  elif [[ $SNAPSHOT_FILE && -n $METASTORE_SNAPSHOT_FILE ]]; then
+  elif [[ $SNAPSHOT_FILE && -z $METASTORE_SNAPSHOT_FILE ]]; then
     CREATE_LOAD_DATA_ARGS="-snapshot_file ${SNAPSHOT_FILE}"
-  elif [[ -n $SNAPSHOT_FILE && $METASTORE_SNAPSHOT_FILE ]]; then
+  elif [[ -z $SNAPSHOT_FILE && $METASTORE_SNAPSHOT_FILE ]]; then
     CREATE_LOAD_DATA_ARGS="-skip_metadata_load -skip_snapshot_load"
   fi
   yes | ${IMPALA_HOME}/testdata/bin/create-load-data.sh ${CREATE_LOAD_DATA_ARGS}

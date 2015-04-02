@@ -32,6 +32,7 @@
 
 #include "common/logging.h"
 #include "util/error-util.h"
+#include "util/redactor.h"
 #include "util/test-info.h"
 
 DEFINE_string(log_filename, "",
@@ -39,6 +40,8 @@ DEFINE_string(log_filename, "",
     "full path is <log_dir>/<log_filename>.[INFO|WARN|ERROR|FATAL]");
 DEFINE_bool(redirect_stdout_stderr, true,
     "If true, redirects stdout/stderr to INFO/ERROR log.");
+
+DECLARE_string(redaction_rules_file);
 
 bool logging_initialized = false;
 
@@ -65,13 +68,14 @@ void impala::InitGoogleLoggingSafe(const char* arg) {
     FLAGS_log_dir = "/tmp";
   }
 
+  // Don't double log to stderr on any threshold.
+  FLAGS_stderrthreshold = google::FATAL + 1;
+
   if (FLAGS_redirect_stdout_stderr && !TestInfo::is_test()) {
     // We will be redirecting stdout/stderr to INFO/LOG so override any glog settings
     // that log to stdout/stderr...
     FLAGS_logtostderr = false;
     FLAGS_alsologtostderr = false;
-    // Don't log to stderr on any threshold.
-    FLAGS_stderrthreshold = google::FATAL + 1;
   }
 
   if (!FLAGS_logtostderr) {
@@ -93,6 +97,10 @@ void impala::InitGoogleLoggingSafe(const char* arg) {
   }
 
   google::InitGoogleLogging(arg);
+  if (!FLAGS_redaction_rules_file.empty()) {
+    // This depends on a patched glog. The patch is at thirdparty/patches/glog.
+    google::InstallLogMessageListenerFunction(impala::Redact);
+  }
 
   // Needs to be done after InitGoogleLogging
   if (FLAGS_log_filename.empty()) {

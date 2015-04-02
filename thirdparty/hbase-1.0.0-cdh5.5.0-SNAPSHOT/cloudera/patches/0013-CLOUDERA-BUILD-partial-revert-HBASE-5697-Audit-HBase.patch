@@ -1,0 +1,107 @@
+From 63ba0058e4c2c639f21fc6cdacb1af8ee8388587 Mon Sep 17 00:00:00 2001
+From: Matteo Bertozzi <matteo.bertozzi@cloudera.com>
+Date: Fri, 19 Dec 2014 21:42:08 +0000
+Subject: [PATCH 013/110] CLOUDERA-BUILD partial revert HBASE-5697 Audit HBase for usage of deprecated hadoop 0.20.x, 1.x property names
+
+---
+ .../hadoop/hbase/io/compress/Compression.java      |    1 +
+ .../hadoop/hbase/mapreduce/WALInputFormat.java     |    3 ++-
+ .../java/org/apache/hadoop/hbase/util/FSUtils.java |    1 +
+ .../apache/hadoop/hbase/HBaseTestingUtility.java   |   19 +++++++++++++++++--
+ 4 files changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/compress/Compression.java b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/compress/Compression.java
+index 8a349db..3e87481 100644
+--- a/hbase-common/src/main/java/org/apache/hadoop/hbase/io/compress/Compression.java
++++ b/hbase-common/src/main/java/org/apache/hadoop/hbase/io/compress/Compression.java
+@@ -246,6 +246,7 @@ public final class Compression {
+ 
+     Algorithm(String name) {
+       this.conf = new Configuration();
++      this.conf.setBoolean("hadoop.native.lib", true);
+       this.conf.setBoolean("io.native.lib.available", true);
+       this.compressName = name;
+     }
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/WALInputFormat.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/WALInputFormat.java
+index 02fcbba..ba4f934 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/WALInputFormat.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mapreduce/WALInputFormat.java
+@@ -231,7 +231,8 @@ public class WALInputFormat extends InputFormat<WALKey, WALEdit> {
+   List<InputSplit> getSplits(final JobContext context, final String startKey, final String endKey)
+       throws IOException, InterruptedException {
+     Configuration conf = context.getConfiguration();
+-    Path inputDir = new Path(conf.get("mapreduce.input.fileinputformat.inputdir"));
++    Path inputDir = new Path(conf.get("mapreduce.input.fileinputformat.inputdir",
++      conf.get("mapred.input.dir")));
+ 
+     long startTime = conf.getLong(startKey, Long.MIN_VALUE);
+     long endTime = conf.getLong(endKey, Long.MAX_VALUE);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+index 7f1f565..4b3f301 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/util/FSUtils.java
+@@ -935,6 +935,7 @@ public abstract class FSUtils {
+ 
+   public static void setFsDefault(final Configuration c, final Path root) throws IOException {
+     c.set("fs.defaultFS", root.toString());    // for hadoop 0.21+
++    c.set("fs.default.name", root.toString()); // for hadoop 0.20
+   }
+ 
+   /**
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+index dffbc95..92df574 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/HBaseTestingUtility.java
+@@ -610,10 +610,15 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
+     Path root = getDataTestDirOnTestFS("hadoop");
+     conf.set(MapreduceTestingShim.getMROutputDirProp(),
+       new Path(root, "mapred-output-dir").toString());
++    conf.set("mapred.system.dir", new Path(root, "mapred-system-dir").toString());
+     conf.set("mapreduce.jobtracker.system.dir", new Path(root, "mapred-system-dir").toString());
+     conf.set("mapreduce.jobtracker.staging.root.dir",
+       new Path(root, "mapreduce-jobtracker-staging-root-dir").toString());
++    conf.set("mapred.working.dir", new Path(root, "mapred-working-dir").toString());
+     conf.set("mapreduce.job.working.dir", new Path(root, "mapred-working-dir").toString());
++
++    conf.set("hadoop.job.history.user.location", new Path(root, "mapred-logs-dir").toString());
++    conf.set("mapreduce.job.userhistorylocation", new Path(root, "mapred-logs-dir").toString());
+   }
+ 
+ 
+@@ -2369,14 +2374,23 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
+       jobConf = mrCluster.createJobConf();
+     }
+ 
++    jobConf.set("mapred.local.dir",
++      conf.get("mapreduce.cluster.local.dir",
++        conf.get("mapred.local.dir"))); //Hadoop MiniMR overwrites this while it should not
+     jobConf.set("mapreduce.cluster.local.dir",
+-      conf.get("mapreduce.cluster.local.dir")); //Hadoop MiniMR overwrites this while it should not
++      conf.get("mapreduce.cluster.local.dir",
++        conf.get("mapred.local.dir"))); //Hadoop MiniMR overwrites this while it should not
+     LOG.info("Mini mapreduce cluster started");
+ 
+     // In hadoop2, YARN/MR2 starts a mini cluster with its own conf instance and updates settings.
+     // Our HBase MR jobs need several of these settings in order to properly run.  So we copy the
+     // necessary config properties here.  YARN-129 required adding a few properties.
+-    conf.set("mapreduce.jobtracker.address", jobConf.get("mapreduce.jobtracker.address"));
++    conf.set("mapred.job.tracker",
++        jobConf.get("mapreduce.jobtracker.address",
++          jobConf.get("mapred.job.tracker")));
++    conf.set("mapreduce.jobtracker.address",
++        jobConf.get("mapreduce.jobtracker.address",
++          jobConf.get("mapred.job.tracker")));
+     // this for mrv2 support; mr1 ignores this
+     conf.set("mapreduce.framework.name", "yarn");
+     conf.setBoolean("yarn.is.minicluster", true);
+@@ -2406,6 +2420,7 @@ public class HBaseTestingUtility extends HBaseCommonTestingUtility {
+       LOG.info("Mini mapreduce cluster stopped");
+     }
+     // Restore configuration to point to local jobtracker
++    conf.set("mapred.job.tracker", "local");
+     conf.set("mapreduce.jobtracker.address", "local");
+   }
+ 
+-- 
+1.7.0.4
+

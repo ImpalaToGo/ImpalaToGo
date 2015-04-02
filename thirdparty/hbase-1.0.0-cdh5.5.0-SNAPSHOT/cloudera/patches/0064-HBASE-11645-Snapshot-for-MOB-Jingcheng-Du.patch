@@ -1,0 +1,4095 @@
+From da9d5707074193382cfc7adc9d252a1db9beb923 Mon Sep 17 00:00:00 2001
+From: Jonathan M Hsieh <jmhsieh@apache.org>
+Date: Thu, 23 Oct 2014 10:19:16 -0700
+Subject: [PATCH 064/110] HBASE-11645 Snapshot for MOB (Jingcheng Du)
+
+Conflicts:
+	hbase-
+server/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+	hbase-
+server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+	hbase-
+server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+
+Reason: MOB Feature
+Author: Jingcheng Du
+Ref: CDH-22447
+---
+ .../java/org/apache/hadoop/hbase/io/HFileLink.java |   14 +-
+ .../snapshot/DisabledTableSnapshotHandler.java     |    8 +
+ .../master/snapshot/MasterSnapshotVerifier.java    |   12 +-
+ .../java/org/apache/hadoop/hbase/mob/MobUtils.java |   14 +
+ .../hadoop/hbase/regionserver/HMobStore.java       |   48 ++-
+ .../apache/hadoop/hbase/regionserver/HRegion.java  |   20 +
+ .../hadoop/hbase/snapshot/ExportSnapshot.java      |   18 +-
+ .../hbase/snapshot/RestoreSnapshotHelper.java      |  136 +++++
+ .../hadoop/hbase/snapshot/SnapshotManifest.java    |  204 ++++++--
+ .../hbase/snapshot/SnapshotReferenceUtil.java      |   13 +-
+ .../client/TestMobCloneSnapshotFromClient.java     |  250 +++++++++
+ ...bCloneSnapshotFromClientWithRegionReplicas.java |   30 ++
+ .../client/TestMobRestoreSnapshotFromClient.java   |  303 +++++++++++
+ ...estoreSnapshotFromClientWithRegionReplicas.java |   30 ++
+ .../client/TestMobSnapshotCloneIndependence.java   |  376 +++++++++++++
+ .../hbase/client/TestMobSnapshotFromClient.java    |  304 +++++++++++
+ ...estMobSnapshotFromClientWithRegionReplicas.java |   30 ++
+ .../hbase/snapshot/MobSnapshotTestingUtils.java    |  355 +++++++++++++
+ .../hbase/snapshot/SnapshotTestingUtils.java       |    9 +-
+ .../hbase/snapshot/TestMobExportSnapshot.java      |  439 ++++++++++++++++
+ .../snapshot/TestMobFlushSnapshotFromClient.java   |  550 ++++++++++++++++++++
+ .../TestMobRestoreFlushSnapshotFromClient.java     |  209 ++++++++
+ .../snapshot/TestMobRestoreSnapshotHelper.java     |  163 ++++++
+ .../snapshot/TestMobSecureExportSnapshot.java      |   53 ++
+ 24 files changed, 3535 insertions(+), 53 deletions(-)
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClient.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClientWithRegionReplicas.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClient.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClientWithRegionReplicas.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotCloneIndependence.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClient.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClientWithRegionReplicas.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/MobSnapshotTestingUtils.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobExportSnapshot.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobFlushSnapshotFromClient.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreFlushSnapshotFromClient.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreSnapshotHelper.java
+ create mode 100644 hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobSecureExportSnapshot.java
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+index ff33951..414cd21 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/io/HFileLink.java
+@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.mob.MobConstants;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.StoreFileInfo;
+ import org.apache.hadoop.hbase.util.FSUtils;
+@@ -89,17 +90,18 @@ public class HFileLink extends FileLink {
+ 
+   private final Path archivePath;
+   private final Path originPath;
++  private final Path mobPath;
+   private final Path tempPath;
+ 
+   /**
+    * Dead simple hfile link constructor
+    */
+-  public HFileLink(final Path originPath, final Path tempPath,
++  public HFileLink(final Path originPath, final Path tempPath, final Path mobPath,
+                    final Path archivePath) {
+     this.tempPath  = tempPath;
+     this.originPath = originPath;
++    this.mobPath = mobPath;
+     this.archivePath = archivePath;
+-
+     setLocations(originPath, tempPath, archivePath);
+   }
+ 
+@@ -125,8 +127,9 @@ public class HFileLink extends FileLink {
+     Path hfilePath = getHFileLinkPatternRelativePath(hFileLinkPattern);
+     Path tempPath = new Path(new Path(rootDir, HConstants.HBASE_TEMP_DIRECTORY), hfilePath);
+     Path originPath = new Path(rootDir, hfilePath);
++    Path mobPath = new Path(new Path(rootDir, MobConstants.MOB_DIR_NAME), hfilePath);
+     Path archivePath = new Path(archiveDir, hfilePath);
+-    return new HFileLink(originPath, tempPath, archivePath);
++    return new HFileLink(originPath, tempPath, mobPath, archivePath);
+   }
+ 
+   /**
+@@ -176,6 +179,11 @@ public class HFileLink extends FileLink {
+   }
+ 
+   /**
++   * @return the path of the mob hfiles.
++   */
++  public Path getMobPath() { return this.mobPath; }
++
++    /**
+    * @param path Path to check.
+    * @return True if the path is a HFileLink.
+    */
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+index e70e1c8..6d214f9 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/DisabledTableSnapshotHandler.java
+@@ -28,6 +28,7 @@ import org.apache.commons.logging.LogFactory;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+ import org.apache.hadoop.hbase.classification.InterfaceStability;
++import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.ServerName;
+ import org.apache.hadoop.hbase.client.RegionReplicaUtil;
+@@ -35,10 +36,12 @@ import org.apache.hadoop.hbase.errorhandling.ForeignException;
+ import org.apache.hadoop.hbase.errorhandling.ForeignExceptionListener;
+ import org.apache.hadoop.hbase.errorhandling.TimeoutExceptionInjector;
+ import org.apache.hadoop.hbase.master.MasterServices;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.snapshot.ClientSnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.snapshot.SnapshotDescriptionUtils;
+ import org.apache.hadoop.hbase.snapshot.SnapshotManifest;
++import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.ModifyRegionUtils;
+ import org.apache.hadoop.hbase.util.Pair;
+@@ -90,6 +93,11 @@ public class DisabledTableSnapshotHandler extends TakeSnapshotHandler {
+         if (RegionReplicaUtil.isDefaultReplica(hri)) {
+           regions.add(hri);
+         }
++        // if it's the first region, add the mob region
++        if (Bytes.equals(hri.getStartKey(), HConstants.EMPTY_START_ROW)) {
++          HRegionInfo mobRegion = MobUtils.getMobRegionInfo(hri.getTable());
++          regions.add(mobRegion);
++        }
+       }
+ 
+       // 2. for each region, write all the info to disk
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+index 2d7fbb7..1b586f7 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/snapshot/MasterSnapshotVerifier.java
+@@ -34,6 +34,7 @@ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.client.RegionReplicaUtil;
+ import org.apache.hadoop.hbase.MetaTableAccessor;
+ import org.apache.hadoop.hbase.master.MasterServices;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
+ import org.apache.hadoop.hbase.snapshot.ClientSnapshotDescriptionUtils;
+@@ -169,10 +170,17 @@ public final class MasterSnapshotVerifier {
+     }
+ 
+     String errorMsg = "";
+-    if (regionManifests.size() != regions.size()) {
++    boolean hasMobStore = false;
++    // the mob region is a dummy region, it's not a real region in HBase.
++    // the mob region has a special name, it could be found by the region name.
++    if (regionManifests.get(MobUtils.getMobRegionInfo(tableName).getEncodedName()) != null) {
++      hasMobStore = true;
++    }
++    int realRegionCount = hasMobStore ? regionManifests.size() - 1 : regionManifests.size();
++    if (realRegionCount != regions.size()) {
+       errorMsg = "Regions moved during the snapshot '" +
+                    ClientSnapshotDescriptionUtils.toString(snapshot) + "'. expected=" +
+-                   regions.size() + " snapshotted=" + regionManifests.size() + ".";
++                   regions.size() + " snapshotted=" + realRegionCount + ".";
+       LOG.error(errorMsg);
+     }
+ 
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+index 07775bc..84565d1 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/mob/MobUtils.java
+@@ -106,6 +106,20 @@ public class MobUtils {
+   }
+ 
+   /**
++   * Gets the table name tag.
++   * @param cell The current cell.
++   * @return The table name tag.
++   */
++  public static Tag getTableNameTag(Cell cell) {
++    if (cell.getTagsLength() > 0) {
++      Tag tag = Tag.getTag(cell.getTagsArray(), cell.getTagsOffset(), cell.getTagsLength(),
++          TagType.MOB_TABLE_NAME_TAG_TYPE);
++      return tag;
++    }
++    return null;
++  }
++
++  /**
+    * Whether the tag list has a mob reference tag.
+    * @param tags The tag list.
+    * @return True if the list has a mob reference tag, false if it doesn't.
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+index fd655d3..d51fc11 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HMobStore.java
+@@ -37,6 +37,7 @@ import org.apache.hadoop.hbase.KeyValue;
+ import org.apache.hadoop.hbase.KeyValue.KVComparator;
+ import org.apache.hadoop.hbase.KeyValue.Type;
+ import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.Tag;
+ import org.apache.hadoop.hbase.client.Scan;
+ import org.apache.hadoop.hbase.filter.Filter;
+ import org.apache.hadoop.hbase.filter.FilterList;
+@@ -53,6 +54,7 @@ import org.apache.hadoop.hbase.mob.MobStoreEngine;
+ import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.mob.MobZookeeper;
+ import org.apache.hadoop.hbase.regionserver.compactions.CompactionContext;
++import org.apache.hadoop.hbase.util.Bytes;
+ import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+ import org.apache.zookeeper.KeeperException;
+ 
+@@ -88,10 +90,12 @@ public class HMobStore extends HStore {
+   private volatile long mobScanCellsCount = 0;
+   private volatile long mobScanCellsSize = 0;
+   private List<Path> mobDirLocations;
++  private HColumnDescriptor family;
+ 
+   public HMobStore(final HRegion region, final HColumnDescriptor family,
+       final Configuration confParam) throws IOException {
+     super(region, family, confParam);
++    this.family = family;
+     this.mobCacheConfig = (MobCacheConfig) cacheConf;
+     this.homePath = MobUtils.getMobHome(conf);
+     this.mobFamilyPath = MobUtils.getMobFamilyPath(conf, this.getTableName(),
+@@ -262,7 +266,10 @@ public class HMobStore extends HStore {
+     Cell result = null;
+     if (MobUtils.hasValidMobRefCellValue(reference)) {
+       String fileName = MobUtils.getMobFileName(reference);
+-      result = readCell(fileName, reference, cacheBlocks);
++      result = readCell(mobDirLocations, fileName, reference, cacheBlocks);
++      if (result == null) {
++        result = readClonedCell(fileName, reference, cacheBlocks);
++      }
+     }
+     if (result == null) {
+       LOG.warn("The KeyValue result is null, assemble a new KeyValue with the same row,family,"
+@@ -284,15 +291,17 @@ public class HMobStore extends HStore {
+    * 1. The working directory.
+    * 2. The archive directory.
+    * Reads the cell from the files located in both of the above directories.
++   * @param locations The possible locations where the mob files are saved.
+    * @param fileName The file to be read.
+    * @param search The cell to be searched.
+    * @param cacheMobBlocks Whether the scanner should cache blocks.
+    * @return The found cell. Null if there's no such a cell.
+    * @throws IOException
+    */
+-  private Cell readCell(String fileName, Cell search, boolean cacheMobBlocks) throws IOException {
++  private Cell readCell(List<Path> locations, String fileName, Cell search, boolean cacheMobBlocks)
++      throws IOException {
+     FileSystem fs = getFileSystem();
+-    for (Path location : mobDirLocations) {
++    for (Path location : locations) {
+       MobFile file = null;
+       Path path = new Path(location, fileName);
+       try {
+@@ -317,6 +326,39 @@ public class HMobStore extends HStore {
+   }
+ 
+   /**
++   * Reads the cell from a mob file of source table.
++   * The table might be cloned, in this case only hfile link is created in the new table,
++   * and the mob file is located in the source table directories.
++   * 1. The working directory of the source table.
++   * 2. The archive directory of the source table.
++   * Reads the cell from the files located in both of the above directories.
++   * @param fileName The file to be read.
++   * @param search The cell to be searched.
++   * @param cacheMobBlocks Whether the scanner should cache blocks.
++   * @return The found cell. Null if there's no such a cell.
++   * @throws IOException
++   */
++  private Cell readClonedCell(String fileName, Cell search, boolean cacheMobBlocks)
++      throws IOException {
++    Tag tableNameTag = MobUtils.getTableNameTag(search);
++    if (tableNameTag == null) {
++      return null;
++    }
++    byte[] tableName = tableNameTag.getValue();
++    if (Bytes.equals(this.getTableName().getName(), tableName)) {
++      return null;
++    }
++    // the possible locations in the source table.
++    List<Path> locations = new ArrayList<Path>();
++    TableName tn = TableName.valueOf(tableName);
++    locations.add(MobUtils.getMobFamilyPath(conf, tn, family.getNameAsString()));
++    locations.add(HFileArchiveUtil.getStoreArchivePath(conf, tn, MobUtils.getMobRegionInfo(tn)
++        .getEncodedName(), family.getNameAsString()));
++    // read the cell from the source table.
++    return readCell(locations, fileName, search, cacheMobBlocks);
++  }
++
++  /**
+    * Gets the mob file path.
+    * @return The mob file path.
+    */
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+index f79c3d8..f2019c2 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/HRegion.java
+@@ -123,6 +123,7 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
+ import org.apache.hadoop.hbase.ipc.CallerDisconnectedException;
+ import org.apache.hadoop.hbase.ipc.RpcCallContext;
+ import org.apache.hadoop.hbase.ipc.RpcServer;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.monitoring.MonitoredTask;
+ import org.apache.hadoop.hbase.monitoring.TaskMonitor;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+@@ -3402,6 +3403,25 @@ public class HRegion implements HeapSize, PropagatingConfigurationObserver { //
+     Path rootDir = FSUtils.getRootDir(conf);
+     Path snapshotDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(desc, rootDir);
+ 
++    if (Bytes.equals(getStartKey(), HConstants.EMPTY_START_ROW)) {
++      Map<byte[], Store> stores = getStores();
++      boolean hasMobStore = false;
++      for (Entry<byte[], Store> store : stores.entrySet()) {
++        hasMobStore = store.getValue().getFamily().isMobEnabled();
++        if (hasMobStore) {
++          break;
++        }
++      }
++      if (hasMobStore) {
++        // if this is the first region, snapshot the mob files.
++        SnapshotManifest snapshotManifest = SnapshotManifest.create(conf, getFilesystem(),
++            snapshotDir, desc, exnSnare);
++        // use the .mob as the start key and 0 as the regionid
++        HRegionInfo mobRegionInfo = MobUtils.getMobRegionInfo(this.getTableDesc().getTableName());
++        mobRegionInfo.setOffline(true);
++        snapshotManifest.addMobRegion(mobRegionInfo, this.getTableDesc().getColumnFamilies());
++      }
++    }
+     SnapshotManifest manifest = SnapshotManifest.create(conf, getFilesystem(),
+                                                         snapshotDir, desc, exnSnare);
+     manifest.addRegion(this);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+index 2655e2b..a4c09b5 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/ExportSnapshot.java
+@@ -52,11 +52,15 @@ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.io.FileLink;
+ import org.apache.hadoop.hbase.io.HFileLink;
+ import org.apache.hadoop.hbase.io.WALLink;
++import org.apache.hadoop.hbase.io.hfile.HFile;
++import org.apache.hadoop.hbase.mapreduce.JobUtil;
+ import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotFileInfo;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
+ import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+ import org.apache.hadoop.hbase.util.Pair;
+ import org.apache.hadoop.io.BytesWritable;
+ import org.apache.hadoop.io.IOUtils;
+@@ -407,7 +411,7 @@ public class ExportSnapshot extends Configured implements Tool {
+         switch (fileInfo.getType()) {
+           case HFILE:
+             Path inputPath = new Path(fileInfo.getHfile());
+-            link = HFileLink.buildFromHFileLinkPattern(conf, inputPath);
++            link = getFileLink(inputPath, conf);
+             break;
+           case WAL:
+             String serverName = fileInfo.getWalServer();
+@@ -433,7 +437,7 @@ public class ExportSnapshot extends Configured implements Tool {
+         switch (fileInfo.getType()) {
+           case HFILE:
+             Path inputPath = new Path(fileInfo.getHfile());
+-            link = HFileLink.buildFromHFileLinkPattern(conf, inputPath);
++            link = getFileLink(inputPath, conf);
+             break;
+           case WAL:
+             link = new WALLink(inputRoot, fileInfo.getWalServer(), fileInfo.getWalName());
+@@ -452,6 +456,16 @@ public class ExportSnapshot extends Configured implements Tool {
+       }
+     }
+ 
++    private FileLink getFileLink(Path path, Configuration conf) throws IOException{
++      String regionName = HFileLink.getReferencedRegionName(path.getName());
++      TableName tableName = HFileLink.getReferencedTableName(path.getName());
++      if(MobUtils.getMobRegionInfo(tableName).getEncodedName().equals(regionName)) {
++        return HFileLink.buildFromHFileLinkPattern(MobUtils.getQualifiedMobRootDir(conf),
++                HFileArchiveUtil.getArchivePath(conf), path);
++      }
++      return HFileLink.buildFromHFileLinkPattern(inputRoot, inputArchive, path);
++    }
++
+     private FileChecksum getFileChecksum(final FileSystem fs, final Path path) {
+       try {
+         return fs.getFileChecksum(path);
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+index 08d776f..255d2a0 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/RestoreSnapshotHelper.java
+@@ -50,6 +50,7 @@ import org.apache.hadoop.hbase.errorhandling.ForeignExceptionDispatcher;
+ import org.apache.hadoop.hbase.io.HFileLink;
+ import org.apache.hadoop.hbase.io.Reference;
+ import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.monitoring.MonitoredTask;
+ import org.apache.hadoop.hbase.monitoring.TaskMonitor;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+@@ -176,6 +177,8 @@ public class RestoreSnapshotHelper {
+     // this instance, by removing the regions already present in the restore dir.
+     Set<String> regionNames = new HashSet<String>(regionManifests.keySet());
+ 
++    HRegionInfo mobRegion = MobUtils.getMobRegionInfo(snapshotManifest.getTableDescriptor()
++        .getTableName());
+     // Identify which region are still available and which not.
+     // NOTE: we rely upon the region name as: "table name, start key, end key"
+     List<HRegionInfo> tableRegions = getTableRegions();
+@@ -196,6 +199,13 @@ public class RestoreSnapshotHelper {
+       // Restore regions using the snapshot data
+       monitor.rethrowException();
+       status.setStatus("Restoring table regions...");
++      if (regionNames.contains(mobRegion.getEncodedName())) {
++        // restore the mob region in case
++        List<HRegionInfo> mobRegions = new ArrayList<HRegionInfo>(1);
++        mobRegions.add(mobRegion);
++        restoreHdfsMobRegions(exec, regionManifests, mobRegions);
++        regionNames.remove(mobRegion.getEncodedName());
++      }
+       restoreHdfsRegions(exec, regionManifests, metaChanges.getRegionsToRestore());
+       status.setStatus("Finished restoring all table regions.");
+ 
+@@ -211,6 +221,11 @@ public class RestoreSnapshotHelper {
+       List<HRegionInfo> regionsToAdd = new ArrayList<HRegionInfo>(regionNames.size());
+ 
+       monitor.rethrowException();
++      // add the mob region
++      if (regionNames.contains(mobRegion.getEncodedName())) {
++        cloneHdfsMobRegion(regionManifests, mobRegion);
++        regionNames.remove(mobRegion.getEncodedName());
++      }
+       for (String regionName: regionNames) {
+         LOG.info("region to add: " + regionName);
+         regionsToAdd.add(HRegionInfo.convert(regionManifests.get(regionName).getRegionInfo()));
+@@ -380,6 +395,21 @@ public class RestoreSnapshotHelper {
+     });
+   }
+ 
++  /**
++   * Restore specified mob regions by restoring content to the snapshot state.
++   */
++  private void restoreHdfsMobRegions(final ThreadPoolExecutor exec,
++      final Map<String, SnapshotRegionManifest> regionManifests,
++      final List<HRegionInfo> regions) throws IOException {
++    if (regions == null || regions.size() == 0) return;
++    ModifyRegionUtils.editRegions(exec, regions, new ModifyRegionUtils.RegionEditTask() {
++      @Override
++      public void editRegion(final HRegionInfo hri) throws IOException {
++        restoreMobRegion(hri, regionManifests.get(hri.getEncodedName()));
++      }
++    });
++  }
++
+   private Map<String, List<SnapshotRegionManifest.StoreFile>> getRegionHFileReferences(
+       final SnapshotRegionManifest manifest) {
+     Map<String, List<SnapshotRegionManifest.StoreFile>> familyMap =
+@@ -461,6 +491,78 @@ public class RestoreSnapshotHelper {
+   }
+ 
+   /**
++   * Restore mob region by removing files not in the snapshot
++   * and adding the missing ones from the snapshot.
++   */
++  private void restoreMobRegion(final HRegionInfo regionInfo,
++      final SnapshotRegionManifest regionManifest) throws IOException {
++    if (regionManifest == null) {
++      return;
++    }
++    Map<String, List<SnapshotRegionManifest.StoreFile>> snapshotFiles =
++                getRegionHFileReferences(regionManifest);
++
++    Path regionDir = MobUtils.getMobRegionPath(conf, tableDesc.getTableName());
++    String tableName = tableDesc.getTableName().getNameAsString();
++
++    // Restore families present in the table
++    for (Path familyDir: FSUtils.getFamilyDirs(fs, regionDir)) {
++      byte[] family = Bytes.toBytes(familyDir.getName());
++      Set<String> familyFiles = getTableRegionFamilyFiles(familyDir);
++      List<SnapshotRegionManifest.StoreFile> snapshotFamilyFiles =
++          snapshotFiles.remove(familyDir.getName());
++      if (snapshotFamilyFiles != null) {
++        List<SnapshotRegionManifest.StoreFile> hfilesToAdd =
++            new ArrayList<SnapshotRegionManifest.StoreFile>();
++        for (SnapshotRegionManifest.StoreFile storeFile: snapshotFamilyFiles) {
++          if (familyFiles.contains(storeFile.getName())) {
++            // HFile already present
++            familyFiles.remove(storeFile.getName());
++          } else {
++            // HFile missing
++            hfilesToAdd.add(storeFile);
++          }
++        }
++
++        // Remove hfiles not present in the snapshot
++        for (String hfileName: familyFiles) {
++          Path hfile = new Path(familyDir, hfileName);
++          LOG.trace("Removing hfile=" + hfileName +
++            " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
++          HFileArchiver.archiveStoreFile(conf, fs, regionInfo, tableDir, family, hfile);
++        }
++
++        // Restore Missing files
++        for (SnapshotRegionManifest.StoreFile storeFile: hfilesToAdd) {
++          LOG.debug("Adding HFileLink " + storeFile.getName() +
++            " to region=" + regionInfo.getEncodedName() + " table=" + tableName);
++          restoreStoreFile(familyDir, regionInfo, storeFile);
++        }
++      } else {
++        // Family doesn't exists in the snapshot
++        LOG.trace("Removing family=" + Bytes.toString(family) +
++          " from region=" + regionInfo.getEncodedName() + " table=" + tableName);
++        HFileArchiver.archiveFamily(fs, conf, regionInfo, tableDir, family);
++        fs.delete(familyDir, true);
++      }
++    }
++
++    // Add families not present in the table
++    for (Map.Entry<String, List<SnapshotRegionManifest.StoreFile>> familyEntry:
++                                                                      snapshotFiles.entrySet()) {
++      Path familyDir = new Path(regionDir, familyEntry.getKey());
++      if (!fs.mkdirs(familyDir)) {
++        throw new IOException("Unable to create familyDir=" + familyDir);
++      }
++
++      for (SnapshotRegionManifest.StoreFile storeFile: familyEntry.getValue()) {
++        LOG.trace("Adding HFileLink " + storeFile.getName() + " to table=" + tableName);
++        restoreStoreFile(familyDir, regionInfo, storeFile);
++      }
++    }
++  }
++
++  /**
+    * @return The set of files in the specified family directory.
+    */
+   private Set<String> getTableRegionFamilyFiles(final Path familyDir) throws IOException {
+@@ -520,6 +622,40 @@ public class RestoreSnapshotHelper {
+   }
+ 
+   /**
++   * Clone the mob region. For the region create a new region
++   * and create a HFileLink for each hfile.
++   */
++  private void cloneHdfsMobRegion(final Map<String, SnapshotRegionManifest> regionManifests,
++      final HRegionInfo region) throws IOException {
++    // clone region info (change embedded tableName with the new one)
++    Path clonedRegionPath = MobUtils.getMobRegionPath(conf, tableDesc.getTableName());
++    cloneRegion(clonedRegionPath, region, regionManifests.get(region.getEncodedName()));
++  }
++
++  /**
++   * Clone region directory content from the snapshot info.
++   *
++   * Each region is encoded with the table name, so the cloned region will have
++   * a different region name.
++   *
++   * Instead of copying the hfiles a HFileLink is created.
++   *
++   * @param regionDir {@link Path} cloned dir
++   * @param snapshotRegionInfo
++   */
++  private void cloneRegion(final Path regionDir, final HRegionInfo snapshotRegionInfo,
++      final SnapshotRegionManifest manifest) throws IOException {
++    final String tableName = tableDesc.getTableName().getNameAsString();
++    for (SnapshotRegionManifest.FamilyFiles familyFiles: manifest.getFamilyFilesList()) {
++      Path familyDir = new Path(regionDir, familyFiles.getFamilyName().toStringUtf8());
++      for (SnapshotRegionManifest.StoreFile storeFile: familyFiles.getStoreFilesList()) {
++        LOG.info("Adding HFileLink " + storeFile.getName() + " to table=" + tableName);
++        restoreStoreFile(familyDir, snapshotRegionInfo, storeFile);
++      }
++    }
++  }
++
++  /**
+    * Clone region directory content from the snapshot info.
+    *
+    * Each region is encoded with the table name, so the cloned region will have
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
+index 38ccf08..4ed8501 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotManifest.java
+@@ -18,8 +18,8 @@
+ 
+ package org.apache.hadoop.hbase.snapshot;
+ 
+-import java.io.IOException;
+ import java.io.FileNotFoundException;
++import java.io.IOException;
+ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.HashMap;
+@@ -34,23 +34,28 @@ import org.apache.hadoop.hbase.classification.InterfaceAudience;
+ import org.apache.hadoop.conf.Configuration;
+ import org.apache.hadoop.fs.FSDataInputStream;
+ import org.apache.hadoop.fs.FSDataOutputStream;
++import org.apache.hadoop.fs.FileStatus;
+ import org.apache.hadoop.fs.FileSystem;
+ import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HConstants;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.HTableDescriptor;
+ import org.apache.hadoop.hbase.errorhandling.ForeignExceptionSnare;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.mob.MobUtils;
++import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotDataManifest;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
+-import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.regionserver.HRegion;
+ import org.apache.hadoop.hbase.regionserver.HRegionFileSystem;
+ import org.apache.hadoop.hbase.regionserver.Store;
+ import org.apache.hadoop.hbase.regionserver.StoreFile;
+ import org.apache.hadoop.hbase.regionserver.StoreFileInfo;
+ import org.apache.hadoop.hbase.util.Bytes;
+-import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.FSTableDescriptors;
++import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.Threads;
+ 
+ /**
+@@ -150,6 +155,57 @@ public class SnapshotManifest {
+     }
+   }
+ 
++  public void addMobRegion(HRegionInfo regionInfo, HColumnDescriptor[] hcds) throws IOException {
++    // 0. Get the ManifestBuilder/RegionVisitor
++    RegionVisitor visitor = createRegionVisitor(desc);
++
++    // 1. dump region meta info into the snapshot directory
++    LOG.debug("Storing '" + regionInfo + "' region-info for snapshot.");
++    Object regionData = visitor.regionOpen(regionInfo);
++    monitor.rethrowException();
++
++    // 2. iterate through all the stores in the region
++    LOG.debug("Creating references for hfiles");
++
++    Path mobRegionPath = MobUtils.getMobRegionPath(conf, regionInfo.getTable());
++    for (HColumnDescriptor hcd : hcds) {
++      // 2.1. build the snapshot reference for the store if it's a mob store
++      if (hcd.isMobEnabled()) {
++        Object familyData = visitor.familyOpen(regionData, hcd.getName());
++        monitor.rethrowException();
++
++        Path storePath = MobUtils.getMobFamilyPath(mobRegionPath, hcd.getNameAsString());
++        try {
++          if (fs.exists(storePath)) {
++            FileStatus[] stats = fs.listStatus(storePath);
++            if (LOG.isDebugEnabled()) {
++              LOG.debug("Adding snapshot references for " + stats.length + " hfiles");
++            }
++
++            // 2.2. iterate through all the mob files and create "references".
++            for (int i = 0, fz = stats.length; i < fz; i++) {
++              FileStatus stat = stats[i];
++              monitor.rethrowException();
++
++              // create "reference" to this store file.
++              if (LOG.isDebugEnabled()) {
++                LOG.debug("Adding reference for file (" + (i + 1) + "/" + fz + "): "
++                    + stat.getPath());
++              }
++              StoreFileInfo mobStoreFileInfo = new StoreFileInfo(conf, fs, stat);
++              visitor.storeFile(regionData, familyData, mobStoreFileInfo);
++            }
++
++          }
++        } catch (FileNotFoundException e) {
++          // do nothing
++        }
++        visitor.familyClose(regionData, familyData);
++      }
++    }
++    visitor.regionClose(regionData);
++  }
++
+   /**
+    * Creates a 'manifest' for the specified region, by reading directly from the HRegion object.
+    * This is used by the "online snapshot" when the table is enabled.
+@@ -198,55 +254,121 @@ public class SnapshotManifest {
+     // 0. Get the ManifestBuilder/RegionVisitor
+     RegionVisitor visitor = createRegionVisitor(desc);
+ 
+-    // Open the RegionFS
+-    HRegionFileSystem regionFs = HRegionFileSystem.openRegionFromFileSystem(conf, fs,
+-          tableDir, regionInfo, true);
+-    monitor.rethrowException();
+-
+-    // 1. dump region meta info into the snapshot directory
+-    LOG.debug("Storing region-info for snapshot.");
+-    Object regionData = visitor.regionOpen(regionInfo);
+-    monitor.rethrowException();
+-
+-    // 2. iterate through all the stores in the region
+-    LOG.debug("Creating references for hfiles");
++    HRegionInfo mobRegionInfo = new HRegionInfo(regionInfo.getTable(),
++        MobConstants.MOB_REGION_NAME_BYTES, HConstants.EMPTY_END_ROW, false, 0);
++    if (mobRegionInfo.getEncodedName().equals(regionInfo.getEncodedName())) {
++      // this is a mob region
++      try {
++        HRegionFileSystem mobRegionFs = HRegionFileSystem.openRegionFromFileSystem(conf, fs,
++            tableDir, regionInfo, true);
++        monitor.rethrowException();
+ 
+-    // This ensures that we have an atomic view of the directory as long as we have < ls limit
+-    // (batch size of the files in a directory) on the namenode. Otherwise, we get back the files in
+-    // batches and may miss files being added/deleted. This could be more robust (iteratively
+-    // checking to see if we have all the files until we are sure), but the limit is currently 1000
+-    // files/batch, far more than the number of store files under a single column family.
+-    Collection<String> familyNames = regionFs.getFamilies();
+-    if (familyNames != null) {
+-      for (String familyName: familyNames) {
+-        Object familyData = visitor.familyOpen(regionData, Bytes.toBytes(familyName));
++        // 1. dump region meta info into the snapshot directory
++        LOG.debug("Storing region-info for snapshot.");
++        Object regionData = visitor.regionOpen(regionInfo);
+         monitor.rethrowException();
+ 
+-        Collection<StoreFileInfo> storeFiles = regionFs.getStoreFiles(familyName);
+-        if (storeFiles == null) {
+-          LOG.debug("No files under family: " + familyName);
+-          continue;
++        // 2. iterate through all the stores in the region
++        LOG.debug("Creating references for hfiles");
++
++        // This ensures that we have an atomic view of the directory as long as we have < ls limit
++        // (batch size of the files in a directory) on the namenode. Otherwise, we get back the
++        // files in batches and may miss files being added/deleted. This could be more robust
++        // (iteratively
++        // checking to see if we have all the files until we are sure), but the limit is currently
++        // 1000 files/batch, far more than the number of store files under a single column family.
++        Collection<String> familyNames = mobRegionFs.getFamilies();
++        if (familyNames != null) {
++          Path regionPath = MobUtils.getMobRegionPath(conf, regionInfo.getTable());
++          for (String familyName: familyNames) {
++            Object familyData = visitor.familyOpen(regionData, Bytes.toBytes(familyName));
++            monitor.rethrowException();
++
++            Path storePath = MobUtils.getMobFamilyPath(regionPath, familyName);
++            try {
++              if (fs.exists(storePath)) {
++                FileStatus[] stats = fs.listStatus(storePath);
++                if (LOG.isDebugEnabled()) {
++                  LOG.debug("Adding snapshot references for " + stats.length + " hfiles");
++                }
++
++                // 2.2. iterate through all the mob files and create "references".
++                for (int i = 0, fz = stats.length; i < fz; i++) {
++                  FileStatus stat = stats[i];
++                  monitor.rethrowException();
++
++                  // create "reference" to this store file.
++                  if (LOG.isDebugEnabled()) {
++                    LOG.debug("Adding reference for file (" + (i + 1) + "/" + fz + "): "
++                        + stat.getPath());
++                  }
++                  StoreFileInfo mobStoreFileInfo = new StoreFileInfo(conf, fs, stat);
++                  visitor.storeFile(regionData, familyData, mobStoreFileInfo);
++                }
++
++              }
++            } catch (FileNotFoundException e) {
++              // do nothing
++            }
++            visitor.familyClose(regionData, familyData);
++          }
+         }
++        visitor.regionClose(regionData);
++      } catch(IOException e) {
++        //the mob directory might not be created yet, so do nothing here
++      }
++    } else {
++      // Open the RegionFS
++      HRegionFileSystem regionFs = HRegionFileSystem.openRegionFromFileSystem(conf, fs,
++            tableDir, regionInfo, true);
++      monitor.rethrowException();
+ 
+-        // 2.1. build the snapshot reference for the store
+-        if (LOG.isDebugEnabled()) {
+-          LOG.debug("Adding snapshot references for " + storeFiles  + " hfiles");
+-        }
++      // 1. dump region meta info into the snapshot directory
++      LOG.debug("Storing region-info for snapshot.");
++      Object regionData = visitor.regionOpen(regionInfo);
++      monitor.rethrowException();
+ 
+-        // 2.2. iterate through all the store's files and create "references".
+-        int i = 0;
+-        int sz = storeFiles.size();
+-        for (StoreFileInfo storeFile: storeFiles) {
++      // 2. iterate through all the stores in the region
++      LOG.debug("Creating references for hfiles");
++
++      // This ensures that we have an atomic view of the directory as long as we have < ls limit
++      // (batch size of the files in a directory) on the namenode. Otherwise, we get back the files
++      // in batches and may miss files being added/deleted. This could be more robust (iteratively
++      // checking to see if we have all the files until we are sure), but the limit is currently
++      // 1000 files/batch, far more than the number of store files under a single column family.
++      Collection<String> familyNames = regionFs.getFamilies();
++      if (familyNames != null) {
++        for (String familyName: familyNames) {
++          Object familyData = visitor.familyOpen(regionData, Bytes.toBytes(familyName));
+           monitor.rethrowException();
+ 
+-          // create "reference" to this store file.
+-          LOG.debug("Adding reference for file ("+ (++i) +"/" + sz + "): " + storeFile.getPath());
+-          visitor.storeFile(regionData, familyData, storeFile);
++          Collection<StoreFileInfo> storeFiles = regionFs.getStoreFiles(familyName);
++          if (storeFiles == null) {
++            LOG.debug("No files under family: " + familyName);
++            continue;
++          }
++
++          // 2.1. build the snapshot reference for the store
++          if (LOG.isDebugEnabled()) {
++            LOG.debug("Adding snapshot references for " + storeFiles  + " hfiles");
++          }
++
++          // 2.2. iterate through all the store's files and create "references".
++          int i = 0;
++          int sz = storeFiles.size();
++          for (StoreFileInfo storeFile: storeFiles) {
++            monitor.rethrowException();
++
++            // create "reference" to this store file.
++            LOG.debug("Adding reference for file (" + (++i) + "/" + sz + "): "
++                + storeFile.getPath());
++            visitor.storeFile(regionData, familyData, storeFile);
++          }
++          visitor.familyClose(regionData, familyData);
+         }
+-        visitor.familyClose(regionData, familyData);
+       }
++      visitor.regionClose(regionData);
+     }
+-    visitor.regionClose(regionData);
+   }
+ 
+   /**
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+index d1f787a..50b5c9a 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/snapshot/SnapshotReferenceUtil.java
+@@ -39,11 +39,14 @@ import org.apache.hadoop.fs.Path;
+ import org.apache.hadoop.hbase.HRegionInfo;
+ import org.apache.hadoop.hbase.TableName;
+ import org.apache.hadoop.hbase.io.HFileLink;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
+ import org.apache.hadoop.hbase.wal.DefaultWALProvider;
+ import org.apache.hadoop.hbase.regionserver.StoreFileInfo;
++import org.apache.hadoop.hbase.util.FSUtils;
+ import org.apache.hadoop.hbase.util.FSVisitor;
++import org.apache.hadoop.hbase.util.HFileArchiveUtil;
+ 
+ /**
+  * Utility methods for interacting with the snapshot referenced files.
+@@ -296,7 +299,15 @@ public final class SnapshotReferenceUtil {
+     }
+ 
+     // check if the linked file exists (in the archive, or in the table dir)
+-    HFileLink link = HFileLink.buildFromHFileLinkPattern(conf, linkPath);
++    HFileLink link = null;
++    if (MobUtils.isMobRegionInfo(regionInfo)) {
++      // for mob region
++      link = HFileLink.buildFromHFileLinkPattern(MobUtils.getQualifiedMobRootDir(conf),
++          HFileArchiveUtil.getArchivePath(conf), linkPath);
++    } else {
++      // not mob region
++      link = HFileLink.buildFromHFileLinkPattern(conf, linkPath);
++    }
+     try {
+       FileStatus fstat = link.getFileStatus(fs);
+       if (storeFile.hasFileSize() && storeFile.getFileSize() != fstat.getLen()) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClient.java
+new file mode 100644
+index 0000000..15d4886
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClient.java
+@@ -0,0 +1,250 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import java.io.IOException;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.NamespaceDescriptor;
++import org.apache.hadoop.hbase.NamespaceNotFoundException;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.snapshot.MobSnapshotTestingUtils;
++import org.apache.hadoop.hbase.snapshot.SnapshotDoesNotExistException;
++import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test clone snapshots from the client
++ */
++@Category(LargeTests.class)
++public class TestMobCloneSnapshotFromClient {
++  final Log LOG = LogFactory.getLog(getClass());
++
++  private final static HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
++
++  private final byte[] FAMILY = Bytes.toBytes("cf");
++
++  private byte[] emptySnapshot;
++  private byte[] snapshotName0;
++  private byte[] snapshotName1;
++  private byte[] snapshotName2;
++  private int snapshot0Rows;
++  private int snapshot1Rows;
++  private TableName tableName;
++  private Admin admin;
++
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    TEST_UTIL.getConfiguration().setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    TEST_UTIL.getConfiguration().setBoolean("hbase.online.schema.update.enable", true);
++    TEST_UTIL.getConfiguration().setInt("hbase.hstore.compactionThreshold", 10);
++    TEST_UTIL.getConfiguration().setInt("hbase.regionserver.msginterval", 100);
++    TEST_UTIL.getConfiguration().setInt("hbase.client.pause", 250);
++    TEST_UTIL.getConfiguration().setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 6);
++    TEST_UTIL.getConfiguration().setBoolean(
++        "hbase.master.enabletable.roundrobin", true);
++    TEST_UTIL.getConfiguration().setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++    TEST_UTIL.startMiniCluster(3);
++  }
++
++  @AfterClass
++  public static void tearDownAfterClass() throws Exception {
++    TEST_UTIL.shutdownMiniCluster();
++  }
++
++  /**
++   * Initialize the tests with a table filled with some data
++   * and two snapshots (snapshotName0, snapshotName1) of different states.
++   * The tableName, snapshotNames and the number of rows in the snapshot are initialized.
++   */
++  @Before
++  public void setup() throws Exception {
++    this.admin = TEST_UTIL.getHBaseAdmin();
++
++    long tid = System.currentTimeMillis();
++    tableName = TableName.valueOf("testtb-" + tid);
++    emptySnapshot = Bytes.toBytes("emptySnaptb-" + tid);
++    snapshotName0 = Bytes.toBytes("snaptb0-" + tid);
++    snapshotName1 = Bytes.toBytes("snaptb1-" + tid);
++    snapshotName2 = Bytes.toBytes("snaptb2-" + tid);
++
++    // create Table and disable it
++    MobSnapshotTestingUtils.createMobTable(TEST_UTIL, tableName, getNumReplicas(), FAMILY);
++    admin.disableTable(tableName);
++
++    // take an empty snapshot
++    admin.snapshot(emptySnapshot, tableName);
++
++    HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    try {
++      // enable table and insert data
++      admin.enableTable(tableName);
++      SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, FAMILY);
++      snapshot0Rows = MobSnapshotTestingUtils.countMobRows(table);
++      admin.disableTable(tableName);
++
++      // take a snapshot
++      admin.snapshot(snapshotName0, tableName);
++
++      // enable table and insert more data
++      admin.enableTable(tableName);
++      SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, FAMILY);
++      snapshot1Rows = MobSnapshotTestingUtils.countMobRows(table);
++      admin.disableTable(tableName);
++
++      // take a snapshot of the updated table
++      admin.snapshot(snapshotName1, tableName);
++
++      // re-enable table
++      admin.enableTable(tableName);
++    } finally {
++      table.close();
++    }
++  }
++
++  protected int getNumReplicas() {
++    return 1;
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    if (admin.tableExists(tableName)) {
++      TEST_UTIL.deleteTable(tableName);
++    }
++    SnapshotTestingUtils.deleteAllSnapshots(admin);
++    SnapshotTestingUtils.deleteArchiveDirectory(TEST_UTIL);
++  }
++
++  @Test(expected=SnapshotDoesNotExistException.class)
++  public void testCloneNonExistentSnapshot() throws IOException, InterruptedException {
++    String snapshotName = "random-snapshot-" + System.currentTimeMillis();
++    TableName tableName = TableName.valueOf("random-table-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName, tableName);
++  }
++
++  @Test(expected = NamespaceNotFoundException.class)
++  public void testCloneOnMissingNamespace() throws IOException, InterruptedException {
++    TableName clonedTableName = TableName.valueOf("unknownNS:clonetb");
++    admin.cloneSnapshot(snapshotName1, clonedTableName);
++  }
++
++  @Test
++  public void testCloneSnapshot() throws IOException, InterruptedException {
++    TableName clonedTableName = TableName.valueOf("clonedtb-" + System.currentTimeMillis());
++    testCloneSnapshot(clonedTableName, snapshotName0, snapshot0Rows);
++    testCloneSnapshot(clonedTableName, snapshotName1, snapshot1Rows);
++    testCloneSnapshot(clonedTableName, emptySnapshot, 0);
++  }
++
++  private void testCloneSnapshot(final TableName tableName, final byte[] snapshotName,
++      int snapshotRows) throws IOException, InterruptedException {
++    // create a new table from snapshot
++    admin.cloneSnapshot(snapshotName, tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshotRows);
++
++    verifyReplicasCameOnline(tableName);
++    TEST_UTIL.deleteTable(tableName);
++  }
++
++  protected void verifyReplicasCameOnline(TableName tableName) throws IOException {
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++  }
++
++  @Test
++  public void testCloneSnapshotCrossNamespace() throws IOException, InterruptedException {
++    String nsName = "testCloneSnapshotCrossNamespace";
++    admin.createNamespace(NamespaceDescriptor.create(nsName).build());
++    TableName clonedTableName =
++        TableName.valueOf(nsName, "clonedtb-" + System.currentTimeMillis());
++    testCloneSnapshot(clonedTableName, snapshotName0, snapshot0Rows);
++    testCloneSnapshot(clonedTableName, snapshotName1, snapshot1Rows);
++    testCloneSnapshot(clonedTableName, emptySnapshot, 0);
++  }
++
++  /**
++   * Verify that tables created from the snapshot are still alive after source table deletion.
++   */
++  @Test
++  public void testCloneLinksAfterDelete() throws IOException, InterruptedException {
++    // Clone a table from the first snapshot
++    TableName clonedTableName = TableName.valueOf("clonedtb1-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName0, clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName, snapshot0Rows);
++
++    // Take a snapshot of this cloned table.
++    admin.disableTable(clonedTableName);
++    admin.snapshot(snapshotName2, clonedTableName);
++
++    // Clone the snapshot of the cloned table
++    TableName clonedTableName2 = TableName.valueOf("clonedtb2-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName2, clonedTableName2);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName2, snapshot0Rows);
++    admin.disableTable(clonedTableName2);
++
++    // Remove the original table
++    TEST_UTIL.deleteTable(tableName);
++    waitCleanerRun();
++
++    // Verify the first cloned table
++    admin.enableTable(clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName, snapshot0Rows);
++
++    // Verify the second cloned table
++    admin.enableTable(clonedTableName2);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName2, snapshot0Rows);
++    admin.disableTable(clonedTableName2);
++
++    // Delete the first cloned table
++    TEST_UTIL.deleteTable(clonedTableName);
++    waitCleanerRun();
++
++    // Verify the second cloned table
++    admin.enableTable(clonedTableName2);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName2, snapshot0Rows);
++
++    // Clone a new table from cloned
++    TableName clonedTableName3 = TableName.valueOf("clonedtb3-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName2, clonedTableName3);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName3, snapshot0Rows);
++
++    // Delete the cloned tables
++    TEST_UTIL.deleteTable(clonedTableName2);
++    TEST_UTIL.deleteTable(clonedTableName3);
++    admin.deleteSnapshot(snapshotName2);
++  }
++
++  // ==========================================================================
++  //  Helpers
++  // ==========================================================================
++
++  private void waitCleanerRun() throws InterruptedException {
++    TEST_UTIL.getMiniHBaseCluster().getMaster().getHFileCleaner().choreForTesting();
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClientWithRegionReplicas.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClientWithRegionReplicas.java
+new file mode 100644
+index 0000000..11d6e2e
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobCloneSnapshotFromClientWithRegionReplicas.java
+@@ -0,0 +1,30 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.junit.experimental.categories.Category;
++
++@Category(LargeTests.class)
++public class TestMobCloneSnapshotFromClientWithRegionReplicas extends
++    TestMobCloneSnapshotFromClient {
++  @Override
++  protected int getNumReplicas() {
++    return 3;
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClient.java
+new file mode 100644
+index 0000000..b865381
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClient.java
+@@ -0,0 +1,303 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.fail;
++
++import java.io.IOException;
++import java.util.HashSet;
++import java.util.Set;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.master.MasterFileSystem;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.regionserver.NoSuchColumnFamilyException;
++import org.apache.hadoop.hbase.snapshot.CorruptedSnapshotException;
++import org.apache.hadoop.hbase.snapshot.MobSnapshotTestingUtils;
++import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test restore snapshots from the client
++ */
++@Category(LargeTests.class)
++public class TestMobRestoreSnapshotFromClient {
++  final Log LOG = LogFactory.getLog(getClass());
++
++  private final static HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
++
++  private final byte[] FAMILY = Bytes.toBytes("cf");
++
++  private byte[] emptySnapshot;
++  private byte[] snapshotName0;
++  private byte[] snapshotName1;
++  private byte[] snapshotName2;
++  private int snapshot0Rows;
++  private int snapshot1Rows;
++  private TableName tableName;
++  private Admin admin;
++
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    TEST_UTIL.getConfiguration().setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    TEST_UTIL.getConfiguration().setBoolean("hbase.online.schema.update.enable", true);
++    TEST_UTIL.getConfiguration().setInt("hbase.hstore.compactionThreshold", 10);
++    TEST_UTIL.getConfiguration().setInt("hbase.regionserver.msginterval", 100);
++    TEST_UTIL.getConfiguration().setInt("hbase.client.pause", 250);
++    TEST_UTIL.getConfiguration().setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 6);
++    TEST_UTIL.getConfiguration().setBoolean(
++        "hbase.master.enabletable.roundrobin", true);
++    TEST_UTIL.getConfiguration().setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++    TEST_UTIL.startMiniCluster(3);
++  }
++
++  @AfterClass
++  public static void tearDownAfterClass() throws Exception {
++    TEST_UTIL.shutdownMiniCluster();
++  }
++
++  /**
++   * Initialize the tests with a table filled with some data
++   * and two snapshots (snapshotName0, snapshotName1) of different states.
++   * The tableName, snapshotNames and the number of rows in the snapshot are initialized.
++   */
++  @Before
++  public void setup() throws Exception {
++    this.admin = TEST_UTIL.getHBaseAdmin();
++
++    long tid = System.currentTimeMillis();
++    tableName =
++        TableName.valueOf("testtb-" + tid);
++    emptySnapshot = Bytes.toBytes("emptySnaptb-" + tid);
++    snapshotName0 = Bytes.toBytes("snaptb0-" + tid);
++    snapshotName1 = Bytes.toBytes("snaptb1-" + tid);
++    snapshotName2 = Bytes.toBytes("snaptb2-" + tid);
++
++    // create Table and disable it
++    MobSnapshotTestingUtils.createMobTable(TEST_UTIL, tableName, getNumReplicas(), FAMILY);
++
++    admin.disableTable(tableName);
++
++    // take an empty snapshot
++    admin.snapshot(emptySnapshot, tableName);
++
++    HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++    // enable table and insert data
++    admin.enableTable(tableName);
++    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, FAMILY);
++    snapshot0Rows = MobSnapshotTestingUtils.countMobRows(table);
++    admin.disableTable(tableName);
++
++    // take a snapshot
++    admin.snapshot(snapshotName0, tableName);
++
++    // enable table and insert more data
++    admin.enableTable(tableName);
++    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, FAMILY);
++    snapshot1Rows = MobSnapshotTestingUtils.countMobRows(table);
++    table.close();
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    TEST_UTIL.deleteTable(tableName);
++    SnapshotTestingUtils.deleteAllSnapshots(TEST_UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(TEST_UTIL);
++  }
++
++  @Test
++  public void testRestoreSnapshot() throws IOException {
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot1Rows);
++    admin.disableTable(tableName);
++    admin.snapshot(snapshotName1, tableName);
++    // Restore from snapshot-0
++    admin.restoreSnapshot(snapshotName0);
++    admin.enableTable(tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot0Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++
++    // Restore from emptySnapshot
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(emptySnapshot);
++    admin.enableTable(tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, 0);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++
++    // Restore from snapshot-1
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName1);
++    admin.enableTable(tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot1Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++
++    // Restore from snapshot-1
++    TEST_UTIL.deleteTable(tableName);
++    admin.restoreSnapshot(snapshotName1);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot1Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++  }
++
++  protected int getNumReplicas() {
++    return 1;
++  }
++
++  @Test
++  public void testRestoreSchemaChange() throws Exception {
++    byte[] TEST_FAMILY2 = Bytes.toBytes("cf2");
++
++    HTable table = new HTable(TEST_UTIL.getConfiguration(), tableName);
++
++    // Add one column family and put some data in it
++    admin.disableTable(tableName);
++    HColumnDescriptor hcd = new HColumnDescriptor(TEST_FAMILY2);
++    hcd.setMobEnabled(true);
++    hcd.setMobThreshold(3L);
++    admin.addColumn(tableName, hcd);
++    admin.enableTable(tableName);
++    assertEquals(2, table.getTableDescriptor().getFamilies().size());
++    HTableDescriptor htd = admin.getTableDescriptor(tableName);
++    assertEquals(2, htd.getFamilies().size());
++    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 500, TEST_FAMILY2);
++    long snapshot2Rows = snapshot1Rows + 500;
++    assertEquals(snapshot2Rows, MobSnapshotTestingUtils.countMobRows(table));
++    assertEquals(500, MobSnapshotTestingUtils.countMobRows(table, TEST_FAMILY2));
++    Set<String> fsFamilies = getFamiliesFromFS(tableName);
++    assertEquals(2, fsFamilies.size());
++
++    // Take a snapshot
++    admin.disableTable(tableName);
++    admin.snapshot(snapshotName2, tableName);
++
++    // Restore the snapshot (without the cf)
++    admin.restoreSnapshot(snapshotName0);
++    admin.enableTable(tableName);
++    assertEquals(1, table.getTableDescriptor().getFamilies().size());
++    try {
++      MobSnapshotTestingUtils.countMobRows(table, TEST_FAMILY2);
++      fail("family '" + Bytes.toString(TEST_FAMILY2) + "' should not exists");
++    } catch (NoSuchColumnFamilyException e) {
++      // expected
++    }
++    assertEquals(snapshot0Rows, MobSnapshotTestingUtils.countMobRows(table));
++    htd = admin.getTableDescriptor(tableName);
++    assertEquals(1, htd.getFamilies().size());
++    fsFamilies = getFamiliesFromFS(tableName);
++    assertEquals(1, fsFamilies.size());
++
++    // Restore back the snapshot (with the cf)
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName2);
++    admin.enableTable(tableName);
++    htd = admin.getTableDescriptor(tableName);
++    assertEquals(2, htd.getFamilies().size());
++    assertEquals(2, table.getTableDescriptor().getFamilies().size());
++    assertEquals(500, MobSnapshotTestingUtils.countMobRows(table, TEST_FAMILY2));
++    assertEquals(snapshot2Rows, MobSnapshotTestingUtils.countMobRows(table));
++    fsFamilies = getFamiliesFromFS(tableName);
++    assertEquals(2, fsFamilies.size());
++    table.close();
++  }
++
++  @Test
++  public void testCloneSnapshotOfCloned() throws IOException, InterruptedException {
++    TableName clonedTableName =
++        TableName.valueOf("clonedtb-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName0, clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName, snapshot0Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(clonedTableName, admin, getNumReplicas());
++    admin.disableTable(clonedTableName);
++    admin.snapshot(snapshotName2, clonedTableName);
++    TEST_UTIL.deleteTable(clonedTableName);
++    waitCleanerRun();
++
++    admin.cloneSnapshot(snapshotName2, clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, clonedTableName, snapshot0Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(clonedTableName, admin, getNumReplicas());
++    TEST_UTIL.deleteTable(clonedTableName);
++  }
++
++  @Test
++  public void testCloneAndRestoreSnapshot() throws IOException, InterruptedException {
++    TEST_UTIL.deleteTable(tableName);
++    waitCleanerRun();
++
++    admin.cloneSnapshot(snapshotName0, tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot0Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++    waitCleanerRun();
++
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName0);
++    admin.enableTable(tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(TEST_UTIL, tableName, snapshot0Rows);
++    SnapshotTestingUtils.verifyReplicasCameOnline(tableName, admin, getNumReplicas());
++  }
++
++  @Test
++  public void testCorruptedSnapshot() throws IOException, InterruptedException {
++    SnapshotTestingUtils.corruptSnapshot(TEST_UTIL, Bytes.toString(snapshotName0));
++    TableName cloneName = TableName.valueOf("corruptedClone-" + System.currentTimeMillis());
++    try {
++      admin.cloneSnapshot(snapshotName0, cloneName);
++      fail("Expected CorruptedSnapshotException, got succeeded cloneSnapshot()");
++    } catch (CorruptedSnapshotException e) {
++      // Got the expected corruption exception.
++      // check for no references of the cloned table.
++      assertFalse(admin.tableExists(cloneName));
++    } catch (Exception e) {
++      fail("Expected CorruptedSnapshotException got: " + e);
++    }
++  }
++
++  // ==========================================================================
++  //  Helpers
++  // ==========================================================================
++  private void waitCleanerRun() throws InterruptedException {
++    TEST_UTIL.getMiniHBaseCluster().getMaster().getHFileCleaner().choreForTesting();
++  }
++
++  private Set<String> getFamiliesFromFS(final TableName tableName) throws IOException {
++    MasterFileSystem mfs = TEST_UTIL.getMiniHBaseCluster().getMaster().getMasterFileSystem();
++    Set<String> families = new HashSet<String>();
++    Path tableDir = FSUtils.getTableDir(mfs.getRootDir(), tableName);
++    for (Path regionDir: FSUtils.getRegionDirs(mfs.getFileSystem(), tableDir)) {
++      for (Path familyDir: FSUtils.getFamilyDirs(mfs.getFileSystem(), regionDir)) {
++        families.add(familyDir.getName());
++      }
++    }
++    return families;
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClientWithRegionReplicas.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClientWithRegionReplicas.java
+new file mode 100644
+index 0000000..403e569
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobRestoreSnapshotFromClientWithRegionReplicas.java
+@@ -0,0 +1,30 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.junit.experimental.categories.Category;
++
++@Category(LargeTests.class)
++public class TestMobRestoreSnapshotFromClientWithRegionReplicas extends
++    TestMobRestoreSnapshotFromClient {
++  @Override
++  protected int getNumReplicas() {
++    return 3;
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotCloneIndependence.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotCloneIndependence.java
+new file mode 100644
+index 0000000..612b98a
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotCloneIndependence.java
+@@ -0,0 +1,376 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.client;
++
++import java.util.List;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.regionserver.ConstantSizeRegionSplitPolicy;
++import org.apache.hadoop.hbase.snapshot.MobSnapshotTestingUtils;
++import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Assert;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test to verify that the cloned table is independent of the table from which it was cloned
++ */
++@Category(LargeTests.class)
++public class TestMobSnapshotCloneIndependence {
++  private static final Log LOG = LogFactory.getLog(TestSnapshotCloneIndependence.class);
++
++  private static final HBaseTestingUtility UTIL = new HBaseTestingUtility();
++
++  private static final int NUM_RS = 2;
++  private static final String STRING_TABLE_NAME = "test";
++  private static final String TEST_FAM_STR = "fam";
++  private static final byte[] TEST_FAM = Bytes.toBytes(TEST_FAM_STR);
++  private static final byte[] TABLE_NAME = Bytes.toBytes(STRING_TABLE_NAME);
++
++  /**
++   * Setup the config for the cluster and start it
++   * @throws Exception on failure
++   */
++  @BeforeClass
++  public static void setupCluster() throws Exception {
++    setupConf(UTIL.getConfiguration());
++    UTIL.startMiniCluster(NUM_RS);
++  }
++
++  private static void setupConf(Configuration conf) {
++    // enable snapshot support
++    conf.setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    // disable the ui
++    conf.setInt("hbase.regionsever.info.port", -1);
++    // change the flush size to a small amount, regulating number of store files
++    conf.setInt("hbase.hregion.memstore.flush.size", 25000);
++    // so make sure we get a compaction when doing a load, but keep around
++    // some files in the store
++    conf.setInt("hbase.hstore.compaction.min", 10);
++    conf.setInt("hbase.hstore.compactionThreshold", 10);
++    // block writes if we get to 12 store files
++    conf.setInt("hbase.hstore.blockingStoreFiles", 12);
++    conf.setInt("hbase.regionserver.msginterval", 100);
++    conf.setBoolean("hbase.master.enabletable.roundrobin", true);
++    // Avoid potentially aggressive splitting which would cause snapshot to fail
++    conf.set(HConstants.HBASE_REGION_SPLIT_POLICY_KEY,
++      ConstantSizeRegionSplitPolicy.class.getName());
++    conf.setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++  }
++
++  @Before
++  public void setup() throws Exception {
++    MobSnapshotTestingUtils.createMobTable(UTIL, TableName.valueOf(STRING_TABLE_NAME), TEST_FAM);
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    UTIL.deleteTable(TABLE_NAME);
++    SnapshotTestingUtils.deleteAllSnapshots(UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(UTIL);
++  }
++
++  @AfterClass
++  public static void cleanupTest() throws Exception {
++    try {
++      UTIL.shutdownMiniCluster();
++    } catch (Exception e) {
++      LOG.warn("failure shutting down cluster", e);
++    }
++  }
++
++  /**
++   * Verify that adding data to the cloned table will not affect the original, and vice-versa when
++   * it is taken as an online snapshot.
++   */
++  @Test (timeout=300000)
++  public void testOnlineSnapshotAppendIndependent() throws Exception {
++    runTestSnapshotAppendIndependent(true);
++  }
++
++  /**
++   * Verify that adding data to the cloned table will not affect the original, and vice-versa when
++   * it is taken as an offline snapshot.
++   */
++  @Test (timeout=300000)
++  public void testOfflineSnapshotAppendIndependent() throws Exception {
++    runTestSnapshotAppendIndependent(false);
++  }
++
++  /**
++   * Verify that adding metadata to the cloned table will not affect the original, and vice-versa
++   * when it is taken as an online snapshot.
++   */
++  @Test (timeout=300000)
++  public void testOnlineSnapshotMetadataChangesIndependent() throws Exception {
++    runTestSnapshotMetadataChangesIndependent(true);
++  }
++
++  /**
++   * Verify that adding netadata to the cloned table will not affect the original, and vice-versa
++   * when is taken as an online snapshot.
++   */
++  @Test (timeout=300000)
++  public void testOfflineSnapshotMetadataChangesIndependent() throws Exception {
++    runTestSnapshotMetadataChangesIndependent(false);
++  }
++
++  /**
++   * Verify that region operations, in this case splitting a region, are independent between the
++   * cloned table and the original.
++   */
++  @Test (timeout=300000)
++  public void testOfflineSnapshotRegionOperationsIndependent() throws Exception {
++    runTestRegionOperationsIndependent(false);
++  }
++
++  /**
++   * Verify that region operations, in this case splitting a region, are independent between the
++   * cloned table and the original.
++   */
++  @Test (timeout=300000)
++  public void testOnlineSnapshotRegionOperationsIndependent() throws Exception {
++    runTestRegionOperationsIndependent(true);
++  }
++
++  private static void waitOnSplit(final HTable t, int originalCount) throws Exception {
++    for (int i = 0; i < 200; i++) {
++      try {
++        Thread.sleep(50);
++      } catch (InterruptedException e) {
++        // Restore the interrupted status
++        Thread.currentThread().interrupt();
++      }
++      if (t.getRegionLocations().size() > originalCount) {
++        return;
++      }
++    }
++    throw new Exception("Split did not increase the number of regions");
++  }
++
++  /*
++   * Take a snapshot of a table, add data, and verify that this only
++   * affects one table
++   * @param online - Whether the table is online or not during the snapshot
++   */
++  private void runTestSnapshotAppendIndependent(boolean online) throws Exception {
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++
++    Admin admin = UTIL.getHBaseAdmin();
++    final long startTime = System.currentTimeMillis();
++    final TableName localTableName =
++        TableName.valueOf(STRING_TABLE_NAME + startTime);
++
++    HTable original = MobSnapshotTestingUtils.createMobTable(UTIL, localTableName, TEST_FAM);
++    try {
++
++      SnapshotTestingUtils.loadData(UTIL, localTableName, 500, TEST_FAM);
++      final int origTableRowCount = MobSnapshotTestingUtils.countMobRows(original);
++
++      // Take a snapshot
++      final String snapshotNameAsString = "snapshot_" + localTableName;
++      byte[] snapshotName = Bytes.toBytes(snapshotNameAsString);
++
++      SnapshotTestingUtils.createSnapshotAndValidate(admin, localTableName, TEST_FAM_STR,
++        snapshotNameAsString, rootDir, fs, online);
++
++      if (!online) {
++        admin.enableTable(localTableName);
++      }
++      TableName cloneTableName = TableName.valueOf("test-clone-" + localTableName);
++      admin.cloneSnapshot(snapshotName, cloneTableName);
++
++      HTable clonedTable = new HTable(UTIL.getConfiguration(), cloneTableName);
++
++      try {
++        final int clonedTableRowCount = MobSnapshotTestingUtils.countMobRows(clonedTable);
++
++        Assert.assertEquals(
++          "The line counts of original and cloned tables do not match after clone. ",
++          origTableRowCount, clonedTableRowCount);
++
++        // Attempt to add data to the test
++        final String rowKey = "new-row-" + System.currentTimeMillis();
++
++        Put p = new Put(Bytes.toBytes(rowKey));
++        p.add(TEST_FAM, Bytes.toBytes("someQualifier"), Bytes.toBytes("someString"));
++        original.put(p);
++        original.flushCommits();
++
++        // Verify that it is not present in the original table
++        Assert.assertEquals("The row count of the original table was not modified by the put",
++          origTableRowCount + 1, MobSnapshotTestingUtils.countMobRows(original));
++        Assert.assertEquals(
++          "The row count of the cloned table changed as a result of addition to the original",
++          clonedTableRowCount, MobSnapshotTestingUtils.countMobRows(clonedTable));
++
++        p = new Put(Bytes.toBytes(rowKey));
++        p.add(TEST_FAM, Bytes.toBytes("someQualifier"), Bytes.toBytes("someString"));
++        clonedTable.put(p);
++        clonedTable.flushCommits();
++
++        // Verify that the new family is not in the restored table's description
++        Assert.assertEquals(
++          "The row count of the original table was modified by the put to the clone",
++          origTableRowCount + 1, MobSnapshotTestingUtils.countMobRows(original));
++        Assert.assertEquals("The row count of the cloned table was not modified by the put",
++          clonedTableRowCount + 1, MobSnapshotTestingUtils.countMobRows(clonedTable));
++      } finally {
++
++        clonedTable.close();
++      }
++    } finally {
++
++      original.close();
++    }
++  }
++
++  /*
++   * Take a snapshot of a table, do a split, and verify that this only affects one table
++   * @param online - Whether the table is online or not during the snapshot
++   */
++  private void runTestRegionOperationsIndependent(boolean online) throws Exception {
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++
++    // Create a table
++    Admin admin = UTIL.getHBaseAdmin();
++    final long startTime = System.currentTimeMillis();
++    final TableName localTableName =
++        TableName.valueOf(STRING_TABLE_NAME + startTime);
++    HTable original = MobSnapshotTestingUtils.createMobTable(UTIL, localTableName, TEST_FAM);
++    SnapshotTestingUtils.loadData(UTIL, localTableName, 500, TEST_FAM);
++    final int loadedTableCount = MobSnapshotTestingUtils.countMobRows(original);
++    System.out.println("Original table has: " + loadedTableCount + " rows");
++
++    final String snapshotNameAsString = "snapshot_" + localTableName;
++
++    // Create a snapshot
++    SnapshotTestingUtils.createSnapshotAndValidate(admin, localTableName, TEST_FAM_STR,
++      snapshotNameAsString, rootDir, fs, online);
++
++    if (!online) {
++      admin.enableTable(localTableName);
++    }
++
++    TableName cloneTableName = TableName.valueOf("test-clone-" + localTableName);
++
++    // Clone the snapshot
++    byte[] snapshotName = Bytes.toBytes(snapshotNameAsString);
++    admin.cloneSnapshot(snapshotName, cloneTableName);
++
++    // Verify that region information is the same pre-split
++    original.clearRegionCache();
++    List<HRegionInfo> originalTableHRegions = admin.getTableRegions(localTableName);
++
++    final int originalRegionCount = originalTableHRegions.size();
++    final int cloneTableRegionCount = admin.getTableRegions(cloneTableName).size();
++    Assert.assertEquals(
++      "The number of regions in the cloned table is different than in the original table.",
++      originalRegionCount, cloneTableRegionCount);
++
++    // Split a region on the parent table
++    admin.splitRegion(originalTableHRegions.get(0).getRegionName());
++    waitOnSplit(original, originalRegionCount);
++
++    // Verify that the cloned table region is not split
++    final int cloneTableRegionCount2 = admin.getTableRegions(cloneTableName).size();
++    Assert.assertEquals(
++      "The number of regions in the cloned table changed though none of its regions were split.",
++      cloneTableRegionCount, cloneTableRegionCount2);
++  }
++
++  /*
++   * Take a snapshot of a table, add metadata, and verify that this only
++   * affects one table
++   * @param online - Whether the table is online or not during the snapshot
++   */
++  private void runTestSnapshotMetadataChangesIndependent(boolean online) throws Exception {
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++
++    // Create a table
++    Admin admin = UTIL.getHBaseAdmin();
++    final long startTime = System.currentTimeMillis();
++    final TableName localTableName =
++        TableName.valueOf(STRING_TABLE_NAME + startTime);
++    HTable original = MobSnapshotTestingUtils.createMobTable(UTIL, localTableName, TEST_FAM);
++    SnapshotTestingUtils.loadData(UTIL, localTableName, 500, TEST_FAM);
++
++    final String snapshotNameAsString = "snapshot_" + localTableName;
++
++    // Create a snapshot
++    SnapshotTestingUtils.createSnapshotAndValidate(admin, localTableName, TEST_FAM_STR,
++      snapshotNameAsString, rootDir, fs, online);
++
++    if (!online) {
++      admin.enableTable(localTableName);
++    }
++    TableName cloneTableName = TableName.valueOf("test-clone-" + localTableName);
++
++    // Clone the snapshot
++    byte[] snapshotName = Bytes.toBytes(snapshotNameAsString);
++    admin.cloneSnapshot(snapshotName, cloneTableName);
++
++    // Add a new column family to the original table
++    byte[] TEST_FAM_2 = Bytes.toBytes("fam2");
++    HColumnDescriptor hcd = new HColumnDescriptor(TEST_FAM_2);
++
++    admin.disableTable(localTableName);
++    admin.addColumn(localTableName, hcd);
++
++    // Verify that it is not in the snapshot
++    admin.enableTable(localTableName);
++
++    // get a description of the cloned table
++    // get a list of its families
++    // assert that the family is there
++    HTableDescriptor originalTableDescriptor = original.getTableDescriptor();
++    HTableDescriptor clonedTableDescriptor = admin.getTableDescriptor(cloneTableName);
++
++    Assert.assertTrue("The original family was not found. There is something wrong. ",
++      originalTableDescriptor.hasFamily(TEST_FAM));
++    Assert.assertTrue("The original family was not found in the clone. There is something wrong. ",
++      clonedTableDescriptor.hasFamily(TEST_FAM));
++
++    Assert.assertTrue("The new family was not found. ",
++      originalTableDescriptor.hasFamily(TEST_FAM_2));
++    Assert.assertTrue("The new family was not found. ",
++      !clonedTableDescriptor.hasFamily(TEST_FAM_2));
++  }
++}
+\ No newline at end of file
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClient.java
+new file mode 100644
+index 0000000..b81d635
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClient.java
+@@ -0,0 +1,304 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.fail;
++
++import java.util.List;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.TableNotFoundException;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.regionserver.ConstantSizeRegionSplitPolicy;
++import org.apache.hadoop.hbase.snapshot.MobSnapshotTestingUtils;
++import org.apache.hadoop.hbase.snapshot.SnapshotCreationException;
++import org.apache.hadoop.hbase.snapshot.SnapshotManifestV1;
++import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++import com.google.common.collect.Lists;
++
++/**
++ * Test create/using/deleting snapshots from the client
++ * <p>
++ * This is an end-to-end test for the snapshot utility
++ */
++@Category(LargeTests.class)
++public class TestMobSnapshotFromClient {
++  private static final Log LOG = LogFactory.getLog(TestSnapshotFromClient.class);
++  protected static final HBaseTestingUtility UTIL = new HBaseTestingUtility();
++  private static final int NUM_RS = 2;
++  private static final String STRING_TABLE_NAME = "test";
++  protected static final byte[] TEST_FAM = Bytes.toBytes("fam");
++  protected static final TableName TABLE_NAME =
++      TableName.valueOf(STRING_TABLE_NAME);
++
++  /**
++   * Setup the config for the cluster
++   * @throws Exception on failure
++   */
++  @BeforeClass
++  public static void setupCluster() throws Exception {
++    setupConf(UTIL.getConfiguration());
++    UTIL.startMiniCluster(NUM_RS);
++  }
++
++  private static void setupConf(Configuration conf) {
++    // disable the ui
++    conf.setInt("hbase.regionsever.info.port", -1);
++    // change the flush size to a small amount, regulating number of store files
++    conf.setInt("hbase.hregion.memstore.flush.size", 25000);
++    // so make sure we get a compaction when doing a load, but keep around some
++    // files in the store
++    conf.setInt("hbase.hstore.compaction.min", 10);
++    conf.setInt("hbase.hstore.compactionThreshold", 10);
++    // block writes if we get to 12 store files
++    conf.setInt("hbase.hstore.blockingStoreFiles", 12);
++    // Enable snapshot
++    conf.setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    conf.set(HConstants.HBASE_REGION_SPLIT_POLICY_KEY,
++      ConstantSizeRegionSplitPolicy.class.getName());
++    conf.setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++  }
++
++  @Before
++  public void setup() throws Exception {
++    MobSnapshotTestingUtils.createMobTable(UTIL, TABLE_NAME, getNumReplicas(), TEST_FAM);
++  }
++
++  protected int getNumReplicas() {
++    return 1;
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    UTIL.deleteTable(TABLE_NAME);
++    SnapshotTestingUtils.deleteAllSnapshots(UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(UTIL);
++  }
++
++  @AfterClass
++  public static void cleanupTest() throws Exception {
++    try {
++      UTIL.shutdownMiniCluster();
++    } catch (Exception e) {
++      LOG.warn("failure shutting down cluster", e);
++    }
++  }
++
++  /**
++   * Test snapshotting not allowed hbase:meta and -ROOT-
++   * @throws Exception
++   */
++  @Test (timeout=300000)
++  public void testMetaTablesSnapshot() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    byte[] snapshotName = Bytes.toBytes("metaSnapshot");
++
++    try {
++      admin.snapshot(snapshotName, TableName.META_TABLE_NAME);
++      fail("taking a snapshot of hbase:meta should not be allowed");
++    } catch (IllegalArgumentException e) {
++      // expected
++    }
++  }
++
++  /**
++   * Test HBaseAdmin#deleteSnapshots(String) which deletes snapshots whose names match the parameter
++   *
++   * @throws Exception
++   */
++  @Test (timeout=300000)
++  public void testSnapshotDeletionWithRegex() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // put some stuff in the table
++    HTable table = new HTable(UTIL.getConfiguration(), TABLE_NAME);
++    UTIL.loadTable(table, TEST_FAM);
++    table.close();
++
++    byte[] snapshot1 = Bytes.toBytes("TableSnapshot1");
++    admin.snapshot(snapshot1, TABLE_NAME);
++    LOG.debug("Snapshot1 completed.");
++
++    byte[] snapshot2 = Bytes.toBytes("TableSnapshot2");
++    admin.snapshot(snapshot2, TABLE_NAME);
++    LOG.debug("Snapshot2 completed.");
++
++    String snapshot3 = "3rdTableSnapshot";
++    admin.snapshot(Bytes.toBytes(snapshot3), TABLE_NAME);
++    LOG.debug(snapshot3 + " completed.");
++
++    // delete the first two snapshots
++    admin.deleteSnapshots("TableSnapshot.*");
++    List<SnapshotDescription> snapshots = admin.listSnapshots();
++    assertEquals(1, snapshots.size());
++    assertEquals(snapshots.get(0).getName(), snapshot3);
++
++    admin.deleteSnapshot(snapshot3);
++    admin.close();
++  }
++  /**
++   * Test snapshotting a table that is offline
++   * @throws Exception
++   */
++  @Test (timeout=300000)
++  public void testOfflineTableSnapshot() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // put some stuff in the table
++    HTable table = new HTable(UTIL.getConfiguration(), TABLE_NAME);
++    UTIL.loadTable(table, TEST_FAM, false);
++
++    LOG.debug("FS state before disable:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++    // XXX if this is flakey, might want to consider using the async version and looping as
++    // disableTable can succeed and still timeout.
++    admin.disableTable(TABLE_NAME);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the disabled table
++    final String SNAPSHOT_NAME = "offlineTableSnapshot";
++    byte[] snapshot = Bytes.toBytes(SNAPSHOT_NAME);
++
++    SnapshotDescription desc = SnapshotDescription.newBuilder()
++      .setType(SnapshotDescription.Type.DISABLED)
++      .setTable(STRING_TABLE_NAME)
++      .setName(SNAPSHOT_NAME)
++      .setVersion(SnapshotManifestV1.DESCRIPTOR_VERSION)
++      .build();
++    admin.snapshot(desc);
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++      snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, TEST_FAM, rootDir,
++      admin, fs);
++
++    admin.deleteSnapshot(snapshot);
++    snapshots = admin.listSnapshots();
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++  }
++
++  @Test (timeout=300000)
++  public void testSnapshotFailsOnNonExistantTable() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    String tableName = "_not_a_table";
++
++    // make sure the table doesn't exist
++    boolean fail = false;
++    do {
++    try {
++      admin.getTableDescriptor(TableName.valueOf(tableName));
++      fail = true;
++          LOG.error("Table:" + tableName + " already exists, checking a new name");
++      tableName = tableName+"!";
++    } catch (TableNotFoundException e) {
++      fail = false;
++      }
++    } while (fail);
++
++    // snapshot the non-existant table
++    try {
++      admin.snapshot("fail", TableName.valueOf(tableName));
++      fail("Snapshot succeeded even though there is not table.");
++    } catch (SnapshotCreationException e) {
++      LOG.info("Correctly failed to snapshot a non-existant table:" + e.getMessage());
++    }
++  }
++
++  @Test (timeout=300000)
++  public void testOfflineTableSnapshotWithEmptyRegions() throws Exception {
++    // test with an empty table with one region
++
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    LOG.debug("FS state before disable:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++    admin.disableTable(TABLE_NAME);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the disabled table
++    byte[] snapshot = Bytes.toBytes("testOfflineTableSnapshotWithEmptyRegions");
++    admin.snapshot(snapshot, TABLE_NAME);
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++      snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    List<byte[]> emptyCfs = Lists.newArrayList(TEST_FAM); // no file in the region
++    List<byte[]> nonEmptyCfs = Lists.newArrayList();
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, nonEmptyCfs, emptyCfs,
++      rootDir, admin, fs);
++
++    admin.deleteSnapshot(snapshot);
++    snapshots = admin.listSnapshots();
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClientWithRegionReplicas.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClientWithRegionReplicas.java
+new file mode 100644
+index 0000000..e323d68
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/client/TestMobSnapshotFromClientWithRegionReplicas.java
+@@ -0,0 +1,30 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.client;
++
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.junit.experimental.categories.Category;
++
++@Category(LargeTests.class)
++public class TestMobSnapshotFromClientWithRegionReplicas extends
++    TestMobSnapshotFromClient {
++  @Override
++  protected int getNumReplicas() {
++    return 3;
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/MobSnapshotTestingUtils.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/MobSnapshotTestingUtils.java
+new file mode 100644
+index 0000000..2dcf83a
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/MobSnapshotTestingUtils.java
+@@ -0,0 +1,355 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.snapshot;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++import java.io.IOException;
++import java.util.List;
++
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FSDataOutputStream;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.Cell;
++import org.apache.hadoop.hbase.CellUtil;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HColumnDescriptor;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.Result;
++import org.apache.hadoop.hbase.client.ResultScanner;
++import org.apache.hadoop.hbase.client.Scan;
++import org.apache.hadoop.hbase.errorhandling.ForeignExceptionDispatcher;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.regionserver.BloomType;
++import org.apache.hadoop.hbase.regionserver.HRegionFileSystem;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSTableDescriptors;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.junit.Assert;
++
++public class MobSnapshotTestingUtils {
++
++  /**
++   * Create the Mob Table.
++   */
++  public static void createMobTable(final HBaseTestingUtility util,
++      final TableName tableName, int regionReplication,
++      final byte[]... families) throws IOException, InterruptedException {
++    HTableDescriptor htd = new HTableDescriptor(tableName);
++    htd.setRegionReplication(regionReplication);
++    for (byte[] family : families) {
++      HColumnDescriptor hcd = new HColumnDescriptor(family);
++      hcd.setMobEnabled(true);
++      hcd.setMobThreshold(0L);
++      htd.addFamily(hcd);
++    }
++    byte[][] splitKeys = SnapshotTestingUtils.getSplitKeys();
++    util.getHBaseAdmin().createTable(htd, splitKeys);
++    SnapshotTestingUtils.waitForTableToBeOnline(util, tableName);
++    assertEquals((splitKeys.length + 1) * regionReplication, util
++        .getHBaseAdmin().getTableRegions(tableName).size());
++  }
++
++  /**
++   * Create a Mob table.
++   *
++   * @param util
++   * @param tableName
++   * @param families
++   * @return An HTable instance for the created table.
++   * @throws IOException
++   */
++  public static HTable createMobTable(final HBaseTestingUtility util,
++      final TableName tableName, final byte[]... families) throws IOException {
++    HTableDescriptor htd = new HTableDescriptor(tableName);
++    for (byte[] family : families) {
++      HColumnDescriptor hcd = new HColumnDescriptor(family);
++      // Disable blooms (they are on by default as of 0.95) but we disable them
++      // here because
++      // tests have hard coded counts of what to expect in block cache, etc.,
++      // and blooms being
++      // on is interfering.
++      hcd.setBloomFilterType(BloomType.NONE);
++      hcd.setMobEnabled(true);
++      hcd.setMobThreshold(0L);
++      htd.addFamily(hcd);
++    }
++    util.getHBaseAdmin().createTable(htd);
++    // HBaseAdmin only waits for regions to appear in hbase:meta we should wait
++    // until they are assigned
++    util.waitUntilAllRegionsAssigned(htd.getTableName());
++    return new HTable(util.getConfiguration(), htd.getTableName());
++  }
++
++  /**
++   * Return the number of rows in the given table.
++   */
++  public static int countMobRows(final HTable table) throws IOException {
++    Scan scan = new Scan();
++    ResultScanner results = table.getScanner(scan);
++    int count = 0;
++    for (Result res : results) {
++      count++;
++      List<Cell> cells = res.listCells();
++      for (Cell cell : cells) {
++        // Verify the value
++        Assert.assertTrue(CellUtil.cloneValue(cell).length > 0);
++      }
++    }
++    results.close();
++    return count;
++  }
++
++  /**
++   * Return the number of rows in the given table.
++   */
++  public static int countMobRows(final HTable table, final byte[]... families)
++      throws IOException {
++    Scan scan = new Scan();
++    for (byte[] family : families) {
++      scan.addFamily(family);
++    }
++    ResultScanner results = table.getScanner(scan);
++    int count = 0;
++    for (Result res : results) {
++      count++;
++      List<Cell> cells = res.listCells();
++      for (Cell cell : cells) {
++        // Verify the value
++        Assert.assertTrue(CellUtil.cloneValue(cell).length > 0);
++      }
++    }
++    results.close();
++    return count;
++  }
++
++  public static void verifyMobRowCount(final HBaseTestingUtility util,
++      final TableName tableName, long expectedRows) throws IOException {
++    HTable table = new HTable(util.getConfiguration(), tableName);
++    try {
++      assertEquals(expectedRows, countMobRows(table));
++    } finally {
++      table.close();
++    }
++  }
++
++  // ==========================================================================
++  // Snapshot Mock
++  // ==========================================================================
++  public static class SnapshotMock {
++    private final static String TEST_FAMILY = "cf";
++    public final static int TEST_NUM_REGIONS = 4;
++
++    private final Configuration conf;
++    private final FileSystem fs;
++    private final Path rootDir;
++
++    static class RegionData {
++      public HRegionInfo hri;
++      public Path tableDir;
++      public Path[] files;
++
++      public RegionData(final Path tableDir, final HRegionInfo hri,
++          final int nfiles) {
++        this.tableDir = tableDir;
++        this.hri = hri;
++        this.files = new Path[nfiles];
++      }
++    }
++
++    public static class SnapshotBuilder {
++      private final RegionData[] tableRegions;
++      private final SnapshotDescription desc;
++      private final HTableDescriptor htd;
++      private final Configuration conf;
++      private final FileSystem fs;
++      private final Path rootDir;
++      private Path snapshotDir;
++      private int snapshotted = 0;
++
++      public SnapshotBuilder(final Configuration conf, final FileSystem fs,
++          final Path rootDir, final HTableDescriptor htd,
++          final SnapshotDescription desc, final RegionData[] tableRegions)
++          throws IOException {
++        this.fs = fs;
++        this.conf = conf;
++        this.rootDir = rootDir;
++        this.htd = htd;
++        this.desc = desc;
++        this.tableRegions = tableRegions;
++        this.snapshotDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(desc,
++            rootDir);
++        new FSTableDescriptors(conf).createTableDescriptorForTableDirectory(
++            snapshotDir, htd, false);
++      }
++
++      public HTableDescriptor getTableDescriptor() {
++        return this.htd;
++      }
++
++      public SnapshotDescription getSnapshotDescription() {
++        return this.desc;
++      }
++
++      public Path getSnapshotsDir() {
++        return this.snapshotDir;
++      }
++
++      public Path[] addRegion() throws IOException {
++        return addRegion(desc);
++      }
++
++      public Path[] addRegionV1() throws IOException {
++        return addRegion(desc.toBuilder()
++            .setVersion(SnapshotManifestV1.DESCRIPTOR_VERSION).build());
++      }
++
++      public Path[] addRegionV2() throws IOException {
++        return addRegion(desc.toBuilder()
++            .setVersion(SnapshotManifestV2.DESCRIPTOR_VERSION).build());
++      }
++
++      private Path[] addRegion(final SnapshotDescription desc)
++          throws IOException {
++        if (this.snapshotted == tableRegions.length) {
++          throw new UnsupportedOperationException(
++              "No more regions in the table");
++        }
++
++        RegionData regionData = tableRegions[this.snapshotted++];
++        ForeignExceptionDispatcher monitor = new ForeignExceptionDispatcher(
++            desc.getName());
++        SnapshotManifest manifest = SnapshotManifest.create(conf, fs,
++            snapshotDir, desc, monitor);
++        manifest.addRegion(regionData.tableDir, regionData.hri);
++        return regionData.files;
++      }
++
++      public Path commit() throws IOException {
++        ForeignExceptionDispatcher monitor = new ForeignExceptionDispatcher(
++            desc.getName());
++        SnapshotManifest manifest = SnapshotManifest.create(conf, fs,
++            snapshotDir, desc, monitor);
++        manifest.addTableDescriptor(htd);
++        manifest.consolidate();
++        SnapshotDescriptionUtils.completeSnapshot(desc, rootDir, snapshotDir,
++            fs);
++        snapshotDir = SnapshotDescriptionUtils.getCompletedSnapshotDir(desc,
++            rootDir);
++        return snapshotDir;
++      }
++    }
++
++    public SnapshotMock(final Configuration conf, final FileSystem fs,
++        final Path rootDir) {
++      this.fs = fs;
++      this.conf = conf;
++      this.rootDir = rootDir;
++    }
++
++    public SnapshotBuilder createSnapshotV1(final String snapshotName)
++        throws IOException {
++      return createSnapshot(snapshotName, SnapshotManifestV1.DESCRIPTOR_VERSION);
++    }
++
++    public SnapshotBuilder createSnapshotV2(final String snapshotName)
++        throws IOException {
++      return createSnapshot(snapshotName, SnapshotManifestV2.DESCRIPTOR_VERSION);
++    }
++
++    private SnapshotBuilder createSnapshot(final String snapshotName,
++        final int version) throws IOException {
++      HTableDescriptor htd = createHtd(snapshotName);
++
++      RegionData[] regions = createTable(htd, TEST_NUM_REGIONS);
++
++      SnapshotDescription desc = SnapshotDescription.newBuilder()
++          .setTable(htd.getNameAsString()).setName(snapshotName)
++          .setVersion(version).build();
++
++      Path workingDir = SnapshotDescriptionUtils.getWorkingSnapshotDir(desc,
++          rootDir);
++      SnapshotDescriptionUtils.writeSnapshotInfo(desc, workingDir, fs);
++      return new SnapshotBuilder(conf, fs, rootDir, htd, desc, regions);
++    }
++
++    public HTableDescriptor createHtd(final String tableName) {
++      HTableDescriptor htd = new HTableDescriptor(tableName);
++      HColumnDescriptor hcd = new HColumnDescriptor(TEST_FAMILY);
++      hcd.setMobEnabled(true);
++      hcd.setMobThreshold(0L);
++      htd.addFamily(hcd);
++      return htd;
++    }
++
++    private RegionData[] createTable(final HTableDescriptor htd,
++        final int nregions) throws IOException {
++      Path tableDir = FSUtils.getTableDir(rootDir, htd.getTableName());
++      new FSTableDescriptors(conf).createTableDescriptorForTableDirectory(
++          tableDir, htd, false);
++
++      assertTrue(nregions % 2 == 0);
++      RegionData[] regions = new RegionData[nregions];
++      for (int i = 0; i < regions.length; i += 2) {
++        byte[] startKey = Bytes.toBytes(0 + i * 2);
++        byte[] endKey = Bytes.toBytes(1 + i * 2);
++
++        // First region, simple with one plain hfile.
++        HRegionInfo hri = new HRegionInfo(htd.getTableName(), startKey, endKey);
++        HRegionFileSystem rfs = HRegionFileSystem.createRegionOnFileSystem(
++            conf, fs, tableDir, hri);
++        regions[i] = new RegionData(tableDir, hri, 3);
++        for (int j = 0; j < regions[i].files.length; ++j) {
++          Path storeFile = createStoreFile(rfs.createTempName());
++          regions[i].files[j] = rfs.commitStoreFile(TEST_FAMILY, storeFile);
++        }
++
++        // Second region, used to test the split case.
++        // This region contains a reference to the hfile in the first region.
++        startKey = Bytes.toBytes(2 + i * 2);
++        endKey = Bytes.toBytes(3 + i * 2);
++        hri = new HRegionInfo(htd.getTableName());
++        rfs = HRegionFileSystem.createRegionOnFileSystem(conf, fs, tableDir,
++            hri);
++        regions[i + 1] = new RegionData(tableDir, hri, regions[i].files.length);
++        for (int j = 0; j < regions[i].files.length; ++j) {
++          String refName = regions[i].files[j].getName() + '.'
++              + regions[i].hri.getEncodedName();
++          Path refFile = createStoreFile(new Path(rootDir, refName));
++          regions[i + 1].files[j] = rfs.commitStoreFile(TEST_FAMILY, refFile);
++        }
++      }
++      return regions;
++    }
++
++    private Path createStoreFile(final Path storeFile) throws IOException {
++      FSDataOutputStream out = fs.create(storeFile);
++      try {
++        out.write(Bytes.toBytes(storeFile.toString()));
++      } finally {
++        out.close();
++      }
++      return storeFile;
++    }
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+index e5f91d7..eb4920e 100644
+--- a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/SnapshotTestingUtils.java
+@@ -56,6 +56,7 @@ import org.apache.hadoop.hbase.client.RegionReplicaUtil;
+ import org.apache.hadoop.hbase.io.HFileLink;
+ import org.apache.hadoop.hbase.master.HMaster;
+ import org.apache.hadoop.hbase.master.MasterFileSystem;
++import org.apache.hadoop.hbase.mob.MobUtils;
+ import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+ import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
+ import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
+@@ -230,7 +231,13 @@ public class SnapshotTestingUtils {
+     List<HRegionInfo> regions = admin.getTableRegions(tableName);
+     // remove the non-default regions
+     RegionReplicaUtil.removeNonDefaultRegions(regions);
+-    assertEquals(regions.size(), regionManifests.size());
++    boolean hasMob = regionManifests.containsKey(MobUtils.getMobRegionInfo(tableName)
++        .getEncodedName());
++    if (hasMob) {
++      assertEquals(regions.size(), regionManifests.size() - 1);
++    } else {
++      assertEquals(regions.size(), regionManifests.size());
++    }
+ 
+     // Verify Regions (redundant check, see MasterSnapshotVerifier)
+     for (HRegionInfo info : regions) {
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobExportSnapshot.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobExportSnapshot.java
+new file mode 100644
+index 0000000..9b065e0
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobExportSnapshot.java
+@@ -0,0 +1,439 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.apache.hadoop.hbase.snapshot;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++import java.io.IOException;
++import java.net.URI;
++import java.util.ArrayList;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileStatus;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.client.Admin;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.mob.MobUtils;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotFileInfo;
++import org.apache.hadoop.hbase.protobuf.generated.SnapshotProtos.SnapshotRegionManifest;
++import org.apache.hadoop.hbase.snapshot.SnapshotTestingUtils.SnapshotMock;
++import org.apache.hadoop.hbase.testclassification.MediumTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.hadoop.hbase.util.Pair;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test Export Snapshot Tool
++ */
++@Category(MediumTests.class)
++public class TestMobExportSnapshot {
++  private final Log LOG = LogFactory.getLog(getClass());
++
++  protected final static HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
++
++  private final static byte[] FAMILY = Bytes.toBytes("cf");
++
++  private byte[] emptySnapshotName;
++  private byte[] snapshotName;
++  private int tableNumFiles;
++  private TableName tableName;
++  private Admin admin;
++
++  public static void setUpBaseConf(Configuration conf) {
++    conf.setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    conf.setInt("hbase.regionserver.msginterval", 100);
++    conf.setInt("hbase.client.pause", 250);
++    conf.setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 6);
++    conf.setBoolean("hbase.master.enabletable.roundrobin", true);
++    conf.setInt("mapreduce.map.maxattempts", 10);
++    conf.setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++  }
++
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    setUpBaseConf(TEST_UTIL.getConfiguration());
++    TEST_UTIL.startMiniCluster(3);
++    TEST_UTIL.startMiniMapReduceCluster();
++  }
++
++  @AfterClass
++  public static void tearDownAfterClass() throws Exception {
++    TEST_UTIL.shutdownMiniMapReduceCluster();
++    TEST_UTIL.shutdownMiniCluster();
++  }
++
++  /**
++   * Create a table and take a snapshot of the table used by the export test.
++   */
++  @Before
++  public void setUp() throws Exception {
++    this.admin = TEST_UTIL.getHBaseAdmin();
++
++    long tid = System.currentTimeMillis();
++    tableName = TableName.valueOf("testtb-" + tid);
++    snapshotName = Bytes.toBytes("snaptb0-" + tid);
++    emptySnapshotName = Bytes.toBytes("emptySnaptb0-" + tid);
++
++    // create Table
++    MobSnapshotTestingUtils.createMobTable(TEST_UTIL, tableName, 1, FAMILY);
++
++    // Take an empty snapshot
++    admin.snapshot(emptySnapshotName, tableName);
++
++    // Add some rows
++    SnapshotTestingUtils.loadData(TEST_UTIL, tableName, 50, FAMILY);
++    tableNumFiles = admin.getTableRegions(tableName).size();
++
++    // take a snapshot
++    admin.snapshot(snapshotName, tableName);
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    TEST_UTIL.deleteTable(tableName);
++    SnapshotTestingUtils.deleteAllSnapshots(TEST_UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(TEST_UTIL);
++  }
++
++  /**
++   * Verfy the result of getBalanceSplits() method.
++   * The result are groups of files, used as input list for the "export" mappers.
++   * All the groups should have similar amount of data.
++   *
++   * The input list is a pair of file path and length.
++   * The getBalanceSplits() function sort it by length,
++   * and assign to each group a file, going back and forth through the groups.
++   */
++  @Test
++  public void testBalanceSplit() throws Exception {
++    // Create a list of files
++    List<Pair<SnapshotFileInfo, Long>> files = new ArrayList<Pair<SnapshotFileInfo, Long>>();
++    for (long i = 0; i <= 20; i++) {
++      SnapshotFileInfo fileInfo = SnapshotFileInfo.newBuilder()
++        .setType(SnapshotFileInfo.Type.HFILE)
++        .setHfile("file-" + i)
++        .build();
++      files.add(new Pair<SnapshotFileInfo, Long>(fileInfo, i));
++    }
++
++    // Create 5 groups (total size 210)
++    //    group 0: 20, 11, 10,  1 (total size: 42)
++    //    group 1: 19, 12,  9,  2 (total size: 42)
++    //    group 2: 18, 13,  8,  3 (total size: 42)
++    //    group 3: 17, 12,  7,  4 (total size: 42)
++    //    group 4: 16, 11,  6,  5 (total size: 42)
++    List<List<Pair<SnapshotFileInfo, Long>>> splits = ExportSnapshot.getBalancedSplits(files, 5);
++    assertEquals(5, splits.size());
++
++    String[] split0 = new String[] {"file-20", "file-11", "file-10", "file-1", "file-0"};
++    verifyBalanceSplit(splits.get(0), split0, 42);
++    String[] split1 = new String[] {"file-19", "file-12", "file-9",  "file-2"};
++    verifyBalanceSplit(splits.get(1), split1, 42);
++    String[] split2 = new String[] {"file-18", "file-13", "file-8",  "file-3"};
++    verifyBalanceSplit(splits.get(2), split2, 42);
++    String[] split3 = new String[] {"file-17", "file-14", "file-7",  "file-4"};
++    verifyBalanceSplit(splits.get(3), split3, 42);
++    String[] split4 = new String[] {"file-16", "file-15", "file-6",  "file-5"};
++    verifyBalanceSplit(splits.get(4), split4, 42);
++  }
++
++  private void verifyBalanceSplit(final List<Pair<SnapshotFileInfo, Long>> split,
++      final String[] expected, final long expectedSize) {
++    assertEquals(expected.length, split.size());
++    long totalSize = 0;
++    for (int i = 0; i < expected.length; ++i) {
++      Pair<SnapshotFileInfo, Long> fileInfo = split.get(i);
++      assertEquals(expected[i], fileInfo.getFirst().getHfile());
++      totalSize += fileInfo.getSecond();
++    }
++    assertEquals(expectedSize, totalSize);
++  }
++
++  /**
++   * Verify if exported snapshot and copied files matches the original one.
++   */
++  @Test
++  public void testExportFileSystemState() throws Exception {
++    testExportFileSystemState(tableName, snapshotName, snapshotName, tableNumFiles);
++  }
++
++  @Test
++  public void testExportFileSystemStateWithSkipTmp() throws Exception {
++    TEST_UTIL.getConfiguration().setBoolean(ExportSnapshot.CONF_SKIP_TMP, true);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, tableNumFiles);
++  }
++
++  @Test
++  public void testEmptyExportFileSystemState() throws Exception {
++    testExportFileSystemState(tableName, emptySnapshotName, emptySnapshotName, 0);
++  }
++
++  @Test
++  public void testConsecutiveExports() throws Exception {
++    Path copyDir = getLocalDestinationDir();
++    testExportFileSystemState(tableName, snapshotName, snapshotName, tableNumFiles, copyDir, false);
++    testExportFileSystemState(tableName, snapshotName, snapshotName, tableNumFiles, copyDir, true);
++    removeExportDir(copyDir);
++  }
++
++  @Test
++  public void testExportWithTargetName() throws Exception {
++    final byte[] targetName = Bytes.toBytes("testExportWithTargetName");
++    testExportFileSystemState(tableName, snapshotName, targetName, tableNumFiles);
++  }
++
++  /**
++   * Mock a snapshot with files in the archive dir,
++   * two regions, and one reference file.
++   */
++  @Test
++  public void testSnapshotWithRefsExportFileSystemState() throws Exception {
++    Configuration conf = TEST_UTIL.getConfiguration();
++
++    Path rootDir = TEST_UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    FileSystem fs = TEST_UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++
++    SnapshotMock snapshotMock = new SnapshotMock(TEST_UTIL.getConfiguration(), fs, rootDir);
++    SnapshotMock.SnapshotBuilder builder = snapshotMock.createSnapshotV2("tableWithRefsV1");
++    testSnapshotWithRefsExportFileSystemState(builder);
++
++    snapshotMock = new SnapshotMock(TEST_UTIL.getConfiguration(), fs, rootDir);
++    builder = snapshotMock.createSnapshotV2("tableWithRefsV2");
++    testSnapshotWithRefsExportFileSystemState(builder);
++  }
++
++  /**
++   * Generates a couple of regions for the specified SnapshotMock,
++   * and then it will run the export and verification.
++   */
++  private void testSnapshotWithRefsExportFileSystemState(SnapshotMock.SnapshotBuilder builder)
++      throws Exception {
++    Path[] r1Files = builder.addRegion();
++    Path[] r2Files = builder.addRegion();
++    builder.commit();
++    int snapshotFilesCount = r1Files.length + r2Files.length;
++
++    byte[] snapshotName = Bytes.toBytes(builder.getSnapshotDescription().getName());
++    TableName tableName = builder.getTableDescriptor().getTableName();
++    testExportFileSystemState(tableName, snapshotName, snapshotName, snapshotFilesCount);
++  }
++
++  private void testExportFileSystemState(final TableName tableName, final byte[] snapshotName,
++      final byte[] targetName, int filesExpected) throws Exception {
++    Path copyDir = getHdfsDestinationDir();
++    testExportFileSystemState(tableName, snapshotName, targetName, filesExpected, copyDir, false);
++    removeExportDir(copyDir);
++  }
++
++  /**
++   * Test ExportSnapshot
++   */
++  private void testExportFileSystemState(final TableName tableName, final byte[] snapshotName,
++      final byte[] targetName, int filesExpected, Path copyDir, boolean overwrite)
++      throws Exception {
++    URI hdfsUri = FileSystem.get(TEST_UTIL.getConfiguration()).getUri();
++    FileSystem fs = FileSystem.get(copyDir.toUri(), new Configuration());
++    copyDir = copyDir.makeQualified(fs);
++
++    List<String> opts = new ArrayList<String>();
++    opts.add("-snapshot");
++    opts.add(Bytes.toString(snapshotName));
++    opts.add("-copy-to");
++    opts.add(copyDir.toString());
++    if (targetName != snapshotName) {
++      opts.add("-target");
++      opts.add(Bytes.toString(targetName));
++    }
++    if (overwrite) opts.add("-overwrite");
++
++    // Export Snapshot
++    int res = ExportSnapshot.innerMain(TEST_UTIL.getConfiguration(),
++        opts.toArray(new String[opts.size()]));
++    assertEquals(0, res);
++
++    // Verify File-System state
++    FileStatus[] rootFiles = fs.listStatus(copyDir);
++    assertEquals(filesExpected > 0 ? 2 : 1, rootFiles.length);
++    for (FileStatus fileStatus: rootFiles) {
++      String name = fileStatus.getPath().getName();
++      assertTrue(fileStatus.isDirectory());
++      assertTrue(name.equals(HConstants.SNAPSHOT_DIR_NAME) ||
++                 name.equals(HConstants.HFILE_ARCHIVE_DIRECTORY));
++    }
++
++    // compare the snapshot metadata and verify the hfiles
++    final FileSystem hdfs = FileSystem.get(hdfsUri, TEST_UTIL.getConfiguration());
++    final Path snapshotDir = new Path(HConstants.SNAPSHOT_DIR_NAME, Bytes.toString(snapshotName));
++    final Path targetDir = new Path(HConstants.SNAPSHOT_DIR_NAME, Bytes.toString(targetName));
++    verifySnapshotDir(hdfs, new Path(TEST_UTIL.getDefaultRootDirPath(), snapshotDir),
++        fs, new Path(copyDir, targetDir));
++    Set<String> snapshotFiles = verifySnapshot(fs, copyDir, tableName, Bytes.toString(targetName));
++    assertEquals(filesExpected, snapshotFiles.size());
++  }
++
++  /**
++   * Check that ExportSnapshot will return a failure if something fails.
++   */
++  @Test
++  public void testExportFailure() throws Exception {
++    assertEquals(1, runExportAndInjectFailures(snapshotName, false));
++  }
++
++  /**
++   * Check that ExportSnapshot will succede if something fails but the retry succede.
++   */
++  @Test
++  public void testExportRetry() throws Exception {
++    assertEquals(0, runExportAndInjectFailures(snapshotName, true));
++  }
++
++  /*
++   * Execute the ExportSnapshot job injecting failures
++   */
++  private int runExportAndInjectFailures(final byte[] snapshotName, boolean retry)
++      throws Exception {
++    Path copyDir = getLocalDestinationDir();
++    URI hdfsUri = FileSystem.get(TEST_UTIL.getConfiguration()).getUri();
++    FileSystem fs = FileSystem.get(copyDir.toUri(), new Configuration());
++    copyDir = copyDir.makeQualified(fs);
++
++    Configuration conf = new Configuration(TEST_UTIL.getConfiguration());
++    conf.setBoolean(ExportSnapshot.CONF_TEST_FAILURE, true);
++    conf.setBoolean(ExportSnapshot.CONF_TEST_RETRY, retry);
++
++    // Export Snapshot
++    Path sourceDir = TEST_UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    int res = ExportSnapshot.innerMain(conf, new String[] {
++      "-snapshot", Bytes.toString(snapshotName),
++      "-copy-from", sourceDir.toString(),
++      "-copy-to", copyDir.toString()
++    });
++    return res;
++  }
++
++  /*
++   * verify if the snapshot folder on file-system 1 match the one on file-system 2
++   */
++  private void verifySnapshotDir(final FileSystem fs1, final Path root1,
++      final FileSystem fs2, final Path root2) throws IOException {
++    assertEquals(listFiles(fs1, root1, root1), listFiles(fs2, root2, root2));
++  }
++
++  /*
++   * Verify if the files exists
++   */
++  private Set<String> verifySnapshot(final FileSystem fs, final Path rootDir,
++      final TableName tableName, final String snapshotName) throws IOException {
++    final Path exportedSnapshot = new Path(rootDir,
++      new Path(HConstants.SNAPSHOT_DIR_NAME, snapshotName));
++    final Set<String> snapshotFiles = new HashSet<String>();
++    final Path exportedArchive = new Path(rootDir, HConstants.HFILE_ARCHIVE_DIRECTORY);
++    SnapshotReferenceUtil.visitReferencedFiles(TEST_UTIL.getConfiguration(), fs, exportedSnapshot,
++          new SnapshotReferenceUtil.SnapshotVisitor() {
++        @Override
++        public void storeFile(final HRegionInfo regionInfo, final String family,
++            final SnapshotRegionManifest.StoreFile storeFile) throws IOException {
++          if(MobUtils.isMobRegionInfo(regionInfo))
++            return;
++          String hfile = storeFile.getName();
++          snapshotFiles.add(hfile);
++          if (storeFile.hasReference()) {
++            // Nothing to do here, we have already the reference embedded
++          } else {
++            verifyNonEmptyFile(new Path(exportedArchive,
++              new Path(FSUtils.getTableDir(new Path("./"), tableName),
++                  new Path(regionInfo.getEncodedName(), new Path(family, hfile)))));
++          }
++        }
++
++        @Override
++        public void logFile (final String server, final String logfile)
++            throws IOException {
++          snapshotFiles.add(logfile);
++          verifyNonEmptyFile(new Path(exportedSnapshot, new Path(server, logfile)));
++        }
++
++        private void verifyNonEmptyFile(final Path path) throws IOException {
++          assertTrue(path + " should exists", fs.exists(path));
++          assertTrue(path + " should not be empty", fs.getFileStatus(path).getLen() > 0);
++        }
++    });
++
++    // Verify Snapshot description
++    SnapshotDescription desc = SnapshotDescriptionUtils.readSnapshotInfo(fs, exportedSnapshot);
++    assertTrue(desc.getName().equals(snapshotName));
++    assertTrue(desc.getTable().equals(tableName.getNameAsString()));
++    return snapshotFiles;
++  }
++
++  private Set<String> listFiles(final FileSystem fs, final Path root, final Path dir)
++      throws IOException {
++    Set<String> files = new HashSet<String>();
++    int rootPrefix = root.toString().length();
++    FileStatus[] list = FSUtils.listStatus(fs, dir);
++    if (list != null) {
++      for (FileStatus fstat: list) {
++        LOG.debug(fstat.getPath());
++        if (fstat.isDirectory()) {
++          files.addAll(listFiles(fs, root, fstat.getPath()));
++        } else {
++          files.add(fstat.getPath().toString().substring(rootPrefix));
++        }
++      }
++    }
++    return files;
++  }
++
++  private Path getHdfsDestinationDir() {
++    Path rootDir = TEST_UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    Path path = new Path(new Path(rootDir, "export-test"), "export-" + System.currentTimeMillis());
++    LOG.info("HDFS export destination path: " + path);
++    return path;
++  }
++
++  private Path getLocalDestinationDir() {
++    Path path = TEST_UTIL.getDataTestDir("local-export-" + System.currentTimeMillis());
++    LOG.info("Local export destination path: " + path);
++    return path;
++  }
++
++  private void removeExportDir(final Path path) throws IOException {
++    FileSystem fs = FileSystem.get(path.toUri(), new Configuration());
++    fs.delete(path, true);
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobFlushSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobFlushSnapshotFromClient.java
+new file mode 100644
+index 0000000..f4475aa
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobFlushSnapshotFromClient.java
+@@ -0,0 +1,550 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.snapshot;
++
++import static org.junit.Assert.*;
++
++import java.io.IOException;
++import java.util.Collections;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.CountDownLatch;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.commons.logging.impl.Log4JLogger;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HRegionInfo;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.TableNotFoundException;
++import org.apache.hadoop.hbase.client.Admin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.client.ScannerCallable;
++import org.apache.hadoop.hbase.ipc.RpcClient;
++import org.apache.hadoop.hbase.ipc.RpcServer;
++import org.apache.hadoop.hbase.master.HMaster;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.regionserver.ConstantSizeRegionSplitPolicy;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.apache.log4j.Level;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test creating/using/deleting snapshots from the client
++ * <p>
++ * This is an end-to-end test for the snapshot utility
++ *
++ * TODO This is essentially a clone of TestSnapshotFromClient.  This is worth refactoring this
++ * because there will be a few more flavors of snapshots that need to run these tests.
++ */
++@Category(LargeTests.class)
++public class TestMobFlushSnapshotFromClient {
++  private static final Log LOG = LogFactory.getLog(TestFlushSnapshotFromClient.class);
++  private static final HBaseTestingUtility UTIL = new HBaseTestingUtility();
++  private static final int NUM_RS = 2;
++  private static final String STRING_TABLE_NAME = "test";
++  private static final byte[] TEST_FAM = Bytes.toBytes("fam");
++  private static final TableName TABLE_NAME =
++      TableName.valueOf(STRING_TABLE_NAME);
++  private final int DEFAULT_NUM_ROWS = 100;
++
++  /**
++   * Setup the config for the cluster
++   * @throws Exception on failure
++   */
++  @BeforeClass
++  public static void setupCluster() throws Exception {
++    ((Log4JLogger)RpcServer.LOG).getLogger().setLevel(Level.ALL);
++    ((Log4JLogger)ScannerCallable.LOG).getLogger().setLevel(Level.ALL);
++    setupConf(UTIL.getConfiguration());
++    UTIL.startMiniCluster(NUM_RS);
++  }
++
++  private static void setupConf(Configuration conf) {
++    // disable the ui
++    conf.setInt("hbase.regionsever.info.port", -1);
++    // change the flush size to a small amount, regulating number of store files
++    conf.setInt("hbase.hregion.memstore.flush.size", 25000);
++    // so make sure we get a compaction when doing a load, but keep around some
++    // files in the store
++    conf.setInt("hbase.hstore.compaction.min", 10);
++    conf.setInt("hbase.hstore.compactionThreshold", 10);
++    // block writes if we get to 12 store files
++    conf.setInt("hbase.hstore.blockingStoreFiles", 12);
++    // Enable snapshot
++    conf.setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    conf.set(HConstants.HBASE_REGION_SPLIT_POLICY_KEY,
++      ConstantSizeRegionSplitPolicy.class.getName());
++    conf.setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++  }
++
++  @Before
++  public void setup() throws Exception {
++    MobSnapshotTestingUtils.createMobTable(UTIL, TABLE_NAME, 1, TEST_FAM);
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    UTIL.deleteTable(TABLE_NAME);
++
++    SnapshotTestingUtils.deleteAllSnapshots(UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(UTIL);
++  }
++
++  @AfterClass
++  public static void cleanupTest() throws Exception {
++    try {
++      UTIL.shutdownMiniCluster();
++    } catch (Exception e) {
++      LOG.warn("failure shutting down cluster", e);
++    }
++  }
++
++  /**
++   * Test simple flush snapshotting a table that is online
++   * @throws Exception
++   */
++  @Test (timeout=300000)
++  public void testFlushTableSnapshot() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // put some stuff in the table
++    HTable table = new HTable(UTIL.getConfiguration(), TABLE_NAME);
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, DEFAULT_NUM_ROWS, TEST_FAM);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the enabled table
++    String snapshotString = "offlineTableSnapshot";
++    byte[] snapshot = Bytes.toBytes(snapshotString);
++    admin.snapshot(snapshotString, TABLE_NAME, SnapshotDescription.Type.FLUSH);
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++      snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, TEST_FAM, rootDir,
++        admin, fs);
++  }
++
++   /**
++   * Test snapshotting a table that is online without flushing
++   * @throws Exception
++   */
++  @Test(timeout=30000)
++  public void testSkipFlushTableSnapshot() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // put some stuff in the table
++    HTable table = new HTable(UTIL.getConfiguration(), TABLE_NAME);
++    UTIL.loadTable(table, TEST_FAM);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the enabled table
++    String snapshotString = "skipFlushTableSnapshot";
++    byte[] snapshot = Bytes.toBytes(snapshotString);
++    admin.snapshot(snapshotString, TABLE_NAME, SnapshotDescription.Type.SKIPFLUSH);
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++        snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, TEST_FAM, rootDir,
++        admin, fs);
++
++    admin.deleteSnapshot(snapshot);
++    snapshots = admin.listSnapshots();
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++  }
++
++
++  /**
++   * Test simple flush snapshotting a table that is online
++   * @throws Exception
++   */
++  @Test (timeout=300000)
++  public void testFlushTableSnapshotWithProcedure() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++
++    // put some stuff in the table
++    HTable table = new HTable(UTIL.getConfiguration(), TABLE_NAME);
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, DEFAULT_NUM_ROWS, TEST_FAM);
++
++    LOG.debug("FS state before snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    // take a snapshot of the enabled table
++    String snapshotString = "offlineTableSnapshot";
++    byte[] snapshot = Bytes.toBytes(snapshotString);
++    Map<String, String> props = new HashMap<String, String>();
++    props.put("table", TABLE_NAME.getNameAsString());
++    admin.execProcedure(SnapshotManager.ONLINE_SNAPSHOT_CONTROLLER_DESCRIPTION,
++        snapshotString, props);
++
++
++    LOG.debug("Snapshot completed.");
++
++    // make sure we have the snapshot
++    List<SnapshotDescription> snapshots = SnapshotTestingUtils.assertOneSnapshotThatMatches(admin,
++      snapshot, TABLE_NAME);
++
++    // make sure its a valid snapshot
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    LOG.debug("FS state after snapshot:");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++        FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++
++    SnapshotTestingUtils.confirmSnapshotValid(snapshots.get(0), TABLE_NAME, TEST_FAM, rootDir,
++        admin, fs);
++  }
++
++  @Test (timeout=300000)
++  public void testSnapshotFailsOnNonExistantTable() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    TableName tableName = TableName.valueOf("_not_a_table");
++
++    // make sure the table doesn't exist
++    boolean fail = false;
++    do {
++    try {
++      admin.getTableDescriptor(tableName);
++      fail = true;
++      LOG.error("Table:" + tableName + " already exists, checking a new name");
++      tableName = TableName.valueOf(tableName+"!");
++    } catch (TableNotFoundException e) {
++      fail = false;
++      }
++    } while (fail);
++
++    // snapshot the non-existant table
++    try {
++      admin.snapshot("fail", tableName, SnapshotDescription.Type.FLUSH);
++      fail("Snapshot succeeded even though there is not table.");
++    } catch (SnapshotCreationException e) {
++      LOG.info("Correctly failed to snapshot a non-existant table:" + e.getMessage());
++    }
++  }
++
++  @Test(timeout = 300000)
++  public void testAsyncFlushSnapshot() throws Exception {
++    Admin admin = UTIL.getHBaseAdmin();
++    SnapshotDescription snapshot = SnapshotDescription.newBuilder().setName("asyncSnapshot")
++        .setTable(TABLE_NAME.getNameAsString())
++        .setType(SnapshotDescription.Type.FLUSH)
++        .build();
++
++    // take the snapshot async
++    admin.takeSnapshotAsync(snapshot);
++
++    // constantly loop, looking for the snapshot to complete
++    HMaster master = UTIL.getMiniHBaseCluster().getMaster();
++    SnapshotTestingUtils.waitForSnapshotToComplete(master, snapshot, 200);
++    LOG.info(" === Async Snapshot Completed ===");
++    FSUtils.logFileSystemState(UTIL.getTestFileSystem(),
++      FSUtils.getRootDir(UTIL.getConfiguration()), LOG);
++    // make sure we get the snapshot
++    SnapshotTestingUtils.assertOneSnapshotThatMatches(admin, snapshot);
++  }
++
++  @Test (timeout=300000)
++  public void testSnapshotStateAfterMerge() throws Exception {
++    int numRows = DEFAULT_NUM_ROWS;
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    // load the table so we have some data
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, numRows, TEST_FAM);
++
++    // Take a snapshot
++    String snapshotBeforeMergeName = "snapshotBeforeMerge";
++    admin.snapshot(snapshotBeforeMergeName, TABLE_NAME, SnapshotDescription.Type.FLUSH);
++
++    // Clone the table
++    TableName cloneBeforeMergeName = TableName.valueOf("cloneBeforeMerge");
++    admin.cloneSnapshot(snapshotBeforeMergeName, cloneBeforeMergeName);
++    SnapshotTestingUtils.waitForTableToBeOnline(UTIL, cloneBeforeMergeName);
++
++    // Merge two regions
++    List<HRegionInfo> regions = admin.getTableRegions(TABLE_NAME);
++    Collections.sort(regions, new Comparator<HRegionInfo>() {
++      public int compare(HRegionInfo r1, HRegionInfo r2) {
++        return Bytes.compareTo(r1.getStartKey(), r2.getStartKey());
++      }
++    });
++
++    int numRegions = admin.getTableRegions(TABLE_NAME).size();
++    int numRegionsAfterMerge = numRegions - 2;
++    admin.mergeRegions(regions.get(1).getEncodedNameAsBytes(),
++        regions.get(2).getEncodedNameAsBytes(), true);
++    admin.mergeRegions(regions.get(5).getEncodedNameAsBytes(),
++        regions.get(6).getEncodedNameAsBytes(), true);
++
++    // Verify that there's one region less
++    waitRegionsAfterMerge(numRegionsAfterMerge);
++    assertEquals(numRegionsAfterMerge, admin.getTableRegions(TABLE_NAME).size());
++
++    // Clone the table
++    TableName cloneAfterMergeName = TableName.valueOf("cloneAfterMerge");
++    admin.cloneSnapshot(snapshotBeforeMergeName, cloneAfterMergeName);
++    SnapshotTestingUtils.waitForTableToBeOnline(UTIL, cloneAfterMergeName);
++
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, TABLE_NAME, numRows);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, cloneBeforeMergeName, numRows);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, cloneAfterMergeName, numRows);
++
++    // test that we can delete the snapshot
++    UTIL.deleteTable(cloneAfterMergeName);
++    UTIL.deleteTable(cloneBeforeMergeName);
++  }
++
++  @Test (timeout=300000)
++  public void testTakeSnapshotAfterMerge() throws Exception {
++    int numRows = DEFAULT_NUM_ROWS;
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    // load the table so we have some data
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, numRows, TEST_FAM);
++
++    // Merge two regions
++    List<HRegionInfo> regions = admin.getTableRegions(TABLE_NAME);
++    Collections.sort(regions, new Comparator<HRegionInfo>() {
++      public int compare(HRegionInfo r1, HRegionInfo r2) {
++        return Bytes.compareTo(r1.getStartKey(), r2.getStartKey());
++      }
++    });
++
++    int numRegions = admin.getTableRegions(TABLE_NAME).size();
++    int numRegionsAfterMerge = numRegions - 2;
++    admin.mergeRegions(regions.get(1).getEncodedNameAsBytes(),
++        regions.get(2).getEncodedNameAsBytes(), true);
++    admin.mergeRegions(regions.get(5).getEncodedNameAsBytes(),
++        regions.get(6).getEncodedNameAsBytes(), true);
++
++    waitRegionsAfterMerge(numRegionsAfterMerge);
++    assertEquals(numRegionsAfterMerge, admin.getTableRegions(TABLE_NAME).size());
++
++    // Take a snapshot
++    String snapshotName = "snapshotAfterMerge";
++    SnapshotTestingUtils.snapshot(admin, snapshotName, TABLE_NAME.getNameAsString(),
++      SnapshotDescription.Type.FLUSH, 3);
++
++    // Clone the table
++    TableName cloneName = TableName.valueOf("cloneMerge");
++    admin.cloneSnapshot(snapshotName, cloneName);
++    SnapshotTestingUtils.waitForTableToBeOnline(UTIL, cloneName);
++
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, TABLE_NAME, numRows);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, cloneName, numRows);
++
++    // test that we can delete the snapshot
++    UTIL.deleteTable(cloneName);
++  }
++
++  /**
++   * Basic end-to-end test of simple-flush-based snapshots
++   */
++  @Test (timeout=300000)
++  public void testFlushCreateListDestroy() throws Exception {
++    LOG.debug("------- Starting Snapshot test -------------");
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    // load the table so we have some data
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, DEFAULT_NUM_ROWS, TEST_FAM);
++
++    String snapshotName = "flushSnapshotCreateListDestroy";
++    FileSystem fs = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getFileSystem();
++    Path rootDir = UTIL.getHBaseCluster().getMaster().getMasterFileSystem().getRootDir();
++    SnapshotTestingUtils.createSnapshotAndValidate(admin, TABLE_NAME, Bytes.toString(TEST_FAM),
++      snapshotName, rootDir, fs, true);
++  }
++
++  /**
++   * Demonstrate that we reject snapshot requests if there is a snapshot already running on the
++   * same table currently running and that concurrent snapshots on different tables can both
++   * succeed concurretly.
++   */
++  @Test(timeout=300000)
++  public void testConcurrentSnapshottingAttempts() throws IOException, InterruptedException {
++    final String STRING_TABLE2_NAME = STRING_TABLE_NAME + "2";
++    final TableName TABLE2_NAME =
++        TableName.valueOf(STRING_TABLE2_NAME);
++
++    int ssNum = 20;
++    Admin admin = UTIL.getHBaseAdmin();
++    // make sure we don't fail on listing snapshots
++    SnapshotTestingUtils.assertNoSnapshots(admin);
++    // create second testing table
++    SnapshotTestingUtils.createTable(UTIL, TABLE2_NAME, TEST_FAM);
++    // load the table so we have some data
++    SnapshotTestingUtils.loadData(UTIL, TABLE_NAME, DEFAULT_NUM_ROWS, TEST_FAM);
++    SnapshotTestingUtils.loadData(UTIL, TABLE2_NAME, DEFAULT_NUM_ROWS, TEST_FAM);
++
++    final CountDownLatch toBeSubmitted = new CountDownLatch(ssNum);
++    // We'll have one of these per thread
++    class SSRunnable implements Runnable {
++      SnapshotDescription ss;
++      SSRunnable(SnapshotDescription ss) {
++        this.ss = ss;
++      }
++
++      @Override
++      public void run() {
++        try {
++          Admin admin = UTIL.getHBaseAdmin();
++          LOG.info("Submitting snapshot request: " + ClientSnapshotDescriptionUtils.toString(ss));
++          admin.takeSnapshotAsync(ss);
++        } catch (Exception e) {
++          LOG.info("Exception during snapshot request: " + ClientSnapshotDescriptionUtils.toString(
++              ss)
++              + ".  This is ok, we expect some", e);
++        }
++        LOG.info("Submitted snapshot request: " + ClientSnapshotDescriptionUtils.toString(ss));
++        toBeSubmitted.countDown();
++      }
++    };
++
++    // build descriptions
++    SnapshotDescription[] descs = new SnapshotDescription[ssNum];
++    for (int i = 0; i < ssNum; i++) {
++      SnapshotDescription.Builder builder = SnapshotDescription.newBuilder();
++      builder.setTable(((i % 2) == 0 ? TABLE_NAME : TABLE2_NAME).getNameAsString());
++      builder.setName("ss"+i);
++      builder.setType(SnapshotDescription.Type.FLUSH);
++      descs[i] = builder.build();
++    }
++
++    // kick each off its own thread
++    for (int i=0 ; i < ssNum; i++) {
++      new Thread(new SSRunnable(descs[i])).start();
++    }
++
++    // wait until all have been submitted
++    toBeSubmitted.await();
++
++    // loop until all are done.
++    while (true) {
++      int doneCount = 0;
++      for (SnapshotDescription ss : descs) {
++        try {
++          if (admin.isSnapshotFinished(ss)) {
++            doneCount++;
++          }
++        } catch (Exception e) {
++          LOG.warn("Got an exception when checking for snapshot " + ss.getName(), e);
++          doneCount++;
++        }
++      }
++      if (doneCount == descs.length) {
++        break;
++      }
++      Thread.sleep(100);
++    }
++
++    // dump for debugging
++    logFSTree(FSUtils.getRootDir(UTIL.getConfiguration()));
++
++    List<SnapshotDescription> taken = admin.listSnapshots();
++    int takenSize = taken.size();
++    LOG.info("Taken " + takenSize + " snapshots:  " + taken);
++    assertTrue("We expect at least 1 request to be rejected because of we concurrently" +
++        " issued many requests", takenSize < ssNum && takenSize > 0);
++
++    // Verify that there's at least one snapshot per table
++    int t1SnapshotsCount = 0;
++    int t2SnapshotsCount = 0;
++    for (SnapshotDescription ss : taken) {
++      if (TableName.valueOf(ss.getTable()).equals(TABLE_NAME)) {
++        t1SnapshotsCount++;
++      } else if (TableName.valueOf(ss.getTable()).equals(TABLE2_NAME)) {
++        t2SnapshotsCount++;
++      }
++    }
++    assertTrue("We expect at least 1 snapshot of table1 ", t1SnapshotsCount > 0);
++    assertTrue("We expect at least 1 snapshot of table2 ", t2SnapshotsCount > 0);
++
++    UTIL.deleteTable(TABLE2_NAME);
++  }
++
++  private void logFSTree(Path root) throws IOException {
++    FSUtils.logFileSystemState(UTIL.getDFSCluster().getFileSystem(), root, LOG);
++  }
++
++  private void waitRegionsAfterMerge(final long numRegionsAfterMerge)
++      throws IOException, InterruptedException {
++    Admin admin = UTIL.getHBaseAdmin();
++    // Verify that there's one region less
++    long startTime = System.currentTimeMillis();
++    while (admin.getTableRegions(TABLE_NAME).size() != numRegionsAfterMerge) {
++      // This may be flaky... if after 15sec the merge is not complete give up
++      // it will fail in the assertEquals(numRegionsAfterMerge).
++      if ((System.currentTimeMillis() - startTime) > 15000)
++        break;
++      Thread.sleep(100);
++    }
++    SnapshotTestingUtils.waitForTableToBeOnline(UTIL, TABLE_NAME);
++  }
++}
++
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreFlushSnapshotFromClient.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreFlushSnapshotFromClient.java
+new file mode 100644
+index 0000000..2354bac
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreFlushSnapshotFromClient.java
+@@ -0,0 +1,209 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.snapshot;
++
++import java.io.IOException;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.TableName;
++import org.apache.hadoop.hbase.client.Admin;
++import org.apache.hadoop.hbase.client.HTable;
++import org.apache.hadoop.hbase.master.MasterFileSystem;
++import org.apache.hadoop.hbase.master.snapshot.SnapshotManager;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.regionserver.snapshot.RegionServerSnapshotManager;
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.util.Bytes;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.junit.After;
++import org.junit.AfterClass;
++import org.junit.Before;
++import org.junit.BeforeClass;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Test clone/restore snapshots from the client
++ *
++ * TODO This is essentially a clone of TestRestoreSnapshotFromClient.  This is worth refactoring
++ * this because there will be a few more flavors of snapshots that need to run these tests.
++ */
++@Category(LargeTests.class)
++public class TestMobRestoreFlushSnapshotFromClient {
++  final Log LOG = LogFactory.getLog(getClass());
++
++  private final static HBaseTestingUtility UTIL = new HBaseTestingUtility();
++
++  private final byte[] FAMILY = Bytes.toBytes("cf");
++
++  private byte[] snapshotName0;
++  private byte[] snapshotName1;
++  private byte[] snapshotName2;
++  private int snapshot0Rows;
++  private int snapshot1Rows;
++  private TableName tableName;
++  private Admin admin;
++
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    UTIL.getConfiguration().setBoolean("hbase.online.schema.update.enable", true);
++    UTIL.getConfiguration().setInt("hbase.regionserver.msginterval", 100);
++    UTIL.getConfiguration().setInt("hbase.client.pause", 250);
++    UTIL.getConfiguration().setInt(HConstants.HBASE_CLIENT_RETRIES_NUMBER, 6);
++    UTIL.getConfiguration().setBoolean(
++        "hbase.master.enabletable.roundrobin", true);
++
++    // Enable snapshot
++    UTIL.getConfiguration().setBoolean(SnapshotManager.HBASE_SNAPSHOT_ENABLED, true);
++    UTIL.getConfiguration().setLong(RegionServerSnapshotManager.SNAPSHOT_TIMEOUT_MILLIS_KEY,
++      RegionServerSnapshotManager.SNAPSHOT_TIMEOUT_MILLIS_DEFAULT * 2);
++
++    UTIL.getConfiguration().setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++
++    UTIL.startMiniCluster(3);
++  }
++
++  @AfterClass
++  public static void tearDownAfterClass() throws Exception {
++    UTIL.shutdownMiniCluster();
++  }
++
++  /**
++   * Initialize the tests with a table filled with some data
++   * and two snapshots (snapshotName0, snapshotName1) of different states.
++   * The tableName, snapshotNames and the number of rows in the snapshot are initialized.
++   */
++  @Before
++  public void setup() throws Exception {
++    this.admin = UTIL.getHBaseAdmin();
++
++    long tid = System.currentTimeMillis();
++    tableName = TableName.valueOf("testtb-" + tid);
++    snapshotName0 = Bytes.toBytes("snaptb0-" + tid);
++    snapshotName1 = Bytes.toBytes("snaptb1-" + tid);
++    snapshotName2 = Bytes.toBytes("snaptb2-" + tid);
++
++    // create Table
++    MobSnapshotTestingUtils.createMobTable(UTIL, tableName, 1, FAMILY);
++
++    HTable table = new HTable(UTIL.getConfiguration(), tableName);
++    SnapshotTestingUtils.loadData(UTIL, tableName, 500, FAMILY);
++    snapshot0Rows = MobSnapshotTestingUtils.countMobRows(table);
++    LOG.info("=== before snapshot with 500 rows");
++    logFSTree();
++
++    // take a snapshot
++    admin.snapshot(Bytes.toString(snapshotName0), tableName,
++        SnapshotDescription.Type.FLUSH);
++
++    LOG.info("=== after snapshot with 500 rows");
++    logFSTree();
++
++    // insert more data
++    SnapshotTestingUtils.loadData(UTIL, tableName, 500, FAMILY);
++    snapshot1Rows = MobSnapshotTestingUtils.countMobRows(table);
++    LOG.info("=== before snapshot with 1000 rows");
++    logFSTree();
++
++    // take a snapshot of the updated table
++    admin.snapshot(Bytes.toString(snapshotName1), tableName,
++        SnapshotDescription.Type.FLUSH);
++    LOG.info("=== after snapshot with 1000 rows");
++    logFSTree();
++    table.close();
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    SnapshotTestingUtils.deleteAllSnapshots(UTIL.getHBaseAdmin());
++    SnapshotTestingUtils.deleteArchiveDirectory(UTIL);
++  }
++
++  @Test
++  public void testTakeFlushSnapshot() throws IOException {
++    // taking happens in setup.
++  }
++
++  @Test
++  public void testRestoreSnapshot() throws IOException {
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, tableName, snapshot1Rows);
++
++    // Restore from snapshot-0
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName0);
++    logFSTree();
++    admin.enableTable(tableName);
++    LOG.info("=== after restore with 500 row snapshot");
++    logFSTree();
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, tableName, snapshot0Rows);
++
++    // Restore from snapshot-1
++    admin.disableTable(tableName);
++    admin.restoreSnapshot(snapshotName1);
++    admin.enableTable(tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, tableName, snapshot1Rows);
++  }
++
++  @Test(expected=SnapshotDoesNotExistException.class)
++  public void testCloneNonExistentSnapshot() throws IOException, InterruptedException {
++    String snapshotName = "random-snapshot-" + System.currentTimeMillis();
++    TableName tableName = TableName.valueOf("random-table-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName, tableName);
++  }
++
++  @Test
++  public void testCloneSnapshot() throws IOException, InterruptedException {
++    TableName clonedTableName = TableName.valueOf("clonedtb-" + System.currentTimeMillis());
++    testCloneSnapshot(clonedTableName, snapshotName0, snapshot0Rows);
++    testCloneSnapshot(clonedTableName, snapshotName1, snapshot1Rows);
++  }
++
++  private void testCloneSnapshot(final TableName tableName, final byte[] snapshotName,
++      int snapshotRows) throws IOException, InterruptedException {
++    // create a new table from snapshot
++    admin.cloneSnapshot(snapshotName, tableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, tableName, snapshotRows);
++
++    UTIL.deleteTable(tableName);
++  }
++
++  @Test
++  public void testRestoreSnapshotOfCloned() throws IOException, InterruptedException {
++    TableName clonedTableName = TableName.valueOf("clonedtb-" + System.currentTimeMillis());
++    admin.cloneSnapshot(snapshotName0, clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, clonedTableName, snapshot0Rows);
++    admin.snapshot(Bytes.toString(snapshotName2), clonedTableName, SnapshotDescription.Type.FLUSH);
++    UTIL.deleteTable(clonedTableName);
++
++    admin.cloneSnapshot(snapshotName2, clonedTableName);
++    MobSnapshotTestingUtils.verifyMobRowCount(UTIL, clonedTableName, snapshot0Rows);
++    UTIL.deleteTable(clonedTableName);
++  }
++
++  // ==========================================================================
++  //  Helpers
++  // ==========================================================================
++  private void logFSTree() throws IOException {
++    MasterFileSystem mfs = UTIL.getMiniHBaseCluster().getMaster().getMasterFileSystem();
++    FSUtils.logFileSystemState(mfs.getFileSystem(), mfs.getRootDir(), LOG);
++  }
++}
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreSnapshotHelper.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreSnapshotHelper.java
+new file mode 100644
+index 0000000..1893c7a
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobRestoreSnapshotHelper.java
+@@ -0,0 +1,163 @@
++/**
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.snapshot;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++import java.io.IOException;
++
++import org.apache.commons.logging.Log;
++import org.apache.commons.logging.LogFactory;
++import org.apache.hadoop.conf.Configuration;
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.hbase.HBaseTestingUtility;
++import org.apache.hadoop.hbase.HConstants;
++import org.apache.hadoop.hbase.HTableDescriptor;
++import org.apache.hadoop.hbase.testclassification.SmallTests;
++import org.apache.hadoop.hbase.errorhandling.ForeignExceptionDispatcher;
++import org.apache.hadoop.hbase.io.HFileLink;
++import org.apache.hadoop.hbase.mob.MobConstants;
++import org.apache.hadoop.hbase.monitoring.MonitoredTask;
++import org.apache.hadoop.hbase.protobuf.generated.HBaseProtos.SnapshotDescription;
++import org.apache.hadoop.hbase.regionserver.StoreFileInfo;
++import org.apache.hadoop.hbase.snapshot.MobSnapshotTestingUtils.SnapshotMock;
++import org.apache.hadoop.hbase.util.FSTableDescriptors;
++import org.apache.hadoop.hbase.util.FSUtils;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.experimental.categories.Category;
++import org.mockito.Mockito;
++
++/**
++ * Test the restore/clone operation from a file-system point of view.
++ */
++@Category(SmallTests.class)
++public class TestMobRestoreSnapshotHelper {
++  final Log LOG = LogFactory.getLog(getClass());
++
++  private final static HBaseTestingUtility TEST_UTIL = new HBaseTestingUtility();
++  private final static String TEST_HFILE = "abc";
++
++  private Configuration conf;
++  private Path archiveDir;
++  private FileSystem fs;
++  private Path rootDir;
++
++  @Before
++  public void setup() throws Exception {
++    rootDir = TEST_UTIL.getDataTestDir("testRestore");
++    archiveDir = new Path(rootDir, HConstants.HFILE_ARCHIVE_DIRECTORY);
++    fs = TEST_UTIL.getTestFileSystem();
++    TEST_UTIL.getConfiguration().setInt(MobConstants.MOB_FILE_CACHE_SIZE_KEY, 0);
++    conf = TEST_UTIL.getConfiguration();
++    FSUtils.setRootDir(conf, rootDir);
++  }
++
++  @After
++  public void tearDown() throws Exception {
++    fs.delete(TEST_UTIL.getDataTestDir(), true);
++  }
++
++  @Test
++  public void testRestore() throws IOException {
++    // Test Rolling-Upgrade like Snapshot.
++    // half machines writing using v1 and the others using v2 format.
++    SnapshotMock snapshotMock = new SnapshotMock(TEST_UTIL.getConfiguration(), fs, rootDir);
++    SnapshotMock.SnapshotBuilder builder = snapshotMock.createSnapshotV2("snapshot");
++    builder.addRegionV1();
++    builder.addRegionV2();
++    builder.addRegionV2();
++    builder.addRegionV1();
++    Path snapshotDir = builder.commit();
++    HTableDescriptor htd = builder.getTableDescriptor();
++    SnapshotDescription desc = builder.getSnapshotDescription();
++
++    // Test clone a snapshot
++    HTableDescriptor htdClone = snapshotMock.createHtd("testtb-clone");
++    testRestore(snapshotDir, desc, htdClone);
++    verifyRestore(rootDir, htd, htdClone);
++
++    // Test clone a clone ("link to link")
++    SnapshotDescription cloneDesc = SnapshotDescription.newBuilder()
++        .setName("cloneSnapshot")
++        .setTable("testtb-clone")
++        .build();
++    Path cloneDir = FSUtils.getTableDir(rootDir, htdClone.getTableName());
++    HTableDescriptor htdClone2 = snapshotMock.createHtd("testtb-clone2");
++    testRestore(cloneDir, cloneDesc, htdClone2);
++    verifyRestore(rootDir, htd, htdClone2);
++  }
++
++  private void verifyRestore(final Path rootDir, final HTableDescriptor sourceHtd,
++      final HTableDescriptor htdClone) throws IOException {
++    String[] files = SnapshotTestingUtils.listHFileNames(fs,
++      FSUtils.getTableDir(rootDir, htdClone.getTableName()));
++    assertEquals(12, files.length);
++    for (int i = 0; i < files.length; i += 2) {
++      String linkFile = files[i];
++      String refFile = files[i+1];
++      assertTrue(linkFile + " should be a HFileLink", HFileLink.isHFileLink(linkFile));
++      assertTrue(refFile + " should be a Referene", StoreFileInfo.isReference(refFile));
++      assertEquals(sourceHtd.getTableName(), HFileLink.getReferencedTableName(linkFile));
++      Path refPath = getReferredToFile(refFile);
++      LOG.debug("get reference name for file " + refFile + " = " + refPath);
++      assertTrue(refPath.getName() + " should be a HFileLink", HFileLink.isHFileLink(refPath.getName()));
++      assertEquals(linkFile, refPath.getName());
++    }
++  }
++
++  /**
++   * Execute the restore operation
++   * @param snapshotDir The snapshot directory to use as "restore source"
++   * @param sd The snapshot descriptor
++   * @param htdClone The HTableDescriptor of the table to restore/clone.
++   */
++  public void testRestore(final Path snapshotDir, final SnapshotDescription sd,
++      final HTableDescriptor htdClone) throws IOException {
++    LOG.debug("pre-restore table=" + htdClone.getTableName() + " snapshot=" + snapshotDir);
++    FSUtils.logFileSystemState(fs, rootDir, LOG);
++
++    new FSTableDescriptors(conf).createTableDescriptor(htdClone);
++    RestoreSnapshotHelper helper = getRestoreHelper(rootDir, snapshotDir, sd, htdClone);
++    helper.restoreHdfsRegions();
++
++    LOG.debug("post-restore table=" + htdClone.getTableName() + " snapshot=" + snapshotDir);
++    FSUtils.logFileSystemState(fs, rootDir, LOG);
++  }
++
++  /**
++   * Initialize the restore helper, based on the snapshot and table information provided.
++   */
++  private RestoreSnapshotHelper getRestoreHelper(final Path rootDir, final Path snapshotDir,
++      final SnapshotDescription sd, final HTableDescriptor htdClone) throws IOException {
++    ForeignExceptionDispatcher monitor = Mockito.mock(ForeignExceptionDispatcher.class);
++    MonitoredTask status = Mockito.mock(MonitoredTask.class);
++
++    SnapshotManifest manifest = SnapshotManifest.open(conf, fs, snapshotDir, sd);
++    return new RestoreSnapshotHelper(conf, fs, manifest,
++      htdClone, rootDir, monitor, status);
++  }
++
++  private Path getReferredToFile(final String referenceName) {
++    Path fakeBasePath = new Path(new Path("table", "region"), "cf");
++    return StoreFileInfo.getReferredToFile(new Path(fakeBasePath, referenceName));
++  }
++}
+\ No newline at end of file
+diff --git a/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobSecureExportSnapshot.java b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobSecureExportSnapshot.java
+new file mode 100644
+index 0000000..4a89db8
+--- /dev/null
++++ b/hbase-server/src/test/java/org/apache/hadoop/hbase/snapshot/TestMobSecureExportSnapshot.java
+@@ -0,0 +1,53 @@
++/**
++ * Copyright The Apache Software Foundation
++ *
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.hadoop.hbase.snapshot;
++
++import org.apache.hadoop.hbase.testclassification.LargeTests;
++import org.apache.hadoop.hbase.mapreduce.HadoopSecurityEnabledUserProviderForTesting;
++import org.apache.hadoop.hbase.security.UserProvider;
++import org.apache.hadoop.hbase.security.access.AccessControlLists;
++import org.apache.hadoop.hbase.security.access.SecureTestUtil;
++
++import org.junit.BeforeClass;
++import org.junit.experimental.categories.Category;
++
++/**
++ * Reruns TestMobExportSnapshot using MobExportSnapshot in secure mode.
++ */
++@Category(LargeTests.class)
++public class TestMobSecureExportSnapshot extends TestMobExportSnapshot {
++  @BeforeClass
++  public static void setUpBeforeClass() throws Exception {
++    setUpBaseConf(TEST_UTIL.getConfiguration());
++
++    // set the always on security provider
++    UserProvider.setUserProviderForTesting(TEST_UTIL.getConfiguration(),
++      HadoopSecurityEnabledUserProviderForTesting.class);
++
++    // setup configuration
++    SecureTestUtil.enableSecurity(TEST_UTIL.getConfiguration());
++
++    TEST_UTIL.startMiniCluster(3);
++    TEST_UTIL.startMiniMapReduceCluster();
++
++    // Wait for the ACL table to become available
++    TEST_UTIL.waitTableEnabled(AccessControlLists.ACL_TABLE_NAME);
++  }
++}
+\ No newline at end of file
+-- 
+1.7.0.4
+

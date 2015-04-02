@@ -65,7 +65,7 @@ const TProtocolVersion::type MAX_SUPPORTED_HS2_VERSION =
 #define HS2_RETURN_IF_ERROR(return_val, status, error_state) \
   do { \
     if (UNLIKELY(!status.ok())) { \
-      HS2_RETURN_ERROR(return_val, status.GetErrorMsg(), error_state); \
+      HS2_RETURN_ERROR(return_val, status.GetDetail(), error_state); \
       return; \
     } \
   } while (false)
@@ -402,7 +402,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
       THandleIdentifierToTUniqueId(session_handle, &session_id, &secret);
   if (!unique_id_status.ok()) {
     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
-    status->__set_errorMessage(unique_id_status.GetErrorMsg());
+    status->__set_errorMessage(unique_id_status.GetDetail());
     status->__set_sqlState(SQLSTATE_GENERAL_ERROR);
     return;
   }
@@ -411,7 +411,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
   Status get_session_status = scoped_session.WithSession(session_id, &session);
   if (!get_session_status.ok()) {
     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
-    status->__set_errorMessage(get_session_status.GetErrorMsg());
+    status->__set_errorMessage(get_session_status.GetDetail());
     // TODO: (here and elsewhere) - differentiate between invalid session ID and timeout
     // when setting the error code.
     status->__set_sqlState(SQLSTATE_GENERAL_ERROR);
@@ -442,7 +442,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
   Status register_status = RegisterQuery(session, exec_state);
   if (!register_status.ok()) {
     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
-    status->__set_errorMessage(register_status.GetErrorMsg());
+    status->__set_errorMessage(register_status.GetDetail());
     status->__set_sqlState(SQLSTATE_GENERAL_ERROR);
     return;
   }
@@ -451,7 +451,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
   if (!exec_status.ok()) {
     UnregisterQuery(exec_state->query_id(), false, &exec_status);
     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
-    status->__set_errorMessage(exec_status.GetErrorMsg());
+    status->__set_errorMessage(exec_status.GetDetail());
     status->__set_sqlState(SQLSTATE_GENERAL_ERROR);
     return;
   }
@@ -462,7 +462,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
   if (!inflight_status.ok()) {
     UnregisterQuery(exec_state->query_id(), false, &inflight_status);
     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
-    status->__set_errorMessage(inflight_status.GetErrorMsg());
+    status->__set_errorMessage(inflight_status.GetDetail());
     status->__set_sqlState(SQLSTATE_GENERAL_ERROR);
     return;
   }
@@ -498,6 +498,7 @@ Status ImpalaServer::FetchInternal(const TUniqueId& query_id, int32_t fetch_size
 
   if (exec_state->num_rows_fetched() == 0) {
     exec_state->query_events()->MarkEvent("First row fetched");
+    exec_state->set_fetched_rows();
   }
 
   if (fetch_first) RETURN_IF_ERROR(exec_state->RestartFetch());
@@ -580,10 +581,10 @@ void ImpalaServer::OpenSession(TOpenSessionResp& return_val,
   // TODO: Fix duplication of code between here and ConnectionStart().
   shared_ptr<SessionState> state(new SessionState());
   state->closed = false;
-  state->start_time = TimestampValue::local_time();
+  state->start_time = TimestampValue::LocalTime();
   state->session_type = TSessionType::HIVESERVER2;
   state->network_address = ThriftServer::GetThreadConnectionContext()->network_address;
-  state->last_accessed_ms = ms_since_epoch();
+  state->last_accessed_ms = UnixMillis();
   state->hs2_version = min(MAX_SUPPORTED_HS2_VERSION, request.client_protocol);
 
   // If the username was set by a lower-level transport, use it.
@@ -728,7 +729,7 @@ void ImpalaServer::ExecuteStatement(TExecuteStatementResp& return_val,
             *exec_state->result_metadata()), cache_num_rows);
     if (!status.ok()) {
       UnregisterQuery(exec_state->query_id(), false, &status);
-      HS2_RETURN_ERROR(return_val, status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+      HS2_RETURN_ERROR(return_val, status.GetDetail(), SQLSTATE_GENERAL_ERROR);
     }
   }
   exec_state->UpdateQueryState(QueryState::RUNNING);
@@ -739,7 +740,7 @@ void ImpalaServer::ExecuteStatement(TExecuteStatementResp& return_val,
   status = SetQueryInflight(session, exec_state);
   if (!status.ok()) {
     UnregisterQuery(exec_state->query_id(), false, &status);
-    HS2_RETURN_ERROR(return_val, status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+    HS2_RETURN_ERROR(return_val, status.GetDetail(), SQLSTATE_GENERAL_ERROR);
   }
   return_val.__isset.operationHandle = true;
   return_val.operationHandle.__set_operationType(TOperationType::EXECUTE_STATEMENT);
@@ -1039,7 +1040,7 @@ void ImpalaServer::FetchResults(TFetchResultsResp& return_val,
     } else {
       UnregisterQuery(query_id, false, &status);
     }
-    HS2_RETURN_ERROR(return_val, status.GetErrorMsg(), SQLSTATE_GENERAL_ERROR);
+    HS2_RETURN_ERROR(return_val, status.GetDetail(), SQLSTATE_GENERAL_ERROR);
   }
   return_val.status.__set_statusCode(thrift::TStatusCode::SUCCESS_STATUS);
 }

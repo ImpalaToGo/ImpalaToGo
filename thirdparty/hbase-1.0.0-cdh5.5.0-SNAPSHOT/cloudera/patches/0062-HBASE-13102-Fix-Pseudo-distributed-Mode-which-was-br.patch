@@ -1,0 +1,37 @@
+From de5f57febc5a27d568613beccd25d28e00e0df0c Mon Sep 17 00:00:00 2001
+From: Elliott Clark <eclark@apache.org>
+Date: Wed, 25 Feb 2015 13:29:36 -0800
+Subject: [PATCH 062/110] HBASE-13102 Fix Pseudo-distributed Mode which was broken in 1.0.0
+
+Reason: Bug
+Author: Elliott Clark
+Ref: CDH-25570
+---
+ .../hadoop/hbase/regionserver/RSRpcServices.java   |   11 -----------
+ 1 files changed, 0 insertions(+), 11 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
+index 6ccd824..1e8f3ce 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/RSRpcServices.java
+@@ -788,17 +788,6 @@ public class RSRpcServices implements HBaseRPCErrorHandler,
+     }
+     // Server to handle client requests.
+     String hostname = getHostname(rs.conf);
+-
+-    boolean mode =
+-        rs.conf.getBoolean(HConstants.CLUSTER_DISTRIBUTED, HConstants.DEFAULT_CLUSTER_DISTRIBUTED);
+-    if (mode == HConstants.CLUSTER_IS_DISTRIBUTED && hostname.equals(HConstants.LOCALHOST)) {
+-      String msg =
+-          "The hostname of regionserver cannot be set to localhost "
+-              + "in a fully-distributed setup because it won't be reachable. "
+-              + "See \"Getting Started\" for more information.";
+-      LOG.fatal(msg);
+-      throw new IOException(msg);
+-    }
+     int port = rs.conf.getInt(HConstants.REGIONSERVER_PORT,
+       HConstants.DEFAULT_REGIONSERVER_PORT);
+     // In CDH5.4+, master and region server would be sharing the same port.
+-- 
+1.7.0.4
+

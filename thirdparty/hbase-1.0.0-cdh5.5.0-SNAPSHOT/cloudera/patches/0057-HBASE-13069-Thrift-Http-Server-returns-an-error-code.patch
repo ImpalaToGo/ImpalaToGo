@@ -1,0 +1,27 @@
+From f86d2174f42db65af7df96fd91bd2a4fb7152e34 Mon Sep 17 00:00:00 2001
+From: tedyu <yuzhihong@gmail.com>
+Date: Thu, 19 Feb 2015 16:36:00 -0800
+Subject: [PATCH 057/110] HBASE-13069 Thrift Http Server returns an error code of 500 instead of 401 when authentication fails (Srikanth Srungarapu)
+
+Reason: Bug
+Author: Srikanth Srungarapu
+Ref: CDH-22146
+---
+ .../hadoop/hbase/thrift/ThriftHttpServlet.java     |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftHttpServlet.java b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftHttpServlet.java
+index 25c6da3..f3bed0a 100644
+--- a/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftHttpServlet.java
++++ b/hbase-thrift/src/main/java/org/apache/hadoop/hbase/thrift/ThriftHttpServlet.java
+@@ -83,6 +83,7 @@ public class ThriftHttpServlet extends TServlet {
+         // Send a 401 to the client
+         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+         response.getWriter().println("Authentication Error: " + e.getMessage());
++        return;
+       }
+     }
+     String doAsUserFromQuery = request.getHeader("doAs");
+-- 
+1.7.0.4
+

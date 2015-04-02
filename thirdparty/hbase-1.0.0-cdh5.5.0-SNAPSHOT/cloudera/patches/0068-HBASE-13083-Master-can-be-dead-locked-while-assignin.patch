@@ -1,0 +1,57 @@
+From 970cf164bbcc24067f52a77411b5ee1a51b6deba Mon Sep 17 00:00:00 2001
+From: stack <stack@apache.org>
+Date: Mon, 23 Feb 2015 21:17:01 -0800
+Subject: [PATCH 068/110] HBASE-13083 Master can be dead-locked while assigning META. (Andrey Stepachev)
+
+Reason: Bug
+Author: Andrey Stepachev
+Ref: CDH-25577
+---
+ .../apache/hadoop/hbase/master/RegionStates.java   |   16 +++++++++-------
+ 1 files changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
+index 75529c6..edb0feb 100644
+--- a/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
++++ b/hbase-server/src/main/java/org/apache/hadoop/hbase/master/RegionStates.java
+@@ -594,14 +594,16 @@ public class RegionStates {
+     // Offline all regions on this server not already in transition.
+     List<HRegionInfo> rits = new ArrayList<HRegionInfo>();
+     Set<HRegionInfo> regionsToCleanIfNoMetaEntry = new HashSet<HRegionInfo>();
++    // Offline regions outside the loop and synchronized block to avoid
++    // ConcurrentModificationException and deadlock in case of meta anassigned,
++    // but RegionState a blocked.
++    Set<HRegionInfo> regionsToOffline = new HashSet<HRegionInfo>();
+     synchronized (this) {
+       Set<HRegionInfo> assignedRegions = serverHoldings.get(sn);
+       if (assignedRegions == null) {
+         assignedRegions = new HashSet<HRegionInfo>();
+       }
+ 
+-      // Offline regions outside the loop to avoid ConcurrentModificationException
+-      Set<HRegionInfo> regionsToOffline = new HashSet<HRegionInfo>();
+       for (HRegionInfo region : assignedRegions) {
+         // Offline open regions, no need to offline if SPLIT/MERGED/OFFLINE
+         if (isRegionOnline(region)) {
+@@ -643,13 +645,13 @@ public class RegionStates {
+           }
+         }
+       }
+-
+-      for (HRegionInfo hri : regionsToOffline) {
+-        regionOffline(hri);
+-      }
+-
+       this.notifyAll();
+     }
++
++    for (HRegionInfo hri : regionsToOffline) {
++      regionOffline(hri);
++    }
++
+     cleanIfNoMetaEntry(regionsToCleanIfNoMetaEntry);
+     return rits;
+   }
+-- 
+1.7.0.4
+

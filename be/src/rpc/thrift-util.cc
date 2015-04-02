@@ -101,6 +101,10 @@ bool TUniqueId::operator<(const TUniqueId& that) const {
   return (hi < that.hi) || (hi == that.hi &&  lo < that.lo);
 }
 
+bool TAccessEvent::operator<(const TAccessEvent& that) const {
+  return this->name < that.name;
+}
+
 static void ThriftOutputFunction(const char* output) {
   VLOG_QUERY << output;
 }
@@ -167,4 +171,10 @@ bool TNetworkAddressComparator(const TNetworkAddress& a, const TNetworkAddress& 
   if (cmp == 0) return a.port < b.port;
   return false;
 }
+
+bool IsTimeoutTException(const TException& e) {
+  // String taken from Thrift's TSocket.cpp
+  return strstr(e.what(), "EAGAIN (timed out)") != NULL;
+}
+
 }

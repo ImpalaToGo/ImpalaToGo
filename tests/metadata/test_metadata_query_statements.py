@@ -2,22 +2,24 @@
 # Copyright (c) 2012 Cloudera, Inc. All rights reserved.
 # Impala tests for queries that query metadata and set session settings
 import logging
+import os
 import pytest
-from tests.beeswax.impala_beeswax import ImpalaBeeswaxException
 from subprocess import call
-from tests.common.test_vector import *
+from tests.beeswax.impala_beeswax import ImpalaBeeswaxException
 from tests.common.impala_test_suite import *
+from tests.common.test_vector import *
+from tests.util.filesystem_utils import get_fs_path
 
 # TODO: For these tests to pass, all table metadata must be created exhaustively.
 # the tests should be modified to remove that requirement.
 class TestMetadataQueryStatements(ImpalaTestSuite):
 
-  CREATE_DATA_SRC_STMT = ("CREATE DATA SOURCE %s "
-      "LOCATION '/test-warehouse/data-sources/test-data-source.jar' "
-      "CLASS 'com.cloudera.impala.extdatasource.AllTypesDataSource' API_VERSION 'V1'")
+  CREATE_DATA_SRC_STMT = ("CREATE DATA SOURCE %s LOCATION '" +
+      get_fs_path("/test-warehouse/data-sources/test-data-source.jar") +
+      "' CLASS 'com.cloudera.impala.extdatasource.AllTypesDataSource' API_VERSION 'V1'")
   DROP_DATA_SRC_STMT = "DROP DATA SOURCE IF EXISTS %s"
   TEST_DATA_SRC_NAMES = ["show_test_ds1", "show_test_ds2"]
-  AVRO_SCHEMA_LOC = "hdfs:///test-warehouse/avro_schemas/functional/alltypes.json"
+  AVRO_SCHEMA_LOC = get_fs_path("/test-warehouse/avro_schemas/functional/alltypes.json")
 
   @classmethod
   def get_workload(self):

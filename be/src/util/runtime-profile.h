@@ -304,6 +304,8 @@ class RuntimeProfile {
       events->insert(events->end(), events_.begin(), events_.end());
     }
 
+    void ToThrift(TEventSequence* seq) const;
+
    private:
     // Protect access to events_
     boost::mutex lock_;
@@ -438,6 +440,7 @@ class RuntimeProfile {
   // which case it is returned.
   // TODO: EventSequences are not merged by Merge() or Update()
   EventSequence* AddEventSequence(const std::string& key);
+  EventSequence* AddEventSequence(const std::string& key, const TEventSequence& from);
 
   // Returns event sequence with the provided name if it exists, otherwise NULL.
   EventSequence* GetEventSequence(const std::string& name) const;

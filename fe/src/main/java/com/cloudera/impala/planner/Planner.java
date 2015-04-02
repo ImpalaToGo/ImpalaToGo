@@ -8,8 +8,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.cloudera.impala.analysis.AnalysisContext;
+import com.cloudera.impala.analysis.ColumnLineageGraph;
 import com.cloudera.impala.analysis.Expr;
 import com.cloudera.impala.analysis.InsertStmt;
+import com.cloudera.impala.catalog.Table;
+import com.cloudera.impala.catalog.HBaseTable;
 import com.cloudera.impala.common.ImpalaException;
 import com.cloudera.impala.common.PrintUtils;
 import com.cloudera.impala.common.RuntimeEnv;
@@ -42,6 +45,7 @@ public class Planner {
     SingleNodePlanner singleNodePlanner = new SingleNodePlanner(ctx_);
     DistributedPlanner distributedPlanner = new DistributedPlanner(ctx_);
     PlanNode singleNodePlan = singleNodePlanner.createSingleNodePlan();
+    ctx_.getRootAnalyzer().getTimeline().markEvent("Single node plan created");
     ArrayList<PlanFragment> fragments = null;
 
     // Determine the maximum number of rows processed by any node in the plan tree
@@ -82,25 +86,51 @@ public class Planner {
       rootFragment.setSink(insertStmt.createDataSink());
     }
 
+    ColumnLineageGraph graph = ctx_.getRootAnalyzer().getColumnLineageGraph();
     List<Expr> resultExprs = null;
+    Table targetTable = null;
     if (ctx_.isInsertOrCtas()) {
-      resultExprs = ctx_.getAnalysisResult().getInsertStmt().getResultExprs();
+      InsertStmt insertStmt = ctx_.getAnalysisResult().getInsertStmt();
+      resultExprs = insertStmt.getResultExprs();
+      targetTable = insertStmt.getTargetTable();
+      graph.addTargetColumnLabels(targetTable);
     } else {
       resultExprs = ctx_.getQueryStmt().getBaseTblResultExprs();
+      graph.addTargetColumnLabels(ctx_.getQueryStmt().getColLabels());
     }
     resultExprs = Expr.substituteList(resultExprs,
         rootFragment.getPlanRoot().getOutputSmap(), ctx_.getRootAnalyzer(), true);
     rootFragment.setOutputExprs(resultExprs);
-
     LOG.debug("desctbl: " + ctx_.getRootAnalyzer().getDescTbl().debugString());
     LOG.debug("resultexprs: " + Expr.debugString(rootFragment.getOutputExprs()));
-
     LOG.debug("finalize plan fragments");
     for (PlanFragment fragment: fragments) {
       fragment.finalize(ctx_.getRootAnalyzer());
     }
 
     Collections.reverse(fragments);
+    ctx_.getRootAnalyzer().getTimeline().markEvent("Distributed plan created");
+
+    if (RuntimeEnv.INSTANCE.computeLineage() || RuntimeEnv.INSTANCE.isTestEnv()) {
+      // Compute the column lineage graph
+      if (ctx_.isInsertOrCtas()) {
+        Preconditions.checkNotNull(targetTable);
+        List<Expr> exprs = Lists.newArrayList();
+        if (targetTable instanceof HBaseTable) {
+          exprs.addAll(resultExprs);
+        } else {
+          exprs.addAll(ctx_.getAnalysisResult().getInsertStmt().getPartitionKeyExprs());
+          exprs.addAll(resultExprs.subList(0,
+              targetTable.getNonClusteringColumns().size()));
+        }
+        graph.computeLineageGraph(exprs, ctx_.getRootAnalyzer());
+      } else {
+        graph.computeLineageGraph(resultExprs, ctx_.getRootAnalyzer());
+      }
+      LOG.trace("lineage: " + graph.debugString());
+      ctx_.getRootAnalyzer().getTimeline().markEvent("Lineage info computed");
+    }
+
     return fragments;
   }
 
@@ -119,8 +149,10 @@ public class Planner {
           request.per_host_vcores));
       hasHeader = true;
     }
-    // Append warning about tables missing stats.
-    if (request.query_ctx.isSetTables_missing_stats() &&
+    // Append warning about tables missing stats except for child queries of
+    // 'compute stats'. The parent_query_id is only set for compute stats child queries.
+    if (!request.query_ctx.isSetParent_query_id() &&
+        request.query_ctx.isSetTables_missing_stats() &&
         !request.query_ctx.getTables_missing_stats().isEmpty()) {
       List<String> tableNames = Lists.newArrayList();
       for (TTableName tableName: request.query_ctx.getTables_missing_stats()) {

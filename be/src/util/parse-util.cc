@@ -20,35 +20,42 @@ using namespace std;
 
 namespace impala {
 
-int64_t ParseUtil::ParseMemSpec(const string& mem_spec_str, bool* is_percent) {
+int64_t ParseUtil::ParseMemSpec(const string& mem_spec_str, bool* is_percent,
+    int64_t relative_reference) {
   if (mem_spec_str.empty()) return 0;
 
-  // Assume last character indicates unit or percent.
-  int32_t number_str_len = mem_spec_str.size() - 1;
   *is_percent = false;
   int64_t multiplier = -1;
-  // Look for accepted suffix character.
-  switch (*mem_spec_str.rbegin()) {
+  int32_t number_str_len = mem_spec_str.size();
+
+  // Look for an accepted suffix such as "MB", "M", or "%".
+  string::const_reverse_iterator suffix_char = mem_spec_str.rbegin();
+  if (*suffix_char == 'b' || *suffix_char == 'B') {
+    // Skip "B", the default is bytes anyways.
+    if (suffix_char == mem_spec_str.rend()) return -1;
+    suffix_char++;
+    number_str_len--;
+  }
+  switch (*suffix_char) {
     case 'g':
     case 'G':
       // Gigabytes.
+      number_str_len--;
       multiplier = 1024L * 1024L * 1024L;
-      break;
-    case '%':
-      *is_percent = true;
       break;
     case 'm':
     case 'M':
       // Megabytes.
+      number_str_len--;
       multiplier = 1024L * 1024L;
       break;
-    case 'b':
-    case 'B':
+    case '%':
+      // Don't allow a suffix of "%B".
+      if (suffix_char != mem_spec_str.rbegin()) return -1;
+      number_str_len--;
+      *is_percent = true;
       break;
-    default:
-      // No unit was given. Default to bytes.
-      number_str_len = mem_spec_str.size();
-      break;
+    // The default is bytes. If there was a trailing "B" it was handled above.
   }
 
   StringParser::ParseResult result;
@@ -64,9 +71,9 @@ int64_t ParseUtil::ParseMemSpec(const string& mem_spec_str, bool* is_percent) {
     int64_t limit_val = StringParser::StringToInt<int64_t>(mem_spec_str.data(),
         number_str_len, &result);
     if (result != StringParser::PARSE_SUCCESS) return -1;
+
     if (*is_percent) {
-      bytes =
-          (static_cast<double>(limit_val) / 100.0) * MemInfo::physical_mem();
+      bytes = (static_cast<double>(limit_val) / 100.0) * relative_reference;
     } else {
       bytes = limit_val;
     }

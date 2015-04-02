@@ -86,13 +86,14 @@ public class BoolLiteral extends LiteralExpr {
     if (targetType.equals(this.type_)) {
       return this;
     } else {
-      return new CastExpr(targetType, this, true);
+      return new CastExpr(targetType, this);
     }
   }
 
   @Override
   public int compareTo(LiteralExpr o) {
-    if (!(o instanceof BoolLiteral)) return -1;
+    int ret = super.compareTo(o);
+    if (ret != 0) return ret;
     BoolLiteral other = (BoolLiteral) o;
     if (value_ && !other.getValue()) return 1;
     if (!value_ && other.getValue()) return -1;

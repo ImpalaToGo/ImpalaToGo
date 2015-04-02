@@ -229,7 +229,7 @@ Status HdfsAvroScanner::ResolveSchemas(const avro_schema_t& table_schema,
   int num_table_fields = avro_schema_record_size(table_schema);
   DCHECK_GT(num_table_fields, 0);
 
-  int num_cols = scan_node_->num_cols() - scan_node_->num_partition_keys();
+  int num_cols = scan_node_->hdfs_table()->num_cols() - scan_node_->num_partition_keys();
   int max_materialized_col_idx = -1;
   if (!scan_node_->materialized_slots().empty()) {
     max_materialized_col_idx = scan_node_->materialized_slots().back()->col_pos()
@@ -239,7 +239,7 @@ Status HdfsAvroScanner::ResolveSchemas(const avro_schema_t& table_schema,
     stringstream ss;
     ss << "The table has " << num_cols << " non-partition columns "
        << "but the table's Avro schema has " << num_table_fields << " fields.";
-    state_->LogError(ss.str());
+    state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
   }
   if (num_table_fields <= max_materialized_col_idx) {
     return Status("Cannot read column that doesn't appear in table schema");
@@ -275,9 +275,9 @@ Status HdfsAvroScanner::ResolveSchemas(const avro_schema_t& table_schema,
     // can have more fields than the table has columns. Treat extra fields as
     // unmaterialized columns.
     int slot_idx = table_field_idx < num_cols ?
-                       scan_node_->GetMaterializedSlotIdx(
-                           table_field_idx + scan_node_->num_partition_keys())
-                       : HdfsScanNode::SKIP_COLUMN;
+                   scan_node_->GetMaterializedSlotIdx(
+                       vector<int>(1, table_field_idx + scan_node_->num_partition_keys()))
+                   : HdfsScanNode::SKIP_COLUMN;
 
     if (slot_idx != HdfsScanNode::SKIP_COLUMN) {
       SlotDescriptor* slot_desc = scan_node_->materialized_slots()[slot_idx];
@@ -706,7 +706,7 @@ Function* HdfsAvroScanner::CodegenMaterializeTuple(HdfsScanNode* node,
   if (error != 0) {
     stringstream ss;
     ss << "Failed to parse table schema: " << avro_strerror();
-    node->runtime_state()->LogError(ss.str());
+    node->runtime_state()->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
     return NULL;
   }
   int num_fields = avro_schema_record_size(table_schema.get());
@@ -714,7 +714,7 @@ Function* HdfsAvroScanner::CodegenMaterializeTuple(HdfsScanNode* node,
   // Disable Codegen for TYPE_CHAR
   for (int field_idx = 0; field_idx < num_fields; ++field_idx) {
     int col_idx = field_idx + node->num_partition_keys();
-    int slot_idx = node->GetMaterializedSlotIdx(col_idx);
+    int slot_idx = node->GetMaterializedSlotIdx(vector<int>(1, col_idx));
     if (slot_idx != HdfsScanNode::SKIP_COLUMN) {
       SlotDescriptor* slot_desc = node->materialized_slots()[slot_idx];
       if (slot_desc->type().type == TYPE_CHAR) {
@@ -763,7 +763,7 @@ Function* HdfsAvroScanner::CodegenMaterializeTuple(HdfsScanNode* node,
         avro_schema_record_field_get_by_index(table_schema.get(), field_idx);
     SchemaElement element = ConvertSchema(field);
     int col_idx = field_idx + node->num_partition_keys();
-    int slot_idx = node->GetMaterializedSlotIdx(col_idx);
+    int slot_idx = node->GetMaterializedSlotIdx(vector<int>(1, col_idx));
 
     // The previous iteration may have left the insert point somewhere else
     builder.SetInsertPoint(&fn->back());

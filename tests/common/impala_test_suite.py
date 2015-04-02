@@ -18,6 +18,7 @@
 import logging
 import os
 import pprint
+import pwd
 import pytest
 import grp
 from getpass import getuser
@@ -51,6 +52,19 @@ IMPALAD_HS2_HOST_PORT =\
 HIVE_HS2_HOST_PORT = pytest.config.option.hive_server2
 WORKLOAD_DIR = os.environ['IMPALA_WORKLOAD_DIR']
 HDFS_CONF = HdfsConfig(pytest.config.option.minicluster_xml_conf)
+CORE_CONF = HdfsConfig(os.path.join(os.environ['HADOOP_CONF_DIR'], "core-site.xml"))
+TARGET_FILESYSTEM = os.getenv("TARGET_FILESYSTEM") or "hdfs"
+IMPALA_HOME = os.getenv("IMPALA_HOME")
+# FILESYSTEM_PREFIX is the path prefix that should be used in queries.  When running
+# the tests against the default filesystem (fs.defaultFS), FILESYSTEM_PREFIX is the
+# empty string.  When running against a secondary filesystem, it will be the scheme
+# and authority porotion of the qualified path.
+FILESYSTEM_PREFIX = os.getenv("FILESYSTEM_PREFIX")
+# NAMENODE is the path prefix that should be used in results, since paths that come
+# out of Impala have been qualified.  When running against the default filesystem,
+# this will be the same as fs.defaultFS.  When running against a secondary filesystem,
+# this will be the same as FILESYSTEM_PREFIX.
+NAMENODE = FILESYSTEM_PREFIX or CORE_CONF.get('fs.defaultFS')
 
 # Base class for Impala tests. All impala test cases should inherit from this class
 class ImpalaTestSuite(BaseTestSuite):
@@ -88,12 +102,8 @@ class ImpalaTestSuite(BaseTestSuite):
     # Create a connection to Impala.
     cls.client = cls.create_impala_client(IMPALAD)
 
-    cls.impalad_test_service = ImpaladService(IMPALAD.split(':')[0])
-    if pytest.config.option.namenode_http_address is None:
-      cls.hdfs_client = get_hdfs_client_from_conf(HDFS_CONF)
-    else:
-      host, port = pytest.config.option.namenode_http_address.split(":")
-      cls.hdfs_client = get_hdfs_client(host, port)
+    cls.impalad_test_service = cls.create_impala_service()
+    cls.hdfs_client = cls.create_hdfs_client()
 
   @classmethod
   def teardown_class(cls):
@@ -111,6 +121,18 @@ class ImpalaTestSuite(BaseTestSuite):
         use_kerberos=pytest.config.option.use_kerberos)
     client.connect()
     return client
+
+  @classmethod
+  def create_impala_service(cls, host_port=IMPALAD):
+    return ImpaladService(IMPALAD.split(':')[0])
+
+  @classmethod
+  def create_hdfs_client(cls):
+    if pytest.config.option.namenode_http_address is None:
+      return get_hdfs_client_from_conf(HDFS_CONF)
+    else:
+      host, port = pytest.config.option.namenode_http_address.split(":")
+      return get_hdfs_client(host, port, "dev")
 
   @classmethod
   def cleanup_db(self, db_name, sync_ddl=1):
@@ -153,8 +175,9 @@ class ImpalaTestSuite(BaseTestSuite):
     table_format_info = vector.get_value('table_format')
     exec_options = vector.get_value('exec_option')
 
-    # Resolve the current user's group name.
-    group_name = grp.getgrnam(getuser()).gr_name
+    # Resolve the current user's primary group name.
+    group_id = pwd.getpwnam(getuser()).pw_gid
+    group_name = grp.getgrgid(group_id).gr_name
 
     target_impalad_clients = list()
     if multiple_impalad:
@@ -181,8 +204,10 @@ class ImpalaTestSuite(BaseTestSuite):
         self.execute_test_case_setup(test_section['SETUP'], table_format_info)
 
       # TODO: support running query tests against different scale factors
-      query = QueryTestSectionReader.build_query(test_section['QUERY'].replace(
-          '$GROUP_NAME', group_name))
+      query = QueryTestSectionReader.build_query(test_section['QUERY']
+          .replace('$GROUP_NAME', group_name)
+          .replace('$IMPALA_HOME', IMPALA_HOME)
+          .replace('$FILESYSTEM_PREFIX', FILESYSTEM_PREFIX))
 
       if 'QUERY_NAME' in test_section:
         LOG.info('Query Name: \n%s\n' % test_section['QUERY_NAME'])
@@ -203,7 +228,12 @@ class ImpalaTestSuite(BaseTestSuite):
           result = self.__execute_query(target_impalad_client, query, user=user)
       except Exception as e:
         if 'CATCH' in test_section:
-          assert test_section['CATCH'].strip() in str(e)
+          # In error messages, some paths are always qualified and some are not.
+          # So, allow both $NAMENODE and $FILESYSTEM_PREFIX to be used in CATCH.
+          expected_str = test_section['CATCH'].strip() \
+              .replace('$FILESYSTEM_PREFIX', FILESYSTEM_PREFIX) \
+              .replace('$NAMENODE', NAMENODE)
+          assert expected_str in str(e)
           continue
         raise
 
@@ -215,10 +245,16 @@ class ImpalaTestSuite(BaseTestSuite):
 
       # Decode the results read back if the data is stored with a specific encoding.
       if encoding: result.data = [row.decode(encoding) for row in result.data]
-
+      # Replace $NAMENODE in the expected results with the actual namenode URI.
+      if 'RESULTS' in test_section:
+        test_section['RESULTS'] = test_section['RESULTS'].replace('$NAMENODE', NAMENODE);
       verify_raw_results(test_section, result,
                          vector.get_value('table_format').file_format,
                          pytest.config.option.update_results)
+      # If --update_results, then replace references to the namenode URI with $NAMENODE.
+      if pytest.config.option.update_results and 'RESULTS' in test_section:
+        test_section['RESULTS'] = test_section['RESULTS'].replace(NAMENODE, '$NAMENODE')
+
     if pytest.config.option.update_results:
       output_file = os.path.join('/tmp', test_file_name.replace('/','_') + ".test")
       write_test_file(output_file, sections, encoding=encoding)
@@ -286,10 +322,11 @@ class ImpalaTestSuite(BaseTestSuite):
       return function(*args, **kwargs)
     return wrapper
 
+  @classmethod
   @execute_wrapper
-  def execute_query_expect_success(self, impalad_client, query, query_options=None):
+  def execute_query_expect_success(cls, impalad_client, query, query_options=None):
     """Executes a query and asserts if the query fails"""
-    result = self.__execute_query(impalad_client, query, query_options)
+    result = cls.__execute_query(impalad_client, query, query_options)
     assert result.success
     return result
 
@@ -370,7 +407,8 @@ class ImpalaTestSuite(BaseTestSuite):
     for partition in self.hive_client.get_partition_names(db_name, table_name, 0):
       self.hive_client.drop_partition_by_name(db_name, table_name, partition, True)
 
-  def __execute_query(self, impalad_client, query, query_options=None, user=None):
+  @classmethod
+  def __execute_query(cls, impalad_client, query, query_options=None, user=None):
     """Executes the given query against the specified Impalad"""
     if query_options is not None: impalad_client.set_configuration(query_options)
     return impalad_client.execute(query, user=user)
@@ -398,9 +436,16 @@ class ImpalaTestSuite(BaseTestSuite):
       for tf in pytest.config.option.table_formats.split(','):
         dataset = get_dataset_from_workload(cls.get_workload())
         table_formats.append(TableFormatInfo.create_from_string(dataset, tf))
-      return TestDimension('table_format', *table_formats)
+      tf_dimensions = TestDimension('table_format', *table_formats)
     else:
-      return load_table_info_dimension(cls.get_workload(), exploration_strategy)
+      tf_dimensions = load_table_info_dimension(cls.get_workload(), exploration_strategy)
+    # If the filesystem is either isilon or s3, we don't need the hbase dimension.
+    if TARGET_FILESYSTEM.lower() in ['s3', 'isilon']:
+      for tf_dimension in tf_dimensions:
+        if tf_dimension.value.file_format == "hbase":
+          tf_dimensions.remove(tf_dimension)
+          break
+    return tf_dimensions
 
   @classmethod
   def __create_exec_option_dimension(cls):

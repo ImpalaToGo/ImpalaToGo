@@ -23,8 +23,8 @@ namespace impala {
 // handle -- handle to the library. NULL if loading from the current process.
 // symbol -- symbol to lookup.
 // fn_ptr -- pointer tor retun addres of function.
-// quiet -- if true, returned error status won't be logged
-Status DynamicLookup(void* handle, const char* symbol, void** fn_ptr, bool quiet = false);
+// quiet -- silence the error
+Status DynamicLookup(void* handle, const char* symbol, void** fn_ptr, bool quiet=false);
 
 // Open a dynamicly loaded library.
 // library -- name of the library.  The default paths will be searched.

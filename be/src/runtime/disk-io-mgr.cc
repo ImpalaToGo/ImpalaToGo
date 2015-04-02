@@ -14,6 +14,7 @@
 
 #include "runtime/disk-io-mgr.h"
 #include "runtime/disk-io-mgr-internal.h"
+#include "util/hdfs-util.h"
 
 #include <fcntl.h>
 #include <gutil/strings/substitute.h>
@@ -29,13 +30,18 @@ using namespace strings;
 // Control the number of disks on the machine.  If 0, this comes from the system
 // settings.
 DEFINE_int32(num_disks, 0, "Number of disks on data node.");
-// Default IoMgr configs.
+// Default IoMgr configs:
 // The maximum number of the threads per disk is also the max queue depth per disk.
+DEFINE_int32(num_threads_per_disk, 0, "number of threads per disk");
+// The maximum number of S3 I/O threads. The default value of 16 was chosen emperically
+// to maximize S3 throughput. Maximum throughput is achieved with multiple connections
+// open to S3 and use of multiple CPU cores since S3 reads are relatively compute
+// expensive (SSL and JNI buffer overheads).
+DEFINE_int32(num_s3_io_threads, 16, "number of S3 I/O threads");
 // The read size is the size of the reads sent to hdfs/os.
 // There is a trade off of latency and throughout, trying to keep disks busy but
 // not introduce seeks.  The literature seems to agree that with 8 MB reads, random
 // io and sequential io perform similarly.
-DEFINE_int32(num_threads_per_disk, 0, "number of threads per disk");
 DEFINE_int32(read_size, 8 * 1024 * 1024, "Read Size (in bytes)");
 DEFINE_int32(min_buffer_size, 1024, "The minimum read buffer size (in bytes)");
 
@@ -81,7 +87,7 @@ class DiskIoMgr::RequestContextCache {
       inactive_contexts_.pop_front();
       return reader;
     } else {
-      RequestContext* reader = new RequestContext(io_mgr_, io_mgr_->num_disks());
+      RequestContext* reader = new RequestContext(io_mgr_, io_mgr_->num_total_disks());
       all_contexts_.push_back(reader);
       return reader;
     }
@@ -221,13 +227,12 @@ DiskIoMgr::DiskIoMgr() :
     read_timer_(TUnit::TIME_NS) {
   int64_t max_buffer_size_scaled = BitUtil::Ceil(max_buffer_size_, min_buffer_size_);
   free_buffers_.resize(BitUtil::Log2(max_buffer_size_scaled) + 1);
-  int num_disks = FLAGS_num_disks;
-  if (num_disks == 0) num_disks = DiskInfo::num_disks();
-  disk_queues_.resize(num_disks);
+  int num_local_disks = FLAGS_num_disks == 0 ? DiskInfo::num_disks() : FLAGS_num_disks;
+  disk_queues_.resize(num_local_disks + REMOTE_NUM_DISKS);
   CheckSseSupport();
 }
 
-DiskIoMgr::DiskIoMgr(int num_disks, int threads_per_disk, int min_buffer_size,
+DiskIoMgr::DiskIoMgr(int num_local_disks, int threads_per_disk, int min_buffer_size,
                      int max_buffer_size) :
     num_threads_per_disk_(threads_per_disk),
     max_buffer_size_(max_buffer_size),
@@ -238,8 +243,8 @@ DiskIoMgr::DiskIoMgr(int num_disks, int threads_per_disk, int min_buffer_size,
     read_timer_(TUnit::TIME_NS) {
   int64_t max_buffer_size_scaled = BitUtil::Ceil(max_buffer_size_, min_buffer_size_);
   free_buffers_.resize(BitUtil::Log2(max_buffer_size_scaled) + 1);
-  if (num_disks == 0) num_disks = DiskInfo::num_disks();
-  disk_queues_.resize(num_disks);
+  if (num_local_disks == 0) num_local_disks = DiskInfo::num_disks();
+  disk_queues_.resize(num_local_disks + REMOTE_NUM_DISKS);
   CheckSseSupport();
 }
 
@@ -298,13 +303,15 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
 
   for (int i = 0; i < disk_queues_.size(); ++i) {
     disk_queues_[i] = new DiskQueue(i);
-    int num_threads_per_disk = num_threads_per_disk_;
-    if (num_threads_per_disk == 0) {
-      if (DiskInfo::is_rotational(i)) {
-        num_threads_per_disk = THREADS_PER_ROTATIONAL_DISK;
-      } else {
-        num_threads_per_disk = THREADS_PER_FLASH_DISK;
-      }
+    int num_threads_per_disk;
+    if (i == RemoteS3DiskId()) {
+      num_threads_per_disk = FLAGS_num_s3_io_threads;
+    } else if (num_threads_per_disk_ != 0) {
+      num_threads_per_disk = num_threads_per_disk_;
+    } else if (DiskInfo::is_rotational(i)) {
+      num_threads_per_disk = THREADS_PER_ROTATIONAL_DISK;
+    } else {
+      num_threads_per_disk = THREADS_PER_FLASH_DISK;
     }
     for (int j = 0; j < num_threads_per_disk; ++j) {
       stringstream ss;
@@ -327,15 +334,16 @@ Status DiskIoMgr::Init(MemTracker* process_mem_tracker) {
   return Status::OK;
 }
 
-Status DiskIoMgr::RegisterContext(dfsFS hdfs, RequestContext** request_context,
+Status DiskIoMgr::RegisterContext(RequestContext** request_context,
     MemTracker* mem_tracker) {
   DCHECK(request_context_cache_.get() != NULL) << "Must call Init() first.";
   *request_context = request_context_cache_->GetNewContext();
-  (*request_context)->Reset(hdfs, mem_tracker);
+  (*request_context)->Reset(mem_tracker);
   return Status::OK;
 }
 
 void DiskIoMgr::UnregisterContext(RequestContext* reader) {
+  // Blocking cancel (waiting for disks completion).
   CancelContext(reader, true);
 
   // All the disks are done with clean, validate nothing is leaking.
@@ -492,11 +500,10 @@ Status DiskIoMgr::AddScanRanges(RequestContext* reader,
 // for eos and error cases. If there isn't already a cached scan range or a scan
 // range prepared by the disk threads, the caller waits on the disk threads.
 Status DiskIoMgr::GetNextRange(RequestContext* reader, ScanRange** range) {
-  DCHECK(reader != NULL);
-  DCHECK(range != NULL);
+  DCHECK_NOTNULL(reader);
+  DCHECK_NOTNULL(range);
   *range = NULL;
-
-  Status status;
+  Status status = Status::OK;
 
   unique_lock<mutex> reader_lock(reader->lock_);
   DCHECK(reader->Validate()) << endl << reader->DebugString();
@@ -533,7 +540,7 @@ Status DiskIoMgr::GetNextRange(RequestContext* reader, ScanRange** range) {
       reader->ready_to_start_ranges_cv_.wait(reader_lock);
     } else {
       *range = reader->ready_to_start_ranges_.Dequeue();
-      DCHECK(*range != NULL);
+      DCHECK_NOTNULL(*range);
       int disk_id = (*range)->disk_id();
       DCHECK_EQ(*range, reader->disk_states_[disk_id].next_scan_range_to_start());
       // Set this to NULL, the next time this disk runs for this reader, it will
@@ -543,21 +550,18 @@ Status DiskIoMgr::GetNextRange(RequestContext* reader, ScanRange** range) {
       break;
     }
   }
-
   return status;
 }
 
 Status DiskIoMgr::Read(RequestContext* reader,
     ScanRange* range, BufferDescriptor** buffer) {
-  DCHECK(range != NULL);
-  DCHECK(buffer != NULL);
+  DCHECK_NOTNULL(range);
+  DCHECK_NOTNULL(buffer);
   *buffer = NULL;
 
   if (range->len() > max_buffer_size_) {
-    stringstream ss;
-    ss << "Cannot perform sync read larger than " << max_buffer_size_
-       << ". Request was " << range->len();
-    return Status(ss.str());
+    return Status(Substitute("Cannot perform sync read larger than $0. Request was $1",
+                             max_buffer_size_, range->len()));
   }
 
   vector<DiskIoMgr::ScanRange*> ranges;
@@ -570,7 +574,7 @@ Status DiskIoMgr::Read(RequestContext* reader,
 }
 
 void DiskIoMgr::ReturnBuffer(BufferDescriptor* buffer_desc) {
-  DCHECK(buffer_desc != NULL);
+  DCHECK_NOTNULL(buffer_desc);
   if (!buffer_desc->status_.ok()) DCHECK(buffer_desc->buffer_ == NULL);
 
   RequestContext* reader = buffer_desc->reader_;
@@ -841,6 +845,12 @@ bool DiskIoMgr::GetNextRequestRange(DiskQueue* disk_queue, RequestRange** range,
 
 void DiskIoMgr::HandleWriteFinished(RequestContext* writer, WriteRange* write_range,
     const Status& write_status) {
+  // Execute the callback before decrementing the thread count. Otherwise CancelContext()
+  // that waits for the disk ref count to be 0 will return, creating a race, e.g.
+  // between BufferedBlockMgr::WriteComplete() and BufferedBlockMgr::~BufferedBlockMgr().
+  // See IMPALA-1890.
+  // The status of the write does not affect the status of the writer context.
+  write_range->callback_(write_status);
   {
     unique_lock<mutex> writer_lock(writer->lock_);
     DCHECK(writer->Validate()) << endl << writer->DebugString();
@@ -852,8 +862,6 @@ void DiskIoMgr::HandleWriteFinished(RequestContext* writer, WriteRange* write_ra
     }
     --state.num_remaining_ranges();
   }
-  // The status of the write does not affect the status of the writer context.
-  write_range->callback_(write_status);
 }
 
 void DiskIoMgr::HandleReadFinished(DiskQueue* disk_queue, RequestContext* reader,
@@ -1035,16 +1043,16 @@ void DiskIoMgr::Write(RequestContext* writer_context, WriteRange* write_range) {
   FILE* file_handle = fopen(write_range->file(), "rb+");
   Status ret_status;
   if (file_handle == NULL) {
-    ret_status = Status(TStatusCode::RUNTIME_ERROR,
+    ret_status = Status(ErrorMsg(TErrorCode::RUNTIME_ERROR,
         Substitute("fopen($0, \"rb+\") failed with errno=$1 description=$2",
-            write_range->file_, errno, GetStrErrMsg()));
+            write_range->file_, errno, GetStrErrMsg())));
   } else {
     ret_status = WriteRangeHelper(file_handle, write_range);
 
     int success = fclose(file_handle);
     if (ret_status.ok() && success != 0) {
-      ret_status = Status(TStatusCode::RUNTIME_ERROR, Substitute("fclose($0) failed",
-          write_range->file_));
+      ret_status = Status(ErrorMsg(TErrorCode::RUNTIME_ERROR, Substitute("fclose($0) failed",
+          write_range->file_)));
     }
   }
 
@@ -1059,24 +1067,24 @@ Status DiskIoMgr::WriteRangeHelper(FILE* file_handle, WriteRange* write_range) {
     success = posix_fallocate(file_desc, write_range->offset(), write_range->len_);
   }
   if (success != 0) {
-    return Status(TStatusCode::RUNTIME_ERROR,
+    return Status(ErrorMsg(TErrorCode::RUNTIME_ERROR,
         Substitute("posix_fallocate($0, $1, $2) failed for file $3"
             " with returnval=$4 description=$5", file_desc, write_range->offset(),
-            write_range->len_, write_range->file_, success, GetStrErrMsg()));
+            write_range->len_, write_range->file_, success, GetStrErrMsg())));
   }
   // Seek to the correct offset and perform the write.
   success = fseek(file_handle, write_range->offset(), SEEK_SET);
   if (success != 0) {
-    return Status(TStatusCode::RUNTIME_ERROR,
+    return Status(ErrorMsg(TErrorCode::RUNTIME_ERROR,
         Substitute("fseek($0, $1, SEEK_SET) failed with errno=$2 description=$3",
-            write_range->file_, write_range->offset(), errno, GetStrErrMsg()));
+        write_range->file_, write_range->offset(), errno, GetStrErrMsg())));
   }
 
   int64_t bytes_written = fwrite(write_range->data_, 1, write_range->len_, file_handle);
   if (bytes_written < write_range->len_) {
-    return Status(TStatusCode::RUNTIME_ERROR,
+    return Status(ErrorMsg(TErrorCode::RUNTIME_ERROR,
         Substitute("fwrite(buffer, 1, $0, $1) failed with errno=$2 description=$3",
-            write_range->len_, write_range->file_, errno, GetStrErrMsg()));
+        write_range->len_, write_range->file_, errno, GetStrErrMsg())));
   }
   if (ImpaladMetrics::IO_MGR_BYTES_WRITTEN != NULL) {
     ImpaladMetrics::IO_MGR_BYTES_WRITTEN->Increment(write_range->len_);
@@ -1104,4 +1112,20 @@ Status DiskIoMgr::AddWriteRange(RequestContext* writer, WriteRange* write_range)
 
   writer->AddRequestRange(write_range, false);
   return Status::OK;
+}
+
+int DiskIoMgr::AssignQueue(const char* file, int disk_id, bool expected_local) {
+  // TODO: add a queue for remote HDFS accesses.
+  if (IsS3APath(file)) {
+    DCHECK(!expected_local);
+    return RemoteS3DiskId();
+  }
+  if (disk_id == -1) {
+    // disk id is unknown, assign it a random one.
+    static int next_disk_id = 0;
+    disk_id = next_disk_id++;
+  }
+  // TODO: we need to parse the config for the number of dirs configured for this
+  // data node.
+  return disk_id % num_local_disks();
 }

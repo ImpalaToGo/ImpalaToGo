@@ -127,7 +127,7 @@ LibCache::LibCacheEntry::~LibCacheEntry() {
 }
 
 Status LibCache::GetSoFunctionPtr(const string& hdfs_lib_file, const string& symbol,
-                                  void** fn_ptr, LibCacheEntry** ent, bool quiet) {
+    void** fn_ptr, LibCacheEntry** ent, bool quiet) {
   if (hdfs_lib_file.empty()) {
     // Just loading a function ptr in the current process. No need to take any locks.
     DCHECK(current_process_handle_ != NULL);
@@ -189,7 +189,7 @@ Status LibCache::GetLocalLibPath(const string& hdfs_lib_file, LibType type,
 }
 
 Status LibCache::CheckSymbolExists(const string& hdfs_lib_file, LibType type,
-                                   const string& symbol, bool quiet) {
+    const string& symbol, bool quiet) {
   if (type == TYPE_SO) {
     void* dummy_ptr = NULL;
     return GetSoFunctionPtr(hdfs_lib_file, symbol, &dummy_ptr, NULL, quiet);
@@ -203,7 +203,7 @@ Status LibCache::CheckSymbolExists(const string& hdfs_lib_file, LibType type,
       stringstream ss;
       ss << "Symbol '" << symbol << "' does not exist in module: " << hdfs_lib_file
          << " (local path: " << entry->local_path << ")";
-      return Status(ss.str(), quiet);
+      return quiet ? Status::Expected(ss.str()) : Status(ss.str());
     }
     return Status::OK;
   } else if (type == TYPE_JAR) {
@@ -398,7 +398,9 @@ Status LibCache::GetCacheEntryInternal(const string& hdfs_lib_file, LibType type
     // Load the module and populate all symbols.
     ObjectPool pool;
     scoped_ptr<LlvmCodeGen> codegen;
-    RETURN_IF_ERROR(LlvmCodeGen::LoadFromFile(&pool, (*entry)->local_path, &codegen));
+    string module_id = filesystem::path((*entry)->local_path).stem().string();
+    RETURN_IF_ERROR(LlvmCodeGen::LoadFromFile(
+        &pool, (*entry)->local_path, module_id, &codegen));
     codegen->GetSymbols(&(*entry)->symbols);
   } else {
     DCHECK_EQ(type, TYPE_JAR);

@@ -24,10 +24,12 @@ from tests.common.impala_cluster import ImpalaCluster
 
 from CatalogService import CatalogService
 from CatalogService.CatalogService import TGetFunctionsRequest, TGetFunctionsResponse
-from Status.ttypes import TStatus, TStatusCode
+from ErrorCodes.ttypes import TErrorCode
+from Status.ttypes import TStatus
 from thrift.transport.TSocket import TSocket
 from thrift.protocol import TBinaryProtocol
 from thrift.transport.TTransport import TBufferedTransport, TTransportException
+from tests.util.filesystem_utils import WAREHOUSE
 from tests.util.thrift_util import create_transport
 
 LOG = logging.getLogger('test_catalog_service_client')
@@ -51,7 +53,8 @@ class TestCatalogServiceClient(ImpalaTestSuite):
 
   def setup_method(self, method):
     self.cleanup_db(self.TEST_DB)
-    self.client.execute('create database %s' % self.TEST_DB)
+    self.client.execute("create database %s location '%s/%s.db'" %
+                        (self.TEST_DB, WAREHOUSE, self.TEST_DB))
 
   def teardown_method(self, method):
     self.cleanup_db(self.TEST_DB)
@@ -71,12 +74,12 @@ class TestCatalogServiceClient(ImpalaTestSuite):
     request = TGetFunctionsRequest()
     request.db_name = self.TEST_DB
     response = catalog_client.GetFunctions(request)
-    assert response.status.status_code == TStatusCode.OK
+    assert response.status.status_code == TErrorCode.OK
     assert len(response.functions) == 0
 
     # Add a function and make sure it shows up.
     self.client.execute("create function %s.fn() RETURNS int "\
-        "LOCATION '/test-warehouse/libTestUdfs.so' SYMBOL='Fn'" % self.TEST_DB)
+        "LOCATION '%s/libTestUdfs.so' SYMBOL='Fn'" % (self.TEST_DB, WAREHOUSE))
 
     response = catalog_client.GetFunctions(request)
     LOG.debug(response)
@@ -90,10 +93,10 @@ class TestCatalogServiceClient(ImpalaTestSuite):
 
     # Add another scalar function with overloaded parameters ensure it shows up.
     self.client.execute("create function %s.fn(int) RETURNS double "\
-        "LOCATION '/test-warehouse/libTestUdfs.so' SYMBOL='Fn'" % self.TEST_DB)
+        "LOCATION '%s/libTestUdfs.so' SYMBOL='Fn'" % (self.TEST_DB, WAREHOUSE))
     response = catalog_client.GetFunctions(request)
     LOG.debug(response)
-    assert response.status.status_code == TStatusCode.OK
+    assert response.status.status_code == TErrorCode.OK
     assert len(response.functions) == 2
 
     functions = [fn for fn in response.functions]
@@ -106,11 +109,12 @@ class TestCatalogServiceClient(ImpalaTestSuite):
     assert functions[1].signature == 'fn(INT)'
 
     # Verify aggregate functions can also be retrieved
-    self.client.execute("create aggregate function %s.agg_fn(int, string) RETURNS int LO"\
-        "CATION '/test-warehouse/libTestUdas.so' UPDATE_FN='TwoArgUpdate'" % self.TEST_DB)
+    self.client.execute("create aggregate function %s.agg_fn(int, string) RETURNS int "\
+        "LOCATION '%s/libTestUdas.so' UPDATE_FN='TwoArgUpdate'" %
+        (self.TEST_DB, WAREHOUSE))
     response = catalog_client.GetFunctions(request)
     LOG.debug(response)
-    assert response.status.status_code == TStatusCode.OK
+    assert response.status.status_code == TErrorCode.OK
     assert len(response.functions) == 3
     functions = [fn for fn in response.functions if fn.aggregate_fn is not None]
     # Should be only 1 aggregate function
@@ -120,11 +124,11 @@ class TestCatalogServiceClient(ImpalaTestSuite):
     request.db_name = self.TEST_DB + "_does_not_exist"
     response = catalog_client.GetFunctions(request)
     LOG.debug(response)
-    assert response.status.status_code == TStatusCode.INTERNAL_ERROR
+    assert response.status.status_code == TErrorCode.GENERAL
     assert 'Database does not exist: ' in str(response.status)
 
     request = TGetFunctionsRequest()
     response = catalog_client.GetFunctions(request)
     LOG.debug(response)
-    assert response.status.status_code == TStatusCode.INTERNAL_ERROR
+    assert response.status.status_code == TErrorCode.GENERAL
     assert 'Database name must be set' in str(response.status)

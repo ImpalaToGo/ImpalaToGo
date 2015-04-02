@@ -59,6 +59,7 @@ ScannerContext::Stream* ScannerContext::AddStream(DiskIoMgr::ScanRange* range) {
   Stream* stream = state_->obj_pool()->Add(new Stream(this));
   stream->scan_range_ = range;
   stream->file_desc_ = scan_node_->GetFileDesc(stream->filename());
+  stream->file_len_ = stream->file_desc_->file_length;
   stream->total_bytes_returned_ = 0;
   stream->io_buffer_pos_ = NULL;
   stream->io_buffer_ = NULL;
@@ -144,10 +145,12 @@ Status ScannerContext::Stream::GetNextBuffer(int64_t read_past_size) {
     DCHECK_GE(read_past_buffer_size, 0);
     if (read_past_buffer_size == 0) {
       io_buffer_bytes_left_ = 0;
+      // TODO: We are leaving io_buffer_ = NULL, revisit.
       return Status::OK;
     }
-    DiskIoMgr::ScanRange* range = parent_->scan_node_->AllocateScanRange(filename(),
-        read_past_buffer_size, offset, -1, scan_range_->disk_id(), false, false);
+    DiskIoMgr::ScanRange* range = parent_->scan_node_->AllocateScanRange(
+        scan_range_->fs(), filename(), read_past_buffer_size, offset, -1,
+        scan_range_->disk_id(), false, false);
     RETURN_IF_ERROR(parent_->state_->io_mgr()->Read(
         parent_->scan_node_->reader_context(), range, &io_buffer_));
   }
@@ -156,6 +159,12 @@ Status ScannerContext::Stream::GetNextBuffer(int64_t read_past_size) {
   ++parent_->scan_node_->num_owned_io_buffers_;
   io_buffer_pos_ = reinterpret_cast<uint8_t*>(io_buffer_->buffer());
   io_buffer_bytes_left_ = io_buffer_->len();
+  if (io_buffer_->len() == 0) {
+    file_len_ = file_offset() + boundary_buffer_bytes_left_;
+    VLOG_FILE << "Unexpectedly read 0 bytes from file=" << filename() << " table="
+              << parent_->scan_node_->hdfs_table()->name()
+              << ". Setting expected file length=" << file_len_;
+  }
   return Status::OK;
 }
 
@@ -278,13 +287,13 @@ Status ScannerContext::Stream::ReportIncompleteRead(int64_t length, int64_t byte
   stringstream ss;
   ss << "Tried to read " << length << " bytes but could only read "
      << bytes_read << " bytes. This may indicate data file corruption. "
-     << "(file: " << filename() << ", byte offset: " << file_offset() << ")";
+     << "(file " << filename() << ", byte offset: " << file_offset() << ")";
   return Status(ss.str());
 }
 
 Status ScannerContext::Stream::ReportInvalidRead(int64_t length) {
   stringstream ss;
   ss << "Invalid read of " << length << " bytes. This may indicate data file corruption. "
-     << "(file: " << filename() << ", byte offset: " << file_offset() << ")";
+     << "(file " << filename() << ", byte offset: " << file_offset() << ")";
   return Status(ss.str());
 }

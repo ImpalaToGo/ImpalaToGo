@@ -61,11 +61,12 @@ import com.cloudera.impala.planner.PlanNode;
 import com.cloudera.impala.service.FeSupport;
 import com.cloudera.impala.thrift.TAccessEvent;
 import com.cloudera.impala.thrift.TCatalogObjectType;
+import com.cloudera.impala.thrift.TErrorCode;
 import com.cloudera.impala.thrift.TNetworkAddress;
 import com.cloudera.impala.thrift.TQueryCtx;
 import com.cloudera.impala.thrift.TStatus;
-import com.cloudera.impala.thrift.TStatusCode;
 import com.cloudera.impala.util.DisjointSet;
+import com.cloudera.impala.util.EventSequence;
 import com.cloudera.impala.util.ListMap;
 import com.cloudera.impala.util.TSessionStateUtil;
 import com.google.common.base.Preconditions;
@@ -164,6 +165,7 @@ public class Analyzer {
     public final AuthorizationConfig authzConfig;
     public final DescriptorTable descTbl = new DescriptorTable();
     public final IdGenerator<ExprId> conjunctIdGenerator = ExprId.createGenerator();
+    public final ColumnLineageGraph lineageGraph;
 
     // True if we are analyzing an explain request. Should be set before starting
     // analysis.
@@ -239,7 +241,7 @@ public class Analyzer {
 
     // accesses to catalog objects
     // TODO: This can be inferred from privilegeReqs. They should be coalesced.
-    public List<TAccessEvent> accessEvents = Lists.newArrayList();
+    public Set<TAccessEvent> accessEvents = Sets.newHashSet();
 
     // Tracks all warnings (e.g. non-fatal errors) that were generated during analysis.
     // These are passed to the backend and eventually propagated to the shell. Maps from
@@ -272,11 +274,16 @@ public class Analyzer {
     // Decreases the size of the scan range locations.
     private final ListMap<TNetworkAddress> hostIndex = new ListMap<TNetworkAddress>();
 
+    // Timeline of important events in the planning process, used for debugging /
+    // profiling
+    private final EventSequence timeline = new EventSequence("Planner Timeline");
+
     public GlobalState(ImpaladCatalog catalog, TQueryCtx queryCtx,
         AuthorizationConfig authzConfig) {
       this.catalog = catalog;
       this.queryCtx = queryCtx;
       this.authzConfig = authzConfig;
+      this.lineageGraph = new ColumnLineageGraph();
     }
   };
 
@@ -642,6 +649,7 @@ public class Analyzer {
       TupleDescriptor tupleDesc) {
     SlotDescriptor result = globalState_.descTbl.addSlotDescriptor(tupleDesc);
     globalState_.blockBySlot.put(result.getId(), this);
+    result.setSourceExprs(srcSlotDesc.getSourceExprs());
     result.setLabel(srcSlotDesc.getLabel());
     result.setStats(srcSlotDesc.getStats());
     if (srcSlotDesc.getColumn() != null) {
@@ -1967,6 +1975,11 @@ public class Analyzer {
   public TQueryCtx getQueryCtx() { return globalState_.queryCtx; }
   public AuthorizationConfig getAuthzConfig() { return globalState_.authzConfig; }
   public ListMap<TNetworkAddress> getHostIndex() { return globalState_.hostIndex; }
+  public ColumnLineageGraph getColumnLineageGraph() { return globalState_.lineageGraph; }
+  public String getSerializedLineageGraph() {
+    Preconditions.checkNotNull(globalState_.lineageGraph);
+    return globalState_.lineageGraph.toJson();
+  }
 
   public ImmutableList<PrivilegeRequest> getPrivilegeReqs() {
     return ImmutableList.copyOf(globalState_.privilegeReqs);
@@ -1977,7 +1990,7 @@ public class Analyzer {
    * accesses that failed due to AuthorizationExceptions. In general, if analysis
    * fails for any reason this list may be incomplete.
    */
-  public List<TAccessEvent> getAccessEvents() { return globalState_.accessEvents; }
+  public Set<TAccessEvent> getAccessEvents() { return globalState_.accessEvents; }
   public void addAccessEvent(TAccessEvent event) {
     globalState_.accessEvents.add(event);
   }
@@ -2002,7 +2015,7 @@ public class Analyzer {
     } catch (InternalException ex) {
       LOG.error(String.format("Exception from reload table \"%s\" : \"%s\".", tableName, ex.getMessage()));
     }
-    if (status == null || status.getStatus_code() != TStatusCode.OK) {
+    if (status == null || status.getStatus_code() != TErrorCode.OK) {
       throw new AnalysisException(
           "Unable to reload missing metadata for table/view : " + tableName);
     }
@@ -2209,6 +2222,9 @@ public class Analyzer {
   public List<Expr> getConjuncts() {
     return new ArrayList<Expr>(globalState_.conjuncts.values());
   }
+  public Expr getConjunct(ExprId exprId) {
+    return globalState_.conjuncts.get(exprId);
+  }
 
   public int incrementCallDepth() { return ++callDepth_; }
   public int decrementCallDepth() { return --callDepth_; }
@@ -2221,6 +2237,8 @@ public class Analyzer {
   public boolean hasValueTransfer(SlotId a, SlotId b) {
     return globalState_.valueTransferGraph.hasValueTransfer(a, b);
   }
+
+  public EventSequence getTimeline() { return globalState_.timeline; }
 
   /**
    * Assign all remaining unassigned slots to their own equivalence classes.

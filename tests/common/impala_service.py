@@ -40,17 +40,20 @@ class BaseImpalaService(object):
     self.hostname = hostname
     self.webserver_port = webserver_port
 
-  def read_debug_webpage(self, page_name, timeout=10, interval=1):
+  def open_debug_webpage(self, page_name, timeout=10, interval=1):
     start_time = time()
 
     while (time() - start_time < timeout):
       try:
         return urllib.urlopen("http://%s:%d/%s" %
-            (self.hostname, int(self.webserver_port), page_name)).read()
+            (self.hostname, int(self.webserver_port), page_name))
       except Exception:
         LOG.info("Debug webpage not yet available.")
       sleep(interval)
     assert 0, 'Debug webpage did not become available in expected time.'
+
+  def read_debug_webpage(self, page_name, timeout=10, interval=1):
+    return self.open_debug_webpage(page_name, timeout=timeout, interval=interval).read()
 
   def get_metric_value(self, metric_name, default_value=None):
     """Returns the value of the the given metric name from the Impala debug webpage"""
@@ -91,7 +94,7 @@ class ImpaladService(BaseImpalaService):
     LOG.info("Getting num_known_live_backends from %s:%s" %
         (self.hostname, self.webserver_port))
     result = json.loads(self.read_debug_webpage('backends?json', timeout, interval))
-    num = result['num_backends']
+    num = len(result['backends'])
     return None if num is None else int(num)
 
   def get_num_in_flight_queries(self, timeout=30, interval=1):

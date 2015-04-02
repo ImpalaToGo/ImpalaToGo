@@ -18,8 +18,10 @@ import java.util.ArrayList;
 
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.common.AnalysisException;
+import com.cloudera.impala.common.RuntimeEnv;
 import com.cloudera.impala.thrift.TAccessEvent;
 import com.cloudera.impala.thrift.TCatalogObjectType;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 
@@ -29,7 +31,7 @@ import com.google.common.base.Preconditions;
 public class CreateViewStmt extends CreateOrAlterViewStmtBase {
 
   public CreateViewStmt(boolean ifNotExists, TableName tableName,
-      ArrayList<ColumnDesc> columnDefs, String comment, QueryStmt viewDefStmt) {
+      ArrayList<ColumnDef> columnDefs, String comment, QueryStmt viewDefStmt) {
     super(ifNotExists, tableName, columnDefs, comment, viewDefStmt);
   }
 
@@ -52,7 +54,11 @@ public class CreateViewStmt extends CreateOrAlterViewStmtBase {
     }
     analyzer.addAccessEvent(new TAccessEvent(dbName_ + "." + tableName_.getTbl(),
         TCatalogObjectType.VIEW, Privilege.CREATE.toString()));
+
     createColumnAndViewDefs(analyzer);
+    if (RuntimeEnv.INSTANCE.computeLineage() || RuntimeEnv.INSTANCE.isTestEnv()) {
+      computeLineageGraph(analyzer);
+    }
   }
 
   @Override

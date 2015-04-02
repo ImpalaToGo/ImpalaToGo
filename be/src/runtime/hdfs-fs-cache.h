@@ -38,6 +38,8 @@ namespace impala {
 // impalad crashes).
 class HdfsFsCache {
  public:
+  typedef boost::unordered_map<std::string, dfsFS> HdfsFsMap;
+
   static HdfsFsCache* instance() { return HdfsFsCache::instance_.get(); }
 
   // Initializes the cache. Must be called before any other APIs.
@@ -46,20 +48,18 @@ class HdfsFsCache {
   // Get connection to the local filesystem.
   Status GetLocalConnection(dfsFS* fs );
 
-  /**
-   * Get connection to specific fs by specifying a path and provider type
-   *
-   * @param [in/out]       path     - path to connect to
-   * @param [in]           fs       - file system handle
-   */
-  Status GetConnection(const std::string& path, dfsFS* fs);
+  // Get connection to specific fs by specifying a path.  Optionally, a local cache can
+  // be provided so that the process-wide lock can be avoided on subsequent calls for
+  // the same filesystem.  The caller is responsible for synchronizing the local cache
+  // (e.g. by passing a thread-local cache).
+  Status GetConnection(const std::string& path, dfsFS* fs,
+      HdfsFsMap* local_cache = NULL);
 
  private:
   // Singleton instance. Instantiated in Init().
   static boost::scoped_ptr<HdfsFsCache> instance_;
 
   boost::mutex lock_;  // protects fs_map_
-  typedef boost::unordered_map<std::string, dfsFS> HdfsFsMap;
   HdfsFsMap fs_map_;
 
   HdfsFsCache() { };
