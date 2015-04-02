@@ -76,14 +76,14 @@ if [ "${TARGET_FILESYSTEM}" = "hdfs" ]; then
   # To properly test HBase integeration, HBase regions are split and assigned by this
   # script. Restarting HBase will change the region server assignment. Run split-hbase.sh
   # before running any test.
-  ${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
+  #${IMPALA_HOME}/testdata/bin/split-hbase.sh > /dev/null 2>&1
 fi
 
 for i in $(seq 1 $NUM_TEST_ITERATIONS)
 do
   # Preemptively force kill impalads and the statestore to clean up any running instances.
   # The BE unit tests cannot run when impalads are started.
-  ${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
+  #${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
 
   if [[ "$BE_TEST" = true ]]; then
   echo "Running BE tests...."
