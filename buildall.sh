@@ -222,17 +222,17 @@ else
 fi
 
 # Stop any running Impala services.
-${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
+#${IMPALA_HOME}/bin/start-impala-cluster.py --kill --force
 
-if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ||
-      -n $METASTORE_SNAPSHOT_FILE ]]
-then
+#if [[ $CLEAN_ACTION -eq 1 || $FORMAT_METASTORE -eq 1 || $FORMAT_CLUSTER -eq 1 ||
+#      -n $METASTORE_SNAPSHOT_FILE ]]
+#then
   # Kill any processes that may be accessing postgres metastore. To be safe, this is done
   # before we make any changes to the config files.
-  set +e
-  ${IMPALA_HOME}/testdata/bin/kill-all.sh
-  set -e
-fi
+#  set +e
+#  ${IMPALA_HOME}/testdata/bin/kill-all.sh
+#  set -e
+#fi
 
 # option to clean everything first
 if [ $CLEAN_ACTION -eq 1 ]
@@ -313,11 +313,11 @@ mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/query_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/fe_tests
 mkdir -p ${IMPALA_TEST_CLUSTER_LOG_DIR}/data_loading
 
-if [ $FORMAT_CLUSTER -eq 1 ]; then
-  $IMPALA_HOME/testdata/bin/run-all.sh -format
-elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
-  $IMPALA_HOME/testdata/bin/run-all.sh
-fi
+#if [ $FORMAT_CLUSTER -eq 1 ]; then
+#  $IMPALA_HOME/testdata/bin/run-all.sh -format
+#elif [ $TESTDATA_ACTION -eq 1 ] || [ $TESTS_ACTION -eq 1 ]; then
+#  $IMPALA_HOME/testdata/bin/run-all.sh
+#fi
 
 #
 # KERBEROS TODO
@@ -347,16 +347,16 @@ fi
 #
 # Don't try to run tests without data!
 #
-TESTWH_ITEMS=`hadoop fs -ls ${FILESYSTEM_PREFIX}/test-warehouse 2> /dev/null | \
-    grep test-warehouse |wc -l`
-if [ ${TESTS_ACTION} -eq 1 -a \
-     ${TESTDATA_ACTION} -eq 0 -a \
-     ${TESTWH_ITEMS} -lt 5 ]; then
-  set +x
-  echo "You just asked buildall to run tests, but did not supply any data."
-  echo "Running tests without data doesn't work. Exiting now."
-  exit 1
-fi
+#TESTWH_ITEMS=`hadoop fs -ls ${FILESYSTEM_PREFIX}/test-warehouse 2> /dev/null | \
+#    grep test-warehouse |wc -l`
+#if [ ${TESTS_ACTION} -eq 1 -a \
+#     ${TESTDATA_ACTION} -eq 0 -a \
+#     ${TESTWH_ITEMS} -lt 5 ]; then
+#  set +x
+#  echo "You just asked buildall to run tests, but did not supply any data."
+#  echo "Running tests without data doesn't work. Exiting now."
+#  exit 1
+#fi
 
 if [ $TESTDATA_ACTION -eq 1 ]; then
   # Create testdata.
