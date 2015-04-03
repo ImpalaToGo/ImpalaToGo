@@ -1,6 +1,0 @@
-highlighter: pygments
-markdown: kramdown
-
-# These allow the documentation to be updated with new releases of Tachyon.
-TACHYON_RELEASED_VERSION: 0.6.1
-TACHYON_MASTER_VERSION_SHORT: 0.7.0-SNAPSHOT
