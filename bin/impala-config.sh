@@ -111,7 +111,7 @@ export IMPALA_SQUEASEL_VERSION=3.3
 
 # Sasl has problems with 'make install' if the path contains a ~. In our
 # packaging jobs, the path contains ~ so we'll just install somewhere else.
-export IMPALA_CYRUS_SASL_INSTALL_DIR=/tmp/impala-build/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION}/build
+export IMPALA_CYRUS_SASL_INSTALL_DIR=$IMPALA_HOME/tmp/impala-build/cyrus-sasl-${IMPALA_CYRUS_SASL_VERSION}/build
 
 export IMPALA_HADOOP_VERSION=2.6.0-cdh5.5.0-SNAPSHOT
 export IMPALA_HBASE_VERSION=1.0.0-cdh5.5.0-SNAPSHOT
