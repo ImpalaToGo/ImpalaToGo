@@ -15,7 +15,6 @@
 package com.cloudera.impala.analysis;
 
 import java.io.StringReader;
-import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -291,6 +290,7 @@ public class AnalysisContext {
    */
   public void analyze(String stmt) throws AnalysisException {
     Analyzer analyzer = new Analyzer(catalog_, queryCtx_, authzConfig_);
+    LOG.info("Analyzer is constructed for query \"" + queryCtx_.request.stmt + "\".");
     analyze(stmt, analyzer);
   }
 
@@ -300,6 +300,7 @@ public class AnalysisContext {
   public void analyze(String stmt, Analyzer analyzer) throws AnalysisException {
     SqlScanner input = new SqlScanner(new StringReader(stmt));
     SqlParser parser = new SqlParser(input);
+    LOG.info("AnalysisContext : SQL scanner and parser are ready for query \"" + queryCtx_.request.stmt + "\".");
     try {
       analysisResult_ = new AnalysisResult();
       analysisResult_.analyzer_ = analyzer;
@@ -333,9 +334,11 @@ public class AnalysisContext {
         Preconditions.checkState(!analysisResult_.requiresRewrite());
       }
     } catch (AnalysisException e) {
+      LOG.error("Analysis exception caught : \"" + e.getMessage() + "\".");
       // Don't wrap AnalysisExceptions in another AnalysisException
       throw e;
     } catch (Exception e) {
+      LOG.error("General exception caught : \"" + e.getMessage() + "\".");
       throw new AnalysisException(parser.getErrorMsg(stmt), e);
     }
   }

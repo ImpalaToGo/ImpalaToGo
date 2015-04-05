@@ -786,9 +786,13 @@ public class Frontend {
       while (true) {
         try {
           analysisCtx.analyze(queryCtx.request.stmt);
+          LOG.info("Analysis is done for \"" + queryCtx.request.stmt + "\".");
           Preconditions.checkState(analysisCtx.getAnalyzer().getMissingTbls().isEmpty());
+          LOG.info("Replying analysis result for : \"" + queryCtx.request.stmt + "\".");
           return analysisCtx.getAnalysisResult();
         } catch (AnalysisException e) {
+          LOG.error("Analysis Exception caught for \"" +
+              queryCtx.request.stmt + "\"; ex: \"" + e.getMessage() + "\".");
           Set<TableName> missingTbls = analysisCtx.getAnalyzer().getMissingTbls();
           // Only re-throw the AnalysisException if there were no missing tables.
           if (missingTbls.isEmpty()) throw e;
