@@ -327,9 +327,12 @@ public class Analyzer {
 
   public Analyzer(ImpaladCatalog catalog, TQueryCtx queryCtx,
       AuthorizationConfig authzConfig) {
+    LOG.info("Analyzer ctor.");
     ancestors_ = Lists.newArrayList();
     globalState_ = new GlobalState(catalog, queryCtx, authzConfig);
+    LOG.info("Analyzer ctor. Global state is constructed.");
     user_ = new User(TSessionStateUtil.getEffectiveUser(queryCtx.session));
+    LOG.info("Analyzer ctor. User is constructed.");
   }
 
   /**
