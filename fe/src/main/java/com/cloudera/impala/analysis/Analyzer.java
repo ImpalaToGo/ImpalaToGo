@@ -2017,9 +2017,12 @@ public class Analyzer {
       throw new AnalysisException(
           "Table/view is missing metadata: " + table.getFullName());
     }
-    else if(!privilege.equals(Privilege.DROP))
+    else if(!privilege.equals(Privilege.DROP)){
       // remove the loaded table from missing tables
       missingTables.remove(tableName);
+      missingTbls_.remove(tableName);
+    }
+
     return table;
   }
 
