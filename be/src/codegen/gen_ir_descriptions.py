@@ -198,8 +198,11 @@ IR_FUNCTIONS_FILE = 'impala-ir-functions.h'
 IR_NAMES_FILE = 'impala-ir-names.h'
 IR_FUNCTIONS_PATH = os.path.join(BE_PATH, IR_FUNCTIONS_FILE)
 IR_NAMES_PATH = os.path.join(BE_PATH, IR_NAMES_FILE)
-TMP_IR_FUNCTIONS_PATH = os.path.join(tempfile.gettempdir(), IR_FUNCTIONS_FILE)
-TMP_IR_NAMES_PATH = os.path.join(tempfile.gettempdir(), IR_NAMES_FILE)
+TMP_DIR_BASE = os.path.join(os.path.join(os.environ['IMPALA_HOME'],'tmp'),'ir-functions')
+os.makedirs(TMP_DIR_BASE)
+TMP_DIR=tempfile.mkdtemp(dir=TMP_DIR_BASE)
+TMP_IR_FUNCTIONS_PATH = os.path.join(TMP_DIR, IR_FUNCTIONS_FILE)
+TMP_IR_NAMES_PATH = os.path.join(TMP_DIR, IR_NAMES_FILE)
 
 if not os.path.exists(BE_PATH):
   os.makedirs(BE_PATH)
@@ -235,3 +238,4 @@ if __name__ == "__main__":
   else:
     shutil.move(TMP_IR_FUNCTIONS_PATH, IR_FUNCTIONS_PATH)
     shutil.move(TMP_IR_NAMES_PATH, IR_NAMES_PATH)
+  shutil.rmtree(TMP_DIR_BASE)
