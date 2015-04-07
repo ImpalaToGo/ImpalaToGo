@@ -7,7 +7,7 @@ BASE_DIR=/root/ImpalaToGo/
 
 
 #tachyon deployment 
-ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon'
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/target/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/src/main/webapp/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/client/target/'
@@ -43,6 +43,7 @@ scp -rp  -i $KEY $BASE_DIR/shell/* ec2-user@$TARGET_HOST:/home/ec2-user/build/sh
 scp  -i $KEY $BASE_DIR/be/build/debug/service/* ec2-user@$TARGET_HOST:/home/ec2-user/build/be
 
 #webap
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/www/'
 scp -i $KEY $BASE_DIR/www/* ec2-user@$TARGET_HOST:/home/ec2-user/build/www
 
 #frontend
