@@ -7,9 +7,9 @@ BASE_DIR=/root/ImpalaToGo/
 
 
 #tachyon deployment 
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/target/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/core/src/main/webapp/'
-ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/client/target/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/assembly/target/'
 ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/tachyon/conf/'
@@ -41,6 +41,9 @@ scp -rp  -i $KEY /root/ImpalaToGo/shell/* ec2-user@$TARGET_HOST:/home/ec2-user/b
 
 #backend
 scp  -i $KEY /root/ImpalaToGo/be/build/debug/service/* ec2-user@$TARGET_HOST:/home/ec2-user/build/be
+
+#webap
+scp -i $KEY /root/ImpalaToGo/www/* ec2-user@$TARGET_HOST:/home/ec2-user/build/www
 
 #frontend
 scp  -i $KEY /root/ImpalaToGo/fe/target/impala-frontend-0.1-SNAPSHOT.jar ec2-user@$TARGET_HOST:/home/ec2-user/build/fe
