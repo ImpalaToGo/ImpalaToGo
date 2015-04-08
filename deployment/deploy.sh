@@ -47,10 +47,12 @@ ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/www/'
 scp -i $KEY $BASE_DIR/www/* ec2-user@$TARGET_HOST:/home/ec2-user/build/www
 
 #frontend
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/fe/'
 scp  -i $KEY $BASE_DIR/fe/target/impala-frontend-0.1-SNAPSHOT.jar ec2-user@$TARGET_HOST:/home/ec2-user/build/fe
 scp  -i $KEY  ${IMPALA_HOME}/shell/*  ec2-user@$TARGET_HOST:/home/ec2-user/build/shell/
 
 #jars dependencies deployment
+ssh  -i $KEY ec2-user@$TARGET_HOST 'mkdir -p /home/ec2-user/build/fe/dependency/'
 for jar in `ls ${IMPALA_HOME}/fe/target/dependency/*.jar`; do
  scp  -i $KEY $jar ec2-user@$TARGET_HOST:/home/ec2-user/build/fe/dependency/
 done
