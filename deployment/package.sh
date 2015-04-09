@@ -19,6 +19,15 @@ mkdir -p $REMOTE_BASE_DIR/tachyon/conf/
 mkdir -p $REMOTE_BASE_DIR/tachyon/bin/
 mkdir -p $REMOTE_BASE_DIR/tachyon/libexec/
 
+
+mkdir -p $REMOTE_BASE_DIR/llvm-ir/
+mkdir -p $REMOTE_BASE_DIR/be/
+mkdir -p $REMOTE_BASE_DIR/thirdparty/thrift/build/
+mkdir -p $REMOTE_BASE_DIR/bin/
+mkdir -p $REMOTE_BASE_DIR/shell/
+mkdir -p $REMOTE_BASE_DIR/lib/
+
+
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/core/target/*.jar $REMOTE_BASE_DIR/tachyon/core/target/
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/core/src/main/webapp/* $REMOTE_BASE_DIR/tachyon/core/src/main/webapp/
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/client/target/*.jar $REMOTE_BASE_DIR/tachyon/client/target/
@@ -41,6 +50,8 @@ cp -rpv $BASE_DIR/bin/set-pythonpath.sh $REMOTE_BASE_DIR/bin/
 
 #shell deployment
 cp -rpv $BASE_DIR/shell/* $REMOTE_BASE_DIR/shell/
+cp -pv $BASE_DIR/bin/impala-shell.sh $REMOTE_BASE_DIR/bin/
+cp -pv $BASE_DIRdeployment/cluster/control/shell.sh $REMOTE_BASE_DIR/bin/
 
 #backend
 cp -rpv $BASE_DIR/be/build/debug/service/* $REMOTE_BASE_DIR/be

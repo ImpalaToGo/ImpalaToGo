@@ -7,7 +7,7 @@ sudo cp fe/dependency/* /usr/lib/impala/lib/
 
 sudo cp tachyon/client/target/*.jar /usr/lib/impala/lib/
 sudo cp tachyon/core/target/*.jar /usr/lib/impala/lib/
-sudo cp www/* /usr/lib/impala/www/
+sudo cp -r www/* /usr/lib/impala/www/
 
 sudo cp $(eval echo ~${SUDO_USER})/build/lib/* /usr/lib/impala/lib/
 sudo ln -sfn /usr/lib/impala/lib/libboost_thread.so.1.54.0 /usr/lib/impala/lib/libboost_thread.so
@@ -21,3 +21,4 @@ sudo ln -sfn /usr/lib/impala/lib/libicudata.so.52.1 /usr/lib/impala/lib/libicuda
 
 sudo chown -R impala  /usr/lib/impala/
 sudo chown -R impala  /usr/lib/impala/llvm-ir
+cp -f bin/shell.sh ~/shell.sh

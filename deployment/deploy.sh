@@ -15,7 +15,7 @@ TARGET_HOST=$1
 USER=$2
 #authorization 
 KEY=$3
-BASE_DIR=/root/ImpalaToGo/
+BASE_DIR=/root/ImpalaToGo
 
 shift 3
 SSH_PARAMS="-i $KEY"
@@ -31,7 +31,13 @@ ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/tachyon/assembly/target/"
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/tachyon/conf/"
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/tachyon/bin/"
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/tachyon/libexec/"
-
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/llvm-ir/"
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/be/"
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/thirdparty/thrift/build/"
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/bin/"
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/shell/"
+ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/lib/"
+ 
 scp -rp -i $KEY $BASE_DIR/thirdparty/$TACHYON_DIR/core/target/*.jar $REMOTE_TARGET:$REMOTE_BASE_DIR/tachyon/core/target/
 scp -rp -i $KEY $BASE_DIR/thirdparty/$TACHYON_DIR/core/src/main/webapp/* $REMOTE_TARGET:$REMOTE_BASE_DIR/tachyon/core/src/main/webapp/
 scp -rp -i $KEY $BASE_DIR/thirdparty/$TACHYON_DIR/client/target/*.jar $REMOTE_TARGET:$REMOTE_BASE_DIR/tachyon/client/target/
@@ -54,18 +60,19 @@ scp  -i $KEY $BASE_DIR/bin/set-pythonpath.sh $REMOTE_TARGET:$REMOTE_BASE_DIR/bin
 
 #shell deployment
 scp -rp  -i $KEY $BASE_DIR/shell/* $REMOTE_TARGET:$REMOTE_BASE_DIR/shell/
-
+scp  -i $KEY $BASE_DIR/bin/impala-shell.sh $REMOTE_TARGET:$REMOTE_BASE_DIR/bin/
+scp -i $KEY $BASE_DIR/deployment/cluster/control/shell.sh $REMOTE_TARGET:$REMOTE_BASE_DIR/bin/
 #backend
 scp  -i $KEY $BASE_DIR/be/build/debug/service/* $REMOTE_TARGET:$REMOTE_BASE_DIR/be
 
 #webap
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/www/"
-scp -i $KEY $BASE_DIR/www/* $REMOTE_TARGET:$REMOTE_BASE_DIR/www
+scp -rp -i $KEY $BASE_DIR/www/* $REMOTE_TARGET:$REMOTE_BASE_DIR/www
 
 #frontend
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/fe/"
 scp  -i $KEY $BASE_DIR/fe/target/impala-frontend-0.1-SNAPSHOT.jar $REMOTE_TARGET:$REMOTE_BASE_DIR/fe
-scp  -i $KEY  ${IMPALA_HOME}/shell/*  $REMOTE_TARGET:$REMOTE_BASE_DIR/shell/
+scp -rp  -i $KEY  ${IMPALA_HOME}/shell/*  $REMOTE_TARGET:$REMOTE_BASE_DIR/shell/
 
 #jars dependencies deployment
 ssh  -i $KEY $REMOTE_TARGET "mkdir -p $REMOTE_BASE_DIR/fe/dependency/"
