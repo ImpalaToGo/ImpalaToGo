@@ -16,6 +16,9 @@ IMPALA_SERVER_ARGS=" \
 
 ENABLE_CORE_DUMPS=false
 
+IMPALA_HOME=${IMPALA_HOME:-/usr/lib/impala}
+export CLASSPATH=${IMPALA_HOME}/lib/tachyon-client-0.7.0-SNAPSHOT-jar-with-dependencies.jar:${IMPALA_HOME}/lib/json-simple-1.1.1.jar:${CLASSPATH}
+
 # LIBHDFS_OPTS=-Djava.library.path=/usr/lib/impala/lib
 # MYSQL_CONNECTOR_JAR=/usr/share/java/mysql-connector-java.jar
 # IMPALA_BIN=/usr/lib/impala/sbin
