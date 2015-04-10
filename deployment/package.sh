@@ -45,13 +45,12 @@ cp -rpv $BASE_DIR/be/build/debug/statestore/statestored   $REMOTE_BASE_DIR/be/
 
 #thirdparty deployment
 cp -rpv $BASE_DIR/thirdparty/thrift-0.9.0/build/*  $REMOTE_BASE_DIR/thirdparty/thrift/build/
-
 cp -rpv $BASE_DIR/bin/set-pythonpath.sh $REMOTE_BASE_DIR/bin/
 
 #shell deployment
 cp -rpv $BASE_DIR/shell/* $REMOTE_BASE_DIR/shell/
 cp -pv $BASE_DIR/bin/impala-shell.sh $REMOTE_BASE_DIR/bin/
-cp -pv $BASE_DIRdeployment/cluster/control/shell.sh $REMOTE_BASE_DIR/bin/
+cp -pv $BASE_DIR/deployment/cluster/control/shell.sh $REMOTE_BASE_DIR/bin/
 
 #backend
 cp -rpv $BASE_DIR/be/build/debug/service/* $REMOTE_BASE_DIR/be
