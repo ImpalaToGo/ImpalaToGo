@@ -1,7 +1,7 @@
 From fba784e92fdd53f09cca90735f99db458c3c170a Mon Sep 17 00:00:00 2001
 From: Robert Navado <sbornava@gmail.com>
 Date: Sun, 12 Apr 2015 00:38:41 +0300
-Subject: [PATCH 3/3] Add cdh repease repository to pom.xml
+Subject: [PATCH 3/4] Add cdh repease repository to pom.xml
 
 ---
  pom.xml | 8 ++++++++

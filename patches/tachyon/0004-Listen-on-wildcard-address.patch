@@ -1,0 +1,29 @@
+From 394bb037354ab5293d2c83749a030e40dbd20513 Mon Sep 17 00:00:00 2001
+From: Robert Navado <sbornava@gmail.com>
+Date: Mon, 13 Apr 2015 20:25:51 +0300
+Subject: [PATCH 4/4] Listen on wildcard address
+
+---
+ core/src/main/java/tachyon/master/TachyonMaster.java | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/core/src/main/java/tachyon/master/TachyonMaster.java b/core/src/main/java/tachyon/master/TachyonMaster.java
+index 3477fe8..ef4bd44 100644
+--- a/core/src/main/java/tachyon/master/TachyonMaster.java
++++ b/core/src/main/java/tachyon/master/TachyonMaster.java
+@@ -95,9 +95,10 @@ public class TachyonMaster {
+   public TachyonMaster(TachyonConf tachyonConf) {
+     mTachyonConf = tachyonConf;
+ 
+-    String hostName = mTachyonConf.get(Constants.MASTER_HOSTNAME, "localhost");
+     int port = mTachyonConf.getInt(Constants.MASTER_PORT, Constants.DEFAULT_MASTER_PORT);
+-    InetSocketAddress address = new InetSocketAddress(hostName, port);
++    //HOSTNAME may be be different in complex setups
++    //so it's probably better to run on a wildcard IP, listening on all interfaces
++    InetSocketAddress address = new InetSocketAddress(port);
+     int webPort =
+         mTachyonConf.getInt(Constants.MASTER_WEB_PORT, Constants.DEFAULT_MASTER_WEB_PORT);
+ 
+-- 
+1.9.1
+

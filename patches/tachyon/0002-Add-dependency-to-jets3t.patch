@@ -1,7 +1,7 @@
 From 4a5e1304793668d27ad812cde9eff0fa6701a0bf Mon Sep 17 00:00:00 2001
 From: Robert Navado <sbornava@gmail.com>
 Date: Wed, 8 Apr 2015 22:32:26 +0300
-Subject: [PATCH 2/3] Add dependency to jets3t
+Subject: [PATCH 2/4] Add dependency to jets3t
 
 ---
  pom.xml | 12 ++++++++++++
