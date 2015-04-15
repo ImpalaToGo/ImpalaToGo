@@ -9,7 +9,7 @@ fi
 PACKAGE_DIR=$BASE_DIR/package
 REMOTE_BASE_DIR=$PACKAGE_DIR/build
 #tachyon deployment
-TACHYON_DIR=tachyon-0.7.0-SNAPSHOT
+TACHYON_DIR=tachyon
 mkdir -p $REMOTE_BASE_DIR/tachyon/
 mkdir -p $REMOTE_BASE_DIR/tachyon/core/target/
 mkdir -p $REMOTE_BASE_DIR/tachyon/core/src/main/webapp/
