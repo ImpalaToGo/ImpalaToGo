@@ -32,6 +32,8 @@ add_library(Exec
   data-sink.cc
   data-source-scan-node.cc
   delimited-text-parser.cc
+  delimited-text-parser-raw.cc
+  delimited-text-parser-json.cc
   empty-set-node.cc
   exec-node.cc
   exchange-node.cc
@@ -80,6 +82,7 @@ ADD_BE_TEST(zigzag-test)
 ADD_BE_TEST(old-hash-table-test)
 ADD_BE_TEST(hash-table-test)
 ADD_BE_TEST(delimited-text-parser-test)
+ADD_BE_TEST(delimited-text-json-parser-test)
 ADD_BE_TEST(read-write-util-test)
 ADD_BE_TEST(parquet-plain-test)
 ADD_BE_TEST(parquet-version-test)

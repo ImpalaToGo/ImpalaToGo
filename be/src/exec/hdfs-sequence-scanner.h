@@ -220,6 +220,8 @@ class HdfsSequenceScanner : public BaseSequenceScanner {
   
   // Helper class for picking fields and rows from delimited text.
   boost::scoped_ptr<DelimitedTextParser> delimited_text_parser_;
+
+  /** container to hold plain batch of columns from consequentially found rows */
   std::vector<FieldLocation> field_locations_;
 
   // Data that is fixed across headers.  This struct is shared between scan ranges.

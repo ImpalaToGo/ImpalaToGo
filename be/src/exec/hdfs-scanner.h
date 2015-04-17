@@ -45,18 +45,25 @@ class TPlanNode;
 class TScanRange;
 class Codec;
 
-// Intermediate structure used for two pass parsing approach. In the first pass,
-// the FieldLocation structs are filled out and contain where all the fields start and
-// their lengths.  In the second pass, the FieldLocation is used to write out the
-// slots. We want to keep this struct as small as possible.
-struct FieldLocation {
-  // start of field. This is set to NULL for FieldLocations that are past the
-  // end of the row in the file. E.g. the file only had 3 cols but the table
-  // has 10. These then get written out as NULL slots.
+/** Intermediate structure used for two pass parsing approach. In the first pass,
+ *  the FieldLocation structs are filled out and contain where all the fields start and
+ *  their lengths.  In the second pass, the FieldLocation is used to write out the
+ *  slots. We want to keep this struct as small as possible.
+ */
+ struct FieldLocation {
+  /** start of field. This is set to NULL for FieldLocations that are past the
+   *  end of the row in the file. E.g. the file only had 3 cols but the table
+   *  has 10. These then get written out as NULL slots.
+   */
   char* start;
-  // Encodes the length and whether or not this fields needs to be unescaped.
-  // If len < 0, then the field needs to be unescaped.
+
+  /** Encodes the length and whether or not this fields needs to be unescaped.
+   *  If len < 0, then the field needs to be unescaped.
+   */
   int len;
+
+  /** field type is introduced for formats that may be schema-discovered */
+  PrimitiveType type;
 
   static const char* LLVM_CLASS_NAME;
 };

@@ -51,6 +51,13 @@ class HdfsTextScanner : public HdfsScanner {
   static const char* LLVM_CLASS_NAME;
 
  protected:
+    /** Underlying data format. Currently is detected basing on "column separator" value */
+	enum DataFormat{
+		UNKNOWN,
+		DELIMTED_RAW,
+		JSON
+	};
+
   // Reset the scanner.  This clears any partial state that needs to
   // be cleared when starting or when restarting after an error.
   Status ResetScanner();
@@ -66,6 +73,8 @@ class HdfsTextScanner : public HdfsScanner {
 
   // True if we are parsing the header for this scanner.
   bool only_parsing_header_;
+
+  DataFormat m_dataFormat;
 
  private:
   const static int NEXT_BLOCK_READ_SIZE = 1024; //bytes
@@ -147,7 +156,7 @@ class HdfsTextScanner : public HdfsScanner {
   // Index into materialized_slots_ for the next slot to output for the current tuple.
   int slot_idx_;
 
-  // Helper class for picking fields and rows from delimited text.
+  /** Helper class for picking fields and rows from delimited text. */
   boost::scoped_ptr<DelimitedTextParser> delimited_text_parser_;
 
   // Return field locations from the Delimited Text Parser.

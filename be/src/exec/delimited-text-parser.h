@@ -25,12 +25,12 @@ namespace impala {
 class DelimitedTextParser {
  public:
 
+	virtual ~DelimitedTextParser(){}
+
   // The Delimited Text Parser parses text rows that are delimited by specific
   // characters:
   //   tuple_delim: delimits tuples
-  //   field_delim: delimits fields
-  //   collection_item_delim: delimits collection items
-  //   escape_char: escape delimiters, make them part of the data.
+  //   pool       : reference to memry pool for possible internal allocations
   //
   // num_cols is the total number of columns including partition keys.
   //
@@ -43,40 +43,42 @@ class DelimitedTextParser {
   // delimiter that occurs in the data.
   DelimitedTextParser(
       int num_cols, int num_partition_keys, const bool* is_materialized_col,
-      char tuple_delim, char field_delim_ = '\0', char collection_item_delim = '^',
-      char escape_char = '\0');
+      char tuple_delim);
 
-  // Called to initialize parser at beginning of scan range.
-  void ParserReset();
+  /** Called to initialize parser at beginning of scan range. */
+  void parserReset(bool hard = true);
 
-  // Check if we are at the start of a tuple.
+  /** Check if we are at the start of a tuple. */
   bool AtTupleStart() { return column_idx_ == num_partition_keys_; }
 
-  char escape_char() const { return escape_char_; }
-
-  // Parses a byte buffer for the field and tuple breaks.
-  // This function will write the field start & len to field_locations
-  // which can then be written out to tuples.
-  // This function uses SSE ("Intel x86 instruction set extension
-  // 'Streaming Simd Extension') if the hardware supports SSE4.2
-  // instructions.  SSE4.2 added string processing instructions that
-  // allow for processing 16 characters at a time.  Otherwise, this
-  // function walks the file_buffer_ character by character.
-  // Input Parameters:
-  //   max_tuples: The maximum number of tuples that should be parsed.
-  //               This is used to control how the batching works.
-  //   remaining_len: Length of data remaining in the byte_buffer_pointer.
-  //   byte_buffer_pointer: Pointer to the buffer containing the data to be parsed.
-  // Output Parameters:
-  //   field_locations: array of pointers to data fields and their lengths
-  //   num_tuples: Number of tuples parsed
-  //   num_fields: Number of materialized fields parsed
-  //   next_column_start: pointer within file_buffer_ where the next field starts
-  //                      after the return from the call to ParseData
-  Status ParseFieldLocations(int max_tuples, int64_t remaining_len,
+  /** Parses a byte buffer for the field and tuple breaks.
+   *  This function will write the field start & len to field_locations
+   *  which can then be written out to tuples.
+   *
+   *  This function uses SSE ("Intel x86 instruction set extension
+   *  'Streaming Simd Extension') if the hardware supports SSE4.2
+   *  instructions.  SSE4.2 added string processing instructions that
+   *  allow for processing 16 characters at a time.  Otherwise, this
+   *  function walks the file_buffer_ character by character.
+   *
+   *  Input Parameters:
+   *  max_tuples    : The maximum number of tuples that should be parsed.
+   *                  This is used to control how the batching works.
+   *
+   *  remaining_len       : Length of data remaining in the byte_buffer_pointer.
+   *  byte_buffer_pointer : Pointer to the buffer containing the data to be parsed.
+   *
+   *  Output Parameters:
+   *  field_locations   : array of pointers to data fields and their lengths
+   *  num_tuples        : number of tuples parsed
+   *  num_fields        : number of materialized fields parsed
+   *  next_column_start : the pointer within file_buffer_ where the next field starts
+   *                      after the return from the call to ParseData
+   */
+  virtual Status ParseFieldLocations(int max_tuples, int64_t remaining_len,
       char** byte_buffer_ptr, char** row_end_locations,
       FieldLocation* field_locations,
-      int* num_tuples, int* num_fields, char** next_column_start);
+      int* num_tuples, int* num_fields, char** next_column_start) = 0;
 
   // Parse a single tuple from buffer.  
   // - buffer/len are input parameters for the entire record.
@@ -120,8 +122,25 @@ class DelimitedTextParser {
   // parsed (i.e., the last byte read was not a tuple delimiter).
   bool HasUnfinishedTuple() { return unfinished_tuple_; }
 
- private:
-  // Initialize the parser state.
+ protected:
+
+  /** reset the parser according to parser implementation specifics */
+  virtual void parserResetInternal() = 0;
+
+  /** initialize parser-specific search characters registry */
+  virtual void setupSearchCharacters() = 0;
+
+  virtual bool process_escapes(int start, const char* buffer) { return process_escapes_; };
+
+  virtual void addColumnInternal(int len, char** next_column_start, int* num_fields,
+		  FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
+		  bool flag = false) = 0;
+
+  virtual void parseSingleTupleInternal(int64_t len, char* buffer, FieldLocation* field_locations,
+	      int* num_fields, const bool flag) = 0;
+
+ protected:
+  /* Initialize the parser state. */
   void ParserInit(HdfsScanNode* scan_node);
 
   // Helper routine to add a column to the field_locations vector.
@@ -136,82 +155,143 @@ class DelimitedTextParser {
   //   field_locations: updated with start and length of current field.
   template <bool process_escapes>
   void AddColumn(int len, char** next_column_start, int* num_fields,
-                 FieldLocation* field_locations);
+                 FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE);
 
-  // Helper routine to parse delimited text using SSE instructions.
-  // Identical arguments as ParseFieldLocations.
-  // If the template argument, 'process_escapes' is true, this function will handle
-  // escapes, otherwise, it will assume the text is unescaped.  By using templates,
-  // we can special case the un-escaped path for better performance.  The unescaped
-  // path is optimized away by the compiler.
-  template <bool process_escapes>
-  void ParseSse(int max_tuples, int64_t* remaining_len,
-      char** byte_buffer_ptr, char** row_end_locations_,
-      FieldLocation* field_locations,
-      int* num_tuples, int* num_fields, char** next_column_start);
-
-  // SSE(xmm) register containing the tuple search character.
+  /** SSE(xmm) register containing the tuple search character. */
   __m128i xmm_tuple_search_;
 
-  // SSE(xmm) register containing the delimiter search character.
-  __m128i xmm_delim_search_;
-
-  // The number of delimiters contained in xmm_delim_search_, i.e. its length
+  /** The number of delimiters contained in xmm_delim_search_, i.e. its length */
   int num_delims_;
 
-  // SSE(xmm) register containing the escape search character.
+  /** SSE(xmm) register containing the escape search character. */
   __m128i xmm_escape_search_;
 
-  // Character delimiting fields (to become slots).
-  char field_delim_;
-
-  // True if this parser should handle escape characters.
+  /* True if this parser should handle escape characters. */
   bool process_escapes_;
 
-  // Escape character. Only used if process_escapes_ is true.
-  char escape_char_;
-
-  // Character delimiting collection items (to become slots).
-  char collection_item_delim_;
-
-  // Character delimiting tuples.
+  /** Character delimiting tuples. */
   char tuple_delim_;
 
-  // Whether or not the current column has an escape character in it
-  // (and needs to be unescaped)
-  bool current_column_has_escape_;
+  /**
+   * Used for special processing of \r.
+   * This will be the offset of the last instance of \r from the end of the
+   * current buffer being searched unless the last row delimiter was not a \r in which
+   * case it will be -1.  If the last character in a buffer is \r then the value
+   * will be 0.  At the start of processing a new buffer if last_row_delim_offset_ is 0
+   * then it is set to be one more than the size of the buffer so that if the buffer
+   * starts with \n it is processed as \r\n.
+   */
+   int32_t last_row_delim_offset_;
 
-  // Whether or not the previous character was the escape character
-  bool last_char_is_escape_;
-
-  // Used for special processing of \r.
-  // This will be the offset of the last instance of \r from the end of the
-  // current buffer being searched unless the last row delimiter was not a \r in which
-  // case it will be -1.  If the last character in a buffer is \r then the value
-  // will be 0.  At the start of processing a new buffer if last_row_delim_offset_ is 0
-  // then it is set to be one more than the size of the buffer so that if the buffer
-  // starts with \n it is processed as \r\n.
-  int32_t last_row_delim_offset_;
-
-  // Precomputed masks to process escape characters
-  uint16_t low_mask_[16];
-  uint16_t high_mask_[16];
-
-  // Number of columns in the table (including partition columns)
+  /** Number of columns in the table (including partition columns) */
   int num_cols_;
 
-  // Number of partition columns in the table.
+  /** Number of partition columns in the table. */
   int num_partition_keys_;
 
-  // For each col index [0, num_cols_), true if the column should be materialized.
-  // Not owned.
+  /** For each col index [0, num_cols_), true if the column should be materialized.
+   *  Not owned.
+   */
   const bool* is_materialized_col_;
 
-  // Index to keep track of the current column in the current file
+  /** Index to keep track of the current column in the current file */
   int column_idx_;
 
-  // True if the last tuple is unfinished (not ended with tuple delimiter).
+  /** flag, indicates we have unfinished tuple in this parsing session.
+   * In next session, if incomplete tuple is detected, incoming buffer will be handled
+   * in order to re-create spanned JSON record hierarchy and prepend the
+   * previously non-parsed content to the current batch
+   */
   bool unfinished_tuple_;
+
+};
+
+/** Delimited text parser which considers columns delimiters, escape symbols and collections delimiters.
+ *  Example of application: csv parser
+ * */
+class RawDelimitedTextParser : public DelimitedTextParser{
+public:
+
+	/**
+	 * The Delimited Text Parser parses text rows that are delimited by specific characters:
+	 *  tuple_delim           : delimits tuples
+	 *  field_delim           : delimits fields
+	 *  collection_item_delim : delimits collection items
+	 *  escape_char           : escape delimiters, make them part of the data.
+	 *  num_cols is the total number of columns including partition keys.
+	 *
+	 *  is_materialized_col should be initialized to an array of length 'num_cols', with
+	 *  is_materialized_col[i] = <true if column i should be materialized, false otherwise>
+	 *  Owned by caller.
+	 *
+	 *  The main method is ParseData which fills in a vector of pointers and lengths to the
+	 *  fields.  It also can handle an escape character which masks a tuple or field
+	 *  delimiter that occurs in the data.
+	 */
+	RawDelimitedTextParser(
+	      int num_cols, int num_partition_keys, const bool* is_materialized_col,
+	      char tuple_delim, char field_delim_ = '\0', char collection_item_delim = '^',
+	      char escape_char = '\0');
+
+	/** Parsing raw csv data into FieldLocation descriptors. */
+	Status ParseFieldLocations(int max_tuples, int64_t remaining_len,
+	      char** byte_buffer_ptr, char** row_end_locations,
+	      FieldLocation* field_locations,
+	      int* num_tuples, int* num_fields, char** next_column_start);
+
+	/** getter for configured escape character */
+	char escape_char() const { return escape_char_; }
+
+private:
+	  /** Character delimiting fields (to become slots). */
+	  char field_delim_;
+
+	  /* Escape character. Only used if process_escapes_ is true. */
+	  char escape_char_;
+
+	  /* SSE(xmm) register containing the delimiter search character. */
+	  __m128i xmm_delim_search_;
+
+	  /* Character delimiting collection items (to become slots). */
+	  char collection_item_delim_;
+
+	  /* Whether or not the current column has an escape character in it (and needs to be unescaped) */
+	  bool current_column_has_escape_;
+
+	  /* Whether or not the previous character was the escape character */
+	  bool last_char_is_escape_;
+
+	  /** Precomputed masks to process escape characters */
+	  uint16_t low_mask_[16];
+	  uint16_t high_mask_[16];
+
+	  /** initialize parser-specific search characters registry */
+	  void setupSearchCharacters();
+
+	  /** reset the parser according to parser implementation specifics */
+	  void parserResetInternal();
+
+	  bool process_escapes(int start, const char* buffer);
+
+	  void addColumnInternal(int len, char** next_column_start, int* num_fields,
+	  		  FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
+			  bool flag = false);
+
+	  void parseSingleTupleInternal(int64_t len, char* buffer, FieldLocation* field_locations,
+	  	      int* num_fields, const bool flag);
+
+	  /** Helper routine to parse delimited text using SSE instructions.
+	   *  Identical arguments as ParseFieldLocations.
+	   *  If the template argument, 'process_escapes' is true, this function will handle
+	   *  escapes, otherwise, it will assume the text is unescaped.  By using templates,
+	   *  we can special case the un-escaped path for better performance.  The unescaped
+	   *  path is optimized away by the compiler.
+	   */
+	  template <bool process_escapes>void ParseSse(int max_tuples, int64_t* remaining_len,
+	      char** byte_buffer_ptr, char** row_end_locations_,
+	      FieldLocation* field_locations,
+	      int* num_tuples, int* num_fields, char** next_column_start);
+
 };
 
 }// namespace impala

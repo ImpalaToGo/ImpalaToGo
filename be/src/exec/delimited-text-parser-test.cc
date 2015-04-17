@@ -16,6 +16,8 @@
 #include <gtest/gtest.h>
 
 #include "exec/delimited-text-parser.inline.h"
+#include "exec/delimited-text-parser-raw.inline.h"
+
 #include "util/cpu-info.h"
 
 using namespace std;
@@ -25,7 +27,7 @@ namespace impala {
 void Validate(DelimitedTextParser* parser, const string& data, 
     int expected_offset, char tuple_delim, int expected_num_tuples,
     int expected_num_fields) {
-  parser->ParserReset();
+  parser->parserReset();
   char* data_ptr = const_cast<char*>(data.c_str());
   int remaining_len = data.size();
   int offset = parser->FindFirstInstance(data_ptr, remaining_len);
@@ -52,7 +54,8 @@ void Validate(DelimitedTextParser* parser, const string& data,
   EXPECT_EQ(num_fields, expected_num_fields) << data;
 }
 
-TEST(DelimitedTextParser, Basic) {
+TEST(RawDelimitedTextParser, Basic) {
+	std::cout << "RawDelimitedTextParser, Basics" << std::endl;
   const char TUPLE_DELIM = '|';
   const char FIELD_DELIM = ',';
   const char COLLECTION_DELIM = ',';
@@ -64,8 +67,9 @@ TEST(DelimitedTextParser, Basic) {
   bool is_materialized_col[NUM_COLS];
   for (int i = 0; i < NUM_COLS; ++i) is_materialized_col[i] = true;
 
-  DelimitedTextParser no_escape_parser(NUM_COLS, 0, is_materialized_col,
+  RawDelimitedTextParser no_escape_parser(NUM_COLS, 0, is_materialized_col,
                                        TUPLE_DELIM, FIELD_DELIM, COLLECTION_DELIM);
+  std::cout << "Basics : running \"no escape\" parser." << std::endl;
   // Note that only complete tuples "count"
   Validate(&no_escape_parser, "no_delims", -1, TUPLE_DELIM, 0, 0);
   Validate(&no_escape_parser, "abc||abc", 4, TUPLE_DELIM, 1, 1);
@@ -73,9 +77,10 @@ TEST(DelimitedTextParser, Basic) {
   Validate(&no_escape_parser, "a|bcd", 2, TUPLE_DELIM, 0, 0);
   
   // Test with escape char
-  DelimitedTextParser escape_parser(NUM_COLS, 0, is_materialized_col,
+  RawDelimitedTextParser escape_parser(NUM_COLS, 0, is_materialized_col,
                                     TUPLE_DELIM, FIELD_DELIM, COLLECTION_DELIM,
                                     ESCAPE_CHAR);
+  std::cout << "Basics : running \"escape\" parser." << std::endl;
   Validate(&escape_parser, "a@|a|bcd", 5, TUPLE_DELIM, 0, 0);
   Validate(&escape_parser, "a@@|a|bcd", 4, TUPLE_DELIM, 1, 1);
   Validate(&escape_parser, "a@@@|a|bcd", 7, TUPLE_DELIM, 0, 0);
@@ -108,7 +113,8 @@ TEST(DelimitedTextParser, Basic) {
   Validate(&escape_parser, str9, 4, TUPLE_DELIM, 0, 0);
 }
 
-TEST(DelimitedTextParser, Fields) {
+TEST(RawDelimitedTextParser, Fields) {
+	std::cout << "RawDelimitedTextParser, Fields" << std::endl;
   const char TUPLE_DELIM = '|';
   const char FIELD_DELIM = ',';
   const char COLLECTION_DELIM = ',';
@@ -119,8 +125,10 @@ TEST(DelimitedTextParser, Fields) {
   bool is_materialized_col[NUM_COLS];
   for (int i = 0; i < NUM_COLS; ++i) is_materialized_col[i] = true;
 
-  DelimitedTextParser no_escape_parser(NUM_COLS, 0, is_materialized_col,
+  RawDelimitedTextParser no_escape_parser(NUM_COLS, 0, is_materialized_col,
                                        TUPLE_DELIM, FIELD_DELIM, COLLECTION_DELIM);
+
+  std::cout << "Basics : running \"no escape\" parser." << std::endl;
 
   Validate(&no_escape_parser, "a,b|c,d|e,f", 4, TUPLE_DELIM, 1, 3);
   Validate(&no_escape_parser, "b|c,d|e,f", 2, TUPLE_DELIM, 1, 3);
@@ -129,18 +137,16 @@ TEST(DelimitedTextParser, Fields) {
   const string str10("a,\0|c,d|e", 9);
   Validate(&no_escape_parser, str10, 4, TUPLE_DELIM, 1, 2);
 
-  DelimitedTextParser escape_parser(NUM_COLS, 0, is_materialized_col,
+  RawDelimitedTextParser escape_parser(NUM_COLS, 0, is_materialized_col,
                                     TUPLE_DELIM, FIELD_DELIM, COLLECTION_DELIM,
                                     ESCAPE_CHAR);
+
+  std::cout << "Basics : running \"escape\" parser." << std::endl;
 
   Validate(&escape_parser, "a,b|c,d|e,f", 4, TUPLE_DELIM, 1, 3);
   Validate(&escape_parser, "a,@|c|e,f", 6, TUPLE_DELIM, 0, 1);
   Validate(&escape_parser, "a|b,c|d@,e", 2, TUPLE_DELIM, 1, 2);
 }
-
-// TODO: expand test for other delimited text parser functions/cases.
-// Not all of them work without creating a HdfsScanNode but we can expand
-// these tests quite a bit more.
 
 }
 

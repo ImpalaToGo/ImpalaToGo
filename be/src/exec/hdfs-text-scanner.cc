@@ -16,7 +16,9 @@
 
 #include "codegen/llvm-codegen.h"
 #include "exec/delimited-text-parser.h"
-#include "exec/delimited-text-parser.inline.h"
+
+#include "exec/delimited-text-parser-json.inline.h"
+#include "exec/delimited-text-parser-raw.inline.h"
 #include "exec/hdfs-lzo-text-scanner.h"
 #include "exec/hdfs-scan-node.h"
 #include "exec/scanner-context.inline.h"
@@ -53,11 +55,16 @@ HdfsTextScanner::HdfsTextScanner(HdfsScanNode* scan_node, RuntimeState* state)
       byte_buffer_end_(NULL),
       byte_buffer_read_size_(0),
       only_parsing_header_(false),
+	  m_dataFormat(UNKNOWN),
       boundary_pool_(new MemPool(scan_node->mem_tracker())),
       boundary_row_(boundary_pool_.get()),
       boundary_column_(boundary_pool_.get()),
       slot_idx_(0),
-      error_in_row_(false) {
+	  batch_start_ptr_(NULL),
+	  error_in_row_(false),
+	  partial_tuple_(NULL),
+	  partial_tuple_empty_(false),
+	  parse_delimiter_timer_(NULL){
 }
 
 HdfsTextScanner::~HdfsTextScanner() {
@@ -213,10 +220,26 @@ Status HdfsTextScanner::InitNewRange() {
     collection_delim = '\0';
   }
 
-  delimited_text_parser_.reset(new DelimitedTextParser(
-      scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
-      scan_node_->is_materialized_col(), hdfs_partition->line_delim(),
-      field_delim, collection_delim, hdfs_partition->escape_char()));
+  /** JSON underlying data is detected basing on column delimiter.
+   * It should be j' to give a hint that the data is "JSON"...
+   * Reason : tables mapped to Hive does not support "JSON" data type
+   * (data types came from hadoop.mapreduce package), but only "TEXT".
+   * Therefore we cannot have a direct hint that the table is "JSON"-formatted.
+   */
+  if(hdfs_partition->field_delim() == 'j'){
+	  delimited_text_parser_.reset(new JsonDelimitedTextParser(
+	      scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
+	      scan_node_->is_materialized_col(), hdfs_partition->line_delim()));
+	  m_dataFormat = JSON;
+  }
+  else {
+	  delimited_text_parser_.reset(new RawDelimitedTextParser(
+			  scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
+			  scan_node_->is_materialized_col(), hdfs_partition->line_delim(),
+			  field_delim, collection_delim, hdfs_partition->escape_char()));
+	  m_dataFormat = DELIMTED_RAW;
+  }
+
   text_converter_.reset(new TextConverter(hdfs_partition->escape_char(),
       scan_node_->hdfs_table()->null_column_value()));
 
@@ -235,7 +258,7 @@ Status HdfsTextScanner::ResetScanner() {
 
   boundary_column_.Clear();
   boundary_row_.Clear();
-  delimited_text_parser_->ParserReset();
+  delimited_text_parser_->parserReset();
 
   partial_tuple_empty_ = true;
   byte_buffer_ptr_ = byte_buffer_end_ = NULL;
@@ -276,9 +299,10 @@ Status HdfsTextScanner::FinishScanRange() {
           state_->LogError(ErrorMsg(TErrorCode::GENERAL, ss.str()));
         }
         if (state_->abort_on_error()) return Status(ss.str());
-      } else if (!partial_tuple_empty_ || !boundary_column_.Empty() ||
-          !boundary_row_.Empty()) {
-        // Missing columns or row delimiter at end of the file is ok, fill the row in.
+      } else if ( (m_dataFormat != JSON) && (!partial_tuple_empty_ || !boundary_column_.Empty() ||
+          !boundary_row_.Empty()) ) {
+          // For csv parser, missing columns or row delimiter at end of the file is ok, fill the row in.
+    	  // For JSON, we have all columns filled in for boundary row in ProcessRange()
         char* col = boundary_column_.str().ptr;
         int num_fields = 0;
         delimited_text_parser_->FillColumns<true>(boundary_column_.Size(),
@@ -298,6 +322,7 @@ Status HdfsTextScanner::FinishScanRange() {
         RETURN_IF_ERROR(CommitRows(num_tuples));
       } else if (delimited_text_parser_->HasUnfinishedTuple() &&
           scan_node_->materialized_slots().empty()) {
+    	  LOG(ERROR) << "Unfinished tuple found at the end of the ." << "\n";
         // If no fields are materialized we do not update partial_tuple_empty_,
         // boundary_column_, or boundary_row_. However, we still need to handle the case
         // of partial tuple due to missing tuple delimiter at the end of file.
@@ -309,6 +334,7 @@ Status HdfsTextScanner::FinishScanRange() {
     DCHECK(eosr);
 
     int num_tuples;
+    // recall to process range, this time past scan range
     RETURN_IF_ERROR(ProcessRange(&num_tuples, true));
     if (num_tuples == 1) break;
     DCHECK_EQ(num_tuples, 0);
@@ -345,6 +371,7 @@ Status HdfsTextScanner::ProcessRange(int* num_tuples, bool past_scan_range) {
     {
       // Parse the bytes for delimiters and store their offsets in field_locations_
       SCOPED_TIMER(parse_delimiter_timer_);
+
       RETURN_IF_ERROR(delimited_text_parser_->ParseFieldLocations(max_tuples,
           byte_buffer_end_ - byte_buffer_ptr_, &byte_buffer_ptr_,
           &row_end_locations_[0],
@@ -357,10 +384,17 @@ Status HdfsTextScanner::ProcessRange(int* num_tuples, bool past_scan_range) {
         (num_fields > 0 || *num_tuples > 0)) {
       // There can be one partial tuple which returned no more fields from this buffer.
       DCHECK_LE(*num_tuples, num_fields + 1);
+      // if there were boundary column remained from previous batch,
+      // assign it to field locations at the first place.
       if (!boundary_column_.Empty()) {
-        CopyBoundaryField(&field_locations_[0], pool);
+    	  // prepend the cached part of column to first field of first tuple
+    	  // only in case if data format is not JSON.
+    	  // If data format is JSON all "part data" cases are handled inside the parser itself.
+    	  if(m_dataFormat != JSON)
+    		  CopyBoundaryField(&field_locations_[0], pool);
         boundary_column_.Clear();
       }
+      // write fields that we extracted from current batch:
       num_tuples_materialized = WriteFields(pool, tuple_row_mem, num_fields, *num_tuples);
       DCHECK_GE(num_tuples_materialized, 0);
       RETURN_IF_ERROR(parse_status_);
@@ -388,6 +422,11 @@ Status HdfsTextScanner::ProcessRange(int* num_tuples, bool past_scan_range) {
       boundary_row_.Append(last_row, byte_buffer_ptr_ - last_row);
     }
     COUNTER_ADD(scan_node_->rows_read_counter(), *num_tuples);
+
+    // always reset the parser soft in case if this is JSON parser:
+    if((m_dataFormat == JSON)){
+  	  delimited_text_parser_->parserReset(false);
+    }
 
     // Commit the rows to the row batch and scan node
     RETURN_IF_ERROR(CommitRows(num_tuples_materialized));
@@ -579,7 +618,7 @@ Status HdfsTextScanner::FindFirstTuple(bool* tuple_found) {
       bool eosr = false;
       RETURN_IF_ERROR(FillByteBuffer(&eosr));
 
-      delimited_text_parser_->ParserReset();
+      delimited_text_parser_->parserReset();
       SCOPED_TIMER(parse_delimiter_timer_);
       int first_tuple_offset = delimited_text_parser_->FindFirstInstance(
           byte_buffer_ptr_, byte_buffer_read_size_);
@@ -663,15 +702,20 @@ int HdfsTextScanner::WriteFields(MemPool* pool, TupleRow* tuple_row,
 
   int num_tuples_processed = 0;
   int num_tuples_materialized = 0;
-  // Write remaining fields, if any, from the previous partial tuple.
+
+  // Write remaining fields, if any, that were missed from the previous partial tuple.
   if (slot_idx_ != 0) {
-    DCHECK(tuple_ != NULL);
-    int num_partial_fields = scan_node_->materialized_slots().size() - slot_idx_;
-    // Corner case where there will be no materialized tuples but at least one col
-    // worth of string data.  In this case, make a deep copy and reuse the byte buffer.
-    bool copy_strings = num_partial_fields > num_fields;
-    num_partial_fields = min(num_partial_fields, num_fields);
-    WritePartialTuple(fields, num_partial_fields, copy_strings);
+	  // do we have a partial tuple?
+	  DCHECK(tuple_ != NULL);
+
+	  // remained fields to write to a previously existed, partial tuple
+	  int num_partial_fields = scan_node_->materialized_slots().size() - slot_idx_;
+
+	  // Corner case where there will be no materialized tuples but at least one col
+      // worth of string data.  In this case, make a deep copy and reuse the byte buffer.
+      bool copy_strings = num_partial_fields > num_fields;
+      num_partial_fields = min(num_partial_fields, num_fields);
+      WritePartialTuple(fields, num_partial_fields, copy_strings);
 
     // This handles case 1.  If the tuple is complete and we've found a tuple delimiter
     // this time around (i.e. num_tuples > 0), add it to the row batch.  Otherwise,
@@ -688,12 +732,15 @@ int HdfsTextScanner::WriteFields(MemPool* pool, TupleRow* tuple_row,
         if (!parse_status_.ok()) return 0;
         error_in_row_ = false;
       }
+      // We completed with current tuple
       boundary_row_.Clear();
 
       memcpy(tuple_, partial_tuple_, scan_node_->tuple_desc()->byte_size());
       partial_tuple_empty_ = true;
       tuple_row->SetTuple(scan_node_->tuple_idx(), tuple_);
 
+      // reset the "currently saved column index for current tuple" to 0 to show we have completed
+      // current tuple
       slot_idx_ = 0;
       ++num_tuples_processed;
       --num_tuples;
@@ -705,7 +752,9 @@ int HdfsTextScanner::WriteFields(MemPool* pool, TupleRow* tuple_row,
       }
     }
 
+    // remained from previously existed partial tuple columns were processed:
     num_fields -= num_partial_fields;
+    // rewind forward the registry of columns:
     fields += num_partial_fields;
   }
 
@@ -772,6 +821,8 @@ int HdfsTextScanner::WritePartialTuple(FieldLocation* fields,
     }
     next_line_offset += (len + 1);
 
+    // write starts from the last known slot index that was processed with previous
+    // batch, when partial tuple was written
     const SlotDescriptor* desc = scan_node_->materialized_slots()[slot_idx_];
     if (!text_converter_->WriteSlot(desc, partial_tuple_,
         fields[i].start, len, true, need_escape, data_buffer_pool_.get())) {
