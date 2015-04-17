@@ -291,21 +291,21 @@ void Webserver::Stop() {
 void Webserver::GetCommonJson(Document* document) {
   DCHECK(document != NULL);
   Value obj(kObjectType);
-  obj.AddMember("process-name", google::ProgramInvocationShortName(),
+  obj.AddMember("process-name", StringRef(google::ProgramInvocationShortName()),
       document->GetAllocator());
 
   Value lst(kArrayType);
   BOOST_FOREACH(const UrlHandlerMap::value_type& handler, url_handlers_) {
     if (handler.second.is_on_nav_bar()) {
       Value obj(kObjectType);
-      obj.AddMember("link", handler.first.c_str(), document->GetAllocator());
-      obj.AddMember("title", handler.first.c_str(), document->GetAllocator());
+      obj.AddMember("link", StringRef(handler.first.c_str()), document->GetAllocator());
+      obj.AddMember("title", StringRef(handler.first.c_str()), document->GetAllocator());
       lst.PushBack(obj, document->GetAllocator());
     }
   }
 
   obj.AddMember("navbar", lst, document->GetAllocator());
-  document->AddMember(COMMON_JSON_KEY, obj, document->GetAllocator());
+  document->AddMember(StringRef(COMMON_JSON_KEY), obj, document->GetAllocator());
 }
 
 int Webserver::LogMessageCallbackStatic(const struct sq_connection* connection,
@@ -372,7 +372,7 @@ int Webserver::BeginRequestCallback(struct sq_connection* connection,
     content_type = PLAIN;
   } else {
     if (arguments.find("raw") != arguments.end()) {
-      document.AddMember(ENABLE_RAW_JSON_KEY, "true", document.GetAllocator());
+      document.AddMember(StringRef(ENABLE_RAW_JSON_KEY), "true", document.GetAllocator());
     }
     if (document.HasMember(ENABLE_RAW_JSON_KEY)) {
       content_type = PLAIN;

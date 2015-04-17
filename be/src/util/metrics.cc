@@ -20,6 +20,7 @@
 #include <boost/mem_fn.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
 #include <gutil/strings/substitute.h>
+
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/prettywriter.h>
 
@@ -153,7 +154,7 @@ void MetricGroup::ToJson(bool include_children, Document* document, Value* out_v
 
   Value container(kObjectType);
   container.AddMember("metrics", metric_list, document->GetAllocator());
-  container.AddMember("name", name_.c_str(), document->GetAllocator());
+  container.AddMember("name", StringRef(name_.c_str()), document->GetAllocator());
   if (include_children) {
     Value child_groups(kArrayType);
     BOOST_FOREACH(const ChildGroupMap::value_type& child, children_) {

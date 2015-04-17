@@ -159,7 +159,7 @@ class SimpleMetric : public Metric {
   virtual void ToLegacyJson(rapidjson::Document* document) {
     rapidjson::Value val;
     ToJsonValue(value(), TUnit::NONE, document, &val);
-    document->AddMember(key_.c_str(), val, document->GetAllocator());
+    document->AddMember(rapidjson::StringRef(key_.c_str()), val, document->GetAllocator());
   }
 
   const TUnit::type unit() const { return unit_; }

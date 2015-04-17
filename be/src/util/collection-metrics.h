@@ -79,7 +79,7 @@ class SetMetric : public Metric {
       ToJsonValue(s, TUnit::NONE, document, &entry_value);
       metric_list.PushBack(entry_value, document->GetAllocator());
     }
-    document->AddMember(key_.c_str(), metric_list, document->GetAllocator());
+    document->AddMember(rapidjson::StringRef(key_.c_str()), metric_list, document->GetAllocator());
   }
 
   virtual std::string ToHumanReadable() {
@@ -162,7 +162,7 @@ class StatsMetric : public Metric {
       container.AddMember("stddev", sqrt(boost::accumulators::variance(acc_)),
           document->GetAllocator());
     }
-    document->AddMember(key_.c_str(), container, document->GetAllocator());
+    document->AddMember(rapidjson::StringRef(key_.c_str()), container, document->GetAllocator());
   }
 
   virtual std::string ToHumanReadable() {

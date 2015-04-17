@@ -116,12 +116,12 @@ TEST(Webserver, ArgsTest) {
 
 void JsonCallback(bool always_text, const Webserver::ArgumentMap& args,
     Document* document) {
-  document->AddMember(SALUTATION_KEY.c_str(), SALUTATION_VALUE.c_str(),
+  document->AddMember(StringRef(SALUTATION_KEY.c_str()), StringRef(SALUTATION_VALUE.c_str()),
       document->GetAllocator());
-  document->AddMember(TO_ESCAPE_KEY.c_str(), TO_ESCAPE_VALUE.c_str(),
+  document->AddMember(StringRef(TO_ESCAPE_KEY.c_str()), StringRef(TO_ESCAPE_VALUE.c_str()),
       document->GetAllocator());
   if (always_text) {
-    document->AddMember(Webserver::ENABLE_RAW_JSON_KEY, true, document->GetAllocator());
+    document->AddMember(StringRef(Webserver::ENABLE_RAW_JSON_KEY), true, document->GetAllocator());
   }
 }
 

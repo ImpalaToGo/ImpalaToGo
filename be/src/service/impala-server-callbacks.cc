@@ -29,7 +29,6 @@
 #include "util/url-coding.h"
 
 using namespace apache::thrift;
-using namespace boost;
 using namespace std;
 using namespace impala;
 using namespace beeswax;
@@ -42,62 +41,62 @@ void ImpalaServer::RegisterWebserverCallbacks(Webserver* webserver) {
   DCHECK(webserver != NULL);
 
   Webserver::UrlCallback hadoop_varz_callback =
-      bind<void>(mem_fn(&ImpalaServer::HadoopVarzUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::HadoopVarzUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/hadoop-varz", "hadoop-varz.tmpl",
       hadoop_varz_callback);
 
   Webserver::UrlCallback query_json_callback =
-      bind<void>(mem_fn(&ImpalaServer::QueryStateUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QueryStateUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/queries", "queries.tmpl",
       query_json_callback);
 
   Webserver::UrlCallback sessions_json_callback =
-      bind<void>(mem_fn(&ImpalaServer::SessionsUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::SessionsUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/sessions", "sessions.tmpl",
       sessions_json_callback);
 
   Webserver::UrlCallback catalog_callback =
-      bind<void>(mem_fn(&ImpalaServer::CatalogUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::CatalogUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/catalog", "catalog.tmpl",
       catalog_callback);
 
   Webserver::UrlCallback catalog_objects_callback =
-      bind<void>(mem_fn(&ImpalaServer::CatalogObjectsUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::CatalogObjectsUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/catalog_object", "catalog_object.tmpl",
       catalog_objects_callback, false);
 
   Webserver::UrlCallback profile_callback =
-      bind<void>(mem_fn(&ImpalaServer::QueryProfileUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QueryProfileUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/query_profile", "query_profile.tmpl",
       profile_callback, false);
 
   Webserver::UrlCallback cancel_callback =
-      bind<void>(mem_fn(&ImpalaServer::CancelQueryUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::CancelQueryUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/cancel_query", "common-pre.tmpl", cancel_callback,
       false);
 
   Webserver::UrlCallback profile_encoded_callback =
-      bind<void>(mem_fn(&ImpalaServer::QueryProfileEncodedUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QueryProfileEncodedUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/query_profile_encoded", "raw_text.tmpl",
       profile_encoded_callback, false);
 
   Webserver::UrlCallback inflight_query_ids_callback =
-      bind<void>(mem_fn(&ImpalaServer::InflightQueryIdsUrlCallback), this, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::InflightQueryIdsUrlCallback), this, _1, _2);
   webserver->RegisterUrlCallback("/inflight_query_ids", "raw_text.tmpl",
       inflight_query_ids_callback, false);
 
   Webserver::UrlCallback query_summary_callback =
-      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, true, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, true, _1, _2);
   webserver->RegisterUrlCallback("/query_summary", "query_summary.tmpl",
       query_summary_callback, false);
 
   Webserver::UrlCallback query_plan_callback =
-      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, true, true, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QuerySummaryCallback), this, true, true, _1, _2);
   webserver->RegisterUrlCallback("/query_plan", "query_plan.tmpl",
       query_plan_callback, false);
 
   Webserver::UrlCallback query_plan_text_callback =
-      bind<void>(mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, false, _1, _2);
+		  boost::bind<void>(boost::mem_fn(&ImpalaServer::QuerySummaryCallback), this, false, false, _1, _2);
   webserver->RegisterUrlCallback("/query_plan_text", "query_plan_text.tmpl",
       query_plan_text_callback, false);
   webserver->RegisterUrlCallback("/query_stmt", "query_stmt.tmpl",
@@ -175,7 +174,7 @@ void ImpalaServer::QueryProfileUrlCallback(const Webserver::ArgumentMap& args,
 
   Value profile(ss.str().c_str(), document->GetAllocator());
   document->AddMember("profile", profile, document->GetAllocator());
-  document->AddMember("query_id", args.find("query_id")->second.c_str(),
+  document->AddMember("query_id", StringRef(args.find("query_id")->second.c_str()),
       document->GetAllocator());
 }
 
@@ -193,19 +192,19 @@ void ImpalaServer::QueryProfileEncodedUrlCallback(const Webserver::ArgumentMap& 
     }
   }
 
-  document->AddMember(Webserver::ENABLE_RAW_JSON_KEY, true, document->GetAllocator());
+  document->AddMember(StringRef(Webserver::ENABLE_RAW_JSON_KEY), true, document->GetAllocator());
   Value profile(ss.str().c_str(), document->GetAllocator());
   document->AddMember("contents", profile, document->GetAllocator());
 }
 
 void ImpalaServer::InflightQueryIdsUrlCallback(const Webserver::ArgumentMap& args,
     Document* document) {
-  lock_guard<mutex> l(query_exec_state_map_lock_);
+	boost::lock_guard<boost::mutex> l(query_exec_state_map_lock_);
   stringstream ss;
   BOOST_FOREACH(const QueryExecStateMap::value_type& exec_state, query_exec_state_map_) {
     ss << exec_state.second->query_id() << "\n";
   }
-  document->AddMember(Webserver::ENABLE_RAW_JSON_KEY, true, document->GetAllocator());
+  document->AddMember(rapidjson::StringRef(Webserver::ENABLE_RAW_JSON_KEY), true, document->GetAllocator());
   Value query_ids(ss.str().c_str(), document->GetAllocator());
   document->AddMember("contents", query_ids, document->GetAllocator());
 }
@@ -268,7 +267,7 @@ void ImpalaServer::QueryStateUrlCallback(const Webserver::ArgumentMap& args,
     Document* document) {
   set<QueryStateRecord, QueryStateRecord> sorted_query_records;
   {
-    lock_guard<mutex> l(query_exec_state_map_lock_);
+	  boost::lock_guard<boost::mutex> l(query_exec_state_map_lock_);
     BOOST_FOREACH(
         const QueryExecStateMap::value_type& exec_state, query_exec_state_map_) {
       // TODO: Do this in the browser so that sorts on other keys are possible.
@@ -288,7 +287,7 @@ void ImpalaServer::QueryStateUrlCallback(const Webserver::ArgumentMap& args,
 
   Value completed_queries(kArrayType);
   {
-    lock_guard<mutex> l(query_log_lock_);
+	  boost::lock_guard<boost::mutex> l(query_log_lock_);
     BOOST_FOREACH(const QueryStateRecord& log_entry, query_log_) {
       Value record_json(kObjectType);
       QueryStateToJson(log_entry, &record_json, document);
@@ -301,10 +300,10 @@ void ImpalaServer::QueryStateUrlCallback(const Webserver::ArgumentMap& args,
 
   Value query_locations(kArrayType);
   {
-    lock_guard<mutex> l(query_locations_lock_);
+	  boost::lock_guard<boost::mutex> l(query_locations_lock_);
     BOOST_FOREACH(const QueryLocations::value_type& location, query_locations_) {
       Value location_json(kObjectType);
-      Value location_name(lexical_cast<string>(location.first).c_str(),
+      Value location_name(boost::lexical_cast<string>(location.first).c_str(),
           document->GetAllocator());
       location_json.AddMember("location", location_name, document->GetAllocator());
       location_json.AddMember("count", location.second.size(),
@@ -318,10 +317,10 @@ void ImpalaServer::QueryStateUrlCallback(const Webserver::ArgumentMap& args,
 
 void ImpalaServer::SessionsUrlCallback(const Webserver::ArgumentMap& args,
     Document* document) {
-  lock_guard<mutex> l(session_state_map_lock_);
+	boost::lock_guard<boost::mutex> l(session_state_map_lock_);
   Value sessions(kArrayType);
   BOOST_FOREACH(const SessionStateMap::value_type& session, session_state_map_) {
-    shared_ptr<SessionState> state = session.second;
+    boost::shared_ptr<SessionState> state = session.second;
     Value session_json(kObjectType);
     Value type(PrintTSessionType(state->session_type).c_str(),
         document->GetAllocator());
@@ -339,7 +338,7 @@ void ImpalaServer::SessionsUrlCallback(const Webserver::ArgumentMap& args,
     Value session_id(PrintId(session.first).c_str(), document->GetAllocator());
     session_json.AddMember("session_id", session_id, document->GetAllocator());
 
-    Value network_address(lexical_cast<string>(state->network_address).c_str(),
+    Value network_address(boost::lexical_cast<string>(state->network_address).c_str(),
         document->GetAllocator());
     session_json.AddMember("network_address", network_address, document->GetAllocator());
 
@@ -442,7 +441,7 @@ void PlanToJsonHelper(const map<TPlanNodeId, TPlanNodeExecSummary>& summaries,
     const vector<TPlanNode>& nodes,
     vector<TPlanNode>::const_iterator* it, rapidjson::Document* document, Value* value) {
   Value children(kArrayType);
-  value->AddMember("label", (*it)->label.c_str(), document->GetAllocator());
+  value->AddMember("label", StringRef((*it)->label.c_str()), document->GetAllocator());
   // Node "details" may contain exprs which should be redacted.
   Value label_detail(RedactCopy((*it)->label_detail).c_str(), document->GetAllocator());
   value->AddMember("label_detail", label_detail, document->GetAllocator());
@@ -545,7 +544,7 @@ void PlanToJson(const vector<TPlanFragment>& fragments, const TExecSummary& summ
       const TDataSink& sink = fragment.output_sink;
       if (sink.__isset.stream_sink) {
         plan_fragment.AddMember("data_stream_target",
-            label_map[sink.stream_sink.dest_node_id].c_str(), document->GetAllocator());
+            StringRef(label_map[sink.stream_sink.dest_node_id].c_str()), document->GetAllocator());
       }
     }
     nodes.PushBack(plan_fragment, document->GetAllocator());
@@ -560,7 +559,7 @@ void ImpalaServer::QuerySummaryCallback(bool include_json_plan, bool include_sum
   if (!status.ok()) {
     // Redact the error message, it may contain part or all of the query.
     Value json_error(RedactCopy(status.GetDetail()).c_str(), document->GetAllocator());
-    document->AddMember("error", json_error, document->GetAllocator());
+    document->AddMember(rapidjson::StringRef("error"), json_error, document->GetAllocator());
     return;
   }
 
@@ -573,14 +572,14 @@ void ImpalaServer::QuerySummaryCallback(bool include_json_plan, bool include_sum
 
   // Search the in-flight queries first, followed by the archived ones.
   {
-    shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+    boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
     if (exec_state != NULL) {
       found = true;
-      lock_guard<mutex> l(*exec_state->lock(), adopt_lock_t());
+      boost::lock_guard<boost::mutex> l(*exec_state->lock(), boost::adopt_lock_t());
       if (exec_state->coord() == NULL) {
         const string& err = Substitute("Invalid query id: $0", PrintId(query_id));
         Value json_error(err.c_str(), document->GetAllocator());
-        document->AddMember("error", json_error, document->GetAllocator());
+        document->AddMember(rapidjson::StringRef("error"), json_error, document->GetAllocator());
         return;
       }
       query_status = exec_state->query_status();
@@ -597,12 +596,12 @@ void ImpalaServer::QuerySummaryCallback(bool include_json_plan, bool include_sum
   }
 
   if (!found) {
-    lock_guard<mutex> l(query_log_lock_);
+    boost::lock_guard<boost::mutex> l(query_log_lock_);
     QueryLogIndex::const_iterator query_record = query_log_index_.find(query_id);
     if (query_record == query_log_index_.end()) {
       const string& err = Substitute("Unknown query id: $0", PrintId(query_id));
       Value json_error(err.c_str(), document->GetAllocator());
-      document->AddMember("error", json_error, document->GetAllocator());
+      document->AddMember(rapidjson::StringRef("error"), json_error, document->GetAllocator());
       return;
     }
     if (include_json_plan || include_summary) {
@@ -628,7 +627,7 @@ void ImpalaServer::QuerySummaryCallback(bool include_json_plan, bool include_sum
   }
   Value json_stmt(RedactCopy(stmt).c_str(), document->GetAllocator());
   document->AddMember("stmt", json_stmt, document->GetAllocator());
-  Value json_plan_text(RedactCopy(plan).c_str(), document->GetAllocator());
+  Value json_plan_text((plan).c_str(), document->GetAllocator());
   document->AddMember("plan", json_plan_text, document->GetAllocator());
 
   // Redact the error in case the query is contained in the error message.
