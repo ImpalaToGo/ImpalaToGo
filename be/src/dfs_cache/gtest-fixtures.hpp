@@ -104,12 +104,25 @@ class CacheLayerTest : public ::testing::Test {
   			  std::to_string(m_cached_handles.load()) << "\".";
     }
 	virtual void SetUp() {
-		m_cache_path   = constants::TEST_CACHE_DEFAULT_LOCATION;
-
-		// try to get the ${IMPALA_HOME} environment variable and assign the dataset location
-		// relatively if anything found. Assign to default dataset location otherwise
+		// try to get the ${IMPALA_HOME} environment variable
 		const char* env_v_name = constants::IMPALA_HOME_ENV_VARIABLE_NAME.c_str();
-		if(const char* env_v = std::getenv(env_v_name)){
+		const char* env_v = std::getenv(env_v_name);
+
+		// assign the cache path location relatively to ${IMPALA_HOME}
+		// if env variable is set.
+		// Assign to default dataset location otherwise
+		if(env_v){
+			char buff[4096];
+			sprintf(buff, "%s%s", env_v, constants::TEST_CACHE_DEFAULT_LOCATION.c_str());
+			m_cache_path.assign(buff);
+		}
+		else
+			m_cache_path = constants::TEST_CACHE_DEFAULT_LOCATION;
+
+		// assign the dataset location relatively to ${IMPALA_HOME}
+		// if env variable is set.
+		// Assign to default dataset location otherwise
+		if(env_v){
 			char buff[4096];
 			sprintf(buff, "%s/testdata/dfs_cache/", env_v);
 			m_dataset_path.assign(buff);
