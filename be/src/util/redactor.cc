@@ -26,6 +26,8 @@
 #include <rapidjson/filestream.h>
 #include <rapidjson/rapidjson.h>
 #include <rapidjson/reader.h>
+#include <rapidjson/error/en.h>
+
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 
@@ -285,20 +287,30 @@ string SetRedactionRulesFromFile(const string& rules_file_path) {
   rules_doc.ParseStream<rapidjson::kParseDefaultFlags>(stream);
   fclose(rules_file);
   if (rules_doc.HasParseError()) {
-    return Substitute("Error parsing redaction rules; $0", rules_doc.GetParseError());
+    return Substitute("Error parsing redaction rules; $0", rapidjson::GetParseError_En(rules_doc.GetParseError()));
   }
   if (!rules_doc.IsObject()) {
     return "Error parsing redaction rules; root element must be a JSON Object.";
   }
+  /* note, in new rapidjson version, operator [] is asserting.
+
   const Value& version = rules_doc["version"];
   if (version.IsNull()) {
     return "Error parsing redaction rules; a document version is required.";
   }
-  if (!version.IsInt()) {
+  */
+  Value::ConstMemberIterator it = rules_doc.FindMember("version");
+  if(it == rules_doc.MemberEnd())
+	  return "Error parsing redaction rules; a document version is required.";
+
+  if (it->value.IsNull()) {
+      return "Error parsing redaction rules; a document version is required.";
+    }
+  if (!it->value.IsInt()) {
     return Substitute("Error parsing redaction rules; version must be an Integer but "
-        "is a $0", NameOfTypeOfJsonValue(version));
+        "is a $0", NameOfTypeOfJsonValue(it->value));
   }
-  if (version.GetInt() != 1) {
+  if (it->value.GetInt() != 1) {
     return "Error parsing redaction rules; only version 1 is supported.";
   }
 

@@ -22,14 +22,21 @@ namespace impala {
 
 using std::string;
 
-TEST(ParserTest, FileNotFound) {
+class RedactorConfigParserTest : public ::testing::Test{
+	protected:
+    static void SetUpTestCase() {
+  	  impala::InitGoogleLoggingSafe("Test_redactor_config_parser");
+    }
+};
+
+TEST_F(RedactorConfigParserTest, FileNotFound) {
   TempRulesFile rules_file("");
   rules_file.Delete();
   string error = SetRedactionRulesFromFile(rules_file.name());
   ASSERT_ERROR_MESSAGE_CONTAINS(error, "No such file");
 }
 
-TEST(ParserTest, EmptyFile) {
+TEST_F(RedactorConfigParserTest, EmptyFile) {
   TempRulesFile rules_file("");
   string error = SetRedactionRulesFromFile(rules_file.name());
   ASSERT_EQ("", error);
@@ -38,10 +45,10 @@ TEST(ParserTest, EmptyFile) {
 
   rules_file.OverwriteContents(" \t\n ");
   error = SetRedactionRulesFromFile(rules_file.name());
-  ASSERT_ERROR_MESSAGE_CONTAINS(error, "Text only contains white space");
+  ASSERT_ERROR_MESSAGE_CONTAINS(error, "The document is empty");
 }
 
-TEST(ParserTest, DescriptionPropertyIgnored) {
+TEST_F(RedactorConfigParserTest, DescriptionPropertyIgnored) {
   TempRulesFile rules_file(
       "{"
       "  \"version\": 1,"
@@ -54,14 +61,14 @@ TEST(ParserTest, DescriptionPropertyIgnored) {
   ASSERT_REDACTED_EQ("foo", "bar");
 }
 
-TEST(ParserTest, InvalidJson) {
+TEST_F(RedactorConfigParserTest, InvalidJson) {
   TempRulesFile rules_file(
       "\"version\": 100,"
       "\"rules\": ["
       "  {\"search\": \"[0-9]\", \"replace\": \"#\"}"
       "]");
   string error = SetRedactionRulesFromFile(rules_file.name());
-  ASSERT_ERROR_MESSAGE_CONTAINS(error, "either an object or array at root");
+  ASSERT_ERROR_MESSAGE_CONTAINS(error, "The document root must not follow by other values.");
 
   rules_file.OverwriteContents(
       "[{"
@@ -71,7 +78,7 @@ TEST(ParserTest, InvalidJson) {
       "  ]"
       "}]");
   error = SetRedactionRulesFromFile(rules_file.name());
-  ASSERT_ERROR_MESSAGE_CONTAINS(error, "root element must be a JSON Object");
+  ASSERT_ERROR_MESSAGE_CONTAINS(error, "root element must be a JSON Object.");
 
   rules_file.OverwriteContents(
       "{"
@@ -95,10 +102,10 @@ TEST(ParserTest, InvalidJson) {
 
   rules_file.OverwriteContents("{!@#$}");
   error = SetRedactionRulesFromFile(rules_file.name());
-  ASSERT_ERROR_MESSAGE_CONTAINS(error, "Name of an object member must be a string");
+  ASSERT_ERROR_MESSAGE_CONTAINS(error, "Missing a name for object member.");
 }
 
-TEST(ParserTest, BadVersion) {
+TEST_F(RedactorConfigParserTest, BadVersion) {
   TempRulesFile rules_file(
       "{"
       "  \"version\": 100,"
@@ -136,7 +143,7 @@ TEST(ParserTest, BadVersion) {
   ASSERT_ERROR_MESSAGE_CONTAINS(error, "version is required");
 }
 
-TEST(ParserTest, BadRegex) {
+TEST_F(RedactorConfigParserTest, BadRegex) {
   TempRulesFile rules_file(
       "{"
       "  \"version\": 1,"
@@ -148,7 +155,7 @@ TEST(ParserTest, BadRegex) {
   ASSERT_ERROR_MESSAGE_CONTAINS(error, "missing ]");
 }
 
-TEST(ParserTest, BadCaseSensitivtyValue) {
+TEST_F(RedactorConfigParserTest, BadCaseSensitivtyValue) {
   TempRulesFile rules_file(
       "{"
       "  \"version\": 1,"
@@ -160,7 +167,7 @@ TEST(ParserTest, BadCaseSensitivtyValue) {
   ASSERT_ERROR_MESSAGE_CONTAINS(error, "must be of type Bool");
 }
 
-TEST(ParserTest, RuleNumberInErrorMessage) {
+TEST_F(RedactorConfigParserTest, RuleNumberInErrorMessage) {
   TempRulesFile rules_file(
       "{"
       "  \"version\": 1,"
