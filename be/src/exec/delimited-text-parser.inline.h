@@ -26,7 +26,6 @@ template <bool process_escapes>
 inline void DelimitedTextParser::AddColumn(int len, char** next_column_start,
     int* num_fields, FieldLocation* field_locations, PrimitiveType type) {
 	addColumnInternal(len, next_column_start, num_fields, field_locations, type, process_escapes);
-	*next_column_start += len + 1;
 	++column_idx_;
 }
 

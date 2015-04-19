@@ -26,11 +26,18 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 		const bool* is_materialized_col,
 		char tuple_delim) :
 		DelimitedTextParser(num_cols, num_partition_keys, is_materialized_col, tuple_delim),
-		m_compundColumnDetectedhandler(0){
+		m_compundColumnDetectedhandler(0),
+		m_data_remainder_size(-1),
+		m_next_tuple_start(-1),
+		m_reconstructedRecordData(NULL),
+		m_unfinishedRecordData(NULL),
+		m_unfinishedRecordLen(-1){
+
+	LOG(INFO) << "JsonDelimitedTextParser()\n";
 
 	// bind "column detected" handler to this parser to be handled here
-	m_columnDetectedHandler = boost::bind(boost::mem_fn(&JsonDelimitedTextParser::addColumnInternal), this,
-			_1, _2, _3, _4, _5, _6);
+	m_columnDetectedHandler = boost::bind(boost::mem_fn(&DelimitedTextParser::AddColumn<false>), this,
+			_1, _2, _3, _4, _5);
 
 	// create the rapidjson events handler:
 	m_messageHandler.reset(new JsonSAXParserEventsHandler(m_columnDetectedHandler, m_compundColumnDetectedhandler));
@@ -67,23 +74,27 @@ void JsonDelimitedTextParser::parserResetInternal(){
 }
 
 bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len){
+	LOG(WARNING) << "continuePreviousSession() for data : \"" << *data << "\n";
 	bool readiness = m_messageHandler->ready();
     // if the handler is not ready, this means that previous record parsing was
 	// not completed due record truncation (or errors).
 	// Handler holds the previous state in order to proceed with incomplete tuple in current session.
 	if(readiness){
 		// if handler is ready, just do nothing.
+		LOG(WARNING) << "continuePreviousSession() : handler is ready.\n";
 		return false;
 	}
 
 	// Get the offset of next record within this batch
 	m_next_tuple_start = FindFirstInstance(*data, *len);
 	bool more_records_exist = m_next_tuple_start != -1;
-	if(more_records_exist)
+	if(more_records_exist){
 		m_next_tuple_start -= 1;
+		LOG(WARNING) << "continuePreviousSession() : more records exists, offset : " << m_next_tuple_start << "\n";
+	}
 
     std::string reconstructedPrefix = m_messageHandler->reconstruct_the_hierarchy();
-
+    LOG(WARNING) << "continuePreviousSession() : reconstructed prefix : " << reconstructedPrefix << "\n";
 	// analyze the arrived data buffer, we should trim the "," if it exists.
 	int pos = 0;
 	bool leading_keyvalue_or_field_separator_found = false;
@@ -96,9 +107,10 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 			break;
 		}
 	}
-
+	LOG(WARNING) << "continuePreviousSession() : going to reset message handler.\n";
     // reset hard the event handler:
     m_messageHandler->reset(false, true);
+    LOG(WARNING) << "continuePreviousSession() : message handler reseted." << "\n";
 
     // save the size of newly arrived data which we append to the partial record
 	// we hold from previous session:
@@ -107,7 +119,7 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
     m_data_remainder_size = leading_keyvalue_or_field_separator_found ? (m_data_remainder_size - (pos + 1) ) : m_data_remainder_size;
 
 	// consider remainder of previous non-finished JSON record inside current batch:
-	int64_t new_len = m_unfinishedRecordLen + reconstructedPrefix.length() + m_data_remainder_size;
+	int64_t new_len = m_unfinishedRecordLen + reconstructedPrefix.length() + m_data_remainder_size + 1;
 
 	// allocate buffer enough to hold "number_of_enclosing_entities" + unfinished JSON record part.
 	// we will do the reconstruction of initial data hierarchy in this buffer
@@ -117,24 +129,25 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 
 	// and save non-finished content prepended with JSON hierarchy:
 	memcpy(m_reconstructedRecordData, reconstructedPrefix.data(), reconstructedPrefix.length());
+	LOG(WARNING) << "continuePreviousSession() : reconstructed prefix copied." << "\n";
 
 	// if there was some partial content in previous record
 	// which we should re-parse, copy the previous part of JSON record
 	// which was not parsed during previous batch session:
 	if(m_unfinishedRecordLen != 0)
 		memcpy((m_reconstructedRecordData + reconstructedPrefix.length()), m_unfinishedRecordData, m_unfinishedRecordLen);
-
+	LOG(WARNING) << "continuePreviousSession() : unfinished data copied." << "\n";
 	// copy from newly arrived byte buffer the remainder of JSON:
 	memcpy((m_reconstructedRecordData + reconstructedPrefix.length() + m_unfinishedRecordLen),
 			leading_keyvalue_or_field_separator_found ? (*data + pos + 1) : (*data), m_data_remainder_size);
-
-    // reset the incompleted record data buffer oly if one was allocated
+	LOG(WARNING) << "continuePreviousSession() : remainder is copied." << "\n";
+    // reset the incompleted record data buffer only if one was allocated
     if(m_unfinishedRecordData != NULL){
     	// deallocate old remainder:
     	delete [] m_unfinishedRecordData;
     	m_unfinishedRecordData = NULL;
     }
-
+    LOG(WARNING) << "continuePreviousSession() : unfinished data is cleaned up." << "\n";
     // if no more records exists in the "data" buffer, increase remained length in order to contain extra
     // content we will add at the beginning of data in order to reconstruct valid JSON:
     if(!more_records_exist){
@@ -209,11 +222,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 
 		// start to handle new tuple
 		if (new_tuple) {
-			if(!continue_previous_session)
-				// reset current column index in case if current parsing session is not the continuation
-				// of previous non-completed session:
-				column_idx_ = 0;
-
 			MemoryStream* ss = NULL;
 			// if there's previous parsing session continuation is required,
 			// create the stream from reconstructed buffer of unfinished record data and give it to a reader
@@ -230,7 +238,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			reader.ParseEx<32>(*ss, *(m_messageHandler.get()));
 			int  error_offset = -1;
             bool error = false;
-
+            LOG(WARNING) << "ParseFieldLocations() : parser completed." << "\n";
             if(reader.HasParseError()){
             	// we ignore the error which is rise by parser in case if it detects
             	// the extra content after root object is closed.
@@ -242,11 +250,12 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
             }
 			if(error){
 				error_offset = reader.GetErrorOffset();
-				std::cout << "JSON parse error \"" << reader.GetParseErrorCode() << "\n.";
+				LOG(WARNING) << "JSON parse error \"" << reader.GetParseErrorCode() << "; offset = " << error_offset << "\n.";
 				// calculate unfinished content size
 				m_unfinishedRecordLen = remaining_len - error_offset;
 				// TODO : use MemoryPool allocator instead:
 				if(m_unfinishedRecordLen != 0){
+					LOG(WARNING) << "Unfinished record len = " << m_unfinishedRecordLen << "\n.";
 					m_unfinishedRecordData = new char[m_unfinishedRecordLen];
 					memset(m_unfinishedRecordData, '\0', m_unfinishedRecordLen);
 					// and save non-finished content for next usage
@@ -277,7 +286,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			// check also whether at least some columns were materialized.
 			// don't count empty row ({}).
 			if(!error && (column_idx_ != 0)){
-
+                LOG(WARNING) << "tuple completed, column index = " << column_idx_ << ".\n";
 				// fill remained columns for this tuple
 				FillColumns<false>(0, NULL, num_fields, field_locations);
 
@@ -314,11 +323,13 @@ void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_f
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
-		printColumn(*num_fields, field_locations);
+
+		if(type != INVALID_TYPE)
+			printColumn(*num_fields, field_locations);
+
 		// number of materialized fields is increased
 		++(*num_fields);
   }
-  ++column_idx_;
 }
 
 }

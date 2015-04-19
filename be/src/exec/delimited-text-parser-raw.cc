@@ -40,6 +40,10 @@ RawDelimitedTextParser::RawDelimitedTextParser(
 				  current_column_has_escape_(false),
 				  last_char_is_escape_(false){
 
+	this->process_escapes_ = escape_char != '\0';
+
+    LOG(INFO) << "RawDelimitedTextParser()\n";
+
 	// Escape character should not be the same as tuple or col delim unless it is the
 	// empty delimiter.
 	DCHECK(escape_char == '\0' || escape_char != tuple_delim);
@@ -247,4 +251,5 @@ void RawDelimitedTextParser::addColumnInternal(int len, char** next_column_start
 	    ++(*num_fields);
 	  }
 	  if (process_escapes) current_column_has_escape_ = false;
+	  *next_column_start += len + 1;
 }

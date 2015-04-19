@@ -24,7 +24,7 @@ namespace constants{
 	const std::string IMPALA_HOME_ENV_VARIABLE_NAME = "IMPALA_HOME";
 
 	/** Test cache location */
-	const std::string TEST_CACHE_DEFAULT_LOCATION = "/root/ImpalaToGo/cache/impalatogo/";
+	const std::string TEST_CACHE_DEFAULT_LOCATION = "/cache/impalatogo/";
 
 	/** reduced age bucket timeslice */
 	const int TEST_CACHE_REDUCED_TIMESLICE = 10;

@@ -101,7 +101,7 @@ class CacheLayerTest : public ::testing::Test {
   			  "Number of zero handles : \"" <<
   			  std::to_string(m_zero_handles.load()) << "\";\n" <<
   			  "Number of cached handles : \"" <<
-  			  std::to_string(m_cached_handles.load()) << "\".";
+  			  std::to_string(m_cached_handles.load()) << "\".\n";
     }
 	virtual void SetUp() {
 		// try to get the ${IMPALA_HOME} environment variable
@@ -117,7 +117,7 @@ class CacheLayerTest : public ::testing::Test {
 			m_cache_path.assign(buff);
 		}
 		else
-			m_cache_path = constants::TEST_CACHE_DEFAULT_LOCATION;
+			m_cache_path = "/root/ImpalaToGo" + constants::TEST_CACHE_DEFAULT_LOCATION;
 
 		// assign the dataset location relatively to ${IMPALA_HOME}
 		// if env variable is set.
@@ -132,8 +132,7 @@ class CacheLayerTest : public ::testing::Test {
 
 		boost::system::error_code ec;
 
-		std::cout << "Reset the cache... \"" << m_cache_path << "\"";
-
+		std::cout << "Reset the cache... \"" << m_cache_path << "\"\n";
 		// clean cache directory before usage:
 		boost::filesystem::remove_all(m_cache_path, ec);
 		SCOPED_TRACE(ec.message());
@@ -142,7 +141,7 @@ class CacheLayerTest : public ::testing::Test {
 		boost::filesystem::create_directory(m_cache_path, ec);
 		ASSERT_TRUE(!ec);
 
-		std::cout << "Check dataset location exist... \"" << m_dataset_path << "\"";
+		std::cout << "Check dataset location exist... \"" << m_dataset_path << "\"\n";
 	    // first check working directories exist:
 		ASSERT_TRUE(boost::filesystem::exists(m_dataset_path.c_str(), ec));
 		SCOPED_TRACE(ec.message());
@@ -151,7 +150,7 @@ class CacheLayerTest : public ::testing::Test {
 		SCOPED_TRACE(ec.message());
 		ASSERT_TRUE(!ec);
 
-		std::cout << "Working directories exist.";
+		std::cout << "Working directories exist.\n";
 
 		m_direct_handles.store(0l);
 		m_cached_handles.store(0l);

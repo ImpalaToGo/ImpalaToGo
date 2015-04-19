@@ -841,8 +841,8 @@ status::StatusInternal dfsCopy(const FileSystemDescriptor & fsDescriptor1, const
     }
 
     // ask source adaptor to do the copy to target adaptor:
-    bool ret = FileSystemDescriptorBound::fileCopy(connectionSource, src, connectionDest, dst);
-    return (ret ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE);
+    int ret = FileSystemDescriptorBound::fileCopy(connectionSource, src, connectionDest, dst);
+    return (ret == 0 ? status::StatusInternal::OK : status::StatusInternal::DFS_OBJECT_OPERATION_FAILURE);
 }
 
 status::StatusInternal dfsMove(const FileSystemDescriptor & fsDescriptor1, const char* src,

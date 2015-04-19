@@ -221,7 +221,6 @@ static void close_open_file_sporadic(const FileSystemDescriptor& fsDescriptor,
     ASSERT_TRUE(!path.empty());
     std::cout << "open-close sporadic, File selected : \"" << path << "\"." << std::endl;
     // add the file:// suffix:
-    // close_open_file((constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), fsDescriptor,
     close_open_file((fsname + path).c_str(), fsDescriptor,
     		direct_handles, cached_handles, zero_handles, total_handles);
 }
@@ -307,7 +306,7 @@ static void rescan_dataset(const char* dataset_location, std::vector<std::string
 	}
 }
 
-TEST_F(CacheLayerTest, TachyonTest) {
+TEST_F(CacheLayerTest, DISABLED_TachyonTest) {
 
 	std::vector<std::string> dataset;
 	dataset.push_back("localhost:19998/eventsSmall/demo_20140629000000000016.csv");
@@ -387,7 +386,7 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
 	data_location.copy(filename, data_location.length() + 1, 0);
 
-	std::cout << "Test data is validated and is ready";
+	std::cout << "Test data is validated and is ready\n";
 
 	cacheInit(constants::TEST_CACHE_DEFAULT_FREE_SPACE_PERCENT, m_cache_path,
 			boost::posix_time::hours(-1), constants::TEST_CACHE_FIXED_SIZE);
@@ -398,7 +397,7 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 	raiiDfsConnection conn = fsAdaptor.getFreeConnection();
 	ASSERT_TRUE(conn.connection() != NULL);
 
-	std::cout << "Localhost filesystem adaptor is ready";
+	std::cout << "Localhost filesystem adaptor is ready\n";
 
 	status::StatusInternal status0 = status::StatusInternal::OK;
 	status::StatusInternal status1;
@@ -415,8 +414,7 @@ TEST_F(CacheLayerTest, TwoClientsRequestSameFileForOpenWhichIsNotExistsInitially
 
 		std::unique_lock<std::mutex> lock(mux);
 		condition.wait(lock, [&] {return go;});
-
-		dfsFile file = dfsOpenFile(m_dfsIdentitylocalFilesystem, filename, O_RDONLY, 0, 0, 0, available);
+ 		dfsFile file = dfsOpenFile(m_dfsIdentitylocalFilesystem, filename, O_RDONLY, 0, 0, 0, available);
 		collectFileHandleStat(file, m_direct_handles, m_cached_handles, m_zero_handles, m_total_handles);
 		EXPECT_TRUE(file != nullptr);
 		EXPECT_TRUE(available);
@@ -702,8 +700,7 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 	memset(dst, 0, 256);
 	dst_location.copy(dst, dst_location.length() + 1, 0);
 
-	status::StatusInternal status = dfsCopy(m_dfsIdentitylocalFilesystem, src, m_dfsIdentitylocalFilesystem, dst);
-	ASSERT_TRUE(status == status::StatusInternal::OK);
+
 
 	// read both files and compare byte-by-byte their contents:
 	dfsFile source      = nullptr;
@@ -717,6 +714,9 @@ TEST_F(CacheLayerTest, TestCopyRemoteFileToLocal){
 
 	std::string path_dest(dst);
 	path_dest = path_dest.insert(0, constants::TEST_LOCALFS_PROTO_PREFFIX + "/");
+
+	status::StatusInternal status = dfsCopy(m_dfsIdentitylocalFilesystem, path_source.c_str(), m_dfsIdentitylocalFilesystem, path_dest.c_str());
+		ASSERT_TRUE(status == status::StatusInternal::OK);
 
 	// open "source" file:
 	source = fsAdaptor.fileOpen(conn, path_source.c_str(), O_RDONLY, 0, 0, 0);
@@ -772,7 +772,7 @@ TEST_F(CacheLayerTest, OpenNonExistingFile) {
 
 	char filename[256];
 	memset(filename, 0, 256);
-	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + data_location;
+	data_location = constants::TEST_LOCALFS_PROTO_PREFFIX + "/" + data_location;
 	data_location.copy(filename, data_location.length() + 1, 0);
 
     std::cout << "Test data is validated and is ready" << std::endl;

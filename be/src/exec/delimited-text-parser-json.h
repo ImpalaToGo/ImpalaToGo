@@ -12,8 +12,8 @@
 #ifndef DELIMITED_TEXT_PARSER_JSON_H_
 #define DELIMITED_TEXT_PARSER_JSON_H_
 
-#include "rapidjson/reader.h"
-#include "boost/function.hpp"
+#include <rapidjson/reader.h>
+#include <boost/function.hpp>
 
 #include "exec/delimited-text-parser.h"
 
@@ -24,7 +24,7 @@ class JsonDelimitedTextParser : public DelimitedTextParser {
 private:
 	/** functor to handle "simple column detected" event */
 	typedef boost::function<void(int len, char** data, int* num_fields,
-			FieldLocation* field_locations, PrimitiveType columnType, bool flag)> simpleColumnDetected;
+			FieldLocation* field_locations, PrimitiveType columnType)> simpleColumnDetected;
 
 	/** functor to handle "object column detected" event */
 	typedef boost::function<void(int len, char** next_column_start, int* num_fields,
@@ -115,6 +115,7 @@ private:
         	if(continuation)
         		return;
 
+        	LOG(INFO) << "resetting handler..\n";
         	boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
 
         	// reset number of incomplete objects registered:
@@ -122,7 +123,7 @@ private:
 
         	// cleanup the vector of registered JSON objects:
         	cleanvector(m_objects);
-
+        	LOG(INFO) << "vecotr is cleaned in handler..\n";
         	// no "currents" exists:
         	m_currentObject = NULL;
         	m_currentKey = "";
@@ -163,50 +164,50 @@ private:
 
 	    bool Null(const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_NULL, false);
+	    			TYPE_NULL);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 
 	    bool Bool(bool b, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_BOOLEAN, false);
+	    			TYPE_BOOLEAN);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Int(int i, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_INT, false);
+	    			TYPE_INT);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Uint(unsigned u, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_INT, false);
+	    			TYPE_INT);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Int64(int64_t i, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_BIGINT, false);
+	    			TYPE_BIGINT);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Uint64(uint64_t u, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data),m_materializedFields, m_fieldLocations,
-	    			TYPE_BIGINT, false);
+	    			TYPE_BIGINT);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Double(double d, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_DOUBLE, false);
+	    			TYPE_DOUBLE);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool String(const char* data, rapidjson::SizeType len, bool copy) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_STRING, false);
+	    			TYPE_STRING);
 	    	state_ = kExpectNameOrObjectEnd;
 	        return true;
 	    }

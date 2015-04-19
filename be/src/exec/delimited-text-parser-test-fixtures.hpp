@@ -15,22 +15,27 @@
 #include <string>
 
 #include "exec/delimited-text-parser.inline.h"
+#include "exec/delimited-text-parser-raw.inline.h"
 #include "exec/delimited-text-parser-json.inline.h"
 
 namespace impala{
 
 /** Fixture for JSON parser tests */
-class JsonParserTest : public ::testing::Test {
+class DelimtedTextParserTest : public ::testing::Test {
  protected:
+	enum FORMAT{
+		RAW,
+		JSON
+	};
+
 	/** parser reference */
-	JsonDelimitedTextParser* m_parser;
+	DelimitedTextParser* m_parser;
 
 	/**mask to mark fields that should be materialized */
 	bool* is_materialized_cols;
 
     static void SetUpTestCase() {
-    	impala::InitGoogleLoggingSafe("Test_json_parser");
-    	impala::InitThreading();
+    	impala::InitGoogleLoggingSafe("Test_delimited_text_parser");
     }
 
 	virtual void SetUp() { }
@@ -47,17 +52,33 @@ class JsonParserTest : public ::testing::Test {
 	}
 
 	/** reset the local state */
-	void reset(int num_cols, char tuple_delim){
+	void reset(FORMAT format, int num_cols, char tuple_delim, char field_delim = '\0',
+			char collection_delim = '\0', char escape_char = '\0'){
 		const int NUM_COLS = 10;
 		is_materialized_cols = new bool[NUM_COLS];
 		for (int i = 0; i < NUM_COLS; ++i) is_materialized_cols[i] = true;
-		m_parser = new JsonDelimitedTextParser(num_cols, 0, is_materialized_cols, tuple_delim);
+
+		// create parser according to format
+		switch(format){
+		case JSON:
+			m_parser = new JsonDelimitedTextParser(num_cols, 0, is_materialized_cols, tuple_delim);
+			break;
+		case RAW:
+			m_parser = new RawDelimitedTextParser(num_cols, 0, is_materialized_cols, tuple_delim,
+					field_delim, collection_delim, escape_char);
+		}
+
 	}
 
-	/** validate assumptions in regards to a batch */
+	/** validate assumptions in regards to a batch. For JSON */
 	void validate(const std::string& data,
 		    int expected_offset, char tuple_delim, int expected_num_tuples,
-		    int expected_num_fields, int expected_incompletes, bool continuation = false);
+		    int expected_num_fields, int expected_incompletes, bool continuation);
+
+	/** validate assumptions in regards to a batch. For CSV */
+	void validate(const string& data,
+		    int expected_offset, char tuple_delim, int expected_num_tuples,
+		    int expected_num_fields);
 };
 }
 
