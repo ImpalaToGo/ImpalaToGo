@@ -15,18 +15,11 @@ mkdir -p $REMOTE_BASE_DIR/tachyon/core/target/
 mkdir -p $REMOTE_BASE_DIR/tachyon/core/src/main/webapp/
 mkdir -p $REMOTE_BASE_DIR/tachyon/client/target/
 mkdir -p $REMOTE_BASE_DIR/tachyon/assembly/target/
-mkdir -p $REMOTE_BASE_DIR/tachyon/conf/
-mkdir -p $REMOTE_BASE_DIR/tachyon/bin/
-mkdir -p $REMOTE_BASE_DIR/tachyon/libexec/
+mkdir -p $REMOTE_BASE_DIR/tachyon/{libexec,bin,conf}
 mkdir -p $REMOTE_BASE_DIR/tachyon/underfs/{glusterfs,hdfs}/target
 
-
-mkdir -p $REMOTE_BASE_DIR/llvm-ir/
-mkdir -p $REMOTE_BASE_DIR/be/
+mkdir -p $REMOTE_BASE_DIR/{llvm-ir,be,bin,shell,lib}/
 mkdir -p $REMOTE_BASE_DIR/thirdparty/thrift/build/
-mkdir -p $REMOTE_BASE_DIR/bin/
-mkdir -p $REMOTE_BASE_DIR/shell/
-mkdir -p $REMOTE_BASE_DIR/lib/
 
 
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/core/target/*.jar $REMOTE_BASE_DIR/tachyon/core/target/
