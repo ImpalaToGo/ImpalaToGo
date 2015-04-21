@@ -18,6 +18,7 @@ mkdir -p $REMOTE_BASE_DIR/tachyon/assembly/target/
 mkdir -p $REMOTE_BASE_DIR/tachyon/conf/
 mkdir -p $REMOTE_BASE_DIR/tachyon/bin/
 mkdir -p $REMOTE_BASE_DIR/tachyon/libexec/
+mkdir -p $REMOTE_BASE_DIR/tachyon/underfs/{glusterfs,hdfs}/target
 
 
 mkdir -p $REMOTE_BASE_DIR/llvm-ir/
@@ -36,6 +37,8 @@ cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/assembly/target/*.jar $REMOTE_BASE_DIR
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/conf/* $REMOTE_BASE_DIR/tachyon/conf/
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/bin/* $REMOTE_BASE_DIR/tachyon/bin/
 cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/libexec/* $REMOTE_BASE_DIR/tachyon/libexec/
+cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/underfs/glusterfs/target/*jar $REMOTE_BASE_DIR/tachyon/underfs/glusterfs/target/
+cp -rpv $BASE_DIR/thirdparty/$TACHYON_DIR/underfs/hdfs/target/*jar $REMOTE_BASE_DIR/tachyon/underfs/hdfs/target/
 
 #impala deployment
 cp -rpv $BASE_DIR/llvm-ir/* $REMOTE_BASE_DIR/llvm-ir/
