@@ -25,7 +25,7 @@ fi
 shift 3
 SSH_PARAMS="-i $KEY"
 REMOTE_TARGET=$USER@$TARGET_HOST
-REMOTE_BASE_DIR=/home/$USER/
+REMOTE_BASE_DIR=/dbcache/
 echo -n Copying build results to target...
 scp -v $SSH_PARAMS $BASE_DIR/build.tgz $REMOTE_TARGET:$REMOTE_BASE_DIR
 echo Done
@@ -35,5 +35,5 @@ ssh $SSH_PARAME $REMOTE_TARGET tar -xzf $REMOTE_BASE_DIR/build.tgz
 echo Done
 echo -n Running install script on target...
 #TODO: Remove previous version before installing
-ssh $SSH_PARAME $REMOTE_TARGET $REMOTE_BASE_DIR/build/deployment/install.sh
+ssh $SSH_PARAME $REMOTE_TARGET /home/$USER/build/deployment/install.sh
 echo Done
