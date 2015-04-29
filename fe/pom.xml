@@ -40,6 +40,8 @@
     <!-- Impala does not currently support the Hive .13 JDBC driver -->
     <hive-jdbc.version>0.13.1-cdh5.2.0-SNAPSHOT</hive-jdbc.version>
     <tachyon.version>${env.IMPALA_TACHYON_VERSION}</tachyon.version>
+    <thrift.version>${env.IMPALA_THRIFT_VERSION}</thrift.version>
+    <thrift.home>${env.THRIFT_HOME}</thrift.home>
   </properties>
 
   <dependencies>
@@ -192,7 +194,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>${env.IMPALA_THRIFT_VERSION}</version>
+      <version>${thrift.version}</version>
       <!-- libthrift depends httpcore 4.1.3 which does not work with KMS. To workaround
            this problem the dependency is excluded here and we explicitly add a newer
            httpcore dependency version. See CDH-22024. TODO: Find a better fix. -->
@@ -213,7 +215,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libfb303</artifactId>
-      <version>${env.IMPALA_THRIFT_VERSION}</version>
+      <version>${thrift.version}</version>
     </dependency>
 
     <dependency>
@@ -689,11 +691,11 @@
       <id>thrift-home-defined</id>
       <activation>
         <file>
-          <exists>${env.THRIFT_HOME}/bin/thrift</exists>
+          <exists>${thrift.home}/bin/thrift</exists>
           </file>
       </activation>
       <properties>
-        <thrift.executable>${env.THRIFT_HOME}/bin/thrift</thrift.executable>
+        <thrift.executable>${thrift.home}/bin/thrift</thrift.executable>
       </properties>
     </profile>
   </profiles>
