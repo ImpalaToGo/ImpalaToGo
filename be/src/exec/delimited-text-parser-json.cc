@@ -279,7 +279,18 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			} else {
 				stream_offset = ss->Tell();
 			}
-			offset = error ? stream_offset : (m_next_tuple_start != -1 ? m_next_tuple_start : stream_offset);
+			/** 1. If there's no other tuple within same batch and no parsing error in current iteration,
+			 *  there're 2 scenarios:
+			 *     - last line is ended with rows separator
+			 *     - last line is not ended with rows separator
+			 *     Just check for the end of batch in case if complete row is parsed in this session
+			 *
+			 *  2. If the row separator is LF, the offset is calculated differently
+			 */
+			int delta = remaining_len - stream_offset;
+			bool use_direct_offset = ( (tuple_delim_ != '\n') || ((delta == 0) || (delta == 1) ));
+			offset = error ? stream_offset :
+					(m_next_tuple_start != -1 ? m_next_tuple_start : (use_direct_offset ? stream_offset : stream_offset - 1));
 
 			// we increase number of processed tuples only in case if there were no parse error
 			// Number of tuples = number of really completed tuples
@@ -300,18 +311,18 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				++(*num_tuples);
 			}
 
-			if (*num_tuples == max_tuples) {
-				LOG(INFO) << "Max num of tuples reached." << "\n";
-				++*byte_buffer_ptr;
-				--remaining_len;
-				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
-				return Status::OK;
-			}
 			LOG(INFO) << "Shifting offset : " << offset << "; remaining len = " << remaining_len << "\.n";
 		    remaining_len -= offset;
 
 			// shift buffer to offset:
 			*byte_buffer_ptr += offset;
+
+			if (*num_tuples == max_tuples) {
+				LOG(INFO) << "Max num of tuples reached." << "\n";
+				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
+				return Status::OK;
+			}
+
 		}
 	}
     LOG(INFO) << "Field locations parsed." << "\n";
