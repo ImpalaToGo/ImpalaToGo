@@ -74,14 +74,13 @@ void JsonDelimitedTextParser::parserResetInternal(){
 }
 
 bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len){
-	LOG(WARNING) << "continuePreviousSession() for data : \"" << *data << "\n";
 	bool readiness = m_messageHandler->ready();
     // if the handler is not ready, this means that previous record parsing was
 	// not completed due record truncation (or errors).
 	// Handler holds the previous state in order to proceed with incomplete tuple in current session.
 	if(readiness){
 		// if handler is ready, just do nothing.
-		LOG(WARNING) << "continuePreviousSession() : handler is ready.\n";
+		LOG(INFO) << "continuePreviousSession() : handler is ready.\n";
 		return false;
 	}
 
@@ -90,11 +89,11 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 	bool more_records_exist = m_next_tuple_start != -1;
 	if(more_records_exist){
 		m_next_tuple_start -= 1;
-		LOG(WARNING) << "continuePreviousSession() : more records exists, offset : " << m_next_tuple_start << "\n";
+		LOG(INFO) << "continuePreviousSession() : more records exists, offset : " << m_next_tuple_start << "\n";
 	}
 
     std::string reconstructedPrefix = m_messageHandler->reconstruct_the_hierarchy();
-    LOG(WARNING) << "continuePreviousSession() : reconstructed prefix : " << reconstructedPrefix << "\n";
+    LOG(INFO) << "continuePreviousSession() : reconstructed prefix : " << reconstructedPrefix << "\n";
 	// analyze the arrived data buffer, we should trim the "," if it exists.
 	int pos = 0;
 	bool leading_keyvalue_or_field_separator_found = false;
@@ -107,10 +106,10 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 			break;
 		}
 	}
-	LOG(WARNING) << "continuePreviousSession() : going to reset message handler.\n";
+	LOG(INFO) << "continuePreviousSession() : going to reset message handler.\n";
     // reset hard the event handler:
     m_messageHandler->reset(false, true);
-    LOG(WARNING) << "continuePreviousSession() : message handler reseted." << "\n";
+    LOG(INFO) << "continuePreviousSession() : message handler reseted." << "\n";
 
     // save the size of newly arrived data which we append to the partial record
 	// we hold from previous session:
@@ -129,25 +128,25 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 
 	// and save non-finished content prepended with JSON hierarchy:
 	memcpy(m_reconstructedRecordData, reconstructedPrefix.data(), reconstructedPrefix.length());
-	LOG(WARNING) << "continuePreviousSession() : reconstructed prefix copied." << "\n";
+	LOG(INFO) << "continuePreviousSession() : reconstructed prefix copied." << "\n";
 
 	// if there was some partial content in previous record
 	// which we should re-parse, copy the previous part of JSON record
 	// which was not parsed during previous batch session:
 	if(m_unfinishedRecordLen != 0)
 		memcpy((m_reconstructedRecordData + reconstructedPrefix.length()), m_unfinishedRecordData, m_unfinishedRecordLen);
-	LOG(WARNING) << "continuePreviousSession() : unfinished data copied." << "\n";
+	LOG(INFO) << "continuePreviousSession() : unfinished data copied." << "\n";
 	// copy from newly arrived byte buffer the remainder of JSON:
 	memcpy((m_reconstructedRecordData + reconstructedPrefix.length() + m_unfinishedRecordLen),
 			leading_keyvalue_or_field_separator_found ? (*data + pos + 1) : (*data), m_data_remainder_size);
-	LOG(WARNING) << "continuePreviousSession() : remainder is copied." << "\n";
+	LOG(INFO) << "continuePreviousSession() : remainder is copied." << "\n";
     // reset the incompleted record data buffer only if one was allocated
     if(m_unfinishedRecordData != NULL){
     	// deallocate old remainder:
     	delete [] m_unfinishedRecordData;
     	m_unfinishedRecordData = NULL;
     }
-    LOG(WARNING) << "continuePreviousSession() : unfinished data is cleaned up." << "\n";
+    LOG(INFO) << "continuePreviousSession() : unfinished data is cleaned up." << "\n";
     // if no more records exists in the "data" buffer, increase remained length in order to contain extra
     // content we will add at the beginning of data in order to reconstruct valid JSON:
     if(!more_records_exist){
@@ -235,10 +234,11 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				ss = new MemoryStream(*next_row_start, remaining_len);
 				m_next_tuple_start = -1;
 			}
+			LOG(INFO) << "ParseFieldLocations() : going to run the parser." << "\n";
 			reader.ParseEx<32>(*ss, *(m_messageHandler.get()));
 			int  error_offset = -1;
             bool error = false;
-            LOG(WARNING) << "ParseFieldLocations() : parser completed." << "\n";
+            LOG(INFO) << "ParseFieldLocations() : parser completed." << "\n";
             if(reader.HasParseError()){
             	// we ignore the error which is rise by parser in case if it detects
             	// the extra content after root object is closed.
@@ -255,7 +255,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				m_unfinishedRecordLen = remaining_len - error_offset;
 				// TODO : use MemoryPool allocator instead:
 				if(m_unfinishedRecordLen != 0){
-					LOG(WARNING) << "Unfinished record len = " << m_unfinishedRecordLen << "\n.";
+					LOG(INFO) << "Unfinished record len = " << m_unfinishedRecordLen << "\n.";
 					m_unfinishedRecordData = new char[m_unfinishedRecordLen];
 					memset(m_unfinishedRecordData, '\0', m_unfinishedRecordLen);
 					// and save non-finished content for next usage
@@ -286,7 +286,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			// check also whether at least some columns were materialized.
 			// don't count empty row ({}).
 			if(!error && (column_idx_ != 0)){
-                LOG(WARNING) << "tuple completed, column index = " << column_idx_ << ".\n";
+                LOG(INFO) << "tuple completed, column index = " << column_idx_ << ".\n";
 				// fill remained columns for this tuple
 				FillColumns<false>(0, NULL, num_fields, field_locations);
 
@@ -301,17 +301,20 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			}
 
 			if (*num_tuples == max_tuples) {
+				LOG(INFO) << "Max num of tuples reached." << "\n";
 				++*byte_buffer_ptr;
 				--remaining_len;
 				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
 				return Status::OK;
 			}
+			LOG(INFO) << "Shifting offset : " << offset << "; remaining len = " << remaining_len << "\.n";
 		    remaining_len -= offset;
 
 			// shift buffer to offset:
 			*byte_buffer_ptr += offset;
 		}
 	}
+    LOG(INFO) << "Field locations parsed." << "\n";
     return Status::OK;
 }
 
