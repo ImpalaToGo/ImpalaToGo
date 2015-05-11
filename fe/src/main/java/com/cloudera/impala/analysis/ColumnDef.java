@@ -38,10 +38,12 @@ public class ColumnDef {
   private final TypeDef typeDef_;
   private Type type_;
 
-  public ColumnDef(String colName, TypeDef typeDef, String comment) {
+  private final String nested_path_;
+  public ColumnDef(String colName, TypeDef typeDef, String comment, String nested_path) {
     colName_ = colName;
     typeDef_ = typeDef;
     comment_ = comment;
+    nested_path_ = nested_path;
   }
 
   public void setType(Type type) { type_ = type; }
@@ -49,6 +51,7 @@ public class ColumnDef {
   public TypeDef getTypeDef() { return typeDef_; }
   public String getColName() { return colName_; }
   public String getComment() { return comment_; }
+  public String getNestedPath() { return nested_path_; }
 
   public void analyze() throws AnalysisException {
     // Check whether the column name meets the Metastore's requirements.
@@ -72,12 +75,14 @@ public class ColumnDef {
       sb.append(" " + typeDef_.toString());
     }
     if (comment_ != null) sb.append(String.format(" COMMENT '%s'", comment_));
+    if (nested_path_ != null) sb.append(String.format(" PATH '%s'", nested_path_));
     return sb.toString();
   }
 
   public TColumn toThrift() {
     TColumn col = new TColumn(new TColumn(getColName(), type_.toThrift()));
     col.setComment(getComment());
+    col.setNested_path(getNestedPath());
     return col;
   }
 }

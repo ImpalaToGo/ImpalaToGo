@@ -23,7 +23,6 @@ import java.util.Map;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
-import org.apache.hadoop.fs.permission.FsAction;
 
 import parquet.hadoop.ParquetFileReader;
 import parquet.hadoop.metadata.ParquetMetadata;
@@ -188,8 +187,10 @@ public class CreateTableLikeFileStmt extends CreateTableStmt {
       }
 
       String colName = field.getName();
+      //TODO: Support nested path here
+      String path = null;
       schema.add(new ColumnDef(colName, new TypeDef(type),
-          "inferred from: " + field.toString()));
+          "inferred from: " + field.toString(), path));
     }
     return schema;
   }

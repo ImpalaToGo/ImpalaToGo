@@ -36,6 +36,7 @@ public class Column {
   protected int position_;  // in table
 
   protected final ColumnStats stats_;
+  protected String nested_path_;
 
   public Column(String name, Type type, int position) {
     this(name, type, null, position);
@@ -64,6 +65,11 @@ public class Column {
 
   public void updateStats(TColumnStats statsData) {
     stats_.update(type_, statsData);
+  }
+
+  public String getNestedPath() { return nested_path_; }
+  public void setNestedPath(String nested_path) {
+    this.nested_path_ = nested_path;
   }
 
   @Override
@@ -95,6 +101,7 @@ public class Column {
           Type.fromThrift(columnDesc.getColumnType()), comment, position);
     }
     if (columnDesc.isSetCol_stats()) col.updateStats(columnDesc.getCol_stats());
+    if (columnDesc.isSetNested_path()) col.setNestedPath(columnDesc.getNested_path());
     return col;
   }
 
@@ -103,6 +110,7 @@ public class Column {
     if (comment_ != null) colDesc.setComment(comment_);
     colDesc.setPosition(position_);
     colDesc.setCol_stats(getStats().toThrift());
+    colDesc.setNested_path(nested_path_);
     return colDesc;
   }
 }

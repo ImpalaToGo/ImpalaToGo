@@ -21,8 +21,6 @@ import java.util.Set;
 
 import org.apache.hadoop.fs.permission.FsAction;
 
-import org.apache.hadoop.fs.permission.FsAction;
-
 import com.cloudera.impala.authorization.Privilege;
 import com.cloudera.impala.catalog.Column;
 import com.cloudera.impala.catalog.HdfsStorageDescriptor;
@@ -338,7 +336,7 @@ public class CreateTableStmt extends StatementBase {
           Lists.newArrayListWithCapacity(avroColumns.size());
       for (Column avroCol: avroColumns) {
         ColumnDef colDef =
-            new ColumnDef(avroCol.getName(), null, avroCol.getComment());
+            new ColumnDef(avroCol.getName(), null, avroCol.getComment(), null);
         colDef.setType(avroCol.getType());
         avroSchemaColDefs.add(colDef);
       }

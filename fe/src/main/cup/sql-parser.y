@@ -242,7 +242,7 @@ terminal
   KW_FUNCTION, KW_FUNCTIONS, KW_GRANT, KW_GROUP, KW_HAVING, KW_IF, KW_IN, KW_INCREMENTAL,
   KW_INIT_FN, KW_INNER, KW_INPATH, KW_INSERT, KW_INT, KW_INTERMEDIATE, KW_INTERVAL,
   KW_INTO, KW_INVALIDATE, KW_IS, KW_JOIN, KW_LAST, KW_LEFT, KW_LIKE, KW_LIMIT, KW_LINES,
-  KW_LOAD, KW_LOCATION, KW_MAP, KW_MERGE_FN, KW_METADATA, KW_NOT, KW_NULL, KW_NULLS,
+  KW_LOAD, KW_LOCATION, KW_MAP, KW_MERGE_FN, KW_METADATA, KW_NESTED_PATH, KW_NOT, KW_NULL, KW_NULLS,
   KW_OFFSET, KW_ON, KW_OR, KW_ORDER, KW_OUTER, KW_OVER, KW_OVERWRITE, KW_PARQUET,
   KW_PARQUETFILE, KW_PARTITION, KW_PARTITIONED, KW_PARTITIONS, KW_PRECEDING,
   KW_PREPARE_FN, KW_PRODUCED, KW_RANGE, KW_RCFILE, KW_REFRESH, KW_REGEXP, KW_RENAME,
@@ -381,6 +381,7 @@ nonterminal ArrayList<StructField> struct_field_def_list;
 nonterminal HdfsCachingOp cache_op_val;
 nonterminal BigDecimal opt_cache_op_replication;
 nonterminal String comment_val;
+nonterminal String nested_path_val;
 nonterminal Boolean external_val;
 nonterminal String opt_init_string_val;
 nonterminal THdfsFileFormat file_format_val;
@@ -462,6 +463,7 @@ precedence left KW_INTERVAL;
 // These tokens need to be at the end for function_def_args_map to accept
 // no keys. Otherwise, the grammar has shift/reduce conflicts.
 precedence left KW_COMMENT;
+precedence left KW_NESTED_PATH;
 precedence left KW_SYMBOL;
 precedence left KW_PREPARE_FN;
 precedence left KW_CLOSE_FN;
@@ -970,6 +972,13 @@ comment_val ::=
   {: RESULT = null; :}
   ;
 
+nested_path_val ::=
+  KW_NESTED_PATH STRING_LITERAL:path
+  {: RESULT = path; :}
+  | /* empty */
+  {: RESULT = null; :}
+  ;
+
 location_val ::=
   KW_LOCATION STRING_LITERAL:location
   {: RESULT = new HdfsUri(location); :}
@@ -1104,8 +1113,8 @@ column_def_list ::=
   ;
 
 column_def ::=
-  IDENT:col_name type_def:type comment_val:comment
-  {: RESULT = new ColumnDef(col_name, type, comment); :}
+  IDENT:col_name type_def:type nested_path_val:path comment_val:comment
+  {: RESULT = new ColumnDef(col_name, type, comment, path); :}
   ;
 
 create_view_stmt ::=
@@ -1201,7 +1210,7 @@ view_column_def_list ::=
 
 view_column_def ::=
   IDENT:col_name comment_val:comment
-  {: RESULT = new ColumnDef(col_name, null, comment); :}
+  {: RESULT = new ColumnDef(col_name, null, comment, null); :}
   ;
 
 alter_view_stmt ::=
@@ -1399,6 +1408,8 @@ function_def_args_map ::=
 function_def_arg_key ::=
   KW_COMMENT
   {: RESULT = CreateFunctionStmtBase.OptArg.COMMENT; :}
+  |  KW_NESTED_PATH
+  {: RESULT = CreateFunctionStmtBase.OptArg.NESTED_PATH; :}
   | KW_SYMBOL
   {: RESULT = CreateFunctionStmtBase.OptArg.SYMBOL; :}
   | KW_PREPARE_FN

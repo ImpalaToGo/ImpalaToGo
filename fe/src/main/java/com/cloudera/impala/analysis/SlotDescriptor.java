@@ -14,8 +14,8 @@
 
 package com.cloudera.impala.analysis;
 
-import java.util.List;
 import java.util.Collections;
+import java.util.List;
 
 import com.cloudera.impala.catalog.Column;
 import com.cloudera.impala.catalog.ColumnStats;
@@ -23,7 +23,6 @@ import com.cloudera.impala.catalog.Type;
 import com.cloudera.impala.thrift.TSlotDescriptor;
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
-import com.google.common.base.Preconditions;
 
 public class SlotDescriptor {
   private final SlotId id_;
@@ -51,6 +50,8 @@ public class SlotDescriptor {
 
   private ColumnStats stats_;  // only set if 'column' isn't set
 
+  private String nested_path_;
+
   SlotDescriptor(SlotId id, TupleDescriptor parent) {
     id_ = id;
     parent_ = parent;
@@ -72,6 +73,7 @@ public class SlotDescriptor {
     nullIndicatorBit_ = src.nullIndicatorBit_;
     slotIdx_ = src.slotIdx_;
     stats_ = src.stats_;
+    nested_path_ = src.nested_path_;
   }
 
   public int getNullIndicatorByte() { return nullIndicatorByte_; }
@@ -90,6 +92,7 @@ public class SlotDescriptor {
   public void setColumn(Column column) {
     this.column_ = column;
     this.type_ = column.getType();
+    this.nested_path_ = column.getNestedPath();
   }
   public boolean isMaterialized() { return isMaterialized_; }
   public void setIsMaterialized(boolean value) { isMaterialized_ = value; }
@@ -108,6 +111,9 @@ public class SlotDescriptor {
   public List<Expr> getSourceExprs() { return sourceExprs_; }
   public void setStats(ColumnStats stats) { this.stats_ = stats; }
 
+  public void setNestedPath(String value) { this.nested_path_ = value; }
+  public String getNestedPath() { return nested_path_; }
+
   public ColumnStats getStats() {
     if (stats_ == null) {
       if (column_ != null) {
@@ -125,7 +131,7 @@ public class SlotDescriptor {
     return new TSlotDescriptor(
         id_.asInt(), parent_.getId().asInt(), type_.toThrift(),
         columnPath, byteOffset_, nullIndicatorByte_, nullIndicatorBit_,
-        slotIdx_, isMaterialized_);
+        slotIdx_, isMaterialized_).setNested_path(nested_path_);
   }
 
   public String debugString() {
@@ -142,6 +148,7 @@ public class SlotDescriptor {
         .add("nullIndicatorBit", nullIndicatorBit_)
         .add("slotIdx", slotIdx_)
         .add("stats", stats_)
+        .add("nested_path", nested_path_)
         .toString();
   }
 }

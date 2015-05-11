@@ -559,12 +559,32 @@ public class HdfsTable extends Table {
                 getName(), type.toString(), s.getName()));
       }
 
-      Column col = new Column(s.getName(), type, s.getComment(), pos);
+      Column col = loadColumn(pos, s, type);
       addColumn(col);
       ++pos;
     }
     fields_ = fieldSchemas == null ? new ArrayList<FieldSchema>() : fieldSchemas;
     loadAllColumnStats(client);
+  }
+
+  private Column loadColumn(int pos, FieldSchema s, Type type) {
+    //Parse nested path from comment when loading from schema
+    String rawComment = s.getComment();
+    String nestedPathMarker = "NESTED_PATH";
+    Column col;
+    if(rawComment != null && rawComment.contains(nestedPathMarker)){
+      String comment;
+      String nested_path;
+      int nestedPathIndex=rawComment.lastIndexOf(nestedPathMarker);
+      comment = rawComment.substring(0,nestedPathIndex).trim();
+      nested_path = rawComment.substring(nestedPathIndex + nestedPathMarker.length()).trim();
+      LOG.info("Loading column with nested_path=" + nested_path);
+      col = new Column(s.getName(), type, comment, pos);
+      col.setNestedPath(nested_path);
+    } else {
+      col = new Column(s.getName(), type, rawComment, pos);
+    }
+    return col;
   }
 
   /**

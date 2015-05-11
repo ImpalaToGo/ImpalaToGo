@@ -111,7 +111,7 @@ public abstract class CreateOrAlterViewStmtBase extends StatementBase {
       List<String> labels = viewDefStmt_.getColLabels();
       Preconditions.checkState(exprs.size() == labels.size());
       for (int i = 0; i < viewDefStmt_.getColLabels().size(); ++i) {
-        ColumnDef colDef = new ColumnDef(labels.get(i), null, null);
+        ColumnDef colDef = new ColumnDef(labels.get(i), null, null, null);
         colDef.setType(exprs.get(i).getType());
         finalColDefs_.add(colDef);
       }
