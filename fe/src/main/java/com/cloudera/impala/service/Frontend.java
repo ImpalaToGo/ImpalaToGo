@@ -963,6 +963,7 @@ public class Frontend {
         TColumn colDesc = new TColumn();
         colDesc.columnName = queryStmt.getColLabels().get(i);
         colDesc.columnType = queryStmt.getResultExprs().get(i).getType().toThrift();
+        //BBB:
         metadata.addToColumns(colDesc);
       }
       result.setResult_set_metadata(metadata);

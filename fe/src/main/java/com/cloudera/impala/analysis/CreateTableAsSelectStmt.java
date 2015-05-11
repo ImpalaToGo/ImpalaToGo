@@ -92,7 +92,7 @@ public class CreateTableAsSelectStmt extends StatementBase {
     int colCnt = tmpQueryStmt.getColLabels().size();
     for (int i = 0; i < colCnt; ++i) {
       ColumnDef colDef = new ColumnDef(
-          tmpQueryStmt.getColLabels().get(i), null, null);
+          tmpQueryStmt.getColLabels().get(i), null, null, null);
       colDef.setType(tmpQueryStmt.getBaseTblResultExprs().get(i).getType());
       createStmt_.getColumnDefs().add(colDef);
     }

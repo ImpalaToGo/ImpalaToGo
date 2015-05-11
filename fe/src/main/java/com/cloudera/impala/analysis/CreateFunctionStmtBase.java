@@ -46,7 +46,8 @@ public abstract class CreateFunctionStmtBase extends StatementBase {
     INIT_FN,          // Only used for Udas
     SERIALIZE_FN,     // Only used for Udas
     MERGE_FN,         // Only used for Udas
-    FINALIZE_FN       // Only used for Udas
+    FINALIZE_FN,      // Only used for Udas
+    NESTED_PATH
   };
 
   protected final FunctionName fnName_;

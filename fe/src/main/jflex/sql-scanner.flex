@@ -143,6 +143,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("map", new Integer(SqlParserSymbols.KW_MAP));
     keywordMap.put("merge_fn", new Integer(SqlParserSymbols.KW_MERGE_FN));
     keywordMap.put("metadata", new Integer(SqlParserSymbols.KW_METADATA));
+    keywordMap.put("nested_path", new Integer(SqlParserSymbols.KW_NESTED_PATH));
     keywordMap.put("not", new Integer(SqlParserSymbols.KW_NOT));
     keywordMap.put("null", new Integer(SqlParserSymbols.KW_NULL));
     keywordMap.put("nulls", new Integer(SqlParserSymbols.KW_NULLS));

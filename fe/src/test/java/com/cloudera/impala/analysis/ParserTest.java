@@ -48,6 +48,7 @@ public class ParserTest {
       result = parser.parse().value;
     } catch (Exception e) {
       System.err.println(parser.getErrorMsg(stmt));
+      e.printStackTrace(System.err);
       fail("\n" + parser.getErrorMsg(stmt));
     }
     assertNotNull(result);
@@ -1939,6 +1940,13 @@ public class ParserTest {
   }
 
   @Test
+  public void TestCreateTableWithColumnPath() {
+    ParsesOk("CREATE TABLE Foo (i int COMMENT 'int field' , s string NESTED_PATH 'path.to.field')");
+    ParserError("CREATE TABLE Foo (i int COMMENT 'int field' , s string COMMENT 'String Field' NESTED_PATH 'path.to.field')");
+    ParsesOk("CREATE TABLE Foo (i int COMMENT 'int field' , s string NESTED_PATH 'path.to.field' COMMENT 'String Field')");
+  }
+
+  @Test
   public void TestCreateTable() {
     // Support unqualified and fully-qualified table names
     ParsesOk("CREATE TABLE Foo (i int)");
@@ -1962,8 +1970,12 @@ public class ParserTest {
     ParsesOk("CREATE TABLE Foo (i int, s string)");
     ParsesOk("CREATE EXTERNAL TABLE Foo (i int, s string)");
     ParsesOk("CREATE EXTERNAL TABLE Foo (i int, s string) LOCATION '/test-warehouse/'");
+    ParsesOk("CREATE EXTERNAL TABLE Foo (i int NESTED_PATH 'path.to.int', s string NESTED_PATH 'path.to.string') LOCATION '/test-warehouse/'");
     ParsesOk("CREATE TABLE Foo (i int, s string) COMMENT 'hello' LOCATION '/a/b/'");
     ParsesOk("CREATE TABLE Foo (i int, s string) COMMENT 'hello' LOCATION '/a/b/' " +
+        "TBLPROPERTIES ('123'='1234')");
+    ParsesOk("CREATE TABLE Foo (i int, s string NESTED_PATH 'path.to.field') COMMENT 'hello' LOCATION '/a/b/'");
+    ParsesOk("CREATE TABLE Foo (i int NESTED_PATH 'path.to.field', s string) COMMENT 'hello' LOCATION '/a/b/' " +
         "TBLPROPERTIES ('123'='1234')");
     // No column definitions.
     ParsesOk("CREATE TABLE Foo COMMENT 'hello' LOCATION '/a/b/' " +
@@ -1974,6 +1986,9 @@ public class ParserTest {
     ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY (s string, d double)");
     ParsesOk("CREATE TABLE Foo (i int, s string) PARTITIONED BY (s string, d double)" +
         " COMMENT 'hello' LOCATION '/a/b/'");
+    ParsesOk("CREATE TABLE Foo (i int, s string NESTED_PATH 'path.to.field') PARTITIONED BY (s string, d double)" +
+        " COMMENT 'hello' LOCATION '/a/b/'");
+
     // No column definitions.
     ParsesOk("CREATE TABLE Foo PARTITIONED BY (s string, d double)" +
         " COMMENT 'hello' LOCATION '/a/b/'");
