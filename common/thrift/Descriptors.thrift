@@ -37,6 +37,7 @@ struct TSlotDescriptor {
   7: required i32 nullIndicatorBit
   9: required i32 slotIdx
   10: required bool isMaterialized
+  11: optional string nested_path
 }
 
 // "Union" of all table types.
