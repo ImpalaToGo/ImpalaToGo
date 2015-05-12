@@ -82,7 +82,7 @@ public class ColumnDef {
   public TColumn toThrift() {
     TColumn col = new TColumn(new TColumn(getColName(), type_.toThrift()));
     col.setComment(getComment());
-    //TODO: Enhance Thrift to support nested path
+    col.setNested_path(getNestedPath());
     return col;
   }
 }

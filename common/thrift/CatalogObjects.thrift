@@ -180,6 +180,7 @@ struct TColumn {
   7: optional string column_family
   8: optional string column_qualifier
   9: optional bool is_binary
+  10: optional string nested_path
 }
 
 // Represents a block in an HDFS file
