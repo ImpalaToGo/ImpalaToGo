@@ -316,6 +316,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 
 			// shift buffer to offset:
 			*byte_buffer_ptr += offset;
+			*next_row_start = *byte_buffer_ptr;
 
 			if (*num_tuples == max_tuples) {
 				LOG(INFO) << "Max num of tuples reached." << "\n";

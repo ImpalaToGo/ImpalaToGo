@@ -609,6 +609,7 @@ Status HdfsTextScanner::FillByteBufferCompressedFile(bool* eosr) {
 }
 
 Status HdfsTextScanner::FindFirstTuple(bool* tuple_found) {
+	LOG(INFO) << "Find first tuple" << ".\n";
   *tuple_found = true;
   if (stream_->scan_range()->offset() != 0) {
     *tuple_found = false;

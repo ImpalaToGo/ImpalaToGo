@@ -188,8 +188,8 @@ Status PlanFragmentExecutor::Prepare(const TExecPlanFragmentParams& request) {
       DescriptorTbl::Create(obj_pool(), request.desc_tbl, &desc_tbl));
   runtime_state_->set_desc_tbl(desc_tbl);
   VLOG_QUERY << "descriptor table for fragment="
-             << request.fragment_instance_ctx.fragment_instance_id
-             << "\n" << desc_tbl->DebugString();
+             << request.fragment_instance_ctx.fragment_instance_id << "\n";
+             // << desc_tbl->DebugString();
 
   // set up plan
   DCHECK(request.__isset.fragment);
