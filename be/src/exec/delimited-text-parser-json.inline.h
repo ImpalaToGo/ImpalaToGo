@@ -22,7 +22,6 @@ inline void JsonDelimitedTextParser::parseSingleTupleInternal(int64_t remaining_
 
 void inline JsonDelimitedTextParser::printColumn(int index, FieldLocation* field_locations){
 	FieldLocation meta = field_locations[index];
-	std::cout << "Fields[" << index << "] = \"" << meta.start << "\"" << std::endl;
 }
 
 }

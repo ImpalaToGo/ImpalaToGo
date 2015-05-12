@@ -115,7 +115,6 @@ private:
         	if(continuation)
         		return;
 
-        	LOG(INFO) << "resetting handler..\n";
         	boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
 
         	// reset number of incomplete objects registered:
@@ -123,7 +122,6 @@ private:
 
         	// cleanup the vector of registered JSON objects:
         	cleanvector(m_objects);
-        	LOG(INFO) << "vecotr is cleaned in handler..\n";
         	// no "currents" exists:
         	m_currentObject = NULL;
         	m_currentKey = "";

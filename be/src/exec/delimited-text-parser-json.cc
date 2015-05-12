@@ -234,11 +234,11 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				ss = new MemoryStream(*next_row_start, remaining_len);
 				m_next_tuple_start = -1;
 			}
-			LOG(INFO) << "ParseFieldLocations() : going to run the parser." << "\n";
+
 			reader.ParseEx<32>(*ss, *(m_messageHandler.get()));
 			int  error_offset = -1;
             bool error = false;
-            LOG(INFO) << "ParseFieldLocations() : parser completed." << "\n";
+
             if(reader.HasParseError()){
             	// we ignore the error which is rise by parser in case if it detects
             	// the extra content after root object is closed.
@@ -297,7 +297,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			// check also whether at least some columns were materialized.
 			// don't count empty row ({}).
 			if(!error && (column_idx_ != 0)){
-                LOG(INFO) << "tuple completed, column index = " << column_idx_ << ".\n";
 				// fill remained columns for this tuple
 				FillColumns<false>(0, NULL, num_fields, field_locations);
 
@@ -310,8 +309,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
                 // now we can increase the number of processed tuples:
 				++(*num_tuples);
 			}
-
-			LOG(INFO) << "Shifting offset : " << offset << "; remaining len = " << remaining_len << "\.n";
 		    remaining_len -= offset;
 
 			// shift buffer to offset:
@@ -319,7 +316,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			*next_row_start = *byte_buffer_ptr;
 
 			if (*num_tuples == max_tuples) {
-				LOG(INFO) << "Max num of tuples reached." << "\n";
 				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
 				return Status::OK;
 			}
