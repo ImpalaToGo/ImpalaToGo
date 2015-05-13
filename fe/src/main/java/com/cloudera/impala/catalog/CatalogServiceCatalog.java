@@ -490,7 +490,7 @@ public class CatalogServiceCatalog extends Catalog {
     try {
       Table tbl = getTable(dbName, tblName);
       if (tbl == null || tbl.isLoaded()) {
-        LOG.info("table " + tblName + " is loaded or null");
+        LOG.info("table " + tblName + " is " + (tbl == null ? "null" : "loaded"));
         return tbl;
       }
       previousCatalogVersion = tbl.getCatalogVersion();
