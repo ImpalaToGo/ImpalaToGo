@@ -2172,7 +2172,14 @@ public class CatalogOpExecutor {
       Type type = Type.fromThrift(col.getColumnType());
       // The type string must be lowercase for Hive to read the column metadata properly.
       String typeSql = type.toSql().toLowerCase();
-      FieldSchema fs = new FieldSchema(col.getColumnName(), typeSql, col.getComment());
+      //FieldSchema does not support additional fields, so temporarry encoding nested path at the end of comment
+      String comment;
+      if(col.isSetNested_path()){
+        comment = String.format("%s NESTED_PATH %s", col.getComment(), col.getNested_path());
+      } else {
+        comment = col.getComment();
+      }
+      FieldSchema fs = new FieldSchema(col.getColumnName(), typeSql, comment);
       fsList.add(fs);
     }
     return fsList;
