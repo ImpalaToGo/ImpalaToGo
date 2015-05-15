@@ -364,6 +364,9 @@ static void ProcessQueryOptions(
 Status Coordinator::Exec(QuerySchedule& schedule,
     vector<ExprContext*>* output_expr_ctxs) {
   const TQueryExecRequest& request = schedule.request();
+  for(std::vector<TSlotDescriptor>::const_iterator it = request.desc_tbl.slotDescriptors.begin();it!=request.desc_tbl.slotDescriptors.end();++it){
+	  LOG (INFO) << "Exec () Coordinator has nested_path='" << it->nested_path << "' in slot descriptor";
+  }
   DCHECK_GT(request.fragments.size(), 0);
   needs_finalization_ = request.__isset.finalize_params;
   if (needs_finalization_) {

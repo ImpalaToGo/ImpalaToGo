@@ -41,7 +41,9 @@ Status FragmentMgr::ExecPlanFragment(const TExecPlanFragmentParams& exec_params)
   if (!exec_params.fragment.__isset.output_sink) {
     return Status("missing sink in plan fragment");
   }
-
+  for(std::vector<TSlotDescriptor>::const_iterator it = exec_params.desc_tbl.slotDescriptors.begin();it!=exec_params.desc_tbl.slotDescriptors.end();++it){
+	  LOG (INFO) << "ExecPlanFragment() has nested_path='" << it->nested_path << "' in slot descriptor";
+  }
   boost::shared_ptr<FragmentExecState> exec_state(
       new FragmentExecState(exec_params.fragment_instance_ctx, ExecEnv::GetInstance()));
   // Call Prepare() now, before registering the exec state, to avoid calling
