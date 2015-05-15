@@ -53,13 +53,14 @@ SlotDescriptor::SlotDescriptor(const TSlotDescriptor& tdesc)
     col_path_(tdesc.columnPath),
     tuple_offset_(tdesc.byteOffset),
     null_indicator_offset_(tdesc.nullIndicatorByte, tdesc.nullIndicatorBit),
+	nested_path_(tdesc.nested_path),
     slot_idx_(tdesc.slotIdx),
     slot_size_(type_.GetByteSize()),
     field_idx_(-1),
     is_materialized_(tdesc.isMaterialized),
     is_null_fn_(NULL),
     set_not_null_fn_(NULL),
-    set_null_fn_(NULL) {
+    set_null_fn_(NULL){
 }
 
 bool SlotDescriptor::ColPathLessThan(const SlotDescriptor* a, const SlotDescriptor* b) {

@@ -94,6 +94,7 @@ class SlotDescriptor {
   bool is_nullable() const { return null_indicator_offset_.bit_mask != 0; }
   int slot_size() const { return slot_size_; }
 
+  std::string nested_path() const { return nested_path_; }
   // Comparison function for ordering slot descriptors by their col_path_.
   // Returns true if 'a' comes before 'b'.
   // Orders the paths as in a depth-first traversal of the schema tree, as follows:
@@ -123,6 +124,7 @@ class SlotDescriptor {
   const int tuple_offset_;
   const NullIndicatorOffset null_indicator_offset_;
 
+  const std::string nested_path_;
   // the idx of the slot in the tuple descriptor (0-based).
   // this is provided by the FE
   const int slot_idx_;
