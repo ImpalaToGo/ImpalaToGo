@@ -10,6 +10,7 @@
  */
 
 #include <iostream>
+
 #include <boost/bind.hpp>
 #include <boost/mem_fn.hpp>
 
@@ -32,8 +33,6 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 		m_reconstructedRecordData(NULL),
 		m_unfinishedRecordData(NULL),
 		m_unfinishedRecordLen(-1){
-
-	LOG(INFO) << "JsonDelimitedTextParser()\n";
 
 	// bind "column detected" handler to this parser to be handled here
 	m_columnDetectedHandler = boost::bind(boost::mem_fn(&DelimitedTextParser::AddColumn<false>), this,
@@ -80,7 +79,6 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 	// Handler holds the previous state in order to proceed with incomplete tuple in current session.
 	if(readiness){
 		// if handler is ready, just do nothing.
-		LOG(INFO) << "continuePreviousSession() : handler is ready.\n";
 		return false;
 	}
 
@@ -89,11 +87,9 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 	bool more_records_exist = m_next_tuple_start != -1;
 	if(more_records_exist){
 		m_next_tuple_start -= 1;
-		LOG(INFO) << "continuePreviousSession() : more records exists, offset : " << m_next_tuple_start << "\n";
 	}
 
     std::string reconstructedPrefix = m_messageHandler->reconstruct_the_hierarchy();
-    LOG(INFO) << "continuePreviousSession() : reconstructed prefix : " << reconstructedPrefix << "\n";
 	// analyze the arrived data buffer, we should trim the "," if it exists.
 	int pos = 0;
 	bool leading_keyvalue_or_field_separator_found = false;
@@ -105,48 +101,43 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 			}
 			break;
 		}
+		else pos++;
 	}
-	LOG(INFO) << "continuePreviousSession() : going to reset message handler.\n";
     // reset hard the event handler:
     m_messageHandler->reset(false, true);
-    LOG(INFO) << "continuePreviousSession() : message handler reseted." << "\n";
 
     // save the size of newly arrived data which we append to the partial record
 	// we hold from previous session:
 	m_data_remainder_size = more_records_exist ? m_next_tuple_start : *len;
-	// if there was a "," at the begining of current line, skip it
+	// if there was a "," at the beginning of current line, skip it
     m_data_remainder_size = leading_keyvalue_or_field_separator_found ? (m_data_remainder_size - (pos + 1) ) : m_data_remainder_size;
 
 	// consider remainder of previous non-finished JSON record inside current batch:
 	int64_t new_len = m_unfinishedRecordLen + reconstructedPrefix.length() + m_data_remainder_size + 1;
 
-	// allocate buffer enough to hold "number_of_enclosing_entities" + unfinished JSON record part.
+	// allocate buffer enough to hold "hierarchy of_enclosing_entities" + unfinished JSON record part.
 	// we will do the reconstruction of initial data hierarchy in this buffer
 	// to present the data as valid JSON
 	m_reconstructedRecordData = new char[new_len];
-    memset(m_reconstructedRecordData, '\0', new_len);
+    memset(m_reconstructedRecordData, 0, new_len);
 
 	// and save non-finished content prepended with JSON hierarchy:
 	memcpy(m_reconstructedRecordData, reconstructedPrefix.data(), reconstructedPrefix.length());
-	LOG(INFO) << "continuePreviousSession() : reconstructed prefix copied." << "\n";
 
 	// if there was some partial content in previous record
 	// which we should re-parse, copy the previous part of JSON record
 	// which was not parsed during previous batch session:
 	if(m_unfinishedRecordLen != 0)
 		memcpy((m_reconstructedRecordData + reconstructedPrefix.length()), m_unfinishedRecordData, m_unfinishedRecordLen);
-	LOG(INFO) << "continuePreviousSession() : unfinished data copied." << "\n";
 	// copy from newly arrived byte buffer the remainder of JSON:
 	memcpy((m_reconstructedRecordData + reconstructedPrefix.length() + m_unfinishedRecordLen),
 			leading_keyvalue_or_field_separator_found ? (*data + pos + 1) : (*data), m_data_remainder_size);
-	LOG(INFO) << "continuePreviousSession() : remainder is copied." << "\n";
     // reset the incompleted record data buffer only if one was allocated
     if(m_unfinishedRecordData != NULL){
     	// deallocate old remainder:
     	delete [] m_unfinishedRecordData;
     	m_unfinishedRecordData = NULL;
     }
-    LOG(INFO) << "continuePreviousSession() : unfinished data is cleaned up." << "\n";
     // if no more records exists in the "data" buffer, increase remained length in order to contain extra
     // content we will add at the beginning of data in order to reconstruct valid JSON:
     if(!more_records_exist){
@@ -236,6 +227,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			}
 
 			reader.ParseEx<32>(*ss, *(m_messageHandler.get()));
+
 			int  error_offset = -1;
             bool error = false;
 
@@ -250,20 +242,21 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
             }
 			if(error){
 				error_offset = reader.GetErrorOffset();
-				LOG(WARNING) << "JSON parse error \"" << reader.GetParseErrorCode() << "; offset = " << error_offset << "\n.";
 				// calculate unfinished content size
 				m_unfinishedRecordLen = remaining_len - error_offset;
 				// TODO : use MemoryPool allocator instead:
 				if(m_unfinishedRecordLen != 0){
-					LOG(INFO) << "Unfinished record len = " << m_unfinishedRecordLen << "\n.";
 					m_unfinishedRecordData = new char[m_unfinishedRecordLen];
-					memset(m_unfinishedRecordData, '\0', m_unfinishedRecordLen);
+					memset(m_unfinishedRecordData, 0, m_unfinishedRecordLen);
 					// and save non-finished content for next usage
 					memcpy(m_unfinishedRecordData, *next_row_start + error_offset, m_unfinishedRecordLen);
 				}
-				else
+				else {
+					if(m_unfinishedRecordData != NULL)
+						delete [] m_unfinishedRecordData;
 					// reset the data pointer
 					m_unfinishedRecordData = NULL;
+				}
 			}
 
 			// renew offset within current data buffer.
@@ -288,7 +281,7 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			 *  2. If the row separator is LF, the offset is calculated differently
 			 */
 			int delta = remaining_len - stream_offset;
-			bool use_direct_offset = ( (tuple_delim_ != '\n') || ((delta == 0) || (delta == 1) ));
+			bool use_direct_offset = ( (tuple_delim_ != '\n') || (delta == 0) || ((delta == 1) && ss->Peek() == tuple_delim_));
 			offset = error ? stream_offset :
 					(m_next_tuple_start != -1 ? m_next_tuple_start : (use_direct_offset ? stream_offset : stream_offset - 1));
 
@@ -322,7 +315,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 
 		}
 	}
-    LOG(INFO) << "Field locations parsed." << "\n";
     return Status::OK;
 }
 
@@ -334,9 +326,6 @@ void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_f
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
-
-		if(type != INVALID_TYPE)
-			printColumn(*num_fields, field_locations);
 
 		// number of materialized fields is increased
 		++(*num_fields);
