@@ -236,7 +236,7 @@ private:
 	    	}
 	    }
 	    bool Key(const char* str, rapidjson::SizeType length, bool copy) {
-	    	m_currentKey.assign(str, 0, length);
+	    	m_currentKey.assign(str, length);
 	    	state_ = kExpectValue;
 	        return true;
 	    }
