@@ -2175,7 +2175,8 @@ public class CatalogOpExecutor {
       //FieldSchema does not support additional fields, so temporarry encoding nested path at the end of comment
       String comment;
       if(col.isSetNested_path()){
-        comment = String.format("%s NESTED_PATH %s", col.getComment(), col.getNested_path());
+        String rawComment = col.getComment();
+        comment = String.format("%s NESTED_PATH %s", rawComment == null ? "" : rawComment, col.getNested_path());
       } else {
         comment = col.getComment();
       }
