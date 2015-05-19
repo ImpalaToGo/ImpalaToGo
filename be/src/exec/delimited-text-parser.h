@@ -101,7 +101,7 @@ class DelimitedTextParser {
   // Will we return the current column to the query?
   // Hive allows cols at the end of the table that are not in the schema.  We'll
   // just ignore those columns
-  bool ReturnCurrentColumn() const {
+  bool virtual ReturnCurrentColumn() const {
     return column_idx_ < num_cols_ && is_materialized_col_[column_idx_];
   }
 
@@ -134,7 +134,7 @@ class DelimitedTextParser {
 
   virtual void addColumnInternal(int len, char** next_column_start, int* num_fields,
 		  FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
-		  bool flag = false) = 0;
+		  const std::string& key = "", bool flag = false) = 0;
 
   virtual void parseSingleTupleInternal(int64_t len, char* buffer, FieldLocation* field_locations,
 	      int* num_fields, const bool flag) = 0;
@@ -150,12 +150,13 @@ class DelimitedTextParser {
   //   len: lenght of the current column.
   // Input/Output:
   //   next_column_start: Start of the current column, moved to the start of the next.
-  //   num_fields: current number of fields processed, updated to next field.
+  //   num_fields       : current number of fields processed, updated to next field.
+  //   key              : current key fully qualified path (for nested data support)
   // Output:
   //   field_locations: updated with start and length of current field.
   template <bool process_escapes>
   void AddColumn(int len, char** next_column_start, int* num_fields,
-                 FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE);
+                 FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE, const std::string& = "");
 
   /** SSE(xmm) register containing the tuple search character. */
   __m128i xmm_tuple_search_;
@@ -275,7 +276,7 @@ private:
 
 	  void addColumnInternal(int len, char** next_column_start, int* num_fields,
 	  		  FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
-			  bool flag = false);
+			  const std::string& key = "",  bool flag = false);
 
 	  void parseSingleTupleInternal(int64_t len, char* buffer, FieldLocation* field_locations,
 	  	      int* num_fields, const bool flag);

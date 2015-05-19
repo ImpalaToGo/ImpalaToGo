@@ -216,8 +216,9 @@ Status HdfsTextScanner::InitNewRange() {
   char field_delim = hdfs_partition->field_delim();
   char collection_delim = hdfs_partition->collection_delim();
   if (scan_node_->materialized_slots().size() == 0) {
-    field_delim = '\0';
-    collection_delim = '\0';
+	  LOG(INFO) << "materialized slots size = 0.\n";
+	  field_delim = '\0';
+	  collection_delim = '\0';
   }
 
   /** JSON underlying data is detected basing on column delimiter.
@@ -230,6 +231,10 @@ Status HdfsTextScanner::InitNewRange() {
 	  delimited_text_parser_.reset(new JsonDelimitedTextParser(
 	      scan_node_->hdfs_table()->num_cols(), scan_node_->num_partition_keys(),
 	      scan_node_->is_materialized_col(), hdfs_partition->line_delim()));
+
+	  // for JSON parser, setup the schema mapping in case if materialized
+	  if(scan_node_->materialized_slots().size() != 0)
+		  ((JsonDelimitedTextParser*)(delimited_text_parser_.get()))->setupSchemaMapping(scan_node_->tuple_desc()->slots());
 	  m_dataFormat = JSON;
   }
   else {
@@ -813,6 +818,11 @@ void HdfsTextScanner::CopyBoundaryField(FieldLocation* data, MemPool* pool) {
 int HdfsTextScanner::WritePartialTuple(FieldLocation* fields,
     int num_fields, bool copy_strings) {
   int next_line_offset = 0;
+
+  // flag, indicates whether the file format is flat (csv).
+  // Introduced in order to determine the way to coordinate the slot and the data for it
+  bool flat = fields[0].idx == 0;
+
   for (int i = 0; i < num_fields; ++i) {
     int need_escape = false;
     int len = fields[i].len;
@@ -824,7 +834,9 @@ int HdfsTextScanner::WritePartialTuple(FieldLocation* fields,
 
     // write starts from the last known slot index that was processed with previous
     // batch, when partial tuple was written
-    const SlotDescriptor* desc = scan_node_->materialized_slots()[slot_idx_];
+    const SlotDescriptor* desc = flat ? scan_node_->materialized_slots()[slot_idx_] :
+    		scan_node_->materialized_slots()[fields[i].idx - 1];
+
     if (!text_converter_->WriteSlot(desc, partial_tuple_,
         fields[i].start, len, true, need_escape, data_buffer_pool_.get())) {
       ReportColumnParseError(desc, fields[i].start, len);

@@ -221,6 +221,12 @@ bool HdfsScanner::WriteCompleteTuple(MemPool* pool, FieldLocation* fields,
   // Initialize tuple before materializing slots
   InitTuple(template_tuple, tuple);
 
+  // currently the solution to determine the non-flat format (like JSON)
+  // is to examine the index field of first within just arrived field locations.
+  // If index > 0, we handle non-flat format, so, handle fields order using arrived indexes
+  // indexing starting from 1 signals that the schema definition was applied during parsing
+  bool flat = fields[0].idx == 0;
+
   for (int i = 0; i < scan_node_->materialized_slots().size(); ++i) {
     int need_escape = false;
     int len = fields[i].len;
@@ -229,7 +235,8 @@ bool HdfsScanner::WriteCompleteTuple(MemPool* pool, FieldLocation* fields,
       need_escape = true;
     }
 
-    SlotDescriptor* desc = scan_node_->materialized_slots()[i];
+    SlotDescriptor* desc = flat ? scan_node_->materialized_slots()[i] :
+    		scan_node_->materialized_slots()[fields[i].idx - 1];
     bool error = !text_converter_->WriteSlot(desc, tuple,
         fields[i].start, len, false, need_escape, pool);
     error_fields[i] = error;

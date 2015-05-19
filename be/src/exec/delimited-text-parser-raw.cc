@@ -42,8 +42,6 @@ RawDelimitedTextParser::RawDelimitedTextParser(
 
 	this->process_escapes_ = escape_char != '\0';
 
-    LOG(INFO) << "RawDelimitedTextParser()\n";
-
 	// Escape character should not be the same as tuple or col delim unless it is the
 	// empty delimiter.
 	DCHECK(escape_char == '\0' || escape_char != tuple_delim);
@@ -239,7 +237,7 @@ bool RawDelimitedTextParser::process_escapes(int start, const char* buffer){
 }
 
 void RawDelimitedTextParser::addColumnInternal(int len, char** next_column_start, int* num_fields,
-		FieldLocation* field_locations, PrimitiveType type, bool process_escapes ){
+		FieldLocation* field_locations, PrimitiveType type, const std::string& key, bool process_escapes ){
 	  if (ReturnCurrentColumn()) {
 	    // Found a column that needs to be parsed, write the start/len to 'field_locations'
 	    field_locations[*num_fields].start = *next_column_start;
@@ -252,4 +250,5 @@ void RawDelimitedTextParser::addColumnInternal(int len, char** next_column_start
 	  }
 	  if (process_escapes) current_column_has_escape_ = false;
 	  *next_column_start += len + 1;
+	  ++column_idx_;
 }
