@@ -20,10 +20,6 @@ inline void JsonDelimitedTextParser::parseSingleTupleInternal(int64_t remaining_
     FieldLocation* field_locations, int* num_fields, const bool process_escapes_flag) {
 }
 
-void inline JsonDelimitedTextParser::printColumn(int index, FieldLocation* field_locations){
-	FieldLocation meta = field_locations[index];
-}
-
 }
 
 

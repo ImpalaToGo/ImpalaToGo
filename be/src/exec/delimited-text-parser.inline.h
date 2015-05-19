@@ -24,9 +24,8 @@ namespace impala {
 
 template <bool process_escapes>
 inline void DelimitedTextParser::AddColumn(int len, char** next_column_start,
-    int* num_fields, FieldLocation* field_locations, PrimitiveType type) {
-	addColumnInternal(len, next_column_start, num_fields, field_locations, type, process_escapes);
-	++column_idx_;
+    int* num_fields, FieldLocation* field_locations, PrimitiveType type, const std::string& key) {
+	addColumnInternal(len, next_column_start, num_fields, field_locations, type, key, process_escapes);
 }
 
 template <bool process_escapes>

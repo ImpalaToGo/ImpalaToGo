@@ -28,15 +28,19 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 		char tuple_delim) :
 		DelimitedTextParser(num_cols, num_partition_keys, is_materialized_col, tuple_delim),
 		m_compundColumnDetectedhandler(0),
+		m_schema_defined(false),
+		schema_size(0),
 		m_data_remainder_size(-1),
 		m_next_tuple_start(-1),
 		m_reconstructedRecordData(NULL),
 		m_unfinishedRecordData(NULL),
-		m_unfinishedRecordLen(-1){
+		m_unfinishedRecordLen(-1),
+		m_idx(0),
+		m_tuple(NULL){
 
 	// bind "column detected" handler to this parser to be handled here
 	m_columnDetectedHandler = boost::bind(boost::mem_fn(&DelimitedTextParser::AddColumn<false>), this,
-			_1, _2, _3, _4, _5);
+			_1, _2, _3, _4, _5, _6);
 
 	// create the rapidjson events handler:
 	m_messageHandler.reset(new JsonSAXParserEventsHandler(m_columnDetectedHandler, m_compundColumnDetectedhandler));
@@ -46,6 +50,12 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 
 	// reset the parser
 	parserResetInternal();
+}
+
+JsonDelimitedTextParser::~JsonDelimitedTextParser(){
+	if(m_tuple != NULL)
+		bitset_free(m_tuple);
+	m_tuple = NULL;
 }
 
 void JsonDelimitedTextParser::setupSearchCharacters(){
@@ -293,6 +303,10 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				// fill remained columns for this tuple
 				FillColumns<false>(0, NULL, num_fields, field_locations);
 
+				if(m_schema_defined)
+					// clear tuple parse progress bitset
+					bitset_clear(m_tuple);
+
 				// reset the "current column index"
 				column_idx_ = num_partition_keys_;
 
@@ -319,17 +333,80 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 }
 
 void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_fields,
-		FieldLocation* field_locations, PrimitiveType type, bool flag ){
+		FieldLocation* field_locations, PrimitiveType type, const std::string& key, bool flag ){
 
-	// if current column is materialized:
+	if(m_schema_defined){
+		m_idx = m_schema[key];
+		LOG(INFO) << "addColumnInternal() : key = \"" << key << "\" with index = " << m_idx << ".\n";
+	}
+	else
+		m_idx = column_idx_ + 1;
+
+    // if current column is materialized:
 	if (ReturnCurrentColumn()) {
+		LOG(INFO) << "addColumnInternal() : key is going to be added.\n";
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
 
+		if(m_schema_defined){
+			if(len == 0 && *data == NULL){
+				// locate next non-filled column index within the
+				// bitmap of tuple parse progress:
+				for(int i = 0; i < schema_size; i++){
+					// if there's non-parsed slot found:
+					if(!get_bit(m_tuple, i)){
+						m_idx = i + 1;
+						break;
+					}
+				}
+			}
+	        // set the "column is parsed" event within the tuple bits
+	        set_bit(m_tuple, m_idx - 1);
+		}
+
+		// specify the index of column within the table schema
+		field_locations[*num_fields].idx = m_idx;
+
 		// number of materialized fields is increased
 		++(*num_fields);
-  }
+	}
+	++column_idx_;
+}
+
+bool JsonDelimitedTextParser::ReturnCurrentColumn() const {
+    // 1. Current column index should be less than expected number of columns (to not overflow the
+	// preallocated buffer for metadata).
+	// 2. Column that is parsed currently should be configured in schema mapping (so m_idx > 0)
+	// 3. Current column index should be configured as requested for materialization.
+	return m_schema_defined ? ( m_idx && column_idx_ < num_cols_ && is_materialized_col_[m_idx - 1] ) :
+			( column_idx_ < num_cols_ && is_materialized_col_[column_idx_] );
+}
+
+void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescriptor*>& schema){
+	LOG(INFO) << "Configuring schema mapping. Schema len = " << schema.size() << ".\n";
+
+	schema_size = m_schema.size();
+
+	if(schema.size() == 0)
+		return;
+
+	int idx = 0;
+
+	// populate schema with the mapping from JSON key's fully qualified name to
+	// column index within the table schema
+	for(std::vector<SlotDescriptor*>::const_iterator it = schema.begin(); it != schema.end(); ++it) {
+		LOG(INFO) << "Configuring nested_path = \"" << (*it)->nested_path() << "\" for idx = " << idx << ".\n";
+		m_schema[(*it)->nested_path()] = ++idx;
+	}
+	// allocate the bitmap representing tuple parse progress:
+	m_tuple = bitset_alloc(idx ? idx : 1);
+
+	// and zero it:
+	bitset_clear(m_tuple);
+
+	// now the schema is defined:
+	m_schema_defined = true;
 }
 
 }

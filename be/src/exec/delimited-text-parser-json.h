@@ -21,10 +21,73 @@ namespace impala{
 
 /** JSON parser implementation of delimited text parser */
 class JsonDelimitedTextParser : public DelimitedTextParser {
+
+	typedef uint32_t word_t;
+
+	/** represents bitset */
+	struct bitset {
+		word_t* words;     /**< address the bitset */
+		int     nwords;    /**< number of words hosted by bitset */
+		int     nbits;     /**< number of bits */
+	};
+
+	enum { WORD_SIZE = sizeof(word_t) * 8 };
+
+	static inline bool check_bounds(bitset *set, int bit) {
+	    if (set->nbits < bit) {
+	    	return false;
+	    }
+	    return true;
+	}
+
+	/** Reset bitset (to zeroes) */
+	void bitset_clear(bitset* data){
+		memset(data->words, 0, WORD_SIZE * data->nwords);
+	}
+
+	/** Allocate bitset */
+	bitset* bitset_alloc(int num_bits) {
+	    bitset *set = (bitset*)(malloc(sizeof(bitset)));
+	    set->nwords = (num_bits / WORD_SIZE + 1);
+	    set->words = (word_t*)malloc(WORD_SIZE * set->nwords);
+	    set->nbits = WORD_SIZE * set->nwords;
+	    bitset_clear(set);
+	    return set;
+	}
+
+	/** release bitset */
+	void bitset_free(struct bitset *bitset) {
+	    free(bitset->words);
+	    free(bitset);
+	}
+
+	inline int bindex(int b) { return b / WORD_SIZE; }
+	inline int boffset(int b) { return b % WORD_SIZE; }
+
+	bool set_bit(bitset* data, int b) {
+		if(!check_bounds(data, b))
+			return false;
+		data->words[bindex(b)] |= (1 << (boffset(b)));
+		return true;
+	}
+
+	bool clear_bit(bitset* data, int b) {
+		if(!check_bounds(data, b))
+			return false;
+	    data->words[bindex(b)] &= (~(1 << (boffset(b))));
+	    return true;
+	}
+
+	int get_bit(bitset* data, int b) {
+		if(!check_bounds(data, b))
+			return -1;
+	    return data->words[bindex(b)] & (1 << (boffset(b)));
+	}
+
 private:
 	/** functor to handle "simple column detected" event */
 	typedef boost::function<void(int len, char** data, int* num_fields,
-			FieldLocation* field_locations, PrimitiveType columnType)> simpleColumnDetected;
+			FieldLocation* field_locations, PrimitiveType columnType, const std::string& key)> simpleColumnDetected;
 
 	/** functor to handle "object column detected" event */
 	typedef boost::function<void(int len, char** next_column_start, int* num_fields,
@@ -162,50 +225,50 @@ private:
 
 	    bool Null(const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_NULL);
+	    			TYPE_NULL, m_currentKey);
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 
 	    bool Bool(bool b, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_BOOLEAN);
+	    			TYPE_BOOLEAN, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Int(int i, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_INT);
+	    			TYPE_INT, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Uint(unsigned u, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_INT);
+	    			TYPE_INT, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Int64(int64_t i, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_BIGINT);
+	    			TYPE_BIGINT, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Uint64(uint64_t u, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data),m_materializedFields, m_fieldLocations,
-	    			TYPE_BIGINT);
+	    			TYPE_BIGINT, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool Double(double d, const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_DOUBLE);
+	    			TYPE_DOUBLE, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 	    bool String(const char* data, rapidjson::SizeType len, bool copy) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_STRING);
+	    			TYPE_STRING, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	        return true;
 	    }
@@ -350,10 +413,40 @@ private:
 	    	return hierarchy;
 	    }
 
+	    /** Builds the field's path hierarchy in terms of fully quelified field path, parts
+	     * separated with a dot. */
+	    std::string build_fqp(){
+	    	std::string fqp = "";
+
+	    	for(jsonObjectsIt it = m_objects.begin(); it != m_objects.end(); it++){
+	    		// no key for root
+	    		if((*it)->parent == NULL)
+	    			continue;
+
+                // for all non-completed entities
+	    		if(!(*it)->completed && ( (*it)->type == JSONObjectType::ENTITY) ){
+	    			// if there was a content in fqp already, put the path's parts separator (which is dot)
+	    			if(!fqp.empty())
+	    				fqp += ".";
+	    			fqp += (*it)->key;
+	    		}
+	    	}
+	    	// and attach the current key value:
+            if( (state_ == kExpectValue) && (m_currentObject->type != JSONObjectType::ARRAY)){
+            	if(!fqp.empty())
+            		fqp += ".";
+            	fqp += m_currentKey;
+            }
+	    	return fqp;
+	    }
+
 	private:
 	    std::string            m_currentKey;            /**< key that was successfully extracted last. */
 	    int*                   m_materializedFields;    /**< number of fields materialized during current parser session */
 	    FieldLocation*         m_fieldLocations;        /**< externally injected registry of field locations, to be filled in */
+
+
+
 	    simpleColumnDetected   m_columnCallback;        /**< callback to be invoked when the simple field is completely extracted */
 	    compoundColumnDetected m_compundColumnCallback; /**< callback to be invoked when the entity is found */
 
@@ -385,7 +478,7 @@ private:
 	};
 
  public:
-	virtual ~JsonDelimitedTextParser() {}
+	virtual ~JsonDelimitedTextParser();
 
 	/**
 	 * JSON parser, currently in use in context of plain JSON parsing while
@@ -434,6 +527,10 @@ private:
 			int* num_fields,
 			char** next_column_start);
 
+
+	/** Configure JSON paths to schema mapping */
+	void setupSchemaMapping(const std::vector<SlotDescriptor*>& schema);
+
  private:
 
 	/** predicate to handle column detection */
@@ -441,6 +538,16 @@ private:
 
 	/** predicate to handle compound column detection */
 	compoundColumnDetected m_compundColumnDetectedhandler;
+
+	/** schema mapping, key is the column fully qualified path,
+	 * value is the index of a slot within the tuple schema */
+	boost::unordered_map<std::string, int> m_schema;
+
+	/** flag, indicates the fact that the schema is defined */
+	bool m_schema_defined;
+
+	/** one-time calculated configured schema size */
+	int schema_size;
 
 	/** size of data remainder if any which comes with a current batch */
 	int m_data_remainder_size;
@@ -468,14 +575,18 @@ private:
 	/** length of content of last incompleted record */
 	int m_unfinishedRecordLen;
 
+	/** index of currently found column within the table schema. It starts from 0 */
+	int m_idx;
+
+	/** Tuple slots parse status bitmap. Each bit represents the slot parse event.
+	 * E.g., bit is set if slot was parsed.
+	 */
+	bitset* m_tuple;
+
 	/*********************** rapdijson callbacks handling section  ******************/
 
 	/** we preserve message handler */
 	boost::scoped_ptr<JsonSAXParserEventsHandler> m_messageHandler;
-
-	/** Print column data. TODO. Beautify it. */
-	void printColumn(int index, FieldLocation* field_locations);
-
 
 	/** parse single tuple */
 	void parseSingleTupleInternal(int64_t len, char* buffer, FieldLocation* field_locations,
@@ -484,8 +595,12 @@ private:
 	/** initialize parser-specific search characters registry */
 	void setupSearchCharacters();
 
+	/** method makes the decision whether current column should be materialized */
+	bool virtual ReturnCurrentColumn() const;
+
 	void addColumnInternal(int len, char** next_column_start, int* num_fields,
-			FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE, const bool flag = false);
+			FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
+			const std::string& key = "", const bool flag = false);
 
 	/** reset the parser according to parser implementation specifics */
 	void parserResetInternal();

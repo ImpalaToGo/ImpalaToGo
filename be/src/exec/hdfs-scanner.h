@@ -65,6 +65,9 @@ class Codec;
   /** field type is introduced for formats that may be schema-discovered */
   PrimitiveType type;
 
+  /** index this column appear within the tuple schema */
+  int idx;
+
   static const char* LLVM_CLASS_NAME;
 };
 

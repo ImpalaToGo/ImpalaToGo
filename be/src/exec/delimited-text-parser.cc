@@ -31,11 +31,9 @@ DelimitedTextParser::DelimitedTextParser(
 		is_materialized_col_(is_materialized_col),
 		column_idx_(0),
 		unfinished_tuple_(false){
-   LOG(INFO) << "DelimitedTextParser()\n";
 }
 
 void DelimitedTextParser::parserReset(bool hard) {
-	LOG(INFO) << "DelimitedTextParser resetting ... \n";
 	last_row_delim_offset_ = -1;
 	if(hard)
 		column_idx_ = num_partition_keys_;
@@ -51,11 +49,9 @@ int DelimitedTextParser::FindFirstInstance(const char* buffer, int len) {
   const char* buffer_start = buffer;
   bool found = false;
 
-  LOG(INFO) << "FindFirstInstance for \"" << buffer << "\"\n.";
   // If the last char in the previous buffer was \r then either return the start of
   // this buffer or skip a \n at the beginning of the buffer.
   if (last_row_delim_offset_ != -1) {
-	  LOG(INFO) << "Find first instance : last delimiter offset <> -1 : \"" << last_row_delim_offset_ << "\"\n";
     if (*buffer_start == '\n') return 1;
     return 0;
   }
@@ -84,7 +80,6 @@ int DelimitedTextParser::FindFirstInstance(const char* buffer, int len) {
 					  if ((tuple_mask & SSEUtil::SSE_BITMASK[i]) != 0) {
 						  tuple_start += i + 1;
 						  buffer += i + 1;
-						  LOG(INFO) << "SSE : found delimiter at " << tuple_start << "\n";
 						  break;
 					  }
 				  }
@@ -95,13 +90,11 @@ int DelimitedTextParser::FindFirstInstance(const char* buffer, int len) {
 		  }
 	  }
 	  if (!found) {
-		  std::cout << "SSE did not find delimiter, currently at " << tuple_start << "\n";
 		  for (; tuple_start < len; ++tuple_start) {
 			  char c = *buffer++;
 			  if (c == tuple_delim_ || (c == '\r' && tuple_delim_ == '\n')) {
 				  ++tuple_start;
 				  found = true;
-				  LOG(INFO) << "found delimiter, currently at " << tuple_start << "\n";
 				  break;
 			  }
 		  }
@@ -110,7 +103,6 @@ int DelimitedTextParser::FindFirstInstance(const char* buffer, int len) {
 	  if (!found)
 		  return -1;
 	  if (process_escapes_) {
-		  LOG(INFO) << "Process escapes is requested. currently at " << tuple_start << "\n";
 		  restart_escape_processing = process_escapes(tuple_start,
 				  buffer_start);
 	  }
@@ -126,7 +118,6 @@ int DelimitedTextParser::FindFirstInstance(const char* buffer, int len) {
     // We have \r\n, move to the next character.
     ++tuple_start;
   }
-  LOG(INFO) << "Find first instance : tuple start = " << tuple_start << "\n";
   return tuple_start;
 }
 

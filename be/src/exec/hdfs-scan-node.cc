@@ -312,7 +312,7 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
     scanner_threads_.SetCgroup(state->cgroup());
   }
 
-  // One-time initialisation of state that is constant across scan ranges
+  // One-time initialization of state that is constant across scan ranges
   DCHECK(tuple_desc_->table_desc() != NULL);
   hdfs_table_ = static_cast<const HdfsTableDescriptor*>(tuple_desc_->table_desc());
   scan_node_pool_.reset(new MemPool(mem_tracker()));
@@ -321,7 +321,7 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   const vector<SlotDescriptor*>& slots = tuple_desc_->slots();
   for (size_t i = 0; i < slots.size(); ++i) {
     if (!slots[i]->is_materialized()) continue;
-    LOG(INFO)<<"HdfsScanNode::Prepare() has nested_path='"<<slots[i]->nested_path()<<"'";
+    LOG(INFO) << "HdfsScanNode::Prepare() has nested_path='" << slots[i]->nested_path() << "'";
     if (hdfs_table_->IsClusteringCol(slots[i])) {
       partition_key_slots_.push_back(slots[i]);
     } else {
