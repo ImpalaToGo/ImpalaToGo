@@ -31,7 +31,9 @@ class JsonDelimitedTextParser : public DelimitedTextParser {
 		int     nbits;     /**< number of bits */
 	};
 
-	enum { WORD_SIZE = sizeof(word_t) * 8 };
+	enum { WORD_SIZE = sizeof(word_t) * 8,
+	       MAX_PATH  = 256
+	     };
 
 	static inline bool check_bounds(bitset *set, int bit) {
 	    if (set->nbits < bit) {
@@ -109,15 +111,23 @@ private:
 		struct JsonObject{
 			JSONObjectType::object_type type;      /**< object type */
 			JsonObject*                 parent;    /**< object parent. For JSON root, its NULL */
-			std::string                 key;       /**< the key for this object. For root JSON, its empty */
+			char*                       key;       /**< the key for this object. For root JSON, its empty */
+			int                         keylen;    /**< legth of the key */
 			bool                        completed; /**< flag, indicates that this object was completely done */
+
+			JsonObject() : type(JSONObjectType::ENTITY), parent(NULL), key(NULL), keylen(0), completed(false) {}
+
+			~JsonObject() {
+				if(key != NULL) delete [] key;
+				key = NULL;
+			}
 		};
 
 		/** iterator for json objects registry */
 		typedef std::vector<JsonObject*>::iterator jsonObjectsIt;
 
         JsonSAXParserEventsHandler():
-        	m_currentKey(""),
+        	m_currentKeylen(0),
 			m_materializedFields(NULL),
 			m_fieldLocations(NULL),
 			m_columnCallback(0),
@@ -128,7 +138,9 @@ private:
 			m_isFresh(true),
 			m_currentObject(NULL),
 			state_(kExpectObjectStart)
-			{}
+		{
+        	memset(&m_currentKey, 0, MAX_PATH);
+		}
 
         /** Ctor.
          * @param callbackOnColumnFound - predicate to be fired when simple column is found.
@@ -138,7 +150,7 @@ private:
          */
         JsonSAXParserEventsHandler(simpleColumnDetected callbackOnColumnFound,
 				  compoundColumnDetected callbackCompundColumnFound) :
-					  m_currentKey(""),
+					  m_currentKeylen(0),
 					  m_materializedFields(NULL),
 					  m_fieldLocations(NULL),
 					  m_columnCallback(callbackOnColumnFound),
@@ -149,7 +161,9 @@ private:
 					  m_isFresh(true),
 					  m_currentObject(NULL),
 					  state_(kExpectObjectStart)
-					  {}
+        {
+        	memset(&m_currentKey, 0, MAX_PATH);
+        }
 
         /** configure the message handler with new registry of fields
          * @param fieldLocations - plain registry of field locations, to be filled in
@@ -187,7 +201,9 @@ private:
         	cleanvector(m_objects);
         	// no "currents" exists:
         	m_currentObject = NULL;
-        	m_currentKey = "";
+
+        	memset(&m_currentKey, 0, MAX_PATH);
+        	m_currentKeylen = 0;
 
         	if(new_session)
         		// no fields were materialized so far:
@@ -225,7 +241,7 @@ private:
 
 	    bool Null(const Ch* data, rapidjson::SizeType len) {
 	    	m_columnCallback(len, const_cast<char**>(&data), m_materializedFields, m_fieldLocations,
-	    			TYPE_NULL, m_currentKey);
+	    			TYPE_NULL, build_fqp());
 	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
@@ -282,7 +298,12 @@ private:
 	    		JsonObject* object = new JsonObject();
 	    		object->type = JSONObjectType::ENTITY;
 	    		object->parent = m_currentObject;
-	    		object->key = m_currentKey;
+
+	    		if(m_currentKeylen){
+	    			object->key = new char[m_currentKeylen];
+	    			memset(object->key, 0, m_currentKeylen);
+	    			memcpy(object->key, m_currentKey, m_currentKeylen);
+	    		}
 	    		object->completed = false;
 	    		{
 	    			boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
@@ -299,7 +320,10 @@ private:
 	    	}
 	    }
 	    bool Key(const char* str, rapidjson::SizeType length, bool copy) {
-	    	m_currentKey.assign(str, length);
+	    	memset(&m_currentKey, 0, MAX_PATH);
+	    	memcpy(&m_currentKey, str, length);
+	    	m_currentKeylen = length;
+
 	    	state_ = kExpectValue;
 	        return true;
 	    }
@@ -312,7 +336,8 @@ private:
 		    	// reassign "current object" to a parent of this object:
 		    	m_currentObject = m_currentObject->parent;
 		    	if(m_currentObject != NULL){
-		    		m_currentKey = m_currentObject->key;
+		    		memset(&m_currentKey, 0, MAX_PATH);
+		    		memcpy(&m_currentKey, m_currentObject->key, m_currentObject->keylen);
 		    	}
 	    	}
 	    	return state_ == kExpectNameOrObjectEnd;
@@ -321,7 +346,13 @@ private:
     		JsonObject* object = new JsonObject();
     		object->type = JSONObjectType::ARRAY;
     		object->parent = m_currentObject;
-    		object->key = m_currentKey;
+
+    		if(m_currentKeylen){
+    			object->key = new char[m_currentKeylen];
+    			memset(object->key, 0, m_currentKeylen);
+    			memcpy(object->key, m_currentKey, m_currentKeylen);
+    		}
+
     		object->completed = false;
     		{
     			boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
@@ -342,7 +373,9 @@ private:
 		    	// reassign "current object" to a parent of this object:
 		    	m_currentObject = m_currentObject->parent;
 		    	if(m_currentObject != NULL){
-		    		m_currentKey = m_currentObject->key;
+		    		memset(m_currentKey, 0, MAX_PATH);
+		    		memcpy(m_currentKey, m_currentObject->key, m_currentObject->keylen);
+		    		m_currentKeylen = m_currentObject->keylen;
 		    	}
 	    	}
 	    	return true;
@@ -396,7 +429,7 @@ private:
 
 	    		if(!(*it)->completed){
 	    			hierarchy += "\"";
-	    			hierarchy += (*it)->key;
+	    			hierarchy.append((*it)->key, (*it)->keylen);
 	    			hierarchy += "\":";
 	    			hierarchy += (*it)->type == JSONObjectType::ENTITY ? "{" : "[";
 	    		}
@@ -406,7 +439,7 @@ private:
 	    	// append it at the end of hierarchy:
             if( (state_ == kExpectValue) && (leaf != NULL) && (m_currentObject->type != JSONObjectType::ARRAY)){
             	hierarchy += "\"";
-            	hierarchy += m_currentKey;
+            	hierarchy.append(m_currentKey, m_currentKeylen);
             	hierarchy += "\":";
             }
 
@@ -428,20 +461,21 @@ private:
 	    			// if there was a content in fqp already, put the path's parts separator (which is dot)
 	    			if(!fqp.empty())
 	    				fqp += ".";
-	    			fqp += (*it)->key;
+	    			fqp.append((*it)->key, (*it)->keylen);
 	    		}
 	    	}
-	    	// and attach the current key value:
+	    	// and attach the current key value if any:
             if( (state_ == kExpectValue) && (m_currentObject->type != JSONObjectType::ARRAY)){
-            	if(!fqp.empty())
+            	if(!fqp.empty() && m_currentKeylen)
             		fqp += ".";
-            	fqp += m_currentKey;
+            	fqp.append(m_currentKey, m_currentKeylen);
             }
 	    	return fqp;
 	    }
 
 	private:
-	    std::string            m_currentKey;            /**< key that was successfully extracted last. */
+	    char                   m_currentKey[MAX_PATH];  /**< key that was successfully extracted last. */
+	    int                    m_currentKeylen;         /**< current key length */
 	    int*                   m_materializedFields;    /**< number of fields materialized during current parser session */
 	    FieldLocation*         m_fieldLocations;        /**< externally injected registry of field locations, to be filled in */
 
