@@ -337,14 +337,12 @@ void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_f
 
 	if(m_schema_defined){
 		m_idx = m_schema[key];
-		LOG(INFO) << "addColumnInternal() : key = \"" << key << "\" with index = " << m_idx << ".\n";
 	}
 	else
 		m_idx = column_idx_ + 1;
 
     // if current column is materialized:
 	if (ReturnCurrentColumn()) {
-		LOG(INFO) << "addColumnInternal() : key is going to be added.\n";
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
@@ -388,19 +386,17 @@ void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescripto
 
 	schema_size = m_schema.size();
 
-	if(schema.size() == 0)
+	if(schema_size == 0)
 		return;
-
-	int idx = 0;
 
 	// populate schema with the mapping from JSON key's fully qualified name to
 	// column index within the table schema
-	for(std::vector<SlotDescriptor*>::const_iterator it = schema.begin(); it != schema.end(); ++it) {
-		LOG(INFO) << "Configuring nested_path = \"" << (*it)->nested_path() << "\" for idx = " << idx << ".\n";
-		m_schema[(*it)->nested_path()] = ++idx;
+	for(std::vector<SlotDescriptor*>::const_iterator it = schema.begin(); it != schema.end(); ++it){
+		m_schema[(*it)->nested_path()] = (*it)->col_pos() + 1;
 	}
+
 	// allocate the bitmap representing tuple parse progress:
-	m_tuple = bitset_alloc(idx ? idx : 1);
+	m_tuple = bitset_alloc(schema_size ? schema_size : 1);
 
 	// and zero it:
 	bitset_clear(m_tuple);
