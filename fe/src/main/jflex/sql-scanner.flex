@@ -133,6 +133,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("invalidate", new Integer(SqlParserSymbols.KW_INVALIDATE));
     keywordMap.put("is", new Integer(SqlParserSymbols.KW_IS));
     keywordMap.put("join", new Integer(SqlParserSymbols.KW_JOIN));
+    keywordMap.put("json", new Integer(SqlParserSymbols.KW_JSON));
     keywordMap.put("last", new Integer(SqlParserSymbols.KW_LAST));
     keywordMap.put("left", new Integer(SqlParserSymbols.KW_LEFT));
     keywordMap.put("like", new Integer(SqlParserSymbols.KW_LIKE));

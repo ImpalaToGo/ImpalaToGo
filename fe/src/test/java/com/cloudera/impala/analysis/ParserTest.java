@@ -2058,6 +2058,11 @@ public class ParserTest {
     ParsesOk("CREATE TABLE T (i int) COMMENT 'hello' ROW FORMAT DELIMITED FIELDS " +
         "TERMINATED BY '\0' LINES TERMINATED BY '\1' STORED AS TEXTFILE LOCATION '/a'");
 
+    //JSON rows
+    ParsesOk("CREATE TABLE T (i int nested_path 'path.to.int') ROW FORMAT JSON");
+    ParserError("CREATE TABLE T (i int nested_path 'path.to.int') ROW FORMAT JSON FIELDS TERMINATED BY '|'");
+    ParsesOk("CREATE TABLE T (i int nested_path 'path.to.int') ROW FORMAT JSON LINES TERMINATED BY '|'");
+
     // Negative row format syntax
     ParserError("CREATE TABLE T (i int) ROW FORMAT DELIMITED TERMINATED BY '\0'");
     ParserError("CREATE TABLE T (i int) ROW FORMAT DELIMITED FIELDS TERMINATED BY");
