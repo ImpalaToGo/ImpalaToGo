@@ -680,6 +680,7 @@ Function* AggregationNode::CodegenUpdateTuple(RuntimeState* state) {
     // skip non-materialized slots; we don't have evaluators instantiated for those
     while (!intermediate_tuple_desc_->slots()[j]->is_materialized()) {
       DCHECK_LT(j, intermediate_tuple_desc_->slots().size() - 1);
+      VLOG_QUERY<<"Found non-materialized slot which will be skipped with nested_path='"<<intermediate_tuple_desc_->slots()[j]->nested_path()<<"'";
       ++j;
     }
     SlotDescriptor* slot_desc = intermediate_tuple_desc_->slots()[j];
@@ -746,6 +747,7 @@ Function* AggregationNode::CodegenUpdateTuple(RuntimeState* state) {
     // skip non-materialized slots; we don't have evaluators instantiated for those
     while (!intermediate_tuple_desc_->slots()[j]->is_materialized()) {
       DCHECK_LT(j, intermediate_tuple_desc_->slots().size() - 1);
+      VLOG_QUERY<<"Found non-materialized slot which will be skipped with nested_path='"<<intermediate_tuple_desc_->slots()[j]->nested_path()<<"'";
       ++j;
     }
     SlotDescriptor* slot_desc = intermediate_tuple_desc_->slots()[j];
