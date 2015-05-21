@@ -35,7 +35,6 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 		m_reconstructedRecordData(NULL),
 		m_unfinishedRecordData(NULL),
 		m_unfinishedRecordLen(-1),
-		m_idx(0),
 		m_tuple(NULL){
 
 	// bind "column detected" handler to this parser to be handled here
@@ -326,7 +325,6 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
 				return Status::OK;
 			}
-
 		}
 	}
     return Status::OK;
@@ -335,36 +333,29 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_fields,
 		FieldLocation* field_locations, PrimitiveType type, const std::string& key, bool flag ){
 
+	int index = 0;
+
 	if(m_schema_defined){
-		m_idx = m_schema[key];
+		m_mapping = m_schema[key];
+		index = m_mapping.llvm_tuple_idx;
 	}
 	else
-		m_idx = column_idx_ + 1;
+		index = column_idx_ + 1;
 
     // if current column is materialized:
-	if (ReturnCurrentColumn()) {
+	if (ReturnCurrentColumn()) {               
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
 
 		if(m_schema_defined){
 			if(len == 0 && *data == NULL){
-				// locate next non-filled column index within the
-				// bitmap of tuple parse progress:
-				for(int i = 0; i < schema_size; i++){
-					// if there's non-parsed slot found:
-					if(!get_bit(m_tuple, i)){
-						m_idx = i + 1;
-						break;
-					}
-				}
+				set_bit(m_tuple, m_mapping.column_idx);
 			}
-	        // set the "column is parsed" event within the tuple bits
-	        set_bit(m_tuple, m_idx - 1);
 		}
 
 		// specify the index of column within the table schema
-		field_locations[*num_fields].idx = m_idx;
+		field_locations[*num_fields].idx = index;
 
 		// number of materialized fields is increased
 		++(*num_fields);
@@ -377,22 +368,27 @@ bool JsonDelimitedTextParser::ReturnCurrentColumn() const {
 	// preallocated buffer for metadata).
 	// 2. Column that is parsed currently should be configured in schema mapping (so m_idx > 0)
 	// 3. Current column index should be configured as requested for materialization.
-	return m_schema_defined ? ( m_idx && column_idx_ < num_cols_ && is_materialized_col_[m_idx - 1] ) :
+	return m_schema_defined ?
+			( this->m_mapping.defined() && (m_mapping.column_idx < num_cols_) && is_materialized_col_[m_mapping.column_idx] ) :
 			( column_idx_ < num_cols_ && is_materialized_col_[column_idx_] );
 }
 
 void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescriptor*>& schema){
 	LOG(INFO) << "Configuring schema mapping. Schema len = " << schema.size() << ".\n";
 
-	schema_size = m_schema.size();
+	schema_size = schema.size();
 
 	if(schema_size == 0)
 		return;
 
+	int idx = 1;
+
 	// populate schema with the mapping from JSON key's fully qualified name to
 	// column index within the table schema
 	for(std::vector<SlotDescriptor*>::const_iterator it = schema.begin(); it != schema.end(); ++it){
-		m_schema[(*it)->nested_path()] = (*it)->col_pos() + 1;
+		LOG(INFO) << "schema mapping of \"" << (*it)->nested_path() << "\" to idx = " << idx << ".\n";
+		SchemaMapping mapping((*it)->col_pos(), idx++);
+		m_schema[(*it)->nested_path()] = mapping;
 	}
 
 	// allocate the bitmap representing tuple parse progress:
