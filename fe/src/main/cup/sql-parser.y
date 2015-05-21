@@ -241,7 +241,7 @@ terminal
   KW_FIRST, KW_FLOAT, KW_FOLLOWING, KW_FOR, KW_FORMAT, KW_FORMATTED, KW_FROM, KW_FULL,
   KW_FUNCTION, KW_FUNCTIONS, KW_GRANT, KW_GROUP, KW_HAVING, KW_IF, KW_IN, KW_INCREMENTAL,
   KW_INIT_FN, KW_INNER, KW_INPATH, KW_INSERT, KW_INT, KW_INTERMEDIATE, KW_INTERVAL,
-  KW_INTO, KW_INVALIDATE, KW_IS, KW_JOIN, KW_LAST, KW_LEFT, KW_LIKE, KW_LIMIT, KW_LINES,
+  KW_INTO, KW_INVALIDATE, KW_IS, KW_JOIN, KW_JSON, KW_LAST, KW_LEFT, KW_LIKE, KW_LIMIT, KW_LINES,
   KW_LOAD, KW_LOCATION, KW_MAP, KW_MERGE_FN, KW_METADATA, KW_NESTED_PATH, KW_NOT, KW_NULL, KW_NULLS,
   KW_OFFSET, KW_ON, KW_OR, KW_ORDER, KW_OUTER, KW_OVER, KW_OVERWRITE, KW_PARQUET,
   KW_PARQUETFILE, KW_PARTITION, KW_PARTITIONED, KW_PARTITIONS, KW_PRECEDING,
@@ -1011,6 +1011,8 @@ row_format_val ::=
   KW_ROW KW_FORMAT KW_DELIMITED field_terminator_val:field_terminator
   escaped_by_val:escaped_by line_terminator_val:line_terminator
   {: RESULT = new RowFormat(field_terminator, line_terminator, escaped_by); :}
+  |  KW_ROW KW_FORMAT KW_JSON escaped_by_val:escaped_by line_terminator_val:line_terminator
+  {: RESULT = new RowFormat("j", line_terminator, escaped_by); :}
   |/* empty */
   {: RESULT = RowFormat.DEFAULT_ROW_FORMAT; :}
   ;
