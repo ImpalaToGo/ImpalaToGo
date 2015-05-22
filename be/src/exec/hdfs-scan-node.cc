@@ -320,8 +320,8 @@ Status HdfsScanNode::Prepare(RuntimeState* state) {
   // Gather materialized partition-key slots and non-partition slots.
   const vector<SlotDescriptor*>& slots = tuple_desc_->slots();
   for (size_t i = 0; i < slots.size(); ++i) {
+    LOG(INFO) << "HdfsScanNode::Prepare() has nested_path='" << slots[i]->nested_path() << "'"; 
     if (!slots[i]->is_materialized()) continue;
-    LOG(INFO) << "HdfsScanNode::Prepare() has nested_path='" << slots[i]->nested_path() << "'";
     if (hdfs_table_->IsClusteringCol(slots[i])) {
       partition_key_slots_.push_back(slots[i]);
     } else {

@@ -368,10 +368,19 @@ bool JsonDelimitedTextParser::ReturnCurrentColumn() const {
 	// preallocated buffer for metadata).
 	// 2. Column that is parsed currently should be configured in schema mapping (so m_idx > 0)
 	// 3. Current column index should be configured as requested for materialization.
-	return m_schema_defined ?
-			( this->m_mapping.defined() && (m_mapping.column_idx < num_cols_) && is_materialized_col_[m_mapping.column_idx] ) :
+	return m_schema_defined ? ( this->m_mapping.defined() && (m_mapping.column_idx < num_cols_) && is_materialized_col_[m_mapping.column_idx] ) :
 			( column_idx_ < num_cols_ && is_materialized_col_[column_idx_] );
 }
+
+#include <algorithm>
+
+struct  slot_asc_descriptor_sort
+{
+    inline bool operator() (const SlotDescriptor* slot1, const SlotDescriptor* slot2)
+    {
+        return (slot1->col_pos() < slot2->col_pos());
+    }
+};
 
 void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescriptor*>& schema){
 	LOG(INFO) << "Configuring schema mapping. Schema len = " << schema.size() << ".\n";
@@ -383,10 +392,13 @@ void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescripto
 
 	int idx = 1;
 
+        // sort arrived schema in order to contain slots in the order they appear in the original table schema (basing on col_pos()):
+        std::vector<SlotDescriptor*> sorted_schema =  schema;
+        std::sort(sorted_schema.begin(), sorted_schema.end(), slot_asc_descriptor_sort());
 	// populate schema with the mapping from JSON key's fully qualified name to
 	// column index within the table schema
-	for(std::vector<SlotDescriptor*>::const_iterator it = schema.begin(); it != schema.end(); ++it){
-		LOG(INFO) << "schema mapping of \"" << (*it)->nested_path() << "\" to idx = " << idx << ".\n";
+	for(std::vector<SlotDescriptor*>::const_iterator it = sorted_schema.begin(); it != sorted_schema.end(); ++it){
+                LOG(INFO) << "schema mapping of \"" << (*it)->nested_path() << "\"; col_idx = " << (*it)->col_pos() << " to idx = " << idx << ".\n";
 		SchemaMapping mapping((*it)->col_pos(), idx++);
 		m_schema[(*it)->nested_path()] = mapping;
 	}
