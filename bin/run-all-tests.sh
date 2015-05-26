@@ -86,9 +86,11 @@ do
   #${IMPALA_HOME}/bin/start-impala-cluster.py --kill_only --force
 
   if [[ "$BE_TEST" = true ]]; then
+  tachyon-local.sh setup
   echo "Running BE tests...."
     # Run backend tests.
     ${IMPALA_HOME}/bin/run-backend-tests.sh
+  tachyon-local.sh teardown
   fi
 
   # Increase the admission controller max_requests to prevent builds failing due to
