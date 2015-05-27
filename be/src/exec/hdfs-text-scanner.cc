@@ -428,13 +428,13 @@ Status HdfsTextScanner::ProcessRange(int* num_tuples, bool past_scan_range) {
     }
     COUNTER_ADD(scan_node_->rows_read_counter(), *num_tuples);
 
+    // Commit the rows to the row batch and scan node
+    RETURN_IF_ERROR(CommitRows(num_tuples_materialized));
+
     // always reset the parser soft in case if this is JSON parser:
     if((m_dataFormat == JSON)){
   	  delimited_text_parser_->parserReset(false);
     }
-
-    // Commit the rows to the row batch and scan node
-    RETURN_IF_ERROR(CommitRows(num_tuples_materialized));
 
     // Done with this buffer and the scan range
     if ((byte_buffer_ptr_ == byte_buffer_end_ && eosr) || past_scan_range) {

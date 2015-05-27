@@ -35,14 +35,23 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 		m_reconstructedRecordData(NULL),
 		m_unfinishedRecordData(NULL),
 		m_unfinishedRecordLen(-1),
-		m_tuple(NULL){
+		m_tuple(NULL),
+		m_number_of_materialized_fields(0),
+		m_record_idx_in_json_collection(-1),
+		m_num_tuples(0){
 
 	// bind "column detected" handler to this parser to be handled here
 	m_columnDetectedHandler = boost::bind(boost::mem_fn(&DelimitedTextParser::AddColumn<false>), this,
 			_1, _2, _3, _4, _5, _6);
 
+	m_setCurrentArrayIndex = boost::bind(boost::mem_fn(&JsonDelimitedTextParser::updateCurrentArrayIndex), this, _1);
+	m_reportEmptyObject = boost::bind(boost::mem_fn(&JsonDelimitedTextParser::handleEmptyObject), this, _1, _2);
+
 	// create the rapidjson events handler:
-	m_messageHandler.reset(new JsonSAXParserEventsHandler(m_columnDetectedHandler, m_compundColumnDetectedhandler));
+	m_messageHandler.reset(new JsonSAXParserEventsHandler(m_columnDetectedHandler,
+			m_setCurrentArrayIndex,
+			m_reportEmptyObject,
+m_compundColumnDetectedhandler));
 
 	// configure search characters registry
 	setupSearchCharacters();
@@ -52,9 +61,9 @@ JsonDelimitedTextParser::JsonDelimitedTextParser(int num_cols,
 }
 
 JsonDelimitedTextParser::~JsonDelimitedTextParser(){
-	if(m_tuple != NULL)
-		bitset_free(m_tuple);
-	m_tuple = NULL;
+	//if(m_tuple != NULL)
+	//	bitset_free(m_tuple);
+	//m_tuple = NULL;
 }
 
 void JsonDelimitedTextParser::setupSearchCharacters(){
@@ -71,13 +80,21 @@ void JsonDelimitedTextParser::setupSearchCharacters(){
 	}
 }
 
-void JsonDelimitedTextParser::parserResetInternal(){
+void JsonDelimitedTextParser::parserResetInternal(bool hard){
 	m_data_remainder_size = -1;
+
+	m_num_tuples = 0;
 
 	// if there were buffer created for data reconstruction, release it:
 	if(m_reconstructedRecordData != NULL){
 		delete [] m_reconstructedRecordData;
 		m_reconstructedRecordData = NULL;
+	}
+	if(hard){
+		column_idx_ = num_partition_keys_;
+		// reset the counters related to "tuple" tracking mechanism
+		m_number_of_materialized_fields = 0;
+		m_record_idx_in_json_collection = -1;
 	}
 }
 
@@ -90,6 +107,9 @@ bool JsonDelimitedTextParser::continuePreviousSession(char** data, int64_t* len)
 		// if handler is ready, just do nothing.
 		return false;
 	}
+
+	// if in continuation, set the record index to 0
+	m_record_idx_in_json_collection = -1;
 
 	// Get the offset of next record within this batch
 	m_next_tuple_start = FindFirstInstance(*data, *len);
@@ -178,7 +198,8 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 	rapidjson::Reader reader;
 
 	// check we need to continue previous session and make cached data aggregation if so
-	bool continue_previous_session = continuePreviousSession(byte_buffer_ptr, &remaining_len);
+	bool continue_previous_session = m_continiation_flag = continuePreviousSession(byte_buffer_ptr, &remaining_len);
+
 	if(continue_previous_session)
 		m_messageHandler->reset(continue_previous_session, true);
 	m_messageHandler->configure(field_locations, num_fields);
@@ -190,13 +211,13 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 
 	// Handle batch data:
     while (remaining_len > 0) {
-		bool new_tuple = initial_tuple_found_flag;
+		bool new_record = initial_tuple_found_flag;
 
 		// and reset the initial "tuple found" flag:
 		initial_tuple_found_flag = false;
 		size_t offset = 0;
 
-		if(tuple_delim_ == '\n' && **byte_buffer_ptr == '\r'){
+		if((tuple_delim_ == '\n' && **byte_buffer_ptr == '\r') || (!continue_previous_session && **byte_buffer_ptr == ' ')){
 			// we found '\r', go next cycle
 			++*byte_buffer_ptr;
 			remaining_len--;
@@ -214,13 +235,13 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			// if we still have bytes to process, set next tuple start to found position:
 			m_next_tuple_start = remaining_len;
 			// say we found new tuple
-			new_tuple = true;
+			new_record = true;
 		}
 
 		*next_row_start = *byte_buffer_ptr;
 
 		// start to handle new tuple
-		if (new_tuple) {
+		if (new_record) {
 			MemoryStream* ss = NULL;
 			// if there's previous parsing session continuation is required,
 			// create the stream from reconstructed buffer of unfinished record data and give it to a reader
@@ -298,33 +319,41 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 			// Number of tuples = number of really completed tuples
 			// check also whether at least some columns were materialized.
 			// don't count empty row ({}).
-			if(!error && (column_idx_ != 0)){
+			if((!error && (m_schema_defined || column_idx_ != 0)) || (m_schema_defined && m_number_of_materialized_fields == schema_size)
+					|| (m_schema_defined && m_number_of_materialized_fields && m_messageHandler->currentArray() &&
+							m_messageHandler->currentArray()->children == m_record_idx_in_json_collection + 1)){
+				// if the schema is defined and no one column was materialized during parser session,
+				// no tuple materialized in current record, shift forward the data buffer and continue
+				if(m_schema_defined){
+					if(!m_number_of_materialized_fields)
+						goto label; // no tuple found
+
+				}
 				// fill remained columns for this tuple
 				FillColumns<false>(0, NULL, num_fields, field_locations);
 
-				if(m_schema_defined)
-					// clear tuple parse progress bitset
-					bitset_clear(m_tuple);
-
-				// reset the "current column index"
-				column_idx_ = num_partition_keys_;
-
 				// point to next record
-				row_end_locations[*num_tuples] = (*byte_buffer_ptr + offset);
-
-                // now we can increase the number of processed tuples:
-				++(*num_tuples);
+				row_end_locations[m_num_tuples] = (*byte_buffer_ptr + offset);
+                                
+				// say new tuple is added
+                reportNewTuple();
 			}
+			label :
+
 		    remaining_len -= offset;
 
 			// shift buffer to offset:
 			*byte_buffer_ptr += offset;
 			*next_row_start = *byte_buffer_ptr;
 
+			// assign collected number of tuples
+			*num_tuples = m_num_tuples;
+
 			if (*num_tuples == max_tuples) {
 				if (last_row_delim_offset_ == remaining_len) last_row_delim_offset_ = 0;
 				return Status::OK;
 			}
+
 		}
 	}
     return Status::OK;
@@ -333,8 +362,65 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_fields,
 		FieldLocation* field_locations, PrimitiveType type, const std::string& key, bool flag ){
 
-	int index = 0;
+	/** Flows:
+	 * Scenario 1. Only when the schema is defined. The column is NULL (so tuple materialization finalization is requested, with zero values).
+	 *             If so, just fill the remained tuple with non-set values using tuple bitmap.
+	 *
+	 * Scenario 2.
+	 * 1. Check the column arrived should be materialized.
+	 * 2. If so, which tuple it belongs to?
+	 *
+	 *    2.1 Check object that encloses this column. If the object's array index = -1,
+	 *    the object does not belong to array on its hierarchy.
+	 *    In this case, the tuple is distinguished by rapidjson parser session completion (if at least 1 column
+	 *    was materialzed during parsing session).
+	 *
+	 *    2.2 Column's enclosing Object's has array index <> -1. This means the object is a part of some array
+	 *    and we need to track the index of this object within that array to understand tuples boundaries.
+	 *
+	 * Scenario 3. No schema defined. Treat the single JSON record as the tuple.
+	 */
 
+	/** Scenario 1 : Handle scenario of dummy columns addition.
+	 *  Examine bitmap for placeholder for materialized column, construct
+	 *  dummy fields accordingly */
+	if(m_schema_defined && *data == NULL && len == 0 && key.empty()){
+		// if all fields were materialized, just do nothing
+		if(m_number_of_materialized_fields == schema_size){
+			// set the column index to fields size so will not reach zero-filling flow again
+			column_idx_ = num_cols_;
+			return;
+		}
+		typedef boost::unordered_map<std::string, SchemaMapping> HASH;
+		BOOST_FOREACH( HASH::value_type& v, m_schema ) {
+			if(v.second.column_idx == -1)
+				continue;
+			if(!get_bit(m_tuple, v.second.column_idx)){
+				// bit is not set, so construct the dummy and mark the bit:
+				field_locations[*num_fields].len         = len;
+				field_locations[*num_fields].start       = *data;
+				field_locations[*num_fields].type        = type;
+
+				// assign llvm column index
+				field_locations[*num_fields].idx = v.second.llvm_tuple_idx;
+
+				// set the bit busy in bitmap
+				set_bit(m_tuple, v.second.column_idx);
+
+				// number of materialized fields is increased
+				++(*num_fields);
+
+				// and say we materialized yet another column for current tuple
+				++m_number_of_materialized_fields;
+			}
+		}
+		// set the column index to fields size so will not reach zero-filling flow again
+		column_idx_ = num_cols_;
+		// and go out
+		return;
+	}
+
+    int index = 0;
 	if(m_schema_defined){
 		m_mapping = m_schema[key];
 		index = m_mapping.llvm_tuple_idx;
@@ -342,25 +428,95 @@ void JsonDelimitedTextParser::addColumnInternal(int len, char** data, int* num_f
 	else
 		index = column_idx_ + 1;
 
-    // if current column is materialized:
-	if (ReturnCurrentColumn()) {               
+    /** Scenario 2.1
+	 * Go if the current column should be materialized.
+	 * For schema-defined tables, column should be also defined in schema. */
+	if (ReturnCurrentColumn()) {
+		if(m_schema_defined){
+			// Scenario 2.2 - checking the column enclosing object - whether it is part of any array?
+			if(m_messageHandler->currentObject()->index == -1){
+				/** Scenario 2.2.1 - the object is not the part of an array.
+                 * Just fill the field locations and set the busy bit in tuple bitmap,
+				 * for plain schema (no mapping to JSON collection's elements)
+				 * the tuple is completed when rapidjson parsing session completes. */
+				field_locations[*num_fields].len         = len;
+				field_locations[*num_fields].start       = *data;
+				field_locations[*num_fields].type        = type;
+
+				// set the bit busy in bitmap
+				set_bit(m_tuple, m_mapping.column_idx);
+
+				// and say we materialized yet another column for current tuple
+				++m_number_of_materialized_fields;
+
+				// specify the index of column within the table schema
+				field_locations[*num_fields].idx = index;
+
+				// number of materialized fields is increased
+				++(*num_fields);
+                ++column_idx_;
+				return;
+			}
+
+			/** Scenario 2.2.2. Column belongs to the object that is the part of some array.
+			 *  Thus, we need to understand the index of the column's record - within the enclosing array -
+			 *  to understand whether we need to report new tuple (arrived column belong to a new tuple)
+			 *  or update current tuple (arrived column belong to the tuple we currently handle).
+			 *  Underlying JSON parser reset the array index when the array is completed.
+			 * */
+			if(m_record_idx_in_json_collection != m_messageHandler->currentObject()->index){
+				// if there were some materialized fields already from the previous tuple,
+				// complete that tuple and report it to the number of completions.
+				// This works for cases except continuation, when the part of this tuple was constructed already in the previous batch.
+				// For continuation case, consume "continuation" flag.
+				if(m_number_of_materialized_fields && !m_continiation_flag){
+					// we step into new tuple. Report this and handle empty slots:
+					// if position bit is busy in the tuple bitmap, report new tuple
+					// fill remained columns for this tuple
+					FillColumns<false>(0, NULL, num_fields, field_locations);
+					reportNewTuple();
+				}
+				else
+					m_record_idx_in_json_collection = m_messageHandler->currentObject()->index;
+			}
+			m_continiation_flag = false;
+			// set the bit busy in bitmap for newly arrived tuple
+			set_bit(m_tuple, m_mapping.column_idx);
+			// increase the number of materialized fields for current tuple:
+			++m_number_of_materialized_fields;
+		}
+
+		/** Scenario 2.2.2 finalization and Scenario 3 (schema is not defined) */
 		field_locations[*num_fields].len         = len;
 		field_locations[*num_fields].start       = *data;
 		field_locations[*num_fields].type        = type;
-
-		if(m_schema_defined){
-			if(len == 0 && *data == NULL){
-				set_bit(m_tuple, m_mapping.column_idx);
-			}
-		}
 
 		// specify the index of column within the table schema
 		field_locations[*num_fields].idx = index;
 
 		// number of materialized fields is increased
 		++(*num_fields);
+
+		++column_idx_;
 	}
-	++column_idx_;
+}
+
+void JsonDelimitedTextParser::reportNewTuple(){
+	if(m_schema_defined){
+		// clear tuple parse progress bitmap
+		bitset_clear(m_tuple);
+
+		// reset number of materialized fields within this tuple:
+		m_number_of_materialized_fields = 0;
+
+		// save the current object index within the array (if any).
+		// -1 means no enclosing array for current object
+		m_record_idx_in_json_collection = m_messageHandler->currentObject() != NULL ? m_messageHandler->currentObject()->index : -1;
+	}
+
+	// reset the "current column index"
+	column_idx_ = num_partition_keys_;
+	++m_num_tuples;
 }
 
 bool JsonDelimitedTextParser::ReturnCurrentColumn() const {
@@ -383,14 +539,12 @@ struct  slot_asc_descriptor_sort
 };
 
 void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescriptor*>& schema){
-	LOG(INFO) << "Configuring schema mapping. Schema len = " << schema.size() << ".\n";
-
-	schema_size = schema.size();
+    schema_size = schema.size();
 
 	if(schema_size == 0)
 		return;
 
-	int idx = 1;
+        int idx = 1;
 
         // sort arrived schema in order to contain slots in the order they appear in the original table schema (basing on col_pos()):
         std::vector<SlotDescriptor*> sorted_schema =  schema;
@@ -398,7 +552,6 @@ void JsonDelimitedTextParser::setupSchemaMapping(const std::vector<SlotDescripto
 	// populate schema with the mapping from JSON key's fully qualified name to
 	// column index within the table schema
 	for(std::vector<SlotDescriptor*>::const_iterator it = sorted_schema.begin(); it != sorted_schema.end(); ++it){
-                LOG(INFO) << "schema mapping of \"" << (*it)->nested_path() << "\"; col_idx = " << (*it)->col_pos() << " to idx = " << idx << ".\n";
 		SchemaMapping mapping((*it)->col_pos(), idx++);
 		m_schema[(*it)->nested_path()] = mapping;
 	}

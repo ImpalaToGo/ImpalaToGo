@@ -95,7 +95,13 @@ private:
 	typedef boost::function<void(int len, char** next_column_start, int* num_fields,
 			FieldLocation* field_locations)> compoundColumnDetected;
 
-	struct JSONObjectType{
+    /** predicate to set the array index of the object which became "current" when the array is completed */
+	typedef boost::function<void(int idx)> setParentArrayIndex;
+
+	/** predicate to report an empty object on top */
+	typedef boost::function<void(int* num_fields, FieldLocation* field_locations)> reportEmptyObject;
+
+    struct JSONObjectType{
 		enum object_type{
 			ENTITY,
 			ARRAY,
@@ -111,11 +117,21 @@ private:
 		struct JsonObject{
 			JSONObjectType::object_type type;      /**< object type */
 			JsonObject*                 parent;    /**< object parent. For JSON root, its NULL */
+			JsonObject*                 array;     /**< enclosing array if any */
 			char*                       key;       /**< the key for this object. For root JSON, its empty */
 			int                         keylen;    /**< legth of the key */
 			bool                        completed; /**< flag, indicates that this object was completely done */
+			int                         index;     /**< index is set if the object is a child of some parent array.
+			                                        * Example : {"arr" : [{"a" : "val", "b" : "val"}, {"b" : "val"}, {"a" : "val"}]}
+			                                        * Index = -1 means no parent array exists for this object.
+			                                        */
+			int                         children;  /**< holds number of direct children of this object.
+			                                        * For object this would be the number of fields of level 0,
+			                                        * For array, number of elements in array
+			                                        */
 
-			JsonObject() : type(JSONObjectType::ENTITY), parent(NULL), key(NULL), keylen(0), completed(false) {}
+			JsonObject() : type(JSONObjectType::ENTITY), parent(NULL), array(NULL), key(NULL), keylen(0), completed(false),
+					index(-1), children(0) {}
 
 			~JsonObject() {
 				if(key != NULL) delete [] key;
@@ -123,7 +139,7 @@ private:
 			}
 		};
 
-		/** iterator for json objects registry */
+	        /** iterator for json objects registry */
 		typedef std::vector<JsonObject*>::iterator jsonObjectsIt;
 
         JsonSAXParserEventsHandler():
@@ -131,12 +147,14 @@ private:
 			m_materializedFields(NULL),
 			m_fieldLocations(NULL),
 			m_columnCallback(0),
+			m_reportEmptyObject(0),
 			m_compundColumnCallback(0),
 			m_incompleteObjects(0),
         	m_isConfigured(false),
         	m_isReady(false),
 			m_isFresh(true),
 			m_currentObject(NULL),
+			m_currentArray(NULL),
 			state_(kExpectObjectStart)
 		{
         	memset(&m_currentKey, 0, MAX_PATH);
@@ -149,17 +167,22 @@ private:
          * @param callbackCompundColumnFound - predicate to be fired when nested entity is found
          */
         JsonSAXParserEventsHandler(simpleColumnDetected callbackOnColumnFound,
-				  compoundColumnDetected callbackCompundColumnFound) :
+        		setParentArrayIndex callbackParentArrayIndexSetter,
+				reportEmptyObject callbackReportEmptyObject,
+				compoundColumnDetected callbackCompundColumnFound) :
 					  m_currentKeylen(0),
 					  m_materializedFields(NULL),
 					  m_fieldLocations(NULL),
 					  m_columnCallback(callbackOnColumnFound),
+					  m_setCurrentObjectArrayIndex(callbackParentArrayIndexSetter),
+					  m_reportEmptyObject(callbackReportEmptyObject),
 					  m_compundColumnCallback(callbackCompundColumnFound),
 					  m_incompleteObjects(0),
 					  m_isConfigured(false),
 					  m_isReady(true),
 					  m_isFresh(true),
 					  m_currentObject(NULL),
+					  m_currentArray(NULL),
 					  state_(kExpectObjectStart)
         {
         	memset(&m_currentKey, 0, MAX_PATH);
@@ -201,6 +224,7 @@ private:
         	cleanvector(m_objects);
         	// no "currents" exists:
         	m_currentObject = NULL;
+        	m_currentArray = NULL;
 
         	memset(&m_currentKey, 0, MAX_PATH);
         	m_currentKeylen = 0;
@@ -291,6 +315,7 @@ private:
 	    bool StartObject() {
 	    	switch (state_) {
 	    	case kExpectObjectStart:
+	    	case kExpectValue:
 	    	{
 	    		state_ = kExpectNameOrObjectEnd;
 	    		// set the "current" object (NULL for JSON root or previous found nested object otherwise)
@@ -298,15 +323,28 @@ private:
 	    		JsonObject* object = new JsonObject();
 	    		object->type = JSONObjectType::ENTITY;
 	    		object->parent = m_currentObject;
+                object->array = m_currentArray;
 
 	    		if(m_currentKeylen){
 	    			object->key = new char[m_currentKeylen];
 	    			memset(object->key, 0, m_currentKeylen);
 	    			memcpy(object->key, m_currentKey, m_currentKeylen);
+	    			object->keylen = m_currentKeylen;
 	    		}
 	    		object->completed = false;
 	    		{
 	    			boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
+	    			// if current object is the array (so array is the nearest parent for this object),
+	    			// assign the corresponding index to this object to track it as its enclosing array child
+	    			if(m_currentObject != NULL){
+	    				if(m_currentObject->type == JSONObjectType::ARRAY)
+	    					object->index = m_currentObject->children;
+	    				// if there was some index assigned to any of parents of this object that were a
+	    				// direct child of array, derive the index from them
+	    				else {
+	    					object->index = m_currentObject->index;
+	    				}
+	    			}
 	    			// reassign current object to say that we start to work with this new object
 	    			m_currentObject = object;
 
@@ -328,6 +366,17 @@ private:
 	        return true;
 	    }
 	    bool EndObject(rapidjson::SizeType memberCount) {
+	    	bool a_part_of_array = m_currentObject->array != NULL;
+	    	bool ret = state_ == kExpectNameOrObjectEnd;
+	    	if(!ret){
+	    		std::cout << "Unexpected state!" << std::endl;
+	    	}
+	    	if(a_part_of_array){
+	    		state_ = kExpectObjectStart;
+		    	// handle empty object in the way of signaling this on top to a client
+		    	if(!memberCount)
+		    		m_reportEmptyObject(m_materializedFields, m_fieldLocations);
+	    	}
 	    	{
 	    		boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
 	    		// mark the current object as completed:
@@ -338,30 +387,46 @@ private:
 		    	if(m_currentObject != NULL){
 		    		memset(&m_currentKey, 0, MAX_PATH);
 		    		memcpy(&m_currentKey, m_currentObject->key, m_currentObject->keylen);
+		    		m_currentKeylen = m_currentObject->keylen;
+
+		    		// if current object is the array (so array is the nearest parent for this object),
+	    			// report number of children is increased for array object. We track only direct children for each array
+	    			if(m_currentObject->type == JSONObjectType::ARRAY){
+	    				++(m_currentObject->children);
+	    			}
 		    	}
 	    	}
-	    	return state_ == kExpectNameOrObjectEnd;
+
+	    	return ret;
 	    }
 	    bool StartArray() {
     		JsonObject* object = new JsonObject();
     		object->type = JSONObjectType::ARRAY;
     		object->parent = m_currentObject;
 
+            // assign enclosing array (if any)
+    		object->array = m_currentArray;
+
     		if(m_currentKeylen){
     			object->key = new char[m_currentKeylen];
     			memset(object->key, 0, m_currentKeylen);
     			memcpy(object->key, m_currentKey, m_currentKeylen);
+    			object->keylen = m_currentKeylen;
     		}
 
     		object->completed = false;
     		{
     			boost::mutex::scoped_lock lock(m_incompleteObjectsMux);
 
+    			// assign array object as the current object:
     			m_currentObject = object;
+    			// assign array object as the current array:
+    			m_currentArray = object;
 
     			// put new object into registry of objects
     			m_objects.push_back(object);
     		}
+    		state_ = kExpectObjectStart;
 	    	return true;
 	    }
 	    bool EndArray(rapidjson::SizeType elementCount) {
@@ -372,12 +437,21 @@ private:
 
 		    	// reassign "current object" to a parent of this object:
 		    	m_currentObject = m_currentObject->parent;
+		    	int array_index;
 		    	if(m_currentObject != NULL){
 		    		memset(m_currentKey, 0, MAX_PATH);
 		    		memcpy(m_currentKey, m_currentObject->key, m_currentObject->keylen);
 		    		m_currentKeylen = m_currentObject->keylen;
+		    		array_index = m_currentObject->index;
 		    	}
+		    	else
+		    		array_index = -1;
+		    	m_setCurrentObjectArrayIndex(array_index);
+		    	// if m_currentArray had no enclosing parent array, reset it.
+		    	// Set current array to the parent enclosing array if one exists.
+		    	m_currentArray = m_currentArray->array;
 	    	}
+	    	state_ = kExpectNameOrObjectEnd;
 	    	return true;
 	    }
 
@@ -428,9 +502,11 @@ private:
 	    		}
 
 	    		if(!(*it)->completed){
-	    			hierarchy += "\"";
-	    			hierarchy.append((*it)->key, (*it)->keylen);
-	    			hierarchy += "\":";
+	    			if((*it)->parent->type == JSONObjectType::ENTITY){
+	    				hierarchy += "\"";
+	    				hierarchy.append((*it)->key, (*it)->keylen);
+	    				hierarchy += "\":";
+	    			}
 	    			hierarchy += (*it)->type == JSONObjectType::ENTITY ? "{" : "[";
 	    		}
 	    	}
@@ -473,6 +549,12 @@ private:
 	    	return fqp;
 	    }
 
+	    /** getter for current object */
+	    JsonObject* currentObject() { return m_currentObject; }
+
+	    /** getter for current array */
+	    JsonObject* currentArray()  { return m_currentArray; }
+
 	private:
 	    char                   m_currentKey[MAX_PATH];  /**< key that was successfully extracted last. */
 	    int                    m_currentKeylen;         /**< current key length */
@@ -481,7 +563,12 @@ private:
 
 
 
-	    simpleColumnDetected   m_columnCallback;        /**< callback to be invoked when the simple field is completely extracted */
+	    simpleColumnDetected   m_columnCallback;             /**< callback to be invoked when the simple field is completely extracted */
+	    setParentArrayIndex    m_setCurrentObjectArrayIndex; /**< callback to set the array index of the object which became
+	                                                           * "current" when the array is completed */
+
+	    reportEmptyObject      m_reportEmptyObject;          /**< callback to report an empty object to a client */
+
 	    compoundColumnDetected m_compundColumnCallback; /**< callback to be invoked when the entity is found */
 
 	    /** Lock for incomplete objects access */
@@ -503,6 +590,8 @@ private:
         std::vector<JsonObject*> m_objects;         /**< registry of JSON ibjects found during SAX parsing session. Root, entities, arrays */
         JsonObject*              m_currentObject;   /**< currently handled entity or array */
 
+        JsonObject*              m_currentArray;    /**< here always non-closed current array is sitting. */
+
         /** States for parser error handling state machine */
 	    enum State {
 	    	kExpectObjectStart,       /**< we expect next the object to start, "{" */
@@ -511,15 +600,15 @@ private:
 	    } state_;
 	};
 
-                 struct   SchemaMapping {
-                        int column_idx;     
-                        int llvm_tuple_idx;
+	struct SchemaMapping {
+		int column_idx;
+		int llvm_tuple_idx;
 
-                        SchemaMapping():column_idx(-1), llvm_tuple_idx(-1) {} 
-                        SchemaMapping(int col_idx, int tuple_idx):column_idx(col_idx), llvm_tuple_idx(tuple_idx){} 
+		SchemaMapping():column_idx(-1), llvm_tuple_idx(-1) {}
+		SchemaMapping(int col_idx, int tuple_idx):column_idx(col_idx), llvm_tuple_idx(tuple_idx){}
 
-                        bool defined() const { return column_idx != -1 && llvm_tuple_idx != -1;}   
-                };
+		bool defined() const { return column_idx != -1 && llvm_tuple_idx != -1;}
+	};
  
  public:
 	virtual ~JsonDelimitedTextParser();
@@ -580,6 +669,12 @@ private:
 	/** predicate to handle column detection */
 	simpleColumnDetected   m_columnDetectedHandler;
 
+	/** predicate to keep the parser up to date with the array index of current object within the underlying parser */
+	setParentArrayIndex    m_setCurrentArrayIndex;
+
+	/** predicate to handle empty object, a part of mapped array, in continuation (reconstruction) scenario */
+	reportEmptyObject      m_reportEmptyObject;
+
 	/** predicate to handle compound column detection */
 	compoundColumnDetected m_compundColumnDetectedhandler;
 
@@ -627,6 +722,21 @@ private:
 	 */
 	bitset* m_tuple;
 
+	/** number of fields materialized for current tuple. Should be reset per tuple */
+	int m_number_of_materialized_fields;
+
+	/** flag that signals that the continuation of the previous batch is requested.
+	 * This flag is only for "add column" scenario and should not be mixed with other
+	 * continuation (like used in ParseFieldLocations() stack) control flags */
+	bool m_continiation_flag;
+
+	/** tracks the current record (tuple) index in the JSON's collection to distinguish records mapped
+	 * to JSON's collection elements */
+	int m_record_idx_in_json_collection;
+
+	/** Number of tuples found in current batch */
+	int m_num_tuples;
+
 	/*********************** rapdijson callbacks handling section  ******************/
 
 	/** we preserve message handler */
@@ -642,12 +752,15 @@ private:
 	/** method makes the decision whether current column should be materialized */
 	bool virtual ReturnCurrentColumn() const;
 
-	void addColumnInternal(int len, char** next_column_start, int* num_fields,
+	void addColumnInternal(int len, char** data, int* num_fields,
 			FieldLocation* field_locations, PrimitiveType type = INVALID_TYPE,
 			const std::string& key = "", const bool flag = false);
 
+	/** report new tuple found */
+	void reportNewTuple();
+
 	/** reset the parser according to parser implementation specifics */
-	void parserResetInternal();
+	void parserResetInternal(bool hard = true);
 
 	/** State handler, detects whether previous batch parsing session should be continued
 	 *  (considering previously handled JSON record was truncated)
@@ -656,6 +769,39 @@ private:
 	 *  True if so.
 	 */
 	bool continuePreviousSession(char** data, int64_t* len);
+
+	/* Updates the record index within the JSON collection (if any) which is encountered for currently handled entity
+	 * by underlying parser
+	 *
+	 * @param index - index to assign
+	 * */
+	inline void updateCurrentArrayIndex(int index) { m_record_idx_in_json_collection = index; }
+
+	/** Handles "empty object" event arrived from underlying JSON parser session */
+	inline void handleEmptyObject(int* num_fields, FieldLocation* field_locations){
+		// Handles special case when :
+		// 1. we have a mapping to a field of object inside collection
+		// 2. previous batch was truncated in the way that :
+		// - collection parsing was not accomplished (no ] appears)
+		// - schema size > 1
+		// - at least one of fields was materialized from the object inside collection, following condition is satisfied:
+		// 1 > num_materialized_tuples < schema_size
+		// - the object the materialized field belongs to was not accomplished (no } appeared)
+		// there's only 1 element in the collection to parse
+
+		// Example:
+		// previous batch :
+		// ... "array":[{"mapped_field_1":"value"
+		// current batch:
+		// {], .....
+		// reconstructed part:
+		// .. "array":[{}]
+		if(m_schema_defined && m_continiation_flag && m_number_of_materialized_fields){
+			// fill remained columns for this tuple
+			FillColumns<false>(0, NULL, num_fields, field_locations);
+			reportNewTuple();
+		}
+	}
 };
 
 }
