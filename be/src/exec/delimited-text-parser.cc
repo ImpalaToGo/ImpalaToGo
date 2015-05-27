@@ -37,7 +37,7 @@ void DelimitedTextParser::parserReset(bool hard) {
 	last_row_delim_offset_ = -1;
 	if(hard)
 		column_idx_ = num_partition_keys_;
-	parserResetInternal();
+	parserResetInternal(hard);
 }
 
 

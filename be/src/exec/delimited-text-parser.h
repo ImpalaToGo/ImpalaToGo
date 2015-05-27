@@ -125,7 +125,7 @@ class DelimitedTextParser {
  protected:
 
   /** reset the parser according to parser implementation specifics */
-  virtual void parserResetInternal() = 0;
+  virtual void parserResetInternal(bool hard = true) = 0;
 
   /** initialize parser-specific search characters registry */
   virtual void setupSearchCharacters() = 0;
@@ -270,7 +270,7 @@ private:
 	  void setupSearchCharacters();
 
 	  /** reset the parser according to parser implementation specifics */
-	  void parserResetInternal();
+	  void parserResetInternal(bool hard = true);
 
 	  bool process_escapes(int start, const char* buffer);
 

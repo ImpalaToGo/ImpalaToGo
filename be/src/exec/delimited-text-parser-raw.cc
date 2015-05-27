@@ -98,7 +98,7 @@ void RawDelimitedTextParser::setupSearchCharacters(){
 	  xmm_delim_search_ = _mm_loadu_si128(reinterpret_cast<__m128i*>(search_chars));
 }
 
-void RawDelimitedTextParser::parserResetInternal(){
+void RawDelimitedTextParser::parserResetInternal(bool hard){
 	  current_column_has_escape_ = false;
 	  last_char_is_escape_ = false;
 }
