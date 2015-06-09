@@ -72,4 +72,5 @@ struct TDescriptorTable {
 
   // all table descriptors referenced by tupleDescriptors
   3: optional list<TTableDescriptor> tableDescriptors;
+  4: optional string dataTransformCmd;
 }
