@@ -95,6 +95,7 @@ void JsonDelimitedTextParser::parserResetInternal(bool hard){
 		// reset the counters related to "tuple" tracking mechanism
 		m_number_of_materialized_fields = 0;
 		m_record_idx_in_json_collection = -1;
+		unfinished_tuple_ = false;
 	}
 }
 
@@ -324,6 +325,10 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 							m_messageHandler->currentArray()->children == m_record_idx_in_json_collection + 1)){
 				// if the schema is defined and no one column was materialized during parser session,
 				// no tuple materialized in current record, shift forward the data buffer and continue
+ 
+				// say no unfinished tuple found
+				unfinished_tuple_ = false;
+  
 				if(m_schema_defined){
 					if(!m_number_of_materialized_fields)
 						goto label; // no tuple found
@@ -338,6 +343,9 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				// say new tuple is added
                 reportNewTuple();
 			}
+			else
+				// report unfinished tuple:
+				unfinished_tuple_ = true;
 			label :
 
 		    remaining_len -= offset;

@@ -325,7 +325,7 @@ Status HdfsTextScanner::FinishScanRange() {
         DCHECK_GE(num_tuples, 0);
         COUNTER_ADD(scan_node_->rows_read_counter(), num_tuples);
         RETURN_IF_ERROR(CommitRows(num_tuples));
-      } else if (delimited_text_parser_->HasUnfinishedTuple() &&
+      } else if (m_dataFormat != JSON && delimited_text_parser_->HasUnfinishedTuple() &&
           scan_node_->materialized_slots().empty()) {
     	  LOG(ERROR) << "Unfinished tuple found at the end of the ." << "\n";
         // If no fields are materialized we do not update partial_tuple_empty_,
@@ -337,6 +337,11 @@ Status HdfsTextScanner::FinishScanRange() {
     }
 
     DCHECK(eosr);
+
+    // recall to process range, this time past scan range. This should be done carefully for JSON parser.
+    // For JSON parser, recall only if there was unfinished tuple remained from last parsing session:
+    if(m_dataFormat == JSON && !delimited_text_parser_->HasUnfinishedTuple())
+    	break;
 
     int num_tuples;
     // recall to process range, this time past scan range
