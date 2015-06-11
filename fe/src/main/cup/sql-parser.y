@@ -251,7 +251,7 @@ terminal
   KW_SERDEPROPERTIES, KW_SERIALIZE_FN, KW_SET, KW_SHOW, KW_SMALLINT, KW_STORED,
   KW_STRAIGHT_JOIN, KW_STRING, KW_STRUCT, KW_SYMBOL, KW_TABLE, KW_TABLES,
   KW_TBLPROPERTIES, KW_TERMINATED, KW_TEXTFILE, KW_THEN,
-  KW_TIMESTAMP, KW_TINYINT, KW_STATS, KW_TO, KW_TRUE, KW_UNBOUNDED, KW_UNCACHED,
+  KW_TIMESTAMP, KW_TINYINT, KW_STATS, KW_TO, KW_TRANSFORM_WITH, KW_TRUE, KW_UNBOUNDED, KW_UNCACHED,
   KW_UNION, KW_UPDATE_FN, KW_USE, KW_USING,
   KW_VALUES, KW_VARCHAR, KW_VIEW, KW_WHEN, KW_WHERE, KW_WITH;
 
@@ -379,6 +379,7 @@ nonterminal ArrayList<ColumnDef> partition_column_defs, view_column_defs;
 nonterminal ArrayList<StructField> struct_field_def_list;
 // Options for DDL commands - CREATE/DROP/ALTER
 nonterminal HdfsCachingOp cache_op_val;
+nonterminal String transform_op_val;
 nonterminal BigDecimal opt_cache_op_replication;
 nonterminal String comment_val;
 nonterminal String nested_path_val;
@@ -867,9 +868,16 @@ create_unpartitioned_tbl_stmt ::=
   KW_CREATE external_val:external KW_TABLE if_not_exists_val:if_not_exists
   table_name:table LPAREN column_def_list:col_defs RPAREN comment_val:comment
   row_format_val:row_format serde_properties:serde_props
-  file_format_create_table_val:file_format location_val:location cache_op_val:cache_op
-  tbl_properties:tbl_props
-  {:
+  file_format_create_table_val:file_format location_val:location transform_op_val:transform_op cache_op_val:cache_op
+   tbl_properties:tbl_props
+   {:
+    if(transform_op!=null) {
+	    if(tbl_props == null) {
+	        tbl_props = new HashMap<String, String>();
+	    }
+	    tbl_props.put("transform_with", transform_op);
+	}
+
     RESULT = new CreateTableStmt(table, col_defs, new ArrayList<ColumnDef>(), external,
         comment, row_format, file_format, location, cache_op, if_not_exists, tbl_props,
         serde_props);
@@ -879,6 +887,7 @@ create_unpartitioned_tbl_stmt ::=
     serde_properties:serde_props file_format_create_table_val:file_format
     location_val:location cache_op_val:cache_op tbl_properties:tbl_props
   {:
+
     RESULT = new CreateTableStmt(table, new ArrayList<ColumnDef>(),
         new ArrayList<ColumnDef>(), external, comment, row_format, file_format,
         location, cache_op, if_not_exists, tbl_props, serde_props);
@@ -904,9 +913,16 @@ create_partitioned_tbl_stmt ::=
   table_name:table LPAREN column_def_list:col_defs RPAREN KW_PARTITIONED KW_BY
   LPAREN column_def_list:partition_col_defs RPAREN comment_val:comment
   row_format_val:row_format serde_properties:serde_props
-  file_format_create_table_val:file_format location_val:location cache_op_val:cache_op
-  tbl_properties:tbl_props
-  {:
+  file_format_create_table_val:file_format location_val:location transform_op_val:transform_op cache_op_val:cache_op
+   tbl_properties:tbl_props
+   {:
+    if(transform_op!=null) {
+	    if(tbl_props == null) {
+	        tbl_props = new HashMap<String, String>();
+	    }
+	    tbl_props.put("transform_with", transform_op);
+	}
+
     RESULT = new CreateTableStmt(table, col_defs, partition_col_defs, external, comment,
         row_format, file_format, location, cache_op, if_not_exists, tbl_props,
         serde_props);
@@ -918,6 +934,7 @@ create_partitioned_tbl_stmt ::=
     file_format_create_table_val:file_format location_val:location cache_op_val:cache_op
     tbl_properties:tbl_props
   {:
+
     RESULT = new CreateTableStmt(table, new ArrayList<ColumnDef>(), partition_col_defs,
         external, comment, row_format, file_format, location, cache_op, if_not_exists,
         tbl_props, serde_props);
@@ -954,6 +971,13 @@ cache_op_val ::=
   {: RESULT = new HdfsCachingOp(pool_name, replication); :}
   | KW_UNCACHED
   {: RESULT = new HdfsCachingOp(); :}
+  | /* empty */
+  {: RESULT = null; :}
+  ;
+
+transform_op_val ::=
+  KW_TRANSFORM_WITH STRING_LITERAL:transform_cmd
+  {: RESULT = transform_cmd; :}
   | /* empty */
   {: RESULT = null; :}
   ;

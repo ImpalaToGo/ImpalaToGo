@@ -1970,9 +1970,12 @@ public class ParserTest {
     ParsesOk("CREATE TABLE Foo (i int, s string)");
     ParsesOk("CREATE EXTERNAL TABLE Foo (i int, s string)");
     ParsesOk("CREATE EXTERNAL TABLE Foo (i int, s string) LOCATION '/test-warehouse/'");
+    ParsesOk("CREATE EXTERNAL TABLE Foo (i int, s string) LOCATION '/test-warehouse/' TRANSFORM_WITH 'sed s#a#b'");
     ParsesOk("CREATE EXTERNAL TABLE Foo (i int NESTED_PATH 'path.to.int', s string NESTED_PATH 'path.to.string') LOCATION '/test-warehouse/'");
     ParsesOk("CREATE TABLE Foo (i int, s string) COMMENT 'hello' LOCATION '/a/b/'");
     ParsesOk("CREATE TABLE Foo (i int, s string) COMMENT 'hello' LOCATION '/a/b/' " +
+        "TBLPROPERTIES ('123'='1234')");
+    ParsesOk("CREATE TABLE Foo (i int, s string) COMMENT 'hello' LOCATION '/a/b/' TRANSFORM_WITH 'sed s#a#b'" +
         "TBLPROPERTIES ('123'='1234')");
     ParsesOk("CREATE TABLE Foo (i int, s string NESTED_PATH 'path.to.field') COMMENT 'hello' LOCATION '/a/b/'");
     ParsesOk("CREATE TABLE Foo (i int NESTED_PATH 'path.to.field', s string) COMMENT 'hello' LOCATION '/a/b/' " +
@@ -1986,6 +1989,8 @@ public class ParserTest {
     ParsesOk("CREATE TABLE Foo (i int) PARTITIONED BY (s string, d double)");
     ParsesOk("CREATE TABLE Foo (i int, s string) PARTITIONED BY (s string, d double)" +
         " COMMENT 'hello' LOCATION '/a/b/'");
+    ParsesOk("CREATE TABLE Foo (i int, s string) PARTITIONED BY (s string, d double)" +
+        " COMMENT 'hello' LOCATION '/a/b/' TRANSFORM_WITH 'sed s#a#b'");
     ParsesOk("CREATE TABLE Foo (i int, s string NESTED_PATH 'path.to.field') PARTITIONED BY (s string, d double)" +
         " COMMENT 'hello' LOCATION '/a/b/'");
 

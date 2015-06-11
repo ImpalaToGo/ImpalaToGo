@@ -205,6 +205,7 @@ import com.cloudera.impala.analysis.SqlParserSymbols;
     keywordMap.put("timestamp", new Integer(SqlParserSymbols.KW_TIMESTAMP));
     keywordMap.put("tinyint", new Integer(SqlParserSymbols.KW_TINYINT));
     keywordMap.put("to", new Integer(SqlParserSymbols.KW_TO));
+    keywordMap.put("transform_with", new Integer(SqlParserSymbols.KW_TRANSFORM_WITH));
     keywordMap.put("true", new Integer(SqlParserSymbols.KW_TRUE));
     keywordMap.put("unbounded", new Integer(SqlParserSymbols.KW_UNBOUNDED));
     keywordMap.put("uncached", new Integer(SqlParserSymbols.KW_UNCACHED));
