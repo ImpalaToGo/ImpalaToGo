@@ -225,6 +225,11 @@ public class ToSqlUtils {
     if (location != null) {
       sb.append("LOCATION '" + location + "'\n");
     }
+    String transform_with_key = "transform_with";
+    if (tblProperties != null && !tblProperties.isEmpty() && tblProperties.containsKey(transform_with_key)) {
+      sb.append("TRANSFORM_WITH " + "'" + tblProperties.get(transform_with_key) + "'");
+      tblProperties.remove(transform_with_key);
+    }
     if (tblProperties != null && !tblProperties.isEmpty()) {
       sb.append("TBLPROPERTIES " + propertyMapToSql(tblProperties));
     }

@@ -267,6 +267,13 @@ public class ToSqlTest extends AnalyzerTest {
         joinTypes_, joinConditions_);
   }
 
+  @Test
+  public void testCreateTable(){
+    testToSql("CREATE EXTERNAL TABLE Foo (i int, s string)".toLowerCase(),
+        "CREATE EXTERNAL TABLE Foo (i int, s string)");
+    testToSql("CREATE EXTERNAL TABLE Foo (i int, s string) LOCATION '/test-warehouse/' TRANSFORM_WITH 'sed s#a#b'".toLowerCase(),
+        "CREATE EXTERNAL TABLE Foo (i int, s string) LOCATION '/test-warehouse/' TRANSFORM_WITH 'sed s#a#b'");
+  }
   /**
    * Tests that the toSql() of plan hints use the end-of-line commented hint style
    * (for view compatibility with Hive) regardless of what style was used in the
