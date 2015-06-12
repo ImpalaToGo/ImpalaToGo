@@ -57,6 +57,7 @@ struct TTableDescriptor {
 
   // Name of the database that the table belongs to
   8: required string dbName;
+  11: optional string dataTransformCmd;
 }
 
 struct TTupleDescriptor {
@@ -72,5 +73,4 @@ struct TDescriptorTable {
 
   // all table descriptors referenced by tupleDescriptors
   3: optional list<TTableDescriptor> tableDescriptors;
-  4: optional string dataTransformCmd;
 }
