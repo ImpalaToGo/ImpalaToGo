@@ -1330,6 +1330,14 @@ public class HdfsTable extends Table {
         getColumns().size(), numClusteringCols_, name_, db_.getName());
     tableDesc.setHdfsTable(getTHdfsTable(false, referencedPartitions));
     tableDesc.setColNames(getColumnNames());
+
+    //Support for custom transform command in the process of data download
+    org.apache.hadoop.hive.metastore.api.Table msTable = this.getMetaStoreTable();
+    if(msTable != null && msTable.getParameters() != null){
+      String dataTransformCmd = this.getMetaStoreTable().getParameters().get("transform_with");
+      tableDesc.setDataTransformCmd(dataTransformCmd);
+    }
+
     return tableDesc;
   }
 
