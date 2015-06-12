@@ -1335,6 +1335,7 @@ public class HdfsTable extends Table {
     org.apache.hadoop.hive.metastore.api.Table msTable = this.getMetaStoreTable();
     if(msTable != null && msTable.getParameters() != null){
       String dataTransformCmd = this.getMetaStoreTable().getParameters().get("transform_with");
+      LOG.debug("TRANSFORM_WITH Command: \"" + dataTransformCmd + "\"" );
       tableDesc.setDataTransformCmd(dataTransformCmd);
     }
 
