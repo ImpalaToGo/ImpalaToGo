@@ -44,13 +44,16 @@ private:
     std::string          m_root;                       /**< root directory to manage */
 
     std::condition_variable m_deletionHappensCondition; /**< deletion condition variable */
-    std::mutex              m_deletionsmux;                /**< mux to protect deletions list */
+    std::mutex              m_deletionsmux;             /**< mux to protect deletions list */
 
-    std::list<std::string> m_deletionList;                /**< list of pending deletion */
+    std::list<std::string> m_deletionList;              /**< list of pending deletion */
 
     managed_file::File::WeightChangedEvent m_weightChangedPredicate; /** the callback that should be called on "item weight is changed" event */
     managed_file::File::GetFileInfo        m_getFileInfoPredicate;   /** callback to get file info */
     managed_file::File::FreeFileInfo       m_freeFileInfoPredicate;  /** callback to free file info */
+
+    /** File transformation commands. Key - file fqp, value - command */
+    boost::unordered_map<std::string, std::string> m_fileTransformCommands;
 
 
 	/** try mark item for deletion
@@ -132,6 +135,10 @@ private:
      		file->open();
      		// mark file as "in progress" immediately, before to publish it to the outer world:
      		file->state(managed_file::State::FILE_IS_IN_USE_BY_SYNC);
+
+     		// assign the data transformation command if any.
+     		// If no data transformation command was assigned, default is the empty one:
+     		file->transformCmd(m_fileTransformCommands[path]);
      	}
     	return file;
     }
@@ -214,11 +221,12 @@ public:
      * Get the file by its local path.
      * This will "open" the file (increase the reference counter)
      *
-     * @param path -file local path
+     * @param path         - file local path
+     * @param transformCmd - transformation command specified for underlying datafile
      *
      * @return file if one found, nullptr otherwise
      */
-    managed_file::File* find(const std::string& path);
+    managed_file::File* find(const std::string& path, const std::string& transformCmd = "");
 
     /** reset the cache */
     void reset() {

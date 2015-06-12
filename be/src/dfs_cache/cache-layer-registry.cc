@@ -90,11 +90,12 @@ const boost::shared_ptr<FileSystemDescriptorBound>* CacheLayerRegistry::getFileS
           return nullptr;
 	}
 
-bool CacheLayerRegistry::findFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file){
+bool CacheLayerRegistry::findFile(const char* path, const FileSystemDescriptor& descriptor,
+		managed_file::File*& file, const std::string transformCmd){
 	std::string fqp = managed_file::File::constructLocalPath(descriptor, path);
 	if(fqp.empty())
 		return false;
-	file = m_cache->find(fqp);
+	file = m_cache->find(fqp, transformCmd);
 	return file != nullptr;
 }
 

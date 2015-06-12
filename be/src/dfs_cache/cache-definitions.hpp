@@ -145,6 +145,13 @@ typedef boost::function<void (const boost::shared_ptr<FileProgress>& progress)> 
 typedef boost::function<status::StatusInternal (const FileSystemDescriptor & namenode, const char* filepath,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task)> SingleFileMakeProgressFunctor;
 
+/**
+ * The functor to be executed in context of "data transformation" scenario on the single file.
+ * @param file - managed file entity, defines the transformation details and a progress.
+ */
+typedef boost::function<status::StatusInternal (managed_file::File*& file,
+		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task)> SingleFileTramsformFunctor;
+
 /** Functor to run on manager when the request is completed */
 typedef boost::function<void (const requestIdentity& requestIdentity, const FileSystemDescriptor & namenode,
 		requestPriority priority, bool canceled, bool async)> DataSetRequestCompletionFunctor;

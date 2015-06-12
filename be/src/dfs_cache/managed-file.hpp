@@ -118,6 +118,10 @@ namespace managed_file {
        std::string        m_originport;       /**< origin port */
        DFS_TYPE           m_schema;           /**< origin schema */
 
+       bool               m_compatible;       /**< Flag, indicates whether the file should be considered as compatible with impala
+                                               *   without an extra transformation. */
+
+       std::string        m_transformCommand;  /**< transformation command defined for this file, if any */
        static int         _defaultTimeSliceInSeconds;  /**< default time slice between unsuccessful attempts to sync the file.
                                                        * this means that attempt to sync the file may be performed once per 20 seconds
                                                        */
@@ -172,7 +176,8 @@ namespace managed_file {
 	    */
 	   File(const char* path, NatureFlag creationFlag,  GetFileInfo getinfo = 0, FreeFileInfo freeinfo = 0)
          :  m_fqp(path), m_remotesize(0), m_estimatedsize(0), m_prevsize(0),
-            m_schema(DFS_TYPE::NON_SPECIFIED), m_weightIsChangedcallback(0), m_getFielInfoCb(getinfo), m_freeFileInfoCb(freeinfo){
+            m_schema(DFS_TYPE::NON_SPECIFIED), m_compatible(false), m_transformCommand(""),
+			m_weightIsChangedcallback(0), m_getFielInfoCb(getinfo), m_freeFileInfoCb(freeinfo){
 
 		   LOG (INFO) << "Creating new managed file on top of \"" << path << "\".\n";
 
@@ -430,17 +435,18 @@ namespace managed_file {
 	    * The scenario which scheduled the file for load should fill this field for estimation scenario calculations
 	    * to be possible.
 	    * @param size - estimated file size
+	    * @param internal_update - flag, indicates that some internal flows changed the file on the file system and
+	    * the file cache should be updated about its new size
 	    */
-	   inline void estimated_size(std::size_t size) {
+	   inline void estimated_size(std::size_t size, bool internal_update = false) {
 		   long long delta = size - m_prevsize;
 		   // if any subscribers for size change, send the signal with a delta.
 		   // In current design this is only relevant for files opened for write (as we cannot predict their final size):
-		   if(m_weightIsChangedcallback && (NatureFlag::FOR_WRITE == getnature()))
+		   if(m_weightIsChangedcallback && ( (NatureFlag::FOR_WRITE == getnature()) || internal_update))
 			   m_weightIsChangedcallback(delta);
 		   m_prevsize = size;
 		   m_estimatedsize = size;
 	   }
-
 
 	   /** getter for File last access (local).
 	    *
@@ -496,6 +502,36 @@ namespace managed_file {
        * @return operation status, true if file was removed
        */
       bool drop();
+
+      /** Setter for file compatibility with impala
+       *
+       *  @param flag - indicates the state which compatibility should be set to.
+       * */
+      void compatible(bool flag) { m_compatible = flag; }
+
+      /** Getter for file format compatibility.
+       *  File is considered compatible in either case:
+       *  - if the file is loaded from previous Impala session from cache.
+       *  We assume the data transformation, if any needed, was applied during
+       *  previous session. Such files should be marked by centralized reload from cache mechanism
+       *  in order to have "compatible" flag set.
+       *
+       *  - if the file does not have transform command assigned
+       *
+       * @return true if the file is compatible with impala,
+       *         false otherwise
+       */
+	  bool compatible() { return m_compatible || m_transformCommand.empty(); }
+
+	  /** Setter for underlying file transformation command.   *
+	   *  @param cmd - command to assign as a data transformation command to this file
+	   */
+	  void transformCmd(std::string cmd) { m_transformCommand = cmd; }
+
+	  /** Getter for underlying file transformation command.
+	   * @return data transformation command to this file
+	   */
+	  std::string transformCmd() { return m_transformCommand; }
 
 	   /* ***********************   Methods group to fit the intrusive concept (LRU Cache)   ******************************/
 

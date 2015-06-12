@@ -193,8 +193,9 @@ DiskIoMgr::ScanRange* HdfsScanNode::AllocateScanRange(
       << "Scan range beyond end of file (offset=" << offset << ", len=" << len << ")";
   disk_id = runtime_state_->io_mgr()->AssignQueue(file, disk_id, expected_local);
 
+  // put the partition id and the data transofrmation command into scan range metadata:
   ScanRangeMetadata* metadata =
-      runtime_state_->obj_pool()->Add(new ScanRangeMetadata(partition_id));
+      runtime_state_->obj_pool()->Add(new ScanRangeMetadata(partition_id, dataTransformationCommand()));
   DiskIoMgr::ScanRange* range =
       runtime_state_->obj_pool()->Add(new DiskIoMgr::ScanRange());
   range->Reset(fs, file, len, offset, disk_id, try_cache, expected_local, metadata);

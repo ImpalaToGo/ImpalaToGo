@@ -352,6 +352,8 @@ class DescriptorTbl {
   // return all registered tuple descriptors
   void GetTupleDescs(std::vector<TupleDescriptor*>* descs) const;
 
+  /** getter for data transformation command, replies a command if any was defined for the table */
+  std::string tranformationCmd() const;
   std::string DebugString() const;
 
  private:
@@ -362,6 +364,9 @@ class DescriptorTbl {
   TableDescriptorMap tbl_desc_map_;
   TupleDescriptorMap tuple_desc_map_;
   SlotDescriptorMap slot_desc_map_;
+
+  /** Custom command for table's data transformation */
+  std::string data_transformation_cmd;
 
   DescriptorTbl(): tbl_desc_map_(), tuple_desc_map_(), slot_desc_map_() {}
 };

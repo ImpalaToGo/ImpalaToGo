@@ -54,6 +54,7 @@ std::ostream& operator<<(std::ostream& out, const status::StatusInternal value){
         INSERT_ELEMENT(status::CACHE_OBJECT_OPERATION_FAILURE);
         INSERT_ELEMENT(status::CACHE_OBJECT_UNDER_FINALIZATION);
         INSERT_ELEMENT(status::CACHE_OBJECT_IS_FORBIDDEN);
+        INSERT_ELEMENT(status::CACHE_OBJECT_IS_INCOMPATIBLE);
         INSERT_ELEMENT(status::NOT_IMPLEMENTED);
         INSERT_ELEMENT(status::NO_STATUS);
 #undef INSERT_ELEMENT

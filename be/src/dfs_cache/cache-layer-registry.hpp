@@ -334,11 +334,14 @@ public:
 	 * Get the File object by its relative path within the @a descriptor of related file system.
 	 * To be called when file path should be resolved from @a path and @a descriptor (when query arrives)
 	 *
-	 * @param [in]  path       - file fqp
-	 * @param [in]  descriptor - file system descriptor
-	 * @param [out] file       - managed file instance (if any)
+	 * @param [in]  path         - file fqp
+	 * @param [in]  descriptor   - file system descriptor
+	 * @param [out] file         - managed file instance (if any)
+	 * @param [in]  transformCmd - data transformation command that should be applied on the
+	 *                             file's data
 	 */
-	bool findFile(const char* path, const FileSystemDescriptor& descriptor, managed_file::File*& file);
+	bool findFile(const char* path, const FileSystemDescriptor& descriptor,
+			managed_file::File*& file, const std::string transformCmd = "");
 
 	/**
 	 * Get the file object by its fully qualified path. Should be called for internal cache usage on

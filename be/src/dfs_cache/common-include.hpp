@@ -105,6 +105,8 @@ typedef enum {
     CACHE_OBJECT_UNDER_FINALIZATION, /**< requested cache object is under finalization and should not be used. It only can be recalimed */
     CACHE_OBJECT_IS_FORBIDDEN,       /**< cache object is forbidden */
 
+	CACHE_OBJECT_IS_INCOMPATIBLE,    /**< indicates that the requested cache object is not compatible for further processing */
+
 	NOT_IMPLEMENTED,                 /**< for developer purposes */
 	NO_STATUS,
 } StatusInternal;

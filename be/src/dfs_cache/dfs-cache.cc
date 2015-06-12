@@ -289,7 +289,7 @@ static dfsFile openForWrite(const FileSystemDescriptor & fsDescriptor, const cha
  * @return local (cached) file handle
  */
 static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, const char* path,
-		int flags, int bufferSize, short replication, tSize blocksize, bool& available){
+		int flags, int bufferSize, short replication, tSize blocksize, bool& available, const std::string& dataTransformationCommand = ""){
 
 	dfsFile handle = NULL;
 	Uri uri = Uri::Parse(path);
@@ -365,6 +365,13 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 		managed_file->unsubscribe_from_updates();
     }
 
+	if(!managed_file->compatible()){
+		// and reply no data available otherwise
+		LOG (ERROR)<< "File \"" << path << "\" is not compatible. File status = \"" << managed_file->state() <<
+				"\"; file nature = \"" << managed_file->getnature() << "\"\n.";
+		managed_file->close();
+		return NULL;
+	}
 	// so as the file is available locally, just open it:
 	if (!managed_file->exists()) {
 		// and reply no data available otherwise
@@ -389,7 +396,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 }
 
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
-		int bufferSize, short replication, tSize blocksize, bool& available) {
+		int bufferSize, short replication, tSize blocksize, bool& available, const std::string& dataTransformationCommand) {
 	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
 
 	// handle direct dfs operation if direct access is configured:

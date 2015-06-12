@@ -172,12 +172,17 @@ status::StatusInternal cacheCheckPrepareStatus(const requestIdentity & requestId
  * @param [In] replication - Block replication - pass 0 if you want to use the default configured values.
  * @param [In] blocksize   - Size of block - pass 0 if you want to use the default configured values.
  *
- * @param [In/Out] available - flag, indicates whether the requested file is available.
- *
+ * @param [In/Out] available                 - flag, indicates whether the requested file is available.
+ * @param [In]     dataTransformationCommand - command to execute on the original data in order to adopt the data
+ *                                             for Impala supported type, using externally defined custom utility.
+ *                                             Command format : program_to_run arg1 arg2 ...
+ *                                             where : program_to_run is the externally defined utility to execute,
+ *                                             followed by list of arguments separated by space.
  * @return Returns the handle to the open file or NULL on error.
  */
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDesciptor, const char* path, int flags,
-		int bufferSize, short replication, tSize blocksize, bool& available);
+		int bufferSize, short replication, tSize blocksize, bool& available,
+		const std::string& dataTransformationCommand = "");
 
 /**
  * @fn status::StatusInternal dfsCloseFile(const FileSystemDescriptor & fsDescriptor, dfsFile file)

@@ -56,6 +56,7 @@ HdfsTextScanner::HdfsTextScanner(HdfsScanNode* scan_node, RuntimeState* state)
       byte_buffer_read_size_(0),
       only_parsing_header_(false),
 	  m_dataFormat(UNKNOWN),
+	  m_dataTransformationCmd(scan_node->dataTransformationCommand()),
       boundary_pool_(new MemPool(scan_node->mem_tracker())),
       boundary_row_(boundary_pool_.get()),
       boundary_column_(boundary_pool_.get()),

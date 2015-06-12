@@ -69,6 +69,16 @@ public:
 			request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task);
 
 	/**
+	 * transformExistingFile - apply the data transformation specified in file metadata - on existing underlying data file.
+	 * Reentrant as only rely on its parameters
+	 *
+	 * @param[in]     file - managed file metadata
+	 *
+	 * @return operation status
+	 */
+	status::StatusInternal transformExistingFile(managed_file::File*& file);
+
+	/**
 	 * cancel active "make progress" file request (prepare / estimate) if any, described by its synchronization  context (for re-entrancy)
 	 * All these sync context is handled here so in the same class
 	 *

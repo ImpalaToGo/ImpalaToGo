@@ -74,7 +74,13 @@ class HdfsTextScanner : public HdfsScanner {
   // True if we are parsing the header for this scanner.
   bool only_parsing_header_;
 
+  /** Text data format, introduced since hdfs-text scanner is shared between csv and JSON parser */
   DataFormat m_dataFormat;
+
+  /** data transformation command (if any is supplied along with a table definition).
+   *  To be passed through to a data provider layer (dfs_cache) in order to be executed there
+   */
+  std::string m_dataTransformationCmd;
 
  private:
   const static int NEXT_BLOCK_READ_SIZE = 1024; //bytes

@@ -73,11 +73,14 @@ struct HdfsFileDesc {
 // Struct for additional metadata for scan ranges. This contains the partition id
 // that this scan range is for.
 struct ScanRangeMetadata {
-  // The partition id that this range is part of.
-  int64_t partition_id;
+  /** The partition id that this range is part of. */
+  int64_t     partition_id;
 
-  ScanRangeMetadata(int64_t partition_id)
-    : partition_id(partition_id) { }
+  /** Transformation command specified for data covered by scan range */
+  std::string transformationCommand;
+
+  ScanRangeMetadata(int64_t partition_id, std::string transCommand = "")
+    : partition_id(partition_id), transformationCommand(transCommand) { }
 };
 
 // A ScanNode implementation that is used for all tables read directly from

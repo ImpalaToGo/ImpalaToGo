@@ -244,21 +244,26 @@ bool FileSystemLRUCache::reload(const std::string& root){
     	if(file != nullptr){
     		// and mark the file as "idle":
     		file->state(managed_file::State::FILE_IS_IDLE);
+    		// and mark the file as "compatible":
+    		file->compatible(true);
     	}
     }
     return true;
 }
 
-managed_file::File* FileSystemLRUCache::find(const std::string& path) {
-    	// first find the file within the registry
-    	managed_file::File* file = m_idxFileLocalPath->operator [](path);
+managed_file::File* FileSystemLRUCache::find(const std::string& path, const std::string& transformCmd) {
+	// ensure we have the transform command preserved in the registry of "{file; transform command}":
+	m_fileTransformCommands[path] = transformCmd;
 
-    	if(file == nullptr)
-    		return file;
+	// first find the file within the registry
+	managed_file::File* file = m_idxFileLocalPath->operator [](path);
 
-    	std::unique_lock<std::mutex> lock(m_deletionsmux);
-    	// check whether the requested file is under finalization maybe?
-    	bool under_finalization = std::find(m_deletionList.begin(), m_deletionList.end(), path) != m_deletionList.end();
+	if(file == nullptr)
+		return file;
+
+	std::unique_lock<std::mutex> lock(m_deletionsmux);
+	// check whether the requested file is under finalization maybe?
+	bool under_finalization = std::find(m_deletionList.begin(), m_deletionList.end(), path) != m_deletionList.end();
 
     	// if file is under finalization already or was unable to be opened, wait while it will be finalized
     	// and then reclaim it. open() should be called while collection of "deletions" is locked to prevent the dangling pointer reference
@@ -278,8 +283,6 @@ managed_file::File* FileSystemLRUCache::find(const std::string& path) {
         	LOG(WARNING) << "File \"" << path << "\" is going to be reclaimed. " << "\n";
         	// reclaim the file:
         	file = m_idxFileLocalPath->operator [](path);
-        	if(file == nullptr)
-        		return nullptr;
 
         	return file;
         }

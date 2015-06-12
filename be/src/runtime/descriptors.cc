@@ -421,6 +421,11 @@ Status DescriptorTbl::Create(ObjectPool* pool, const TDescriptorTable& thrift_tb
     }
     entry->second->AddSlot(slot_d);
   }
+
+  // Initialize transformation command if any defined for this table by user:
+  if(thrift_tbl.__isset.dataTransformCmd)
+	  (*tbl)->data_transformation_cmd = thrift_tbl.dataTransformCmd;
+
   return Status::OK;
 }
 
@@ -605,7 +610,11 @@ StructType* TupleDescriptor::GenerateLlvmStruct(LlvmCodeGen* codegen) {
   return tuple_struct;
 }
 
-string DescriptorTbl::DebugString() const {
+std::string DescriptorTbl::tranformationCmd() const {
+	return data_transformation_cmd;
+}
+
+std::string DescriptorTbl::DebugString() const {
   stringstream out;
   out << "tuples:\n";
   for (TupleDescriptorMap::const_iterator i = tuple_desc_map_.begin();

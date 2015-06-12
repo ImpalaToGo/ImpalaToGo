@@ -248,6 +248,7 @@ void DiskIoMgr::ScanRange::InitInternal(DiskIoMgr* io_mgr, RequestContext* reade
   }
   DCHECK(Validate()) << DebugString();
 }
+#include "exec/hdfs-scan-node.h"
 
 Status DiskIoMgr::ScanRange::Open() {
   unique_lock<mutex> hdfs_lock(hdfs_lock_);
@@ -261,7 +262,12 @@ Status DiskIoMgr::ScanRange::Open() {
     bool available;
     LOG(INFO) << "Scan range is going to open the file \"" << file() <<
     		"\" for read. \n";
-    hdfs_file_ = dfsOpenFile(fs_, file(), O_RDONLY, 0, 0, 0, available);
+
+    // resolve metadata to extract the data transformation command if any
+    ScanRangeMetadata* metadata =
+                  reinterpret_cast<ScanRangeMetadata*>(meta_data());
+
+    hdfs_file_ = dfsOpenFile(fs_, file(), O_RDONLY, 0, 0, 0, available, metadata->transformationCommand);
     VLOG_FILE << "dfsOpenFile() file =" << file();
     if (hdfs_file_ == NULL || !available) {
       return Status(GetHdfsErrorMsg("Failed to open DFS file ", file_));

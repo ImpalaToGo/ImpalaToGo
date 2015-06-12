@@ -186,6 +186,76 @@ void reverse(_Node& head) {
 	head = prev;
 }
 
+#include <vector>
+#include <sstream>
+#include <iterator>
+#include <cstring>
+#include <memory.h>
+
+/** Represents a program invocation details : the program name and variable length arguments */
+class ProgramInvocationDetails{
+private:
+	char*  m_program;   /**< fast reference to a program name */
+	char** m_args;      /**< fast reference to arguments */
+    char** m_c_tokens;  /**< tokens extracted from the command line separated with spaces */
+    int    m_tokensNum; /**< number of tokens extracted */
+
+    bool   m_valid;     /**< flag, indicates the validity of the details */
+
+public:
+	ProgramInvocationDetails(const std::string& cmd) :
+		m_program(NULL), m_args(NULL), m_c_tokens(NULL), m_tokensNum(0), m_valid(false){
+		// parse the command to instantiate members
+		if(cmd.empty())
+			return;
+
+		// tokenize:
+		std::istringstream buf(cmd);
+		std::istream_iterator<std::string> beg(buf), end;
+		std::vector<std::string> tokens(beg, end);
+
+		if(tokens.size() == 0)
+			return;
+
+		// allocate an array to hold the program and arguments tokens pointers:
+		m_c_tokens = new char*[tokens.size()];
+		// populate an array:
+		for(auto token : tokens){
+			m_c_tokens[m_tokensNum] = new char[token.length() + 1];
+            memset(m_c_tokens[m_tokensNum], 0, token.length() + 1);
+			std::memcpy(m_c_tokens[m_tokensNum], token.c_str(), token.length());
+			m_tokensNum++;
+		}
+		// point program and params to corresponding tokens locations:
+		m_program = m_c_tokens[0];
+		m_args = m_c_tokens;
+
+		m_valid = true;
+	}
+
+	~ProgramInvocationDetails() {
+		// go over the tokens and destroy them:
+		for(int idx = 0; idx < m_tokensNum; idx++){
+			delete [] m_c_tokens[idx];
+		}
+		// delete the tokens pointers storage:
+		delete [] m_c_tokens;
+
+		m_c_tokens = NULL;
+	}
+
+	/** getter for arguments if any specified */
+	char** args() { return m_args; }
+
+	/** getter for all the command tokens if any specified */
+	char** argv() { return m_c_tokens; }
+
+	/** getter from program if any specified */
+	char* program() { return m_program;  }
+
+	/** getter to validate the invocation details */
+	bool valid() { return m_valid; }
+};
 }
 }
 
