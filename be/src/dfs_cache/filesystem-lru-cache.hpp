@@ -139,6 +139,8 @@ private:
      		// assign the data transformation command if any.
      		// If no data transformation command was assigned, default is the empty one:
      		file->transformCmd(m_fileTransformCommands[path]);
+     		LOG(INFO) << "File \"" << path << "\" is assigned with a transcommand \""
+     				<< m_fileTransformCommands[path] << "\".\n";
      	}
     	return file;
     }

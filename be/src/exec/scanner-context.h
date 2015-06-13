@@ -116,6 +116,8 @@ class ScannerContext {
     bool eof() const { return file_offset() == file_len_; }
 
     const char* filename() { return scan_range_->file(); }
+   //  const char* cmd() { return scan_range_->; }
+
     const DiskIoMgr::ScanRange* scan_range() { return scan_range_; }
     const HdfsFileDesc* file_desc() { return file_desc_; }
 

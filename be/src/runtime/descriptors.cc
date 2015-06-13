@@ -395,7 +395,14 @@ Status DescriptorTbl::Create(ObjectPool* pool, const TDescriptorTable& thrift_tb
       default:
         DCHECK(false) << "invalid table type: " << tdesc.tableType;
     }
+    // Initialize transformation command if any defined for this table by user:
+    if(tdesc.__isset.dataTransformCmd)
+    	desc->tranformationCmd(tdesc.dataTransformCmd);
+    LOG(INFO) << "Assign the transformation command \"" << desc->tranformationCmd() << "\" to the table \"" <<
+    		desc->name() << "\".\n";
+
     (*tbl)->tbl_desc_map_[tdesc.id] = desc;
+
   }
 
   for (size_t i = 0; i < thrift_tbl.tupleDescriptors.size(); ++i) {
@@ -421,11 +428,6 @@ Status DescriptorTbl::Create(ObjectPool* pool, const TDescriptorTable& thrift_tb
     }
     entry->second->AddSlot(slot_d);
   }
-
-  // Initialize transformation command if any defined for this table by user:
-  if(thrift_tbl.__isset.dataTransformCmd)
-	  (*tbl)->data_transformation_cmd = thrift_tbl.dataTransformCmd;
-
   return Status::OK;
 }
 
@@ -464,6 +466,14 @@ void DescriptorTbl::GetTupleDescs(vector<TupleDescriptor*>* descs) const {
   descs->clear();
   for (TupleDescriptorMap::const_iterator i = tuple_desc_map_.begin();
        i != tuple_desc_map_.end(); ++i) {
+    descs->push_back(i->second);
+  }
+}
+
+void DescriptorTbl::GetTableDescs(vector<TableDescriptor*>* descs) const {
+  descs->clear();
+  for (TableDescriptorMap::const_iterator i = tbl_desc_map_.begin();
+       i != tbl_desc_map_.end(); ++i) {
     descs->push_back(i->second);
   }
 }
@@ -608,10 +618,6 @@ StructType* TupleDescriptor::GenerateLlvmStruct(LlvmCodeGen* codegen) {
   }
   llvm_struct_ = tuple_struct;
   return tuple_struct;
-}
-
-std::string DescriptorTbl::tranformationCmd() const {
-	return data_transformation_cmd;
 }
 
 std::string DescriptorTbl::DebugString() const {

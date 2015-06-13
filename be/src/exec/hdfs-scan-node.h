@@ -63,10 +63,14 @@ struct HdfsFileDesc {
 
   THdfsCompression::type file_compression;
 
+  /* transformation command */
+  std::string command;
+
   // Splits (i.e. raw byte ranges) for this file, assigned to this scan node.
   std::vector<DiskIoMgr::ScanRange*> splits;
-  HdfsFileDesc(const std::string& filename)
-    : filename(filename), file_length(0), file_compression(THdfsCompression::NONE) {
+
+  HdfsFileDesc(const std::string& filename, const std::string cmd = "")
+    : filename(filename), file_length(0), file_compression(THdfsCompression::NONE), command(cmd) {
   }
 };
 
@@ -186,7 +190,7 @@ class HdfsScanNode : public ScanNode {
   // This is thread safe.
   DiskIoMgr::ScanRange* AllocateScanRange(
       dfsFS fs, const char* file, int64_t len, int64_t offset, int64_t partition_id,
-      int disk_id, bool try_cache, bool expected_local);
+      int disk_id, bool try_cache, bool expected_local, std::string cmd = "");
 
   // Adds ranges to the io mgr queue and starts up new scanner threads if possible.
   Status AddDiskIoRanges(const std::vector<DiskIoMgr::ScanRange*>& ranges);

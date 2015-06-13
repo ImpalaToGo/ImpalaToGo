@@ -81,8 +81,6 @@ class ScanNode : public ExecNode {
       scan_range_params_(NULL),
       active_scanner_thread_counter_(TUnit::UNIT, 0),
       active_hdfs_read_thread_counter_(TUnit::UNIT, 0) {
-	  // save the data transformation command, if any defined for this table desc:
-	  data_transformation_cmd_ = descs.tranformationCmd();
   }
 
   virtual Status Prepare(RuntimeState* state);
@@ -119,9 +117,6 @@ class ScanNode : public ExecNode {
   RuntimeProfile::Counter* average_scanner_thread_concurrency() const {
     return average_scanner_thread_concurrency_;
   }
-
-  const std::string dataTransformationCommand() { return data_transformation_cmd_; }
-
   // names of ScanNode common counters
   static const std::string BYTES_READ_COUNTER;
   static const std::string ROWS_READ_COUNTER;
@@ -141,9 +136,6 @@ class ScanNode : public ExecNode {
  protected:
   // The scan ranges this scan node is responsible for. Not owned.
   const std::vector<TScanRangeParams>* scan_range_params_;
-
-  /** custom data transformation command defined for the active table */
-  std::string data_transformation_cmd_;
 
   RuntimeProfile::Counter* bytes_read_counter_; // # bytes read from the scanner
   // Time series of the bytes_read_counter_

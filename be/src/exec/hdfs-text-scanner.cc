@@ -56,7 +56,6 @@ HdfsTextScanner::HdfsTextScanner(HdfsScanNode* scan_node, RuntimeState* state)
       byte_buffer_read_size_(0),
       only_parsing_header_(false),
 	  m_dataFormat(UNKNOWN),
-	  m_dataTransformationCmd(scan_node->dataTransformationCommand()),
       boundary_pool_(new MemPool(scan_node->mem_tracker())),
       boundary_row_(boundary_pool_.get()),
       boundary_column_(boundary_pool_.get()),
@@ -123,7 +122,7 @@ Status HdfsTextScanner::IssueInitialRanges(HdfsScanNode* scan_node,
           DiskIoMgr::ScanRange* file_range = scan_node->AllocateScanRange(
               files[i]->fs, files[i]->filename.c_str(), files[i]->file_length, 0,
               metadata->partition_id, split->disk_id(), split->try_cache(),
-              split->expected_local());
+              split->expected_local(), files[i]->command);
           compressed_text_scan_ranges.push_back(file_range);
           scan_node->max_compressed_text_file_length()->Set(files[i]->file_length);
         }

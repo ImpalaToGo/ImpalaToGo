@@ -218,7 +218,7 @@ public:
 			return;
 
 		// allocate an array to hold the program and arguments tokens pointers:
-		m_c_tokens = new char*[tokens.size()];
+		m_c_tokens = new char*[tokens.size() + 1];
 		// populate an array:
 		for(auto token : tokens){
 			m_c_tokens[m_tokensNum] = new char[token.length() + 1];
@@ -226,6 +226,9 @@ public:
 			std::memcpy(m_c_tokens[m_tokensNum], token.c_str(), token.length());
 			m_tokensNum++;
 		}
+
+		// assign last token as a NULL to make a hint for exec:
+		m_c_tokens[m_tokensNum] = NULL;
 		// point program and params to corresponding tokens locations:
 		m_program = m_c_tokens[0];
 		m_args = m_c_tokens;
@@ -255,6 +258,9 @@ public:
 
 	/** getter to validate the invocation details */
 	bool valid() { return m_valid; }
+
+	/** getter for number of arguments */
+	int argc() { return m_tokensNum++; }
 };
 }
 }

@@ -148,9 +148,12 @@ Status ScannerContext::Stream::GetNextBuffer(int64_t read_past_size) {
       // TODO: We are leaving io_buffer_ = NULL, revisit.
       return Status::OK;
     }
+    ScanRangeMetadata* metadata =
+            reinterpret_cast<ScanRangeMetadata*>(scan_range_->meta_data());
+
     DiskIoMgr::ScanRange* range = parent_->scan_node_->AllocateScanRange(
         scan_range_->fs(), filename(), read_past_buffer_size, offset, -1,
-        scan_range_->disk_id(), false, false);
+        scan_range_->disk_id(), false, false, metadata != NULL ? metadata->transformationCommand : "");
     RETURN_IF_ERROR(parent_->state_->io_mgr()->Read(
         parent_->scan_node_->reader_context(), range, &io_buffer_));
   }

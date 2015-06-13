@@ -110,7 +110,7 @@ Status HdfsParquetScanner::IssueInitialRanges(HdfsScanNode* scan_node,
       DiskIoMgr::ScanRange* footer_range = scan_node->AllocateScanRange(
           files[i]->fs, files[i]->filename.c_str(), footer_size, footer_start,
           metadata->partition_id, split->disk_id(), split->try_cache(),
-          split->expected_local());
+          split->expected_local(), files[i]->command);
       footer_ranges.push_back(footer_range);
     }
   }

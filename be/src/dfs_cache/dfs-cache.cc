@@ -306,7 +306,7 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 		fqp = managed_file::File::fileSeparator + uri.Host + fqp;
 
 	if (!CacheLayerRegistry::instance()->findFile(fqp.c_str(),
-			fsDescriptor, managed_file) || managed_file == nullptr
+			fsDescriptor, managed_file, dataTransformationCommand) || managed_file == nullptr
 			|| !managed_file->valid()) {
 		LOG (WARNING)<< "File \"/" << "/" << path << "\" is not available either on target or locally." << "\n";
 
@@ -397,7 +397,8 @@ static dfsFile openForReadOrCreate(const FileSystemDescriptor & fsDescriptor, co
 
 dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path, int flags,
 		int bufferSize, short replication, tSize blocksize, bool& available, const std::string& dataTransformationCommand) {
-	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"." << "\n";
+	LOG (INFO) << "dfsOpenFile() begin : file path \"" << path << "\"; transformation cmd : \""
+			<< dataTransformationCommand << "\".\n";
 
 	// handle direct dfs operation if direct access is configured:
 	if(CacheLayerRegistry::instance()->directDFSAccess()){
@@ -441,7 +442,7 @@ dfsFile dfsOpenFile(const FileSystemDescriptor & fsDescriptor, const char* path,
     if(flags == O_WRONLY){
        return openForWrite(fsDescriptor, path, bufferSize, replication, blocksize, available);
     }
-    return openForReadOrCreate(fsDescriptor, path, flags, bufferSize, replication, blocksize, available);
+    return openForReadOrCreate(fsDescriptor, path, flags, bufferSize, replication, blocksize, available, dataTransformationCommand);
 }
 
 static status::StatusInternal handleCloseFileInWriteMode(const FileSystemDescriptor & fsDescriptor, dfsFile file,

@@ -196,7 +196,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	}
 
-	 char* buffer = (char*)malloc(sizeof(char) * BUFFER_SIZE);
+	 char* buffer = (char*)malloc(sizeof(char) * (BUFFER_SIZE + 1));
 	 if(buffer == NULL){
 		 LOG (ERROR) << "Insufficient memory to read remote file \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
 				 fsDescriptor.host << "\"" << "\n";
@@ -309,7 +309,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 switch (pid = fork()){
 		 case -1:
 			 // Still in parent process:
-			 LOG (ERROR) << "Fork failed" << std::endl;
+			 LOG (ERROR) << "Fork failed" << "\n";
 
 			 // close all pipes:
 			 close(parent_pipeline[ READ_FD  ]);
@@ -348,27 +348,24 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 
 			 /* set the specific "failure" retcode, as this line should never be reached  */
 			 exit(constants::COMMAND_EXEC_FAILURE);
-			 break;
 		 }
 
 		 default: /* Parent */
 			 LOG (INFO) << "Transformation is in progress on pid = " << pid << "..." << ".\n";
 
 			 int written = 0;
-			 memset(buffer, 0, BUFFER_SIZE);
+			 memset(buffer, 0, BUFFER_SIZE + 1);
 
 			 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
 
 			 for (; last_read > 0;) {
-				 boost::mutex::scoped_lock lock(*mux);
-
 				 if((written = write(parent_pipeline[ WRITE_FD ], buffer, last_read)) != last_read){
 					 LOG (ERROR) << "Unable to write into the pipe.\n";
 
 					 // set status to "interrupted"
 					 return constants::INTERRUPTED_WRITE;
 				 }
-				 memset(buffer, 0, BUFFER_SIZE);
+				 memset(buffer, 0, BUFFER_SIZE + 1);
 				 // read next data buffer:
 				 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
 			 }
@@ -397,7 +394,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 			 bytes = 0;
 			 /* read the external command's output */
 			 while(true){
-				 memset(&buffer, 0, BUFFER_SIZE + 1);
+				 memset(buffer, 0, BUFFER_SIZE + 1);
 
 				 switch(bytes = read(child_pipeline[ READ_FD ], buffer, BUFFER_SIZE)){
 				 case 0: /* End-of-File, or non-blocking read. */
@@ -410,6 +407,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 						 return constants::CHILD_PROCESS_DETACHED;
 					 }
 					 LOG (INFO) << "Data transform function exit status is:  " << WEXITSTATUS(ret) << ".\n";
+                     // For transformed file, rewrite the execution state with actual statistic
+					 // as we cannot predict the real data size before transformation is run:
+			 		 fp->estimatedBytes(fp->localBytes);
 					 return constants::OK;
 
 				 case -1:

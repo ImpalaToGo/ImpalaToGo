@@ -156,6 +156,10 @@ class TableDescriptor {
   int num_clustering_cols() const { return num_clustering_cols_; }
   virtual std::string DebugString() const;
 
+  /** getter and setter for data transformation command, replies a command if any was defined for the table */
+  std::string tranformationCmd() const  { return data_transformation_cmd; }
+  void tranformationCmd(const std::string& cmd) { data_transformation_cmd = cmd; }
+
   // The first num_clustering_cols_ columns by position are clustering
   // columns.
   bool IsClusteringCol(const SlotDescriptor* slot_desc) const {
@@ -174,6 +178,8 @@ class TableDescriptor {
   int num_cols_;
   int num_clustering_cols_;
   std::vector<std::string> col_names_;
+  /** Custom command for table's data transformation */
+  std::string data_transformation_cmd;
 };
 
 // Metadata for a single partition inside an Hdfs table.
@@ -352,8 +358,9 @@ class DescriptorTbl {
   // return all registered tuple descriptors
   void GetTupleDescs(std::vector<TupleDescriptor*>* descs) const;
 
-  /** getter for data transformation command, replies a command if any was defined for the table */
-  std::string tranformationCmd() const;
+  // return all registered table descriptors
+  void GetTableDescs(std::vector<TableDescriptor*>* descs) const;
+
   std::string DebugString() const;
 
  private:
@@ -364,9 +371,6 @@ class DescriptorTbl {
   TableDescriptorMap tbl_desc_map_;
   TupleDescriptorMap tuple_desc_map_;
   SlotDescriptorMap slot_desc_map_;
-
-  /** Custom command for table's data transformation */
-  std::string data_transformation_cmd;
 
   DescriptorTbl(): tbl_desc_map_(), tuple_desc_map_(), slot_desc_map_() {}
 };
