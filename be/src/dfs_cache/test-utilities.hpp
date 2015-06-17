@@ -68,12 +68,6 @@ st(Function_ f, A&& a){
 	return res;
 }
 
-template <typename T_>
-using decay_t = typename std::decay<T_>::type;
-
-template< class T >
-using result_of_t = typename std::result_of<T>::type;
-
 template<typename Function_, typename ...Args_>
 std::future<typename std::result_of<Function_(Args_...)>::type >
 spawn_task(Function_&& function, Args_... args){
@@ -88,6 +82,12 @@ spawn_task(Function_&& function, Args_... args){
 
 	return result;
 }
+
+template <typename T_>
+using decay_t = typename std::decay<T_>::type;
+
+template< class T >
+using result_of_t = typename std::result_of<T>::type;
 
 template<typename Function_, typename ...Args_>
 std::future<typename std::result_of<Function_(Args_...)>::type >

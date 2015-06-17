@@ -13,6 +13,7 @@
 
 #include "dfs_cache/gtest-fixtures.hpp"
 #include "dfs_cache/test-utilities.hpp"
+#include "dfs_cache/utilities.hpp"
 
 namespace impala{
 

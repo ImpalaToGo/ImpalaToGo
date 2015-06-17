@@ -53,6 +53,10 @@ const int INTERRUPTED_READ = 105;
 
 /* failure during command's out read */
 const int PIPELINE_READ_FAILURE = 106;
+
+/** operation of waiting for pipe with transformed data is timed out */
+const int TIMEOUT_WAIT_FOR_TRANSFORMED_DATA = 107;
+
 }
 void dataTransformationProgressStateMachine(int ret, managed_file::File* file){
 	 // anaylze the retcode to understand where we are with data:
@@ -96,6 +100,10 @@ void dataTransformationProgressStateMachine(int ret, managed_file::File* file){
 		 LOG(ERROR) << "Transform data : failed to read from external command." << "\n";
 		 file->compatible(false);
 		 break;
+	 case constants::TIMEOUT_WAIT_FOR_TRANSFORMED_DATA:
+		 LOG(ERROR) << "Transform data : operation of waiting for pipe with transformed data is timed out." << "\n";
+		 file->compatible(false);
+		 break;
 	 }
 }
 
@@ -125,6 +133,10 @@ status::StatusInternal Sync::estimateTimeToGetFileLocally(const FileSystemDescri
     // set the progress directly to the task
 	return status::StatusInternal::OK;
 }
+
+#define BOOST_THREAD_PROVIDES_FUTURE
+#include <boost/thread.hpp>
+#include <boost/thread/future.hpp>
 
 status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescriptor, const char* path,
 		request::MakeProgressTask<boost::shared_ptr<FileProgress> >* const & task){
@@ -197,7 +209,14 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	}
 
 	 char* buffer = (char*)malloc(sizeof(char) * (BUFFER_SIZE + 1));
-	 if(buffer == NULL){
+	 /* buffer for transformed data */
+	 char* in_buffer = NULL;
+
+	 /* allocate buffer for transformed data if transformation command is specified */
+	 if(!managed_file->transformCmd().empty())
+		 in_buffer = (char*)malloc(sizeof(char) * (BUFFER_SIZE + 1));
+
+	 if(buffer == NULL || (!managed_file->transformCmd().empty() && in_buffer == NULL)){
 		 LOG (ERROR) << "Insufficient memory to read remote file \"" << path << "\" from \"" << fsDescriptor.dfs_type << ":" <<
 				 fsDescriptor.host << "\"" << "\n";
     	 fp->error    = true;
@@ -207,7 +226,11 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 // update file status:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
     	 managed_file->close();
-		 return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
+
+    	 if(buffer != NULL)
+    		 free(buffer);
+
+    	 return status::StatusInternal::DFS_OBJECT_DOES_NOT_EXIST;
 	 }
 
 	 bool available;
@@ -227,6 +250,12 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
     	 // update file status:
     	 managed_file->state(managed_file::State::FILE_IS_FORBIDDEN);
     	 managed_file->close();
+
+    	 if(buffer != NULL)
+    		 free(buffer);
+    	 if(in_buffer != NULL)
+    		 free(buffer);
+
     	 return status::StatusInternal::FILE_OBJECT_OPERATION_FAILURE;
      }
 
@@ -267,6 +296,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 // define a reader + data transformation
 	 // define a reader
 	 boost::function<int ()> reader_t = [&]() {
+		 using namespace std;
 
 		 /** Pipe type, to describe the pipe direction */
 		 enum PIPE_FILE_DESCRIPTORS
@@ -287,8 +317,9 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 pid_t     pid;
 
 		 /*************** Buffered IO operations management *********************/
-		 /* number of bytes participating buffered IO operation */
-		 std::size_t  bytes;
+
+		 /* number of bytes participating buffered Read operation */
+		 std::size_t  in_bytes;
 
 		 /* transformed data size */
 		 int transformed_data_size = 0;
@@ -305,7 +336,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 			 return constants::PIPELINE_FAILURE;
 		 }
 
-		 /* fork the current process: */
+     	 /* fork the current process: */
 		 switch (pid = fork()){
 		 case -1:
 			 // Still in parent process:
@@ -353,9 +384,111 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 		 default: /* Parent */
 			 LOG (INFO) << "Transformation is in progress on pid = " << pid << "..." << ".\n";
 
+			 // Define a functor to handle non-blocking read from the pipe attached to the
+			 // external command's output, i.e., data acceptor:
+			 boost::function<int()> transformed_data_acceptor = [&]() {
+				 /* define a set of descriptors we are going to observe for activity */
+				 fd_set          readfds;
+				 /* max timeout the observer is going to wait for for activity on one of observed descriptors */
+				 struct timeval  timeout;
+
+				 /* max descriptor number, from the range of readfds - observed by select() */
+				 int max_sd = -1;
+
+				 /* set the timeout */
+				 timeout.tv_sec  = 0;     /* seconds */
+				 timeout.tv_usec = 10000; /* microseconds */
+
+				 FD_ZERO(&readfds);
+				 /* assign the "output" side of exec pipe to be tracked for activity */
+				 FD_SET( child_pipeline[ READ_FD ], &readfds );
+
+				 /* set the highest file descriptor number to the only we track */
+				 if(child_pipeline[ READ_FD ] > max_sd)
+					 max_sd = child_pipeline[ READ_FD ];
+
+				 /* activity type */
+				 int activity;
+
+				 /* go observe the configured descriptors for activity */
+				 while(true){
+					 switch (activity = select(1 + max_sd, &readfds, (fd_set*)NULL, (fd_set*)NULL, NULL) ){
+					 case 0: /* Timeout expired */
+						 return constants::TIMEOUT_WAIT_FOR_TRANSFORMED_DATA;
+
+					 case -1: /* and external interruption or failure with pipe descriptor */
+						 if ((errno == EINTR) || (errno == EAGAIN))
+							 return constants::EXTERNAL_INTERRUPTION;
+						 else
+							 /* devastation, unexpected pipe failure */
+							 return constants::PIPELINE_FAILURE;
+
+					 case 1:  /* The pipe is signaling */
+						 if (FD_ISSET(child_pipeline[ READ_FD ], &readfds)){
+							 memset(in_buffer, 0, BUFFER_SIZE + 1);
+
+							 /* ready to read the data */
+							 switch(in_bytes = read(child_pipeline[ READ_FD ], in_buffer, BUFFER_SIZE)){
+							 case 0: /* End-of-File, or non-blocking read. */
+								 LOG (INFO) << "Data transformation is completed." << "Data size = "
+								 	 << transformed_data_size << "\".\n";
+
+								 /* Wait for child finalization and check for status */
+								 if(pid != waitpid( pid, & ret, 0 )){
+									 LOG (ERROR) << "Failure while waiting on child's pid : " << ret << ".\n";
+									 return constants::CHILD_PROCESS_DETACHED;
+								 }
+
+								 LOG (INFO) << "Data transform function exit status is:  " << WEXITSTATUS(ret) << ".\n";
+			                     /* For transformed file, rewrite the execution state with actual statistic
+								  * as we cannot predict the real data size before transformation is run */
+						 		 fp->estimatedBytes = fp->localBytes;
+								 return constants::OK;
+
+		        				case -1:
+		        					/* EINTR : If an I/O primitive (open, read, ...) is waiting for an I/O device, and the signal arrived and was handled,
+		        					 * the primitive will fail immediately.
+		        					 * EAGAIN : code for non-blocking I/O (no data available right away, try again later)
+		        					 **/
+		        					if ((errno == EINTR) || (errno == EAGAIN)){
+		        						errno = 0;
+		        						return constants::EXTERNAL_INTERRUPTION;
+		        					}
+		        					else {
+		        						LOG (ERROR) << "Failed to read transformed data." << "\n";
+		        						return constants::PIPELINE_READ_FAILURE;
+		        					}
+
+		        				default:
+		        					transformed_data_size += in_bytes;
+		        					// write bytes locally:
+		        					filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, in_buffer, in_bytes);
+		        					managed_file->estimated_size(managed_file->estimated_size() + in_bytes);
+		        					// update job progress:
+		        					fp->localBytes += last_read;
+		        					break;
+		        				} /* end of "read from pipe, the result" switch */
+		        			} /* end of "The pipe is signaling" case */
+		        			break;
+
+		        		default:
+		        			LOG (ERROR) << "select was fired despite no activity on observed descriptors." << "\n";
+		        			return constants::PIPELINE_FAILURE;
+					 } /* end of select() fire handler */
+				 } /* end of select() processing loop */
+			 };
+
+			 auto process_transformed_stream = boost::bind(transformed_data_acceptor);
+			 // spawn the task for transformed data non-blocking read processor:
+			 //auto au = spawn_task(process_transformed_stream);
+
+			 auto au = boost::async(boost::launch::async,
+					 [&] {return process_transformed_stream();});
+
 			 int written = 0;
 			 memset(buffer, 0, BUFFER_SIZE + 1);
 
+			 /* Read the original data and forward it into transformation process */
 			 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
 
 			 for (; last_read > 0;) {
@@ -370,7 +503,7 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				 last_read = fsAdaptor->fileRead(connection, hfile, (void*)buffer, BUFFER_SIZE);
 			 }
 
-			 /* Close parent's write direction, so that the transformation process could detect the eof
+			 /* When write is finished, close parent's write direction, so that the transformation process could detect the eof
 			  * and stop the buffering */
 			 if(0 != (ret = close(parent_pipeline[ WRITE_FD ]))){
 				 LOG (ERROR) << "Unable to close parent's write pipe." << "\n";
@@ -383,59 +516,15 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 				 LOG(ERROR) << "Unable to close child's write pipe." << "\n";
 				 return constants::PIPELINE_FAILURE;
 			 }
-
-
 			 if(last_read == -1){
-				 // remote I/O exception happened, return
+				 /* dfs I/O exception happened, no reason to proceed. Non-blocking read will complete automatically
+				  * as its stdin forwrader is closed */
 				 LOG(ERROR) << "Remote read is interrupted." << "\n";
 				 return constants::INTERRUPTED_READ;
 			 }
-
-			 bytes = 0;
-			 /* read the external command's output */
-			 while(true){
-				 memset(buffer, 0, BUFFER_SIZE + 1);
-
-				 switch(bytes = read(child_pipeline[ READ_FD ], buffer, BUFFER_SIZE)){
-				 case 0: /* End-of-File, or non-blocking read. */
-					 LOG (INFO) << "Data transformation is completed." << "Data size = "
-					 	 << transformed_data_size << "\".\n";
-
-					 /* Wait for child finalization and check for status */
-					 if(pid != waitpid( pid, & ret, 0 )){
-						 LOG (ERROR) << "Failure while waiting on child's pid : " << ret << ".\n";
-						 return constants::CHILD_PROCESS_DETACHED;
-					 }
-					 LOG (INFO) << "Data transform function exit status is:  " << WEXITSTATUS(ret) << ".\n";
-                     // For transformed file, rewrite the execution state with actual statistic
-					 // as we cannot predict the real data size before transformation is run:
-			 		 fp->estimatedBytes(fp->localBytes);
-					 return constants::OK;
-
-				 case -1:
-					 /* EINTR : If an I/O primitive (open, read, ...) is waiting for an I/O device, and the signal arrived and was handled,
-					  * the primitive will fail immediately.
-					  * EAGAIN : code for non-blocking I/O (no data available right away, try again later)
-        		      */
-					 if ((errno == EINTR) || (errno == EAGAIN)){
-						 errno = 0;
-						 return constants::EXTERNAL_INTERRUPTION;
-					 }
-					 else {
-						 LOG (ERROR) << "Failed to read transformed data." << "\n";
-						 return constants::PIPELINE_READ_FAILURE;
-					 }
-
-				 default:
-					 transformed_data_size += bytes;
-			 		 // write bytes locally:
-			 		 filemgmt::FileSystemManager::instance()->dfsWrite(fsAdaptor->descriptor(), file, buffer, bytes);
-			 		 managed_file->estimated_size(managed_file->estimated_size() + bytes);
-			 		 // update job progress:
-			 		 fp->localBytes += last_read;
-        		   break;
-        	   }
-			 } /* while (true) */
+			 /* now, wait for non-blocking read the transformed data to complete */
+			 if(!(ret = au.get()))
+				 return ret;
 		 } /* switch (pid = fork())*/
 		 return ret;
 	 };
@@ -502,6 +591,8 @@ status::StatusInternal Sync::prepareFile(const FileSystemDescriptor & fsDescript
 	 LOG (INFO) << "Remote bytes read = " << std::to_string(fp->localBytes) << " for file \"" << path << "\".\n";
 	 // whatever happens, clean resources:
 	 free(buffer);
+	 if(in_buffer != NULL)
+		 free(in_buffer);
 
      if(last_read != 0 || !managed_file->compatible()){
     	 // remote file was not read to end, report a problem:

@@ -363,7 +363,7 @@ Status HdfsTableSink::InitOutputPartition(RuntimeState* state,
       // decoded partition key value.
       string encoded_str;
       UrlEncode(value_str, &encoded_str, true);
-      // If the string is empty, map it to NULL (mimicking Hive's behaviour)
+      // If the string is empty, map it to NULL (mimicking Hive's behavior)
       partition_name_ss << (encoded_str.empty() ?
                         table_desc_->null_partition_key_value() : encoded_str);
     }
@@ -593,7 +593,7 @@ Status HdfsTableSink::FinalizePartitionFile(RuntimeState* state,
     PartitionStatusMap::iterator it =
         state->per_partition_status()->find(partition->partition_name);
 
-    // Should have been created in GetOutputPartition() when the partition was initialised.
+    // Should have been created in GetOutputPartition() when the partition was initialized.
     DCHECK(it != state->per_partition_status()->end());
     it->second.num_appended_rows += partition->num_rows;
     DataSink::MergeInsertStats(partition->writer->stats(), &it->second.stats);
