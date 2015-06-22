@@ -284,7 +284,7 @@ Status HdfsTableSink::CreateNewTmpFile(RuntimeState* state,
   SCOPED_TIMER(ADD_TIMER(profile(), "TmpFileCreateTimer"));
   stringstream filename;
   // Elena : change required for s3 to work more efficiently - avoid temporaries to avoid rename
-  if(hdfs_connection_.dfs_type == s3n){
+  if((hdfs_connection_.dfs_type == s3n) || (hdfs_connection_.dfs_type == s3a)){
 	  // construct the final filename and work with it.
 	  // Later, in master's coordinator, filter out bundles with "temp filename = final filename"
 	  filename << output_partition->final_hdfs_file_name_prefix
@@ -495,7 +495,7 @@ inline Status HdfsTableSink::GetOutputPartition(
         make_pair(partition->partition_name, partition_status));
 
     // schedule the temporary directory for coordinator deletion for non-block-based file systems:
-    if (!has_empty_input_batch_ && (hdfs_connection_.dfs_type != s3n)) {
+    if (!has_empty_input_batch_ && (hdfs_connection_.dfs_type != s3n) && (hdfs_connection_.dfs_type != s3a)) {
       // Indicate that temporary directory is to be deleted after execution
       (*state->hdfs_files_to_move())[partition->tmp_hdfs_dir_name] = "";
     }

@@ -851,7 +851,7 @@ Status Coordinator::FinalizeQuery() {
 
   dfsFS hdfs_conn;
   RETURN_IF_ERROR(HdfsFsCache::instance()->GetConnection(staging_dir.str(), &hdfs_conn));
-  if(hdfs_conn.dfs_type != s3n){
+  if((hdfs_conn.dfs_type != s3n) && ((hdfs_conn.dfs_type != s3a))){
 	  VLOG_QUERY << "Removing staging directory: " << staging_dir.str();
 	  dfsDelete(hdfs_conn, staging_dir.str().c_str(), 1);
   }

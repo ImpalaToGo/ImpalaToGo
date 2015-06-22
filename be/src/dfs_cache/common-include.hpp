@@ -53,6 +53,9 @@ namespace constants
     /** s3n scheme name */
     extern const std::string S3N_SCHEME;
 
+    /** s3a scheme name */
+    extern const std::string S3A_SCHEME;
+
     /** local filesystem scheme */
     extern const std::string LOCAL_SCHEME;
 

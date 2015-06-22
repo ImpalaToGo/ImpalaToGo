@@ -43,6 +43,7 @@
 /** Scheme definitions */
 #define SCHEME_HDFS    "hdfs"
 #define SCHEME_S3N     "s3n"
+#define SCHEME_S3A     "s3a"
 #define SCHEME_LOCAL   "file"
 #define SCHEME_TACHYON "tachyon"
 
@@ -65,6 +66,8 @@ DFS_TYPE fsTypeFromScheme(const char* scheme){
 		return hdfs;
     if(strcmp(scheme, SCHEME_S3N) == 0)
     	return s3n;
+    if(strcmp(scheme, SCHEME_S3A) == 0)
+    	return s3a;
     if(strcmp(scheme, SCHEME_LOCAL) == 0)
     	return local;
     if(strcmp(scheme, SCHEME_TACHYON) == 0)
@@ -720,6 +723,9 @@ static int calcEffectiveURI(struct fsBuilder *bld, char ** uri)
     	break;
     case s3n:
     	explicitScheme = "s3n://";
+    	break;
+    case s3a:
+    	explicitScheme = "s3a://";
     	break;
     case local:
     	explicitScheme = "file://";
