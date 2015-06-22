@@ -19,6 +19,7 @@ std::ostream& operator<<(std::ostream& out, const DFS_TYPE& value) {
 #define INSERT_ELEMENT(p) strings[p] = #p
 		INSERT_ELEMENT(hdfs);
 		INSERT_ELEMENT(s3n);
+		INSERT_ELEMENT(s3a);
 		INSERT_ELEMENT(local);
 		INSERT_ELEMENT(tachyon);
 		INSERT_ELEMENT(DEFAULT_FROM_CONFIG);

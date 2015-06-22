@@ -51,6 +51,7 @@ void File::initialize(){
 	  // configure supported file systems:
 	  m_supportedFs.push_back(constants::HDFS_SCHEME);
 	  m_supportedFs.push_back(constants::S3N_SCHEME);
+	  m_supportedFs.push_back(constants::S3A_SCHEME);
 	  m_supportedFs.push_back(constants::LOCAL_SCHEME);
 }
 
@@ -103,6 +104,8 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 		descriptor.dfs_type = DFS_TYPE::hdfs;
 	if(boost::iequals(schema, constants::S3N_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::s3n;
+	if(boost::iequals(schema, constants::S3A_SCHEME))
+		descriptor.dfs_type = DFS_TYPE::s3a;
 	if(boost::iequals(schema, constants::LOCAL_SCHEME))
 		descriptor.dfs_type = DFS_TYPE::local;
 
@@ -162,7 +165,7 @@ FileSystemDescriptor File::restoreNetworkPathFromLocal(const std::string& local,
 	fqnp += (descriptor.dfs_type == DFS_TYPE::local ? ":/" : "://");
 	fqnp += descriptor.host;
 	// for 3sn or local filesystem, don't add the port into uri
-	if((descriptor.dfs_type != DFS_TYPE::s3n) && (descriptor.dfs_type != DFS_TYPE::local)){
+	if((descriptor.dfs_type != DFS_TYPE::s3n) && (descriptor.dfs_type != DFS_TYPE::s3a) && (descriptor.dfs_type != DFS_TYPE::local)){
 		fqnp += ":";
 		fqnp += std::to_string(descriptor.port);
 	}

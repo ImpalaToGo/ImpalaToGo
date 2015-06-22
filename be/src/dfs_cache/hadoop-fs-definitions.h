@@ -19,6 +19,7 @@ extern "C" {
 enum _DFS_TYPE {
 	hdfs,
 	s3n,
+	s3a,
 	local,
 	tachyon,
 	DEFAULT_FROM_CONFIG,
