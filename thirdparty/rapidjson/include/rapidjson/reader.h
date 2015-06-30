@@ -569,6 +569,11 @@ private:
         }
 
         for (SizeType memberCount = 0;;) {
+            if(is.Peek() == '\0'){
+            	// report data truncation in place
+            	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, is.Tell());
+            }
+
             if (is.Peek() != '"')
                 RAPIDJSON_PARSE_ERROR(kParseErrorObjectMissName, is.Tell());
 
@@ -576,6 +581,11 @@ private:
             RAPIDJSON_PARSE_ERROR_EARLY_RETURN_VOID;
 
             SkipWhitespace(is);
+
+            if(is.Peek() == '\0'){
+            	// report data truncation in place
+            	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, is.Tell());
+            }
 
             if (is.Take() != ':')
                 RAPIDJSON_PARSE_ERROR(kParseErrorObjectMissColon, is.Tell());
@@ -588,13 +598,17 @@ private:
             SkipWhitespace(is);
 
             ++memberCount;
-
-            switch (is.Take()) {
+            char c;
+            switch (c = is.Take()) {
                 case ',': SkipWhitespace(is); break;
                 case '}':
                     if (!handler.EndObject(memberCount))
                         RAPIDJSON_PARSE_ERROR(kParseErrorTermination, is.Tell());
                     return;
+                case '\0' :
+                	// report data truncation in place
+                	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, is.Tell());
+                	return;
                 default:  RAPIDJSON_PARSE_ERROR(kParseErrorObjectMissCommaOrCurlyBracket, is.Tell());
             }
         }
@@ -661,12 +675,16 @@ private:
             ++elementCount;
             SkipWhitespace(is);
 
-            switch (is.Take()) {
+            char c;
+            switch (c = is.Take()) {
                 case ',': SkipWhitespace(is); break;
                 case ']':
                     if (!handler.EndArray(elementCount))
                         RAPIDJSON_PARSE_ERROR(kParseErrorTermination, is.Tell());
                     return;
+                case '\0':
+                	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, is.Tell());
+                	return;
                 default:  RAPIDJSON_PARSE_ERROR(kParseErrorArrayMissCommaOrSquareBracket, is.Tell());
             }
         }
@@ -699,6 +717,10 @@ private:
         	if (!handler.Null(head, len))
         		RAPIDJSON_PARSE_ERROR(kParseErrorTermination, is.Tell());
         }
+        else if(is.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+        }
         else
         	RAPIDJSON_PARSE_ERROR(kParseErrorValueInvalid, offset);
     }
@@ -727,6 +749,10 @@ private:
         	size_t len = is.src_ - head;
             if (!handler.Bool(true, head, len))
                 RAPIDJSON_PARSE_ERROR(kParseErrorTermination, is.Tell());
+        }
+        else if(is.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
         }
         else
         	RAPIDJSON_PARSE_ERROR(kParseErrorValueInvalid, offset);
@@ -758,6 +784,10 @@ private:
         	size_t len = is.src_ - head;
             if (!handler.Bool(false, head, len))
                 RAPIDJSON_PARSE_ERROR(kParseErrorTermination, is.Tell());
+        }
+        else if(is.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
         }
         else
         	RAPIDJSON_PARSE_ERROR(kParseErrorValueInvalid, offset);
@@ -967,7 +997,6 @@ private:
                 is.Take();
                 Ch e = is.Take();
                 if (!(((sizeof(Ch) == 1 || unsigned(e) < 256) && escape[(unsigned char)e]) || (e == 'u')))
-                    // RAPIDJSON_PARSE_ERROR(kParseErrorStringEscapeInvalid, is.Tell() - 1);
                 	RAPIDJSON_PARSE_ERROR(kParseErrorStringEscapeInvalid, offset);
             }
             else if (c == '"') {    // Closing double quote
@@ -977,11 +1006,12 @@ private:
                 	*len = - *len;
                 return;
             }
-            else if (c == '\0')
-                // RAPIDJSON_PARSE_ERROR(kParseErrorStringMissQuotationMark, is.Tell() - 1);
-            	RAPIDJSON_PARSE_ERROR(kParseErrorStringMissQuotationMark, offset);
+            else if (c == '\0'){
+            	//RAPIDJSON_PARSE_ERROR(kParseErrorStringMissQuotationMark, offset);
+            	// report data truncation in place
+            	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+            }
             else if ((unsigned)c < 0x20) // RFC 4627: unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
-                // RAPIDJSON_PARSE_ERROR(kParseErrorStringEscapeInvalid, is.Tell() - 1);
             	RAPIDJSON_PARSE_ERROR(kParseErrorStringEscapeInvalid, offset);
             else
             	is.Take();
@@ -1247,6 +1277,10 @@ private:
 
         // Parse minus
         bool minus = false;
+        if(s.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+        }
         if (s.Peek() == '-') {
             minus = true;
             s.Take();
@@ -1257,6 +1291,7 @@ private:
         uint64_t i64 = 0;
         bool use64bit = false;
         int significandDigit = 0;
+
         if (s.Peek() == '0') {
             i = 0;
             s.TakePush();
@@ -1289,7 +1324,11 @@ private:
                     significandDigit++;
                 }
         }
-        else // RAPIDJSON_PARSE_ERROR(kParseErrorValueInvalid, s.Tell());
+        else if(s.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+        }
+        else
         	RAPIDJSON_PARSE_ERROR(kParseErrorValueInvalid, offset);
 
         // Parse 64bit int
@@ -1333,12 +1372,21 @@ private:
         // Parse frac = decimal-point 1*DIGIT
         int expFrac = 0;
         size_t decimalPosition;
+        if(s.Peek() == '\0'){
+        	// report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+        }
+
         if (s.Peek() == '.') {
             s.Take();
             decimalPosition = s.Length();
 
+            if(s.Peek() == '\0'){
+            	// report data truncation in place
+            	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
+            }
+
             if (!(s.Peek() >= '0' && s.Peek() <= '9'))
-                // RAPIDJSON_PARSE_ERROR(kParseErrorNumberMissFraction, s.Tell());
             	RAPIDJSON_PARSE_ERROR(kParseErrorNumberMissFraction, offset);
 
             if (!useDouble) {
@@ -1417,7 +1465,9 @@ private:
         // if we reached the end of stream, rise and error
         //if(is.Peek() != ',' && is.Peek() != '}' && is.Peek() != ']')
         if(is.Peek() == '\0')
-        	RAPIDJSON_PARSE_ERROR(kParseErrorStringMissQuotationMark, offset);
+        	// RAPIDJSON_PARSE_ERROR(kParseErrorStringMissQuotationMark, offset);
+            // report data truncation in place
+        	RAPIDJSON_PARSE_ERROR(kParseErrorDataTruncated, offset);
 
         bool cont = true;
         size_t length = s.Length();
@@ -1449,7 +1499,6 @@ private:
             }
         }
         if (!cont)
-        	// RAPIDJSON_PARSE_ERROR(kParseErrorTermination, s.Tell());
         	RAPIDJSON_PARSE_ERROR(kParseErrorTermination, offset);
     }
 

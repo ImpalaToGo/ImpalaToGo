@@ -269,7 +269,13 @@ Status JsonDelimitedTextParser::ParseFieldLocations(int max_tuples, int64_t rema
 				if(reader.GetParseErrorCode() == rapidjson::kParseErrorDocumentRootNotSingular){
 					error = false;
 				}
-				else error = true;
+				else {
+					// If there's error other than "more JSON records exist", check for data truncation
+					// error. This is the only acceptable parser error, in addition to "more records exist".
+					// Other errors mean JSON dataset is malformed.
+					DCHECK_EQ(reader.GetParseErrorCode(), rapidjson::kParseErrorDataTruncated);
+					error = true;
+				}
             }
 			if(error){
 				error_offset = reader.GetErrorOffset();
