@@ -12,7 +12,7 @@ ImpalaToGo is a fork of Cloudera Impala, separated from Hadoop. It is optimized 
 5. It gives an ability to query JSON-formatted data, which is the start for more wide variety of hierarchical data formats support. See [JSON data support how to](https://github.com/ImpalaToGo/ImpalaToGo/wiki/JSON-data-support----how-to)
 
  
-How to try it: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
+How to try it: [How to try](https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try)
 
 A short presentation on ImpalaToGo's architecture can be found at: http://www.slideshare.net/DavidGroozman/impala-togo-introduction
 
