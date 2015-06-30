@@ -9,7 +9,7 @@ ImpalaToGo is a fork of Cloudera Impala, separated from Hadoop. It is optimized 
 2. It is optimized to work with S3. ImpalaToGo transparently caches data on local drives.
 3. It is actually the only open source MPP database written in C++.
 4. It gives you almost the same capabilities as Hive over S3, but is much faster.
-5. It gives an ability to query JSON-formatted data, which is the start for more wide variety of hierarchical data formats support. See [JSON data support how to](wiki/JSON-data-support----how-to)
+5. It gives an ability to query JSON-formatted data, which is the start for more wide variety of hierarchical data formats support. See [JSON data support how to](https://github.com/ImpalaToGo/ImpalaToGo/wiki/JSON-data-support----how-to)
 
  
 How to try it: https://github.com/ImpalaToGo/ImpalaToGo/wiki/How-to-try
