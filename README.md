@@ -22,6 +22,14 @@ We have developed a caching layer which uses local drives to provide cache acces
 Development environment prerequisites (Ubuntu)
 ----
 
+**Note:**
+
+1) How to build ImpalaToGo : the complete instruction of how to get the relevant sources with dependencies : 
+[i2go-repo-manifests](https://github.com/ImpalaToGo/i2g-repo-manifests)
+
+2) Boost : last boost checked version was 1.54 
+
+
   - Install Java
     ```sh
     sudo apt-get install python-software-properties
