@@ -120,8 +120,8 @@ function build_preamble() {
 }
 
 #TODO: Check whever IMPALA_TACHYON_VERSION really required
-mvn clean install -f $IMPALA_HOME/thirdparty/tachyon/pom.xml -DskipTests=true
-mvn install:install-file -Dfile=$IMPALA_HOME/thirdparty/tachyon/client/target/tachyon-client-${IMPALA_TACHYON_VERSION}-jar-with-dependencies.jar -DpomFile=$IMPALA_HOME/thirdparty/tachyon/client/pom.xml
+#mvn clean install -f $IMPALA_HOME/thirdparty/tachyon/pom.xml -DskipTests=true
+#mvn install:install-file -Dfile=$IMPALA_HOME/thirdparty/tachyon/client/target/tachyon-client-${IMPALA_TACHYON_VERSION}-jar-with-dependencies.jar -DpomFile=$IMPALA_HOME/thirdparty/tachyon/client/pom.xml
 
 #Build UDTF
 cd $IMPALA_HOME/thirdparty/udtf
