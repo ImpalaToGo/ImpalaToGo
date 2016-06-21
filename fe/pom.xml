@@ -38,10 +38,10 @@
     <parquet.version>${env.IMPALA_PARQUET_VERSION}</parquet.version>
     <impala.extdatasrc.api.version>1.0-SNAPSHOT</impala.extdatasrc.api.version>
     <!-- Impala does not currently support the Hive .13 JDBC driver -->
-    <hive-jdbc.version>0.13.1-cdh5.2.0-SNAPSHOT</hive-jdbc.version>
-    <tachyon.version>${env.IMPALA_TACHYON_VERSION}</tachyon.version>
+    <hive-jdbc.version>1.1.0-cdh5.5.0</hive-jdbc.version>
     <thrift.version>${env.IMPALA_THRIFT_VERSION}</thrift.version>
     <thrift.home>${env.THRIFT_HOME}</thrift.home>
+    <cdh.metrics-core.version>3.0.2</cdh.metrics-core.version>
   </properties>
 
   <dependencies>
@@ -330,15 +330,6 @@
       <version>4.8.2</version>
       <scope>test</scope>
     </dependency>
-  
-    <!-- Tachyon -->
-    <dependency>
-      <groupId>org.tachyonproject</groupId>
-      <artifactId>tachyon-client</artifactId>
-      <version>${tachyon.version}</version>
-    </dependency>
-
-
     <dependency>
       <groupId>com.googlecode.json-simple</groupId>
       <artifactId>json-simple</artifactId>
