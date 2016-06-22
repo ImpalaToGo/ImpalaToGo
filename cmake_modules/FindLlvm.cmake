@@ -7,14 +7,47 @@
 #  LLVM_MODULE_LIBS - list of llvm libs for working with modules.
 #  LLVM_FOUND       - True if llvm found.
 
+math(EXPR BITS "8*${CMAKE_SIZEOF_VOID_P}")
+set(LLVM_CONFIG_EXECUTABLE_NAMES llvm-config llvm-config-33 llvm-config-${BITS}-33 llvm-config-3.3 llvm-config-${BITS}-3.3)
 
-# First look in ENV{LLVM_HOME} then system path.
-find_program(LLVM_CONFIG_EXECUTABLE llvm-config
-  PATHS
-  $ENV{LLVM_HOME}
-  NO_DEFAULT_PATH
-)
-find_program(LLVM_CONFIG_EXECUTABLE llvm-config)
+set(LLVM_SUITABLE_VERSION "FALSE")
+
+foreach(LLVM_CONFIG_EXECUTABLE_NAME ${LLVM_CONFIG_EXECUTABLE_NAMES})
+    # First look in ENV{LLVM_HOME} then system path.
+    find_program(LLVM_CONFIG_EXECUTABLE ${LLVM_CONFIG_EXECUTABLE_NAME}
+      PATHS
+      $ENV{LLVM_HOME}
+      NO_DEFAULT_PATH
+    )
+    find_program(LLVM_CONFIG_EXECUTABLE ${LLVM_CONFIG_EXECUTABLE_NAME})
+
+    message(STATUS "LLVM_CONFIG_EXECUTABLE: ${LLVM_CONFIG_EXECUTABLE}")
+
+    if (NOT LLVM_CONFIG_EXECUTABLE)
+        message(STATUS "Could not find ${LLVM_CONFIG_EXECUTABLE_NAME}")
+    else(LLVM_CONFIG_EXECUTABLE)
+        message(STATUS "${LLVM_CONFIG_EXECUTABLE_NAME} found: ${LLVM_CONFIG_EXECUTABLE}")
+
+        execute_process(
+          COMMAND ${LLVM_CONFIG_EXECUTABLE} --version
+          OUTPUT_VARIABLE LLVM_VERSION
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if (NOT "${LLVM_VERSION}" STREQUAL "$ENV{IMPALA_LLVM_VERSION}")
+            message(STATUS
+              "LLVM version must be $ENV{IMPALA_LLVM_VERSION}. Found version: ${LLVM_VERSION}")
+            message(STATUS "Keep searching...")
+            unset(LLVM_CONFIG_EXECUTABLE CACHE)
+        else()
+            set(LLVM_SUITABLE_VERSION "TRUE")
+        endif()
+    endif (NOT LLVM_CONFIG_EXECUTABLE)
+endforeach(LLVM_CONFIG_EXECUTABLE_NAME)
+
+if (NOT LLVM_SUITABLE_VERSION)
+    message(FATAL_ERROR "There's no suitable llvm version")
+endif(NOT LLVM_SUITABLE_VERSION)
 
 find_program(LLVM_CLANG_EXECUTABLE clang++
   PATHS
@@ -30,10 +63,6 @@ find_program(LLVM_OPT_EXECUTABLE opt
 )
 find_program(LLVM_OPT_EXECUTABLE opt)
 
-if (NOT LLVM_CONFIG_EXECUTABLE)
-  message(FATAL_ERROR "Could not find llvm-config")
-endif (NOT LLVM_CONFIG_EXECUTABLE)
-
 if (NOT LLVM_CLANG_EXECUTABLE)
   message(FATAL_ERROR "Could not find clang++")
 endif (NOT LLVM_CLANG_EXECUTABLE)
@@ -45,17 +74,6 @@ endif (NOT LLVM_OPT_EXECUTABLE)
 message(STATUS "LLVM llvm-config found at: ${LLVM_CONFIG_EXECUTABLE}")
 message(STATUS "LLVM clang++ found at: ${LLVM_CLANG_EXECUTABLE}")
 message(STATUS "LLVM opt found at: ${LLVM_OPT_EXECUTABLE}")
-
-execute_process(
-  COMMAND ${LLVM_CONFIG_EXECUTABLE} --version
-  OUTPUT_VARIABLE LLVM_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-if (NOT "${LLVM_VERSION}" STREQUAL "$ENV{IMPALA_LLVM_VERSION}") 
-  message(FATAL_ERROR 
-      "LLVM version must be $ENV{IMPALA_LLVM_VERSION}. Found version: ${LLVM_VERSION}")
-endif()
 
 execute_process(
   COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir

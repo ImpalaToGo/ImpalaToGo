@@ -13,6 +13,9 @@
 # limitations under the License.
 
 
+#include_directories(${Boost_INCLUDE_DIRS})
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Boost_INCLUDE_DIRS}")
+
 # where to put generated libraries
 set(LIBRARY_OUTPUT_PATH "${BUILD_OUTPUT_ROOT_DIRECTORY}/codegen")
 
