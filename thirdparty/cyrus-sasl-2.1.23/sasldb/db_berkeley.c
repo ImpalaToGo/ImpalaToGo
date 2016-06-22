@@ -100,7 +100,7 @@ static int berkeleydb_open(const sasl_utils_t *utils,
     ret = db_create(mbdb, NULL, 0);
     if (ret == 0 && *mbdb != NULL)
     {
-#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
+#if (DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1) || DB_VERSION_MAJOR > 4
 	ret = (*mbdb)->open(*mbdb, NULL, path, NULL, DB_HASH, flags, 0660);
 #else
 	ret = (*mbdb)->open(*mbdb, path, NULL, DB_HASH, flags, 0660);

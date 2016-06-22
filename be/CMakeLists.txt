@@ -93,6 +93,7 @@ endif ()
 SET(CMAKE_CXX_FLAGS "${CXX_COMMON_FLAGS} ${CMAKE_CXX_FLAGS}")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fverbose-asm")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CFLAGS}")
+#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Boost_INCLUDE_DIRS}")
 
 # Use ccache when found and not explicitly disabled by setting the DISABLE_CCACHE envvar.
 find_program(CCACHE ccache)
@@ -176,6 +177,19 @@ set(CLANG_INCLUDE_FLAGS
   "-I${JAVA_INCLUDE_PATH2}"
   "-I${RE2_INCLUDE_DIR}"
 )
+
+# If an alternative Boost location is given, remark the include and
+# libraries directories.
+if (DEFINED ENV{BOOST_ROOT})
+    include_directories(${Boost_INCLUDE_DIRS})
+    link_directories(${BOOST_LIBRARYDIR})
+
+    # Also add the Boost include directory to include search paths
+    # for CLang.
+    set(CLANG_INCLUDE_FLAGS
+        ${CLANG_INCLUDE_FLAGS}
+        "-I${Boost_INCLUDE_DIRS}")
+endif (DEFINED ENV{BOOST_ROOT})
 
 # allow linking of static libs into dynamic lib
 add_definitions(-fPIC)
@@ -268,7 +282,6 @@ set (IMPALA_LINK_LIBS ${IMPALA_LINK_LIBS}
   -lrt -lboost_date_time
 )
 
-
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "CODE_COVERAGE")
   set (IMPALA_LINK_LIBS ${IMPALA_LINK_LIBS} -lgcov)
 endif ()
@@ -293,8 +306,8 @@ list(REMOVE_ITEM UDF_TEST_LINK_LIBS Udf)
 set (IMPALA_TEST_LINK_LIBS ${IMPALA_LINK_LIBS} gtest)
 set (UDF_TEST_LINK_LIBS ${UDF_TEST_LINK_LIBS} gtest)
 
-MESSAGE(STATUS, "Compiler Flags: ${CMAKE_CXX_FLAGS}")
-MESSAGE(STATUS, "Linker Libs: ${IMPALA_LINK_LIBS}")
+MESSAGE(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
+MESSAGE(STATUS "Linker Libs: ${IMPALA_LINK_LIBS}")
 
 set(LLVM_IR_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/llvm-ir")
 file(MAKE_DIRECTORY ${LLVM_IR_OUTPUT_DIRECTORY})
@@ -320,6 +333,12 @@ ENDFUNCTION()
 # e.g. COMPILE_TO_IR(test.cc) generates the "test-ir" make target.
 # Note: this is duplicated in udf_samples/CMakeLists.txt
 set(IR_COMPILE_FLAGS "-emit-llvm" "-O3" "-c" "-I../" "-Wno-deprecated")
+# In case if boost includes are not in the default include search path
+# add it explicitly.
+IF (DEFINED ENV{BOOST_ROOT})
+    set(IR_COMPILE_FLAGS ${IR_COMPILE_FLAGS} "-I${Boost_INCLUDE_DIRS}")
+ENDIF (DEFINED ENV{BOOST_ROOT})
+
 function(COMPILE_TO_IR SRC_FILE)
   get_filename_component(BASE_NAME ${SRC_FILE} NAME_WE)
   set(OUTPUT_FILE "${LIBRARY_OUTPUT_PATH}/${BASE_NAME}.ll")
@@ -371,6 +390,7 @@ link_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/build/testutil
   ${CMAKE_CURRENT_SOURCE_DIR}/build/util
   ${CMAKE_CURRENT_SOURCE_DIR}/build/transport
+  ${Boost_LIBRARIES}
 )
 
 # only generate statically linked libs and executables

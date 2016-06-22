@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+include_directories(${Boost_INCLUDE_DIRS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Boost_INCLUDE_DIRS}")
+
 # where to put generated libraries
 set(LIBRARY_OUTPUT_PATH "${BUILD_OUTPUT_ROOT_DIRECTORY}/udf_samples")
 # where to put generated binaries
@@ -22,6 +25,7 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_OUTPUT_ROOT_DIRECTORY}/udf_samples")
 # src-file-ir target that can be built.
 # e.g. COMPILE_TO_IR(test.cc) generates the "test-ir" make target.
 set(IR_COMPILE_FLAGS "-emit-llvm" "-O3" "-c" "-I../")
+set(IR_COMPILE_FLAGS ${IR_COMPILE_FLAGS} "-I${Boost_INCLUDE_DIRS}")
 function(COMPILE_TO_IR SRC_FILE)
   get_filename_component(BASE_NAME ${SRC_FILE} NAME_WE)
   set(OUTPUT_FILE "${LIBRARY_OUTPUT_PATH}/${BASE_NAME}.ll")
