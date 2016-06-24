@@ -40,3 +40,6 @@ cluster_logs/
 
 # This file is auto-generated in the build process
 common/thrift/ErrorCodes.thrift
+
+testdata/dfs_cache/
+tmp/
