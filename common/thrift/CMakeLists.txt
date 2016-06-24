@@ -116,7 +116,7 @@ function(THRIFT_GEN_DS VAR)
 endfunction(THRIFT_GEN_DS)
 
 message("Using Thrift compiler: ${THRIFT_COMPILER}")
-set(THRIFT_INCLUDE_DIR_OPTION -I ${THRIFT_CONTRIB_DIR} -I $ENV{HIVE_HOME}/src/metastore/if)
+set(THRIFT_INCLUDE_DIR_OPTION -I ${THRIFT_CONTRIB_DIR} -I $ENV{HIVE_HOME}/metastore/if)
 set(BE_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/be/generated-sources)
 set(FE_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/fe/generated-sources)
 # TODO: avoid duplicating generated java classes

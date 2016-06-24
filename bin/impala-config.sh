@@ -145,7 +145,7 @@ export MINIKDC_HOME=$IMPALA_HOME/thirdparty/llama-minikdc-${IMPALA_MINIKDC_VERSI
 export SENTRY_HOME=$IMPALA_HOME/thirdparty/sentry-${IMPALA_SENTRY_VERSION}
 export SENTRY_CONF_DIR=$IMPALA_HOME/fe/src/test/resources
 
-export HIVE_HOME=$IMPALA_HOME/thirdparty/hive-${IMPALA_HIVE_VERSION}/
+export HIVE_HOME=$IMPALA_HOME/thirdparty/hive/
 export PATH=$HIVE_HOME/bin:$PATH
 export HIVE_CONF_DIR=$IMPALA_FE_DIR/src/test/resources
 

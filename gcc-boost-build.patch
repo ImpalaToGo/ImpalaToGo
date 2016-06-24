@@ -1,0 +1,1217 @@
+diff --git a/be/CMakeLists.txt b/be/CMakeLists.txt
+index b9a80f2..1729abb 100644
+--- a/be/CMakeLists.txt
++++ b/be/CMakeLists.txt
+@@ -39,6 +39,7 @@ SET(CXX_COMMON_FLAGS "-Wall -Wno-sign-compare -Wno-unknown-pragmas -pthread")
+ SET(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -fno-strict-aliasing")
+ SET(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -Wno-deprecated")
+ SET(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -DBOOST_DATE_TIME_POSIX_TIME_STD_CONFIG")
++SET(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -fpermissive")
+ SET(CXX_COVERAGE_FLAGS "-fprofile-arcs -ftest-coverage")
+ 
+ # For any clang builds (currently only ASAN):
+diff --git a/be/src/benchmarks/lock-benchmark.cc b/be/src/benchmarks/lock-benchmark.cc
+index 0656e55..8c619c0 100644
+--- a/be/src/benchmarks/lock-benchmark.cc
++++ b/be/src/benchmarks/lock-benchmark.cc
+@@ -71,7 +71,7 @@ struct TestData {
+ mutex lock_;
+ SpinLock spinlock_;
+   
+-typedef function<void (int64_t, int64_t*)> Fn;
++typedef ::boost::function<void (int64_t, int64_t*)> Fn;
+ 
+ void UnlockedConsumeThread(int64_t n, int64_t* value) {
+   // volatile to prevent compile from collapsing this loop to *value -= n
+diff --git a/be/src/benchmarks/thread-create-benchmark.cc b/be/src/benchmarks/thread-create-benchmark.cc
+index c01ad31..1d08e29 100644
+--- a/be/src/benchmarks/thread-create-benchmark.cc
++++ b/be/src/benchmarks/thread-create-benchmark.cc
+@@ -75,7 +75,7 @@ void EmptyThread() {
+ }
+ 
+ // Runs N native threads, each executing 'f'
+-void NativeThreadStarter(int num_threads, const function<void ()>& f) {
++void NativeThreadStarter(int num_threads, const std::function<void ()>& f) {
+   thread_group threads;
+   for (int i = 0; i < num_threads; ++i) {
+     threads.add_thread(new thread(f));
+@@ -84,7 +84,7 @@ void NativeThreadStarter(int num_threads, const function<void ()>& f) {
+ }
+ 
+ // Runs N Impala Threads, each executing 'f'
+-void ImpalaThreadStarter(int num_threads, const function<void ()>& f) {
++void ImpalaThreadStarter(int num_threads, const std::function<void ()>& f) {
+   vector<Thread*> threads;
+   threads.reserve(num_threads);
+   for (int i=0; i < num_threads; ++i) {
+@@ -104,11 +104,11 @@ void TimeParallelExecutors(int num_threads, int num_threads_per_executor,
+   StopWatch sw;
+   sw.Start();
+   if (use_native_threads) {
+-    function<void ()> f =
++      std::function<void ()> f =
+         bind(NativeThreadStarter, num_threads_per_executor, EmptyThread);
+     NativeThreadStarter(num_threads, f);
+   } else {
+-    function<void ()> f =
++      std::function<void ()> f =
+         bind(ImpalaThreadStarter, num_threads_per_executor, EmptyThread);
+     ImpalaThreadStarter(num_threads, f);
+   }
+diff --git a/be/src/common/atomic-test.cc b/be/src/common/atomic-test.cc
+index 1742c0e..894be11 100644
+--- a/be/src/common/atomic-test.cc
++++ b/be/src/common/atomic-test.cc
+@@ -101,7 +101,7 @@ TEST(AtomicTest, TestAndSet) {
+ }
+ 
+ // Basic multi-threaded testing
+-typedef function<void (int64_t, int64_t , AtomicInt<int>*)> Fn;
++typedef ::boost::function<void (int64_t, int64_t , AtomicInt<int>*)> Fn;
+ 
+ void IncrementThread(int64_t id, int64_t n, AtomicInt<int>* ai) {
+   for (int64_t i = 0; i < n * id; ++i) {
+diff --git a/be/src/common/init.cc b/be/src/common/init.cc
+index 45b2cfa..ddc370d 100644
+--- a/be/src/common/init.cc
++++ b/be/src/common/init.cc
+@@ -69,7 +69,7 @@ using std::string;
+ //    logbufsecs has passed since the previous flush when a new log is written. That means
+ //    that on a quiet system, logs will be buffered indefinitely.
+ // 2) checks that tcmalloc has not left too much memory in its pageheap
+-shared_ptr<impala::Thread> maintenance_thread;
++::boost::shared_ptr<impala::Thread> maintenance_thread;
+ static void MaintenanceThread() {
+   while(true) {
+     sleep(FLAGS_logbufsecs);
+diff --git a/be/src/exprs/expr-test.cc b/be/src/exprs/expr-test.cc
+index 2e3e901..7ff6e96 100644
+--- a/be/src/exprs/expr-test.cc
++++ b/be/src/exprs/expr-test.cc
+@@ -3999,7 +3999,7 @@ TEST_F(ExprTest, ResultsLayoutTest) {
+     exprs.clear();
+     expected_offsets.clear();
+     // With one expr, all offsets should be 0.
+-    expected_offsets[t.GetByteSize()] = list_of(0);
++    expected_offsets[t.GetByteSize()] = {0}; // list_of(0);
+     exprs.push_back(pool.Add(Literal::CreateLiteral(t, "0")));
+     if (t.type == TYPE_STRING) {
+       ValidateLayout(exprs, 16, 0, expected_offsets);
+diff --git a/be/src/resourcebroker/resource-broker.cc b/be/src/resourcebroker/resource-broker.cc
+index 34c2bc7..767734e 100644
+--- a/be/src/resourcebroker/resource-broker.cc
++++ b/be/src/resourcebroker/resource-broker.cc
+@@ -187,7 +187,7 @@ Status ResourceBroker::Init() {
+     return Status("No Llama addresses configured (see --llama_addresses)");
+   }
+ 
+-  shared_ptr<TProcessor> llama_callback_proc(
++  ::boost::shared_ptr<TProcessor> llama_callback_proc(
+       new llama::LlamaNotificationServiceProcessor(llama_callback_thrift_iface_));
+   llama_callback_server_.reset(new ThriftServer("llama-callback", llama_callback_proc,
+       llama_callback_address_.port, NULL, metrics_, 5));
+diff --git a/be/src/rpc/authentication.cc b/be/src/rpc/authentication.cc
+index 1676ebd..a9bca4f 100644
+--- a/be/src/rpc/authentication.cc
++++ b/be/src/rpc/authentication.cc
+@@ -807,7 +807,7 @@ Status SaslAuthProvider::Start() {
+ }
+ 
+ Status SaslAuthProvider::GetServerTransportFactory(
+-    shared_ptr<TTransportFactory>* factory) {
++    ::boost::shared_ptr<TTransportFactory>* factory) {
+   DCHECK(!principal_.empty() || has_ldap_);
+ 
+   // This is the heart of the link between this file and thrift.  Here we
+@@ -845,10 +845,10 @@ Status SaslAuthProvider::GetServerTransportFactory(
+ }
+ 
+ Status SaslAuthProvider::WrapClientTransport(const string& hostname,
+-    shared_ptr<TTransport> raw_transport, const string& service_name,
+-    shared_ptr<TTransport>* wrapped_transport) {
++    ::boost::shared_ptr<TTransport> raw_transport, const string& service_name,
++    ::boost::shared_ptr<TTransport>* wrapped_transport) {
+ 
+-  shared_ptr<sasl::TSasl> sasl_client;
++  ::boost::shared_ptr<sasl::TSasl> sasl_client;
+   const map<string, string> props; // Empty; unused by thrift
+   const string auth_id; // Empty; unused by thrift
+ 
+@@ -875,15 +875,15 @@ Status SaslAuthProvider::WrapClientTransport(const string& hostname,
+   return Status::OK;
+ }
+ 
+-Status NoAuthProvider::GetServerTransportFactory(shared_ptr<TTransportFactory>* factory) {
++Status NoAuthProvider::GetServerTransportFactory(::boost::shared_ptr<TTransportFactory>* factory) {
+   // No Sasl - yawn.  Here, have a regular old buffered transport.
+   factory->reset(new TBufferedTransportFactory());
+   return Status::OK;
+ }
+ 
+ Status NoAuthProvider::WrapClientTransport(const string& hostname,
+-    shared_ptr<TTransport> raw_transport, const string& dummy_service,
+-    shared_ptr<TTransport>* wrapped_transport) {
++    ::boost::shared_ptr<TTransport> raw_transport, const string& dummy_service,
++    ::boost::shared_ptr<TTransport>* wrapped_transport) {
+   // No Sasl - yawn.  Don't do any transport wrapping for clients.
+   *wrapped_transport = raw_transport;
+   return Status::OK;
+diff --git a/be/src/rpc/thrift-server.cc b/be/src/rpc/thrift-server.cc
+index 6c54a5b..f00a0cc 100644
+--- a/be/src/rpc/thrift-server.cc
++++ b/be/src/rpc/thrift-server.cc
+@@ -72,14 +72,14 @@ class ThriftServer::ThriftServerEventProcessor : public TServerEventHandler {
+ 
+   // Called when a client connects; we create per-client state and call any
+   // ConnectionHandlerIf handler.
+-  virtual void* createContext(shared_ptr<TProtocol> input, shared_ptr<TProtocol> output);
++  virtual void* createContext(::boost::shared_ptr<TProtocol> input, ::boost::shared_ptr<TProtocol> output);
+ 
+   // Called when a client starts an RPC; we set the thread-local connection context.
+-  virtual void processContext(void* context, shared_ptr<TTransport> output);
++  virtual void processContext(void* context, ::boost::shared_ptr<TTransport> output);
+ 
+   // Called when a client disconnects; we call any ConnectionHandlerIf handler.
+-  virtual void deleteContext(void* serverContext, shared_ptr<TProtocol> input,
+-      shared_ptr<TProtocol> output);
++  virtual void deleteContext(void* serverContext, ::boost::shared_ptr<TProtocol> input,
++      ::boost::shared_ptr<TProtocol> output);
+ 
+   // Waits for a timeout of TIMEOUT_MS for a server to signal that it has started
+   // correctly.
+@@ -199,12 +199,12 @@ const ThriftServer::ConnectionContext* ThriftServer::GetThreadConnectionContext(
+   return __connection_context__;
+ }
+ 
+-void* ThriftServer::ThriftServerEventProcessor::createContext(shared_ptr<TProtocol> input,
+-    shared_ptr<TProtocol> output) {
++void* ThriftServer::ThriftServerEventProcessor::createContext(::boost::shared_ptr<TProtocol> input,
++    ::boost::shared_ptr<TProtocol> output) {
+   TSocket* socket = NULL;
+   TTransport* transport = input->getTransport().get();
+-  shared_ptr<ConnectionContext> connection_ptr =
+-      shared_ptr<ConnectionContext>(new ConnectionContext);
++  ::boost::shared_ptr<ConnectionContext> connection_ptr =
++      ::boost::shared_ptr<ConnectionContext>(new ConnectionContext);
+   TTransport* underlying_transport =
+       (static_cast<TBufferedTransport*>(transport))->getUnderlyingTransport().get();
+   if (!thrift_server_->auth_provider_->is_sasl()) {
+@@ -248,12 +248,12 @@ void* ThriftServer::ThriftServerEventProcessor::createContext(shared_ptr<TProtoc
+ }
+ 
+ void ThriftServer::ThriftServerEventProcessor::processContext(void* context,
+-    shared_ptr<TTransport> transport) {
++    ::boost::shared_ptr<TTransport> transport) {
+   __connection_context__ = reinterpret_cast<ConnectionContext*>(context);
+ }
+ 
+ void ThriftServer::ThriftServerEventProcessor::deleteContext(void* serverContext,
+-    shared_ptr<TProtocol> input, shared_ptr<TProtocol> output) {
++    ::boost::shared_ptr<TProtocol> input, ::boost::shared_ptr<TProtocol> output) {
+   __connection_context__ = (ConnectionContext*) serverContext;
+ 
+   if (thrift_server_->connection_handler_ != NULL) {
+@@ -270,7 +270,7 @@ void ThriftServer::ThriftServerEventProcessor::deleteContext(void* serverContext
+   }
+ }
+ 
+-ThriftServer::ThriftServer(const string& name, const shared_ptr<TProcessor>& processor,
++ThriftServer::ThriftServer(const string& name, const ::boost::shared_ptr<TProcessor>& processor,
+     int port, AuthProvider* auth_provider, MetricGroup* metrics, int num_worker_threads,
+     ServerType server_type)
+     : started_(false),
+@@ -300,11 +300,11 @@ ThriftServer::ThriftServer(const string& name, const shared_ptr<TProcessor>& pro
+   }
+ }
+ 
+-Status ThriftServer::CreateSocket(shared_ptr<TServerTransport>* socket) {
++Status ThriftServer::CreateSocket(::boost::shared_ptr<TServerTransport>* socket) {
+   if (ssl_enabled()) {
+     // This 'factory' is only called once, since CreateSocket() is only called from
+     // Start()
+-    shared_ptr<TSSLSocketFactory> socket_factory(new TSSLSocketFactory());
++    ::boost::shared_ptr<TSSLSocketFactory> socket_factory(new TSSLSocketFactory());
+     try {
+       socket_factory->loadCertificate(certificate_path_.c_str());
+       socket_factory->loadPrivateKey(private_key_path_.c_str());
+@@ -347,20 +347,20 @@ Status ThriftServer::EnableSsl(const string& certificate, const string& private_
+ 
+ Status ThriftServer::Start() {
+   DCHECK(!started_);
+-  shared_ptr<TProtocolFactory> protocol_factory(new TBinaryProtocolFactory());
+-  shared_ptr<ThreadFactory> thread_factory(
++  ::boost::shared_ptr<TProtocolFactory> protocol_factory(new TBinaryProtocolFactory());
++  ::boost::shared_ptr<ThreadFactory> thread_factory(
+       new ThriftThreadFactory("thrift-server", name_));
+ 
+   // Note - if you change the transport types here, you must check that the
+   // logic in createContext is still accurate.
+-  shared_ptr<TServerTransport> server_socket;
+-  shared_ptr<TTransportFactory> transport_factory;
++  ::boost::shared_ptr<TServerTransport> server_socket;
++  ::boost::shared_ptr<TTransportFactory> transport_factory;
+   RETURN_IF_ERROR(CreateSocket(&server_socket));
+   RETURN_IF_ERROR(auth_provider_->GetServerTransportFactory(&transport_factory));
+   switch (server_type_) {
+     case ThreadPool:
+       {
+-        shared_ptr<ThreadManager> thread_mgr(
++        ::boost::shared_ptr<ThreadManager> thread_mgr(
+             ThreadManager::newSimpleThreadManager(num_worker_threads_));
+         thread_mgr->threadFactory(thread_factory);
+         thread_mgr->start();
+@@ -378,7 +378,7 @@ Status ThriftServer::Start() {
+       LOG(ERROR) << error_msg.str();
+       return Status(error_msg.str());
+   }
+-  shared_ptr<ThriftServer::ThriftServerEventProcessor> event_processor(
++  ::boost::shared_ptr<ThriftServer::ThriftServerEventProcessor> event_processor(
+       new ThriftServer::ThriftServerEventProcessor(this));
+   server_->setServerEventHandler(event_processor);
+ 
+diff --git a/be/src/rpc/thrift-thread.cc b/be/src/rpc/thrift-thread.cc
+index 7471e27..c715459 100644
+--- a/be/src/rpc/thrift-thread.cc
++++ b/be/src/rpc/thrift-thread.cc
+@@ -41,17 +41,17 @@ void ThriftThread::join() {
+   impala_thread_->Join();
+ }
+ 
+-shared_ptr<atc::Thread> ThriftThreadFactory::newThread(
+-    shared_ptr<atc::Runnable> runnable) const {
++::boost::shared_ptr<atc::Thread> ThriftThreadFactory::newThread(
++    ::boost::shared_ptr<atc::Runnable> runnable) const {
+   stringstream name;
+   name << prefix_ << "-" << count_++;
+-  shared_ptr<ThriftThread> result =
+-      shared_ptr<ThriftThread>(new ThriftThread(group_, name.str(), runnable));
++  ::boost::shared_ptr<ThriftThread> result =
++      ::boost::shared_ptr<ThriftThread>(new ThriftThread(group_, name.str(), runnable));
+   runnable->thread(result);
+   return result;
+ }
+ 
+-void ThriftThread::RunRunnable(shared_ptr<atc::Runnable> runnable,
++void ThriftThread::RunRunnable(::boost::shared_ptr<atc::Runnable> runnable,
+     Promise<atc::Thread::id_t>* promise) {
+   promise->Set(get_current());
+   // Passing runnable in to this method (rather than reading from this->runnable())
+@@ -66,7 +66,7 @@ atc::Thread::id_t ThriftThreadFactory::getCurrentThreadId() const {
+ }
+ 
+ ThriftThread::ThriftThread(const string& group, const string& name,
+-    shared_ptr<atc::Runnable> runnable)
++    ::boost::shared_ptr<atc::Runnable> runnable)
+     : group_(group), name_(name) {
+   // Sets this::runnable (and no, I don't know why it's not protected in atc::Thread)
+   this->Thread::runnable(runnable);
+diff --git a/be/src/runtime/buffered-block-mgr-test.cc b/be/src/runtime/buffered-block-mgr-test.cc
+index 8d50fbb..89665cc 100644
+--- a/be/src/runtime/buffered-block-mgr-test.cc
++++ b/be/src/runtime/buffered-block-mgr-test.cc
+@@ -111,8 +111,8 @@ class BufferedBlockMgrTest : public ::testing::Test {
+     }
+   }
+ 
+-  shared_ptr<BufferedBlockMgr> CreateMgr(int max_buffers) {
+-    shared_ptr<BufferedBlockMgr> mgr;
++  ::boost::shared_ptr<BufferedBlockMgr> CreateMgr(int max_buffers) {
++    ::boost::shared_ptr<BufferedBlockMgr> mgr;
+     BufferedBlockMgr::Create(runtime_state_.get(),
+         block_mgr_parent_tracker_.get(), runtime_state_->runtime_profile(),
+         max_buffers * block_size_, block_size_, &mgr);
+@@ -266,7 +266,7 @@ class BufferedBlockMgrTest : public ::testing::Test {
+   // Single-threaded execution of the TestRandomInternalImpl.
+   void TestRandomInternalSingle() {
+     const int num_buffers = 10;
+-    shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(num_buffers);
++    ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(num_buffers);
+     TestRandomInternalImpl(block_mgr.get(), num_buffers, SINGLE_THREADED_TID);
+     block_mgr.reset();
+     EXPECT_EQ(block_mgr_parent_tracker_->consumption(), 0);
+@@ -276,7 +276,7 @@ class BufferedBlockMgrTest : public ::testing::Test {
+   void TestRandomInternalMulti(int num_threads) {
+     DCHECK_GT(num_threads, 0);
+     const int num_buffers = 10;
+-    shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(num_buffers * num_threads);
++    ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(num_buffers * num_threads);
+     thread_group workers;
+     for (int i = 0; i < num_threads; ++i) {
+       thread* t = new thread(bind(&BufferedBlockMgrTest::TestRandomInternalImpl, this,
+@@ -296,7 +296,7 @@ class BufferedBlockMgrTest : public ::testing::Test {
+ 
+ TEST_F(BufferedBlockMgrTest, GetNewBlock) {
+   int max_num_blocks = 5;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -338,7 +338,7 @@ TEST_F(BufferedBlockMgrTest, GetNewBlock) {
+ 
+ TEST_F(BufferedBlockMgrTest, GetNewBlockSmallBlocks) {
+   int max_num_blocks = 3;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
+   BufferedBlockMgr::Client* client;
+   MemTracker tracker;
+   Status status = block_mgr->RegisterClient(0, &tracker, runtime_state_.get(), &client);
+@@ -403,7 +403,7 @@ TEST_F(BufferedBlockMgrTest, GetNewBlockSmallBlocks) {
+ // Test that pinning more blocks than the max available buffers.
+ TEST_F(BufferedBlockMgrTest, Pin) {
+   int max_num_blocks = 5;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_blocks);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -453,7 +453,7 @@ TEST_F(BufferedBlockMgrTest, Pin) {
+ // the max available buffers are allocated. Writes must be issued in LIFO order.
+ TEST_F(BufferedBlockMgrTest, Eviction) {
+   int max_num_buffers = 5;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -506,7 +506,7 @@ TEST_F(BufferedBlockMgrTest, Eviction) {
+ // Test deletion and reuse of blocks.
+ TEST_F(BufferedBlockMgrTest, Deletion) {
+   int max_num_buffers = 5;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -535,7 +535,7 @@ TEST_F(BufferedBlockMgrTest, Deletion) {
+ // Test that all APIs return cancelled after close.
+ TEST_F(BufferedBlockMgrTest, Close) {
+   int max_num_buffers = 5;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -568,7 +568,7 @@ TEST_F(BufferedBlockMgrTest, Close) {
+ TEST_F(BufferedBlockMgrTest, WriteError) {
+   int max_num_buffers = 2;
+   const int write_wait_millis = 500;
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client;
+   Status status = block_mgr->RegisterClient(0, NULL, runtime_state_.get(), &client);
+   EXPECT_TRUE(status.ok());
+@@ -619,7 +619,7 @@ TEST_F(BufferedBlockMgrTest, MultipleClients) {
+   int client2_buffers = 5;
+   int max_num_buffers = client1_buffers + client2_buffers;
+ 
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client1;
+   BufferedBlockMgr::Client* client2;
+   Status status;
+@@ -732,7 +732,7 @@ TEST_F(BufferedBlockMgrTest, MultipleClientsExtraBuffers) {
+   int client2_buffers = 1;
+   int max_num_buffers = client1_buffers + client2_buffers + 2;
+ 
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client1;
+   BufferedBlockMgr::Client* client2;
+   Status status;
+@@ -781,7 +781,7 @@ TEST_F(BufferedBlockMgrTest, ClientOversubscription) {
+   int client2_buffers = 2;
+   int max_num_buffers = 2;
+ 
+-  shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr = CreateMgr(max_num_buffers);
+   BufferedBlockMgr::Client* client1;
+   BufferedBlockMgr::Client* client2;
+   Status status;
+diff --git a/be/src/runtime/buffered-tuple-stream-test.cc b/be/src/runtime/buffered-tuple-stream-test.cc
+index 475e18a..e99f0a5 100644
+--- a/be/src/runtime/buffered-tuple-stream-test.cc
++++ b/be/src/runtime/buffered-tuple-stream-test.cc
+@@ -389,7 +389,7 @@ class SimpleTupleStreamTest : public testing::Test {
+   scoped_ptr<RuntimeState> runtime_state_;
+   scoped_ptr<MemTracker> block_mgr_parent_tracker_;
+ 
+-  shared_ptr<BufferedBlockMgr> block_mgr_;
++  ::boost::shared_ptr<BufferedBlockMgr> block_mgr_;
+   BufferedBlockMgr::Client* client_;
+ 
+   MemTracker tracker_;
+diff --git a/be/src/runtime/data-stream-mgr.cc b/be/src/runtime/data-stream-mgr.cc
+index 5e9a179..0da38da 100644
+--- a/be/src/runtime/data-stream-mgr.cc
++++ b/be/src/runtime/data-stream-mgr.cc
+@@ -43,14 +43,14 @@ inline uint32_t DataStreamMgr::GetHashValue(
+   return value;
+ }
+ 
+-shared_ptr<DataStreamRecvr> DataStreamMgr::CreateRecvr(RuntimeState* state,
++::boost::shared_ptr<DataStreamRecvr> DataStreamMgr::CreateRecvr(RuntimeState* state,
+     const RowDescriptor& row_desc, const TUniqueId& fragment_instance_id,
+     PlanNodeId dest_node_id, int num_senders, int buffer_size, RuntimeProfile* profile,
+     bool is_merging) {
+   DCHECK(profile != NULL);
+   VLOG_FILE << "creating receiver for fragment="
+             << fragment_instance_id << ", node=" << dest_node_id;
+-  shared_ptr<DataStreamRecvr> recvr(
++  ::boost::shared_ptr<DataStreamRecvr> recvr(
+       new DataStreamRecvr(this, state->instance_mem_tracker(), row_desc,
+           fragment_instance_id, dest_node_id, num_senders, is_merging, buffer_size,
+           profile));
+@@ -61,7 +61,7 @@ shared_ptr<DataStreamRecvr> DataStreamMgr::CreateRecvr(RuntimeState* state,
+   return recvr;
+ }
+ 
+-shared_ptr<DataStreamRecvr> DataStreamMgr::FindRecvr(
++::boost::shared_ptr<DataStreamRecvr> DataStreamMgr::FindRecvr(
+     const TUniqueId& fragment_instance_id, PlanNodeId node_id, bool acquire_lock) {
+   VLOG_ROW << "looking up fragment_instance_id=" << fragment_instance_id
+            << ", node=" << node_id;
+@@ -70,7 +70,7 @@ shared_ptr<DataStreamRecvr> DataStreamMgr::FindRecvr(
+   pair<StreamMap::iterator, StreamMap::iterator> range =
+       receiver_map_.equal_range(hash_value);
+   while (range.first != range.second) {
+-    shared_ptr<DataStreamRecvr> recvr = range.first->second;
++    ::boost::shared_ptr<DataStreamRecvr> recvr = range.first->second;
+     if (recvr->fragment_instance_id() == fragment_instance_id
+         && recvr->dest_node_id() == node_id) {
+       if (acquire_lock) lock_.unlock();
+@@ -79,7 +79,7 @@ shared_ptr<DataStreamRecvr> DataStreamMgr::FindRecvr(
+     ++range.first;
+   }
+   if (acquire_lock) lock_.unlock();
+-  return shared_ptr<DataStreamRecvr>();
++  return ::boost::shared_ptr<DataStreamRecvr>();
+ }
+ 
+ Status DataStreamMgr::AddData(
+@@ -88,7 +88,7 @@ Status DataStreamMgr::AddData(
+   VLOG_ROW << "AddData(): fragment_instance_id=" << fragment_instance_id
+            << " node=" << dest_node_id
+            << " size=" << RowBatch::GetBatchSize(thrift_batch);
+-  shared_ptr<DataStreamRecvr> recvr =
++  ::boost::shared_ptr<DataStreamRecvr> recvr =
+       FindRecvr(fragment_instance_id, dest_node_id);
+   if (recvr == NULL) {
+     // The receiver may remove itself from the receiver map via DeregisterRecvr()
+@@ -108,7 +108,7 @@ Status DataStreamMgr::CloseSender(const TUniqueId& fragment_instance_id,
+     PlanNodeId dest_node_id, int sender_id) {
+   VLOG_FILE << "CloseSender(): fragment_instance_id=" << fragment_instance_id
+             << ", node=" << dest_node_id;
+-  shared_ptr<DataStreamRecvr> recvr = FindRecvr(fragment_instance_id, dest_node_id);
++  ::boost::shared_ptr<DataStreamRecvr> recvr = FindRecvr(fragment_instance_id, dest_node_id);
+   if (recvr == NULL) {
+     // The receiver may remove itself from the receiver map via DeregisterRecvr()
+     // at any time without considering the remaining number of senders.
+@@ -132,7 +132,7 @@ Status DataStreamMgr::DeregisterRecvr(
+   pair<StreamMap::iterator, StreamMap::iterator> range =
+       receiver_map_.equal_range(hash_value);
+   while (range.first != range.second) {
+-    const shared_ptr<DataStreamRecvr>& recvr = range.first->second;
++    const ::boost::shared_ptr<DataStreamRecvr>& recvr = range.first->second;
+     if (recvr->fragment_instance_id() == fragment_instance_id
+         && recvr->dest_node_id() == node_id) {
+       // Notify concurrent AddData() requests that the stream has been terminated.
+@@ -158,7 +158,7 @@ void DataStreamMgr::Cancel(const TUniqueId& fragment_instance_id) {
+   FragmentStreamSet::iterator i =
+       fragment_stream_set_.lower_bound(make_pair(fragment_instance_id, 0));
+   while (i != fragment_stream_set_.end() && i->first == fragment_instance_id) {
+-    shared_ptr<DataStreamRecvr> recvr = FindRecvr(i->first, i->second, false);
++    ::boost::shared_ptr<DataStreamRecvr> recvr = FindRecvr(i->first, i->second, false);
+     if (recvr == NULL) {
+       // keep going but at least log it
+       stringstream err;
+diff --git a/be/src/runtime/descriptors.cc b/be/src/runtime/descriptors.cc
+index 51423cb..732429b 100644
+--- a/be/src/runtime/descriptors.cc
++++ b/be/src/runtime/descriptors.cc
+@@ -34,6 +34,8 @@ using namespace boost::algorithm;
+ 
+ namespace impala {
+ 
++const int RowDescriptor::INVALID_IDX;
++
+ string NullIndicatorOffset::DebugString() const {
+   stringstream out;
+   out << "(offset=" << byte_offset
+diff --git a/be/src/runtime/mem-tracker.cc b/be/src/runtime/mem-tracker.cc
+index 6239c2f..c652b3c 100644
+--- a/be/src/runtime/mem-tracker.cc
++++ b/be/src/runtime/mem-tracker.cc
+@@ -152,7 +152,7 @@ MemTracker* MemTracker::GetRequestPoolMemTracker(const string& pool_name,
+   }
+ }
+ 
+-shared_ptr<MemTracker> MemTracker::GetQueryMemTracker(
++::boost::shared_ptr<MemTracker> MemTracker::GetQueryMemTracker(
+     const TUniqueId& id, int64_t byte_limit, int64_t rm_reserved_limit, MemTracker* parent,
+     QueryResourceMgr* res_mgr) {
+   if (byte_limit != -1) {
+@@ -171,7 +171,7 @@ shared_ptr<MemTracker> MemTracker::GetQueryMemTracker(
+   if (it != request_to_mem_trackers_.end()) {
+     // Return the existing MemTracker object for this id, converting the weak ptr
+     // to a shared ptr.
+-    shared_ptr<MemTracker> tracker = it->second.lock();
++    ::boost::shared_ptr<MemTracker> tracker = it->second.lock();
+     DCHECK_EQ(tracker->limit_, byte_limit);
+     DCHECK(id == tracker->query_id_);
+     DCHECK(parent == tracker->parent_);
+@@ -179,7 +179,7 @@ shared_ptr<MemTracker> MemTracker::GetQueryMemTracker(
+   } else {
+     // First time this id registered, make a new object.  Give a shared ptr to
+     // the caller and put a weak ptr in the map.
+-    shared_ptr<MemTracker> tracker(new MemTracker(byte_limit, rm_reserved_limit,
++    ::boost::shared_ptr<MemTracker> tracker(new MemTracker(byte_limit, rm_reserved_limit,
+         Substitute("Query($0) Limit", lexical_cast<string>(id)), parent));
+     tracker->auto_unregister_ = true;
+     tracker->query_id_ = id;
+diff --git a/be/src/runtime/timestamp-parse-util.cc b/be/src/runtime/timestamp-parse-util.cc
+index b488799..04e4846 100644
+--- a/be/src/runtime/timestamp-parse-util.cc
++++ b/be/src/runtime/timestamp-parse-util.cc
+@@ -34,11 +34,26 @@ void TimestampParser::Init() {
+   // This needs to be lazily init'd because a StringValues hash function will be invoked
+   // for each entry that's placed in the map. The hash function expects that
+   // CpuInfo::Init() has already been called.
+-  REV_MONTH_INDEX = assign::map_list_of
+-    (StringValue("jan"), 1)(StringValue("feb"), 2)(StringValue("mar"), 3)
+-    (StringValue("apr"), 4)(StringValue("may"), 5)(StringValue("jun"), 6)
+-    (StringValue("jul"), 7)(StringValue("aug"), 8)(StringValue("sep"), 9)
+-    (StringValue("oct"), 10)(StringValue("nov"), 11)(StringValue("dec"), 12);
++  //REV_MONTH_INDEX = assign::map_list_of
++  //  (StringValue("jan"), 1)(StringValue("feb"), 2)(StringValue("mar"), 3)
++  //  (StringValue("apr"), 4)(StringValue("may"), 5)(StringValue("jun"), 6)
++  //  (StringValue("jul"), 7)(StringValue("aug"), 8)(StringValue("sep"), 9)
++  //  (StringValue("oct"), 10)(StringValue("nov"), 11)(StringValue("dec"), 12);
++
++  REV_MONTH_INDEX = {
++    {StringValue("jan"), 1},
++    {StringValue("feb"), 2},
++    {StringValue("mar"), 3},
++    {StringValue("apr"), 4},
++    {StringValue("may"), 5},
++    {StringValue("jun"), 6},
++    {StringValue("jul"), 7},
++    {StringValue("aug"), 8},
++    {StringValue("sep"), 9},
++    {StringValue("oct"), 10},
++    {StringValue("nov"), 11},
++    {StringValue("dec"), 12},
++  };
+ 
+   // Setup the default date/time context yyyy-MM-dd HH:mm:ss.SSSSSSSSS
+   const char* DATE_TIME_CTX_FMT = "yyyy-MM-dd HH:mm:ss.SSSSSSSSS";
+diff --git a/be/src/service/impala-beeswax-server.cc b/be/src/service/impala-beeswax-server.cc
+index 4dbf6a1..92a2a57 100644
+--- a/be/src/service/impala-beeswax-server.cc
++++ b/be/src/service/impala-beeswax-server.cc
+@@ -170,7 +170,7 @@ class ImpalaServer::AsciiQueryResultSet : public ImpalaServer::QueryResultSet {
+ void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
+   VLOG_QUERY << "query(): query=" << query.query;
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   RAISE_IF_ERROR(
+       session_handle.WithSession(ThriftServer::GetThreadConnectionId(), &session),
+       SQLSTATE_GENERAL_ERROR);
+@@ -180,7 +180,7 @@ void ImpalaServer::query(QueryHandle& query_handle, const Query& query) {
+ 
+   // raise Syntax error or access violation; it's likely to be syntax/analysis error
+   // TODO: that may not be true; fix this
+-  shared_ptr<QueryExecState> exec_state;
++  ::boost::shared_ptr<QueryExecState> exec_state;
+   RAISE_IF_ERROR(Execute(&query_ctx, session, &exec_state),
+       SQLSTATE_SYNTAX_ERROR_OR_ACCESS_VIOLATION);
+ 
+@@ -202,7 +202,7 @@ void ImpalaServer::executeAndWait(QueryHandle& query_handle, const Query& query,
+     const LogContextId& client_ctx) {
+   VLOG_QUERY << "executeAndWait(): query=" << query.query;
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   RAISE_IF_ERROR(
+       session_handle.WithSession(ThriftServer::GetThreadConnectionId(), &session),
+       SQLSTATE_GENERAL_ERROR);
+@@ -210,7 +210,7 @@ void ImpalaServer::executeAndWait(QueryHandle& query_handle, const Query& query,
+   // raise general error for request conversion error;
+   RAISE_IF_ERROR(QueryToTQueryContext(query, &query_ctx), SQLSTATE_GENERAL_ERROR);
+ 
+-  shared_ptr<QueryExecState> exec_state;
++  ::boost::shared_ptr<QueryExecState> exec_state;
+   DCHECK(session != NULL);  // The session should exist.
+   {
+     // The session is created when the client connects. Depending on the underlying
+@@ -304,7 +304,7 @@ void ImpalaServer::get_results_metadata(ResultsMetadata& results_metadata,
+   TUniqueId query_id;
+   QueryHandleToTUniqueId(handle, &query_id);
+   VLOG_QUERY << "get_results_metadata(): query_id=" << PrintId(query_id);
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+   if (exec_state.get() == NULL) {
+     RaiseBeeswaxException("Invalid query handle", SQLSTATE_GENERAL_ERROR);
+   }
+@@ -391,7 +391,7 @@ void ImpalaServer::get_log(string& log, const LogContextId& context) {
+   TUniqueId query_id;
+   QueryHandleToTUniqueId(handle, &query_id);
+ 
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state.get() == NULL) {
+     stringstream str;
+     str << "unknown query id: " << query_id;
+@@ -513,7 +513,7 @@ Status ImpalaServer::QueryToTQueryContext(const Query& query,
+   query_ctx->request.stmt = query.query;
+   VLOG_QUERY << "query: " << ThriftDebugString(query);
+   {
+-    shared_ptr<SessionState> session;
++    ::boost::shared_ptr<SessionState> session;
+     const TUniqueId& session_id = ThriftServer::GetThreadConnectionId();
+     RETURN_IF_ERROR(GetSessionState(session_id, &session));
+     DCHECK(session != NULL);
+@@ -561,7 +561,7 @@ void ImpalaServer::RaiseBeeswaxException(const string& msg, const char* sql_stat
+ 
+ Status ImpalaServer::FetchInternal(const TUniqueId& query_id,
+     const bool start_over, const int32_t fetch_size, beeswax::Results* query_results) {
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state == NULL) return Status("Invalid query handle");
+ 
+   // Make sure QueryExecState::Wait() has completed before fetching rows. Wait() ensures
+@@ -619,7 +619,7 @@ Status ImpalaServer::FetchInternal(const TUniqueId& query_id,
+ 
+ Status ImpalaServer::CloseInsertInternal(const TUniqueId& query_id,
+     TInsertResult* insert_result) {
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+   if (exec_state == NULL) return Status("Invalid query handle");
+   Status query_status;
+   {
+diff --git a/be/src/service/impala-hs2-server.cc b/be/src/service/impala-hs2-server.cc
+index d79361a..540dc26 100644
+--- a/be/src/service/impala-hs2-server.cc
++++ b/be/src/service/impala-hs2-server.cc
+@@ -407,7 +407,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
+     return;
+   }
+   ScopedSessionState scoped_session(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   Status get_session_status = scoped_session.WithSession(session_id, &session);
+   if (!get_session_status.ok()) {
+     status->__set_statusCode(thrift::TStatusCode::ERROR_STATUS);
+@@ -429,7 +429,7 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
+   session->ToThrift(session_id, &query_ctx.session);
+   request->__set_session(query_ctx.session);
+ 
+-  shared_ptr<QueryExecState> exec_state;
++  ::boost::shared_ptr<QueryExecState> exec_state;
+   // There is no user-supplied query text available because this metadata operation comes
+   // from an RPC. As a best effort, we use the type of the operation.
+   map<int, const char*>::const_iterator query_text_it =
+@@ -475,14 +475,14 @@ void ImpalaServer::ExecuteMetadataOp(const THandleIdentifier& session_handle,
+ 
+ Status ImpalaServer::FetchInternal(const TUniqueId& query_id, int32_t fetch_size,
+     bool fetch_first, TFetchResultsResp* fetch_results) {
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state == NULL) return Status("Invalid query handle");
+ 
+   // FetchResults doesn't have an associated session handle, so we presume that this
+   // request should keep alive the same session that orignated the query.
+   ScopedSessionState session_handle(this);
+   const TUniqueId session_id = exec_state->session_id();
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   RETURN_IF_ERROR(session_handle.WithSession(session_id, &session));
+ 
+   // Make sure QueryExecState::Wait() has completed before fetching rows. Wait() ensures
+@@ -523,7 +523,7 @@ Status ImpalaServer::TExecuteStatementReqToTQueryContext(
+   query_ctx->request.stmt = execute_request.statement;
+   VLOG_QUERY << "TExecuteStatementReq: " << ThriftDebugString(execute_request);
+   {
+-    shared_ptr<SessionState> session_state;
++    ::boost::shared_ptr<SessionState> session_state;
+     TUniqueId session_id;
+     TUniqueId secret;
+     RETURN_IF_ERROR(THandleIdentifierToTUniqueId(execute_request.sessionHandle.sessionId,
+@@ -579,7 +579,7 @@ void ImpalaServer::OpenSession(TOpenSessionResp& return_val,
+   // query options.
+   // TODO: put secret in session state map and check it
+   // TODO: Fix duplication of code between here and ConnectionStart().
+-  shared_ptr<SessionState> state(new SessionState());
++  ::boost::shared_ptr<SessionState> state(new SessionState());
+   state->closed = false;
+   state->start_time = TimestampValue::LocalTime();
+   state->session_type = TSessionType::HIVESERVER2;
+@@ -660,7 +660,7 @@ void ImpalaServer::GetInfo(TGetInfoResp& return_val,
+   HS2_RETURN_IF_ERROR(return_val, THandleIdentifierToTUniqueId(
+       request.sessionHandle.sessionId, &session_id, &secret), SQLSTATE_GENERAL_ERROR);
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   HS2_RETURN_IF_ERROR(return_val, session_handle.WithSession(session_id, &session),
+       SQLSTATE_GENERAL_ERROR);
+ 
+@@ -694,7 +694,7 @@ void ImpalaServer::ExecuteStatement(TExecuteStatementResp& return_val,
+   HS2_RETURN_IF_ERROR(return_val, THandleIdentifierToTUniqueId(
+       request.sessionHandle.sessionId, &session_id, &secret), SQLSTATE_GENERAL_ERROR);
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   HS2_RETURN_IF_ERROR(return_val, session_handle.WithSession(session_id, &session),
+       SQLSTATE_GENERAL_ERROR);
+   if (session == NULL) {
+@@ -719,7 +719,7 @@ void ImpalaServer::ExecuteStatement(TExecuteStatementResp& return_val,
+     }
+   }
+ 
+-  shared_ptr<QueryExecState> exec_state;
++  ::boost::shared_ptr<QueryExecState> exec_state;
+   status = Execute(&query_ctx, session, &exec_state);
+   HS2_RETURN_IF_ERROR(return_val, status, SQLSTATE_GENERAL_ERROR);
+ 
+@@ -920,7 +920,7 @@ void ImpalaServer::CancelOperation(TCancelOperationResp& return_val,
+       request.operationHandle.operationId, &query_id, &secret), SQLSTATE_GENERAL_ERROR);
+   VLOG_QUERY << "CancelOperation(): query_id=" << PrintId(query_id);
+ 
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state.get() == NULL) {
+     // No handle was found
+     HS2_RETURN_ERROR(return_val, "Invalid query handle", SQLSTATE_GENERAL_ERROR);
+@@ -941,7 +941,7 @@ void ImpalaServer::CloseOperation(TCloseOperationResp& return_val,
+       request.operationHandle.operationId, &query_id, &secret), SQLSTATE_GENERAL_ERROR);
+   VLOG_QUERY << "CloseOperation(): query_id=" << PrintId(query_id);
+ 
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state.get() == NULL) {
+     // No handle was found
+     HS2_RETURN_ERROR(return_val, "Invalid query handle", SQLSTATE_GENERAL_ERROR);
+@@ -976,7 +976,7 @@ void ImpalaServer::GetResultSetMetadata(TGetResultSetMetadataResp& return_val,
+   HS2_RETURN_IF_ERROR(return_val, session_handle.WithSession(session_id),
+       SQLSTATE_GENERAL_ERROR);
+ 
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, true);
+   if (exec_state.get() == NULL) {
+     VLOG_QUERY << "GetResultSetMetadata(): invalid query handle";
+     // No handle was found
+@@ -1051,7 +1051,7 @@ void ImpalaServer::GetLog(TGetLogResp& return_val, const TGetLogReq& request) {
+   HS2_RETURN_IF_ERROR(return_val, THandleIdentifierToTUniqueId(
+       request.operationHandle.operationId, &query_id, &secret), SQLSTATE_GENERAL_ERROR);
+ 
+-  shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
++  ::boost::shared_ptr<QueryExecState> exec_state = GetQueryExecState(query_id, false);
+   if (exec_state.get() == NULL) {
+     // No handle was found
+     HS2_RETURN_ERROR(return_val, "Invalid query handle", SQLSTATE_GENERAL_ERROR);
+@@ -1086,7 +1086,7 @@ void ImpalaServer::GetExecSummary(TGetExecSummaryResp& return_val,
+   HS2_RETURN_IF_ERROR(return_val, THandleIdentifierToTUniqueId(
+       request.sessionHandle.sessionId, &session_id, &secret), SQLSTATE_GENERAL_ERROR);
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   HS2_RETURN_IF_ERROR(return_val, session_handle.WithSession(session_id, &session),
+       SQLSTATE_GENERAL_ERROR);
+ 
+@@ -1108,7 +1108,7 @@ void ImpalaServer::GetRuntimeProfile(TGetRuntimeProfileResp& return_val,
+   HS2_RETURN_IF_ERROR(return_val, THandleIdentifierToTUniqueId(
+       request.sessionHandle.sessionId, &session_id, &secret), SQLSTATE_GENERAL_ERROR);
+   ScopedSessionState session_handle(this);
+-  shared_ptr<SessionState> session;
++  ::boost::shared_ptr<SessionState> session;
+   HS2_RETURN_IF_ERROR(return_val, session_handle.WithSession(session_id, &session),
+       SQLSTATE_GENERAL_ERROR);
+ 
+diff --git a/be/src/service/query-exec-state.cc b/be/src/service/query-exec-state.cc
+index 15c121d..6b88f82 100644
+--- a/be/src/service/query-exec-state.cc
++++ b/be/src/service/query-exec-state.cc
+@@ -56,7 +56,7 @@ static const string TABLES_MISSING_STATS_KEY = "Tables Missing Stats";
+ 
+ ImpalaServer::QueryExecState::QueryExecState(
+     const TQueryCtx& query_ctx, ExecEnv* exec_env, Frontend* frontend,
+-    ImpalaServer* server, shared_ptr<SessionState> session)
++    ImpalaServer* server, ::boost::shared_ptr<SessionState> session)
+   : query_ctx_(query_ctx),
+     last_active_time_(numeric_limits<int64_t>::max()),
+     ref_count_(0L),
+diff --git a/be/src/statestore/query-resource-mgr.cc b/be/src/statestore/query-resource-mgr.cc
+index ac9ee9a..b92e9a3 100644
+--- a/be/src/statestore/query-resource-mgr.cc
++++ b/be/src/statestore/query-resource-mgr.cc
+@@ -159,8 +159,8 @@ void QueryResourceMgr::RemoveVcoreAvailableCb(int32_t callback_id) {
+ }
+ 
+ void QueryResourceMgr::AcquireVcoreResources(
+-    shared_ptr<AtomicInt<int16_t> > thread_in_expand,
+-    shared_ptr<AtomicInt<int16_t> > early_exit) {
++    ::boost::shared_ptr<AtomicInt<int16_t> > thread_in_expand,
++    ::boost::shared_ptr<AtomicInt<int16_t> > early_exit) {
+   // Take a copy because we'd like to print it in some cases after the destructor.
+   TUniqueId reservation_id = reservation_id_;
+   VLOG_QUERY << "Starting Vcore acquisition for: " << reservation_id;
+diff --git a/be/src/statestore/statestore-subscriber.cc b/be/src/statestore/statestore-subscriber.cc
+index 8da9f07..fdd7030 100644
+--- a/be/src/statestore/statestore-subscriber.cc
++++ b/be/src/statestore/statestore-subscriber.cc
+@@ -192,8 +192,8 @@ Status StatestoreSubscriber::Start() {
+     LOG(INFO) << "Starting statestore subscriber";
+ 
+     // Backend must be started before registration
+-    shared_ptr<TProcessor> processor(new StatestoreSubscriberProcessor(thrift_iface_));
+-    shared_ptr<TProcessorEventHandler> event_handler(
++    ::boost::shared_ptr<TProcessor> processor(new StatestoreSubscriberProcessor(thrift_iface_));
++    ::boost::shared_ptr<TProcessorEventHandler> event_handler(
+         new RpcEventHandler("statestore-subscriber", metrics_));
+     processor->setEventHandler(event_handler);
+ 
+diff --git a/be/src/statestore/statestore.cc b/be/src/statestore/statestore.cc
+index 5c00add..f5e7ab8 100644
+--- a/be/src/statestore/statestore.cc
++++ b/be/src/statestore/statestore.cc
+@@ -377,7 +377,7 @@ Status Statestore::RegisterSubscriber(const SubscriberId& subscriber_id,
+     }
+ 
+     UUIDToTUniqueId(subscriber_uuid_generator_(), registration_id);
+-    shared_ptr<Subscriber> current_registration(
++    ::boost::shared_ptr<Subscriber> current_registration(
+         new Subscriber(subscriber_id, *registration_id, location, topic_registrations));
+     subscribers_.insert(make_pair(subscriber_id, current_registration));
+     failure_detector_->UpdateHeartbeat(
+@@ -638,7 +638,7 @@ void Statestore::DoSubscriberUpdate(bool is_heartbeat, int thread_id,
+     // to wait.
+     VLOG(3) << "Initial " << hb_type << " message for: " << update.second;
+   }
+-  shared_ptr<Subscriber> subscriber;
++  ::boost::shared_ptr<Subscriber> subscriber;
+   {
+     lock_guard<mutex> l(subscribers_lock_);
+     SubscriberMap::iterator it = subscribers_.find(update.second);
+diff --git a/be/src/statestore/statestored-main.cc b/be/src/statestore/statestored-main.cc
+index a8635aa..8985ff4 100644
+--- a/be/src/statestore/statestored-main.cc
++++ b/be/src/statestore/statestored-main.cc
+@@ -68,9 +68,9 @@ int main(int argc, char** argv) {
+ 
+   Statestore statestore(metrics.get());
+   statestore.RegisterWebpages(webserver.get());
+-  shared_ptr<TProcessor> processor(
++  ::boost::shared_ptr<TProcessor> processor(
+       new StatestoreServiceProcessor(statestore.thrift_iface()));
+-  shared_ptr<TProcessorEventHandler> event_handler(
++  ::boost::shared_ptr<TProcessorEventHandler> event_handler(
+       new RpcEventHandler("statestore", metrics.get()));
+   processor->setEventHandler(event_handler);
+ 
+diff --git a/be/src/testutil/in-process-servers.cc b/be/src/testutil/in-process-servers.cc
+index a4ffae1..a29a835 100644
+--- a/be/src/testutil/in-process-servers.cc
++++ b/be/src/testutil/in-process-servers.cc
+@@ -93,7 +93,7 @@ InProcessStatestore::InProcessStatestore(int statestore_port, int webserver_port
+ 
+ Status InProcessStatestore::Start() {
+   webserver_->Start();
+-  shared_ptr<TProcessor> processor(
++  ::boost::shared_ptr<TProcessor> processor(
+       new StatestoreServiceProcessor(statestore_->thrift_iface()));
+ 
+   statestore_server_.reset(new ThriftServer("StatestoreService", processor,
+diff --git a/be/src/transport/TSaslServerTransport.cpp b/be/src/transport/TSaslServerTransport.cpp
+index be4691e..c4471df 100644
+--- a/be/src/transport/TSaslServerTransport.cpp
++++ b/be/src/transport/TSaslServerTransport.cpp
+@@ -37,7 +37,7 @@ using namespace boost;
+ using namespace sasl;
+ 
+ namespace apache { namespace thrift { namespace transport {
+-TSaslServerTransport::TSaslServerTransport(shared_ptr<TTransport> transport)
++TSaslServerTransport::TSaslServerTransport(::boost::shared_ptr<TTransport> transport)
+    : TSaslTransport(transport) {
+ }
+ 
+@@ -48,7 +48,7 @@ TSaslServerTransport::TSaslServerTransport(const string& mechanism,
+                                            unsigned flags,
+                                            const map<string, string>& props,
+                                            const vector<struct sasl_callback>& callbacks,
+-                                           boost::shared_ptr<TTransport> transport)
++                                           ::boost::shared_ptr<TTransport> transport)
+      : TSaslTransport(transport) {
+   addServerDefinition(mechanism, protocol, serverName, realm, flags,
+       props, callbacks);
+@@ -110,8 +110,8 @@ void TSaslServerTransport::handleSaslStartMessage() {
+ 
+ }
+ 
+-shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
+-    shared_ptr<TTransport> trans) {
++::boost::shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
++    ::boost::shared_ptr<TTransport> trans) {
+   lock_guard<mutex> l(transportMap_mutex_);
+   // Thrift servers use both an input and an output transport to communicate with
+   // clients. In principal, these can be different, but for SASL clients we require them
+@@ -129,17 +129,17 @@ shared_ptr<TTransport> TSaslServerTransport::Factory::getTransport(
+   // again. This is obviously brittle (what if for some reason getTransport() is called a
+   // third time?) but for our usage of Thrift it's a tolerable band-aid.
+   //
+-  // An alternative approach is to use the 'custom deleter' feature of shared_ptr to
++  // An alternative approach is to use the 'custom deleter' feature of ::boost::shared_ptr to
+   // ensure that when ret_transport is eventually deleted, its corresponding map entry is
+   // removed. That is likely to be error prone given the locking involved; for now we go
+   // with the simple solution.
+-  map<shared_ptr<TTransport>, shared_ptr<TBufferedTransport> >::iterator trans_map =
++  map<::boost::shared_ptr<TTransport>, ::boost::shared_ptr<TBufferedTransport> >::iterator trans_map =
+       transportMap_.find(trans);
+   VLOG_EVERY_N(2, 100) << "getTransport(): transportMap_ size is: "
+                        << transportMap_.size();
+-  shared_ptr<TBufferedTransport> ret_transport;
++  ::boost::shared_ptr<TBufferedTransport> ret_transport;
+   if (trans_map == transportMap_.end()) {
+-    shared_ptr<TTransport> wrapped(new TSaslServerTransport(serverDefinitionMap_, trans));
++    ::boost::shared_ptr<TTransport> wrapped(new TSaslServerTransport(serverDefinitionMap_, trans));
+     ret_transport.reset(new TBufferedTransport(wrapped));
+     ret_transport.get()->open();
+     transportMap_[trans] = ret_transport;
+diff --git a/be/src/util/blocking-queue-test.cc b/be/src/util/blocking-queue-test.cc
+index 012d9a0..fa66baa 100644
+--- a/be/src/util/blocking-queue-test.cc
++++ b/be/src/util/blocking-queue-test.cc
+@@ -88,14 +88,14 @@ class MultiThreadTest {
+ 
+   void Run() {
+     for (int i = 0; i < nthreads_; ++i) {
+-      threads_.push_back(shared_ptr<thread>(
++      threads_.push_back(::boost::shared_ptr<thread>(
+           new thread(bind(&MultiThreadTest::InserterThread, this, i))));
+-      threads_.push_back(shared_ptr<thread>(
++      threads_.push_back(::boost::shared_ptr<thread>(
+           new thread(bind(&MultiThreadTest::RemoverThread, this))));
+     }
+     // We add an extra thread to ensure that there aren't enough elements in
+     // the queue to go around.  This way, we test removal after Shutdown.
+-    threads_.push_back(shared_ptr<thread>(
++    threads_.push_back(::boost::shared_ptr<thread>(
+             new thread(bind(
+               &MultiThreadTest::RemoverThread, this))));
+     for (int i = 0; i < threads_.size(); ++i) {
+@@ -114,7 +114,7 @@ class MultiThreadTest {
+   }
+ 
+  private:
+-  typedef vector<shared_ptr<thread> > ThreadVector;
++  typedef vector<::boost::shared_ptr<thread> > ThreadVector;
+ 
+   int iterations_;
+   int nthreads_;
+diff --git a/be/src/util/cgroups-mgr.cc b/be/src/util/cgroups-mgr.cc
+index 3684d05..d30eed9 100644
+--- a/be/src/util/cgroups-mgr.cc
++++ b/be/src/util/cgroups-mgr.cc
+@@ -102,7 +102,7 @@ Status CgroupsMgr::SetCpuShares(const string& cgroup, int32_t num_shares) {
+   RETURN_IF_ERROR(GetCgroupPaths(cgroup, &cgroup_path, &tasks_path));
+ 
+   const string& cpu_shares_path = Substitute("$0/$1", cgroup_path, "cpu.shares");
+-  ofstream cpu_shares(tasks_path.c_str(), ios::out | ios::trunc);
++  ::boost::filesystem::ofstream cpu_shares(tasks_path.c_str(), ios::out | ios::trunc);
+   if (!cpu_shares.is_open()) {
+     stringstream err_msg;
+     err_msg << "CGroup CPU shares file: " << cpu_shares_path
+@@ -143,7 +143,7 @@ Status CgroupsMgr::AssignThreadToCgroup(const Thread& thread,
+   string tasks_path;
+   RETURN_IF_ERROR(GetCgroupPaths(cgroup, &cgroup_path, &tasks_path));
+ 
+-  ofstream tasks(tasks_path.c_str(), ios::out | ios::app);
++  ::boost::filesystem::ofstream tasks(tasks_path.c_str(), ios::out | ios::app);
+   if (!tasks.is_open()) {
+     stringstream err_msg;
+     err_msg << "CGroup tasks file: " << tasks_path << " is not writable by Impala";
+@@ -166,14 +166,14 @@ Status CgroupsMgr::RelocateThreads(const string& src_cgroup,
+   string dst_tasks_path;
+   RETURN_IF_ERROR(GetCgroupPaths(dst_cgroup, &dst_cgroup_path, &dst_tasks_path));
+ 
+-  ifstream src_tasks(src_tasks_path.c_str());
++  ::boost::filesystem::ifstream src_tasks(src_tasks_path.c_str());
+   if (!src_tasks) {
+     stringstream err_msg;
+     err_msg << "Failed to open source CGroup tasks file at: " << src_tasks_path;
+     return Status(err_msg.str());
+   }
+ 
+-  ofstream dst_tasks(dst_tasks_path.c_str(), ios::out | ios::app);
++  ::boost::filesystem::ofstream dst_tasks(dst_tasks_path.c_str(), ios::out | ios::app);
+   if (!dst_tasks) {
+     stringstream err_msg;
+     err_msg << "Failed to open destination CGroup tasks file at: " << dst_tasks_path;
+diff --git a/be/src/util/network-perf-benchmark.cc b/be/src/util/network-perf-benchmark.cc
+index 5182332..93be999 100644
+--- a/be/src/util/network-perf-benchmark.cc
++++ b/be/src/util/network-perf-benchmark.cc
+@@ -210,9 +210,9 @@ int main(int argc, char** argv) {
+   }
+ 
+   // Start up server and client shell
+-  shared_ptr<TestServer> handler(new TestServer);
+-  shared_ptr<ThreadFactory> thread_factory(new ThriftThreadFactory("test", "test"));
+-  shared_ptr<TProcessor> processor(new NetworkTestServiceProcessor(handler));
++  ::boost::shared_ptr<TestServer> handler(new TestServer);
++  ::boost::shared_ptr<ThreadFactory> thread_factory(new ThriftThreadFactory("test", "test"));
++  ::boost::shared_ptr<TProcessor> processor(new NetworkTestServiceProcessor(handler));
+   ThriftServer* server = new ThriftServer("Network Test Server", processor,
+       FLAGS_port, NULL, NULL, 100, ThriftServer::ThreadPool);
+   thread* server_thread = new thread(&TestServer::Server, handler.get(), server);
+diff --git a/be/src/util/os-util.cc b/be/src/util/os-util.cc
+index 2a3e592..5ff144f 100644
+--- a/be/src/util/os-util.cc
++++ b/be/src/util/os-util.cc
+@@ -54,7 +54,7 @@ Status impala::GetThreadStats(int64_t tid, ThreadStats* stats) {
+   proc_path << "/proc/self/task/" << tid << "/stat";
+   if (!exists(proc_path.str())) return Status("Thread path does not exist");
+ 
+-  ifstream proc_file(proc_path.str().c_str());
++  ::boost::filesystem::ifstream proc_file(proc_path.str().c_str());
+   if (!proc_file.is_open()) return Status("Could not open ifstream");
+ 
+   string buffer((istreambuf_iterator<char>(proc_file)),
+diff --git a/be/src/util/parquet-reader.cc b/be/src/util/parquet-reader.cc
+index 820d7f7..7adde0b 100644
+--- a/be/src/util/parquet-reader.cc
++++ b/be/src/util/parquet-reader.cc
+@@ -47,8 +47,8 @@ using namespace apache::thrift::transport;
+ // Some code is replicated to make this more stand-alone.
+ const uint8_t PARQUET_VERSION_NUMBER[] = {'P', 'A', 'R', '1'};
+ 
+-shared_ptr<TProtocol> CreateDeserializeProtocol(
+-    shared_ptr<TMemoryBuffer> mem, bool compact) {
++::boost::shared_ptr<TProtocol> CreateDeserializeProtocol(
++    ::boost::shared_ptr<TMemoryBuffer> mem, bool compact) {
+   if (compact) {
+     TCompactProtocolFactoryT<TMemoryBuffer> tproto_factory;
+     return tproto_factory.getProtocol(mem);
+@@ -65,8 +65,8 @@ template <class T>
+ bool DeserializeThriftMsg(uint8_t* buf, uint32_t* len, bool compact,
+     T* deserialized_msg) {
+   // Deserialize msg bytes into c++ thrift msg using memory transport.
+-  shared_ptr<TMemoryBuffer> tmem_transport(new TMemoryBuffer(buf, *len));
+-  shared_ptr<TProtocol> tproto = CreateDeserializeProtocol(tmem_transport, compact);
++  ::boost::shared_ptr<TMemoryBuffer> tmem_transport(new TMemoryBuffer(buf, *len));
++  ::boost::shared_ptr<TProtocol> tproto = CreateDeserializeProtocol(tmem_transport, compact);
+   try {
+     deserialized_msg->read(tproto.get());
+   } catch (apache::thrift::protocol::TProtocolException& e) {
+diff --git a/be/src/util/pprof-path-handlers.cc b/be/src/util/pprof-path-handlers.cc
+index 6c2f3cd..4d9bfae 100644
+--- a/be/src/util/pprof-path-handlers.cc
++++ b/be/src/util/pprof-path-handlers.cc
+@@ -101,9 +101,9 @@ void PprofCpuProfileHandler(const Webserver::ArgumentMap& args, stringstream* ou
+   ProfilerStart(tmp_prof_file_name.str().c_str());
+   sleep(seconds);
+   ProfilerStop();
+-  ifstream prof_file(tmp_prof_file_name.str().c_str(), ios::in);
++  std::ifstream prof_file(tmp_prof_file_name.str().c_str(), ios::in);
+   if (!prof_file.is_open()) {
+-    (*output) << "Unable to open cpu profile: " << tmp_prof_file_name;
++    (*output) << "Unable to open cpu profile: " << tmp_prof_file_name.str();
+     return;
+   }
+   (*output) << prof_file.rdbuf();
+diff --git a/be/src/util/url-coding.cc b/be/src/util/url-coding.cc
+index 5024309..8530c19 100644
+--- a/be/src/util/url-coding.cc
++++ b/be/src/util/url-coding.cc
+@@ -35,11 +35,11 @@ namespace impala {
+ // characters it will encode.
+ // See common/src/java/org/apache/hadoop/hive/common/FileUtils.java
+ // in the Hive source code for the source of this list.
+-static function<bool (char)> HiveShouldEscape = is_any_of("\"#%\\*/:=?\u00FF");
++    static ::boost::function<bool (char)> HiveShouldEscape = is_any_of("\"#%\\*/:=?\u00FF");
+ 
+ // It is more convenient to maintain the complement of the set of
+ // characters to escape when not in Hive-compat mode.
+-static function<bool (char)> ShouldNotEscape = is_any_of("-_.~");
++    static ::boost::function<bool (char)> ShouldNotEscape = is_any_of("-_.~");
+ 
+ static inline void UrlEncode(const char* in, int in_len, string* out, bool hive_compat) {
+   (*out).reserve(in_len);
+diff --git a/be/src/util/webserver.cc b/be/src/util/webserver.cc
+index 5cc7d54..8924c6b 100644
+--- a/be/src/util/webserver.cc
++++ b/be/src/util/webserver.cc
+@@ -381,7 +381,7 @@ int Webserver::BeginRequestCallback(struct sq_connection* connection,
+     const string& full_template_path =
+         Substitute("$0/$1/$2", FLAGS_webserver_doc_root, DOC_FOLDER,
+             url_handler->template_filename());
+-    ifstream tmpl(full_template_path.c_str());
++    ::boost::filesystem::ifstream tmpl(full_template_path.c_str());
+     if (!tmpl.is_open()) {
+       output << "Could not open template: " << full_template_path;
+       content_type = PLAIN;
+diff --git a/bin/build_thirdparty.sh b/bin/build_thirdparty.sh
+index d12c880..cc194f9 100755
+--- a/bin/build_thirdparty.sh
++++ b/bin/build_thirdparty.sh
+@@ -154,7 +154,8 @@ if [ $BUILD_ALL -eq 1 ] || [ $BUILD_THRIFT -eq 1 ]; then
+     ./configure --with-pic --prefix=${THRIFT_HOME} \
+     --with-php=no --with-java=no --with-perl=no --with-erlang=no \
+     --with-ruby=no --with-haskell=no --with-erlang=no --with-d=no \
+-    --with-go=no --with-qt4=no --with-libevent=no ${PIC_LIB_OPTIONS:-}
++    --with-go=no --with-qt4=no --with-libevent=no ${PIC_LIB_OPTIONS:-} \
++    --with-boost${BOOST_ROOT:+=$BOOST_ROOT}
+   make # Make with -j fails
+   make install
+   cd ${THRIFT_SRC_DIR}/contrib/fb303
+@@ -162,7 +163,8 @@ if [ $BUILD_ALL -eq 1 ] || [ $BUILD_THRIFT -eq 1 ]; then
+   ./bootstrap.sh
+   chmod 755 configure
+   CPPFLAGS="-I${THRIFT_HOME}/include" PY_PREFIX=${THRIFT_HOME}/python ./configure \
+-    --with-java=no --with-php=no --prefix=${THRIFT_HOME} --with-thriftpath=${THRIFT_HOME}
++    --with-java=no --with-php=no --prefix=${THRIFT_HOME} --with-thriftpath=${THRIFT_HOME} \
++    --with-boost${BOOST_ROOT:+=$BOOST_ROOT}
+   make
+   make install
+ fi
+diff --git a/thirdparty/thrift-0.9.0/compiler/cpp/src/generate/t_rb_generator.cc b/thirdparty/thrift-0.9.0/compiler/cpp/src/generate/t_rb_generator.cc
+index 9471860..deefb62 100644
+--- a/thirdparty/thrift-0.9.0/compiler/cpp/src/generate/t_rb_generator.cc
++++ b/thirdparty/thrift-0.9.0/compiler/cpp/src/generate/t_rb_generator.cc
+@@ -356,7 +356,11 @@ void t_rb_generator::generate_enum(t_enum* tenum) {
+   for(c_iter = constants.begin(); c_iter != constants.end(); ++c_iter) {
+     // Populate the hash
+     int value = (*c_iter)->get_value();
+-    first ? first = false : f_types_ << ", ";
++    if (first) {
++        first = false;
++    } else {
++        f_types_ << ", ";
++    }
+     f_types_ << value << " => \"" << capitalize((*c_iter)->get_name()) << "\"";
+   }
+   f_types_ << "}" << endl;
+@@ -366,7 +370,11 @@ void t_rb_generator::generate_enum(t_enum* tenum) {
+   first = true;
+   for (c_iter = constants.begin(); c_iter != constants.end(); ++c_iter) {
+     // Populate the set
+-    first ? first = false : f_types_ << ", ";
++    if (first) {
++        first = false;
++    } else {
++        f_types_ << ", ";
++    }
+     f_types_ << capitalize((*c_iter)->get_name());
+   }
+   f_types_ << "]).freeze" << endl;
+diff --git a/thirdparty/thrift-0.9.0/contrib/fb303/bootstrap.sh b/thirdparty/thrift-0.9.0/contrib/fb303/bootstrap.sh
+index 3cbeddb..67fa4ab 100755
+--- a/thirdparty/thrift-0.9.0/contrib/fb303/bootstrap.sh
++++ b/thirdparty/thrift-0.9.0/contrib/fb303/bootstrap.sh
+@@ -23,4 +23,4 @@
+ aclocal -I ./aclocal
+ automake -a
+ autoconf
+-./configure --config-cache $*
++./configure --config-cache --with-boost${BOOST_ROOT:+=$BOOST_ROOT} $*
