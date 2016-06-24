@@ -1,7 +1,7 @@
 export M2_HOME=`mvn --version | grep "Maven home" | sed 's/^Maven home: //'`
 export M2=$M2_HOME/bin
 export JAVA_HOME=`mvn --version | grep "Java home" | sed 's/^Java home: //'`
-export BOOST_ROOT=~/opt/boost
+#export BOOST_ROOT=~/opt/boost
 export LD_LIBRARY_PATH=$BOOST_ROOT/lib:$LD_LIBRARY_PATH
 
 export PATH=$M2:$PATH
