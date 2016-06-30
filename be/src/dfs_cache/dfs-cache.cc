@@ -111,10 +111,11 @@ status::StatusInternal cacheConfigureFileSystem(FileSystemDescriptor& fsDescript
 }
 
 status::StatusInternal cacheShutdown(bool force, bool updateClients) {
-	if(CacheLayerRegistry::instance()->directDFSAccess())
-		return status::StatusInternal::OK;
+    // Do anything only if instance was initialised.
+    if (CacheLayerRegistry::instance() != nullptr
+            && !CacheLayerRegistry::instance()->directDFSAccess())
+        CacheManager::instance()->shutdown(force, updateClients);
 
-	CacheManager::instance()->shutdown(force, updateClients);
 	return status::StatusInternal::OK;
 }
 

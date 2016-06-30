@@ -138,7 +138,8 @@ class CacheLayerTest : public ::testing::Test {
 		SCOPED_TRACE(ec.message());
 	    ASSERT_TRUE(!ec);
 
-		boost::filesystem::create_directory(m_cache_path, ec);
+		boost::filesystem::create_directories(m_cache_path, ec);
+        SCOPED_TRACE(ec.message());
 		ASSERT_TRUE(!ec);
 
 		std::cout << "Check dataset location exist... \"" << m_dataset_path << "\"\n";
