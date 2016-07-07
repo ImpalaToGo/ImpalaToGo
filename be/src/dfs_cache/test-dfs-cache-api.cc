@@ -1236,7 +1236,7 @@ TEST_F(CacheLayerTest, TestOverloadedCacheAddNewItem){
 }
 
 int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-
+    impala::InitGoogleLoggingSafe(argv[0]);
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
