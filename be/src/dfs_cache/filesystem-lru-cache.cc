@@ -99,7 +99,7 @@ void FileSystemLRUCache::sync(managed_file::File* file){
 
 	// and wait for prepare operation will be finished:
 	DataSet data;
-	data.push_back(file->relative_name().c_str());
+	data.push_back(file->relative_name());
 
 	bool condition = false;
 	boost::condition_variable condition_var;
@@ -256,7 +256,7 @@ managed_file::File* FileSystemLRUCache::find(const std::string& path, const std:
 	m_fileTransformCommands[path] = transformCmd;
 
 	// first find the file within the registry
-	managed_file::File* file = m_idxFileLocalPath->operator [](path);
+	managed_file::File* file = (*m_idxFileLocalPath)[path];
 
 	if(file == nullptr)
 		return file;
@@ -282,7 +282,7 @@ managed_file::File* FileSystemLRUCache::find(const std::string& path, const std:
 
         	LOG(WARNING) << "File \"" << path << "\" is going to be reclaimed. " << "\n";
         	// reclaim the file:
-        	file = m_idxFileLocalPath->operator [](path);
+            file = (*m_idxFileLocalPath)[path];
 
         	return file;
         }

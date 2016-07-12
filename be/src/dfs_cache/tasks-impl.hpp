@@ -62,7 +62,7 @@ public:
 	 * @param file         - file path within the file system
 	 */
 	FileDownloadTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
-			const FileSystemDescriptor & fsDescriptor, const char* path)
+			const FileSystemDescriptor & fsDescriptor, const std::string& path)
 		try : FileProgressTaskType(callback, functor, cancellation){
 			this->m_progress.reset(new FileProgress());
 			this->m_progress->namenode = fsDescriptor;
@@ -114,7 +114,7 @@ public:
 	 * @param file         - file path within the cluster
 	 */
 	FileEstimateTask(SingleFileProgressCompletedCallback callback, SingleFileMakeProgressFunctor functor, CancellationFunctor cancellation,
-			const FileSystemDescriptor & fsDescriptor, const char* path)
+			const FileSystemDescriptor & fsDescriptor, const std::string& path)
 		try : FileProgressTaskType(callback, functor, cancellation){
              this->m_progress.reset(new FileProgress());
              this->m_progress->namenode = fsDescriptor;

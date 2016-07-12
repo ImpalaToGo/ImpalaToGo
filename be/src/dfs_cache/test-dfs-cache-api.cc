@@ -79,8 +79,8 @@ static void close_open_file(const char* path, const FileSystemDescriptor& fsDesc
 	bool available;
 	dfsFile file = dfsOpenFile(fsDescriptor, path, O_RDONLY, 0, 0, 0, available);
 	collectFileHandleStat(file, direct_handles, cached_handles, zero_handles, total_handles);
-	ASSERT_TRUE(file != nullptr);
-	ASSERT_TRUE(available);
+	ASSERT_TRUE(file != nullptr) << "Error opening file: " << path;
+	ASSERT_TRUE(available) << "File " << path << " is not available";
 	status::StatusInternal status = dfsCloseFile(fsDescriptor, file);
 	ASSERT_TRUE(status == status::StatusInternal::OK);
 }
@@ -99,7 +99,8 @@ static void open_read_close_file(std::string path, const FileSystemDescriptor& f
 	bool available;
 	dfsFile file = dfsOpenFile(fsDescriptor, (constants::TEST_LOCALFS_PROTO_PREFFIX + path).c_str(), O_RDONLY, 0, 0, 0, available);
 	collectFileHandleStat(file, direct_handles, cached_handles, zero_handles, total_handles);
-	ASSERT_TRUE((file != NULL) && available);
+	ASSERT_TRUE((file != NULL) && available) << "Error opening file: " <<
+	        constants::TEST_LOCALFS_PROTO_PREFFIX + path;
 
 	// open "target" file:
 	// and add an extra slash to have the uri "file:///path"
@@ -154,7 +155,8 @@ static void open_seek_read_compare_close_file(std::string& path,
 	bool available;
 	dfsFile file = dfsOpenFile(fsDescriptor, cache_path.c_str(), O_RDONLY, 0, 0, 0, available);
 	collectFileHandleStat(file, direct_handles, cached_handles, zero_handles, total_handles);
-	ASSERT_TRUE((file != NULL) && available);
+	ASSERT_TRUE((file != NULL) && available) << "Error opening file: " <<
+	        constants::TEST_LOCALFS_PROTO_PREFFIX + path;
 
 	// open "target" file:
 	// and add an extra slash to have the uri "file:///path"
