@@ -166,7 +166,7 @@ struct FileSystemDescriptor{
 typedef FileSystemDescriptor     dfsFS;
 
 /** Represent data set in terms of data string descriptors */
-typedef std::list<const char*> DataSet;
+typedef std::list<std::string> DataSet;
 
 /**
  * Represent the single DFS connection
